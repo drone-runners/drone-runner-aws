@@ -1,0 +1,9 @@
+---
+kind: pipeline
+type: aws
+name: test
+
+steps:
+- ~
+
+...

@@ -1,0 +1,15 @@
+---
+kind: pipeline
+type: aws
+name: test
+
+steps:
+- name: build
+  commands:
+  - go build
+
+- name: test
+  commands:
+  - go test
+
+...
