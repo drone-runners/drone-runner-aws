@@ -17,31 +17,74 @@ type (
 	Spec struct {
 		Root     string   `json:"root,omitempty"`
 		Platform Platform `json:"platform,omitempty"`
-		Settings Settings `json:"settings,omitempty"`
+		Account  Account  `json:"account,omitempty"`
+		Instance Instance `json:"instance,omitempty"`
 		Files    []*File  `json:"files,omitempty"`
 		Steps    []*Step  `json:"steps,omitempty"`
 	}
 
-	// Settings provides pipeline settings.
-	Settings struct {
-		// TODO remove or replace
-		Param1 string `json:"param1,omitempty`
-		Param2 string `json:"param2,omitempty`
+	// Account provides account settings
+	Account struct {
+		AccessKeyID     string `json:"access_key_id,omitempty"`
+		AccessKeySecret string `json:"secret_access_key,omitempty"`
+		Region          string `json:"region,omitempty"`
+	}
+
+	// Instance provides instance settings.
+	Instance struct {
+		AMI     string  `json:"ami,omitempty"`
+		Type    string  `json:"type,omitempty"`
+		User    string  `json:"user,omitempty"`
+		Disk    Disk    `json:"disk,omitempty"`
+		Network Network `json:"network,omitempty"`
+		Market  string  `json:"market_type,omitempty"`
+		Device  Device  `json:"device,omitempty"`
+
+		// availability_zone
+		// placement_group
+		// tenancy
+
+		// iam_instance_profile
+	}
+
+	// Network provides network settings.
+	Network struct {
+		VPC               string   `json:"vpc,omitempty"`
+		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty"`
+		SecurityGroups    []string `json:"security_groups,omitempty"`
+		SubnetID          string   `json:"subnet_id,omitempty"`
+		PrivateIP         bool     `json:"private_ip,omitempty"`
+
+		// public_dns
+		// private_dns
+		// network_interface
+	}
+
+	// Disk provides disk size and type.
+	Disk struct {
+		Size int64  `json:"size,omitempty"`
+		Type string `json:"type,omitempty"`
+		Iops int64  `json:"iops,omitempty"`
+	}
+
+	// Device provides the device settings.
+	Device struct {
+		Name string `json:"name,omitempty"`
 	}
 
 	// Step defines a pipeline step.
 	Step struct {
-		Args         []string          `json:"args,omitempty"`
-		Command      string            `json:"command,omitempty"`
-		Detach       bool              `json:"detach,omitempty"`
-		DependsOn    []string          `json:"depends_on,omitempty"`
-		ErrPolicy    runtime.ErrPolicy `json:"err_policy,omitempty"`
-		Envs         map[string]string `json:"environment,omitempty"`
-		Files        []*File           `json:"files,omitempty"`
-		Name         string            `json:"name,omitempt"`
-		RunPolicy    runtime.RunPolicy `json:"run_policy,omitempty"`
-		Secrets      []*Secret         `json:"secrets,omitempty"`
-		WorkingDir   string            `json:"working_dir,omitempty"`
+		Args       []string          `json:"args,omitempty"`
+		Command    string            `json:"command,omitempty"`
+		Detach     bool              `json:"detach,omitempty"`
+		DependsOn  []string          `json:"depends_on,omitempty"`
+		ErrPolicy  runtime.ErrPolicy `json:"err_policy,omitempty"`
+		Envs       map[string]string `json:"environment,omitempty"`
+		Files      []*File           `json:"files,omitempty"`
+		Name       string            `json:"name,omitempt"`
+		RunPolicy  runtime.RunPolicy `json:"run_policy,omitempty"`
+		Secrets    []*Secret         `json:"secrets,omitempty"`
+		WorkingDir string            `json:"working_dir,omitempty"`
 	}
 
 	// Secret represents a secret variable.

@@ -153,13 +153,8 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		Client:   cli,
 		Dispatch: runner.Run,
 		Filter: &client.Filter{
-			Kind:    resource.Kind,
-			Type:    resource.Type,
-			OS:      config.Platform.OS,
-			Arch:    config.Platform.Arch,
-			Variant: config.Platform.Variant,
-			Kernel:  config.Platform.Kernel,
-			Labels:  config.Runner.Labels,
+			Kind: resource.Kind,
+			Type: resource.Type,
 		},
 	}
 
@@ -207,8 +202,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 			WithField("endpoint", config.Client.Address).
 			WithField("kind", resource.Kind).
 			WithField("type", resource.Type).
-			WithField("os", config.Platform.OS).
-			WithField("arch", config.Platform.Arch).
 			Infoln("polling the remote server")
 
 		poller.Poll(ctx, config.Runner.Capacity)

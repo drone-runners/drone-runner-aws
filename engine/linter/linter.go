@@ -12,7 +12,6 @@ import (
 	"github.com/drone/runner-go/manifest"
 )
 
-
 // Linter evaluates the pipeline against a set of
 // rules and returns an error if one or more of the
 // rules are broken.
@@ -33,6 +32,9 @@ func checkPipeline(pipeline *resource.Pipeline, trusted bool) error {
 	if err := checkSteps(pipeline, trusted); err != nil {
 		return err
 	}
+	if pipeline.Instance.AMI == "" {
+		return errors.New("Linter: invalid or missing AMI")
+	}
 	return nil
 }
 
@@ -49,6 +51,6 @@ func checkSteps(pipeline *resource.Pipeline, trusted bool) error {
 }
 
 func checkStep(step *resource.Step, trusted bool) error {
-	// TODO optionally add per-step pipeline rules or remove
+	// define pipeline step linting rules here.
 	return nil
 }

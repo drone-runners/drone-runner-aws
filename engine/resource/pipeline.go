@@ -34,6 +34,8 @@ type Pipeline struct {
 	Platform    manifest.Platform    `json:"platform,omitempty"`
 	Trigger     manifest.Conditions  `json:"conditions,omitempty"`
 
+	Account     Account           `json:"account,omitempty"`
+	Instance    Instance          `json:"instance,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 	Steps       []*Step           `json:"steps,omitempty"`
 	Workspace   Workspace         `json:"workspace,omitempty"`
@@ -80,19 +82,58 @@ func (p *Pipeline) GetStep(name string) *Step {
 type (
 	// Step defines a Pipeline step.
 	Step struct {
-		Commands     []string                       `json:"commands,omitempty"`
-		Detach       bool                           `json:"detach,omitempty"`
-		DependsOn    []string                       `json:"depends_on,omitempty" yaml:"depends_on"`
-		Environment  map[string]*manifest.Variable  `json:"environment,omitempty"`
-		Failure      string                         `json:"failure,omitempty"`
-		Name         string                         `json:"name,omitempty"`
-		Shell        string                         `json:"shell,omitempty"`
-		When         manifest.Conditions            `json:"when,omitempty"`
-		WorkingDir   string                         `json:"working_dir,omitempty" yaml:"working_dir"`
+		Commands    []string                      `json:"commands,omitempty"`
+		Detach      bool                          `json:"detach,omitempty"`
+		DependsOn   []string                      `json:"depends_on,omitempty" yaml:"depends_on"`
+		Environment map[string]*manifest.Variable `json:"environment,omitempty"`
+		Failure     string                        `json:"failure,omitempty"`
+		Name        string                        `json:"name,omitempty"`
+		Shell       string                        `json:"shell,omitempty"`
+		When        manifest.Conditions           `json:"when,omitempty"`
+		WorkingDir  string                        `json:"working_dir,omitempty" yaml:"working_dir"`
 	}
 
 	// Workspace represents the pipeline workspace configuration.
 	Workspace struct {
 		Path string `json:"path,omitempty"`
+	}
+
+	// Account provides account settings
+	Account struct {
+		AccessKeyID     manifest.Variable `json:"access_key_id,omitempty"     yaml:"access_key_id"`
+		AccessKeySecret manifest.Variable `json:"secret_access_key,omitempty" yaml:"secret_access_key"`
+		Region          string            `json:"region,omitempty"`
+	}
+
+	// Instance provides instance settings.
+	Instance struct {
+		AMI     string  `json:"ami,omitempty"`
+		Type    string  `json:"type,omitempty"`
+		User    string  `json:"user,omitempty"`
+		Disk    Disk    `json:"disk,omitempty"`
+		Network Network `json:"network,omitempty"`
+		Market  string  `json:"market_type,omitempty" yaml:"market_type"`
+		Device  Device  `json:"device,omitempty"`
+	}
+
+	// Network provides network settings.
+	Network struct {
+		VPC               string   `json:"vpc,omitempty"`
+		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_group_ids"`
+		SecurityGroups    []string `json:"security_groups,omitempty"        yaml:"security_groups"`
+		SubnetID          string   `json:"subnet_id,omitempty"              yaml:"subnet_id"`
+		PrivateIP         bool     `json:"private_ip,omitempty"             yaml:"private_ip"`
+	}
+
+	// Disk provides disk size and type.
+	Disk struct {
+		Size int64  `json:"size,omitempty"`
+		Type string `json:"type,omitempty"`
+		Iops int64  `json:"iops,omitempty"`
+	}
+
+	// Device provides the device settings.
+	Device struct {
+		Name string `json:"name,omitempty"`
 	}
 )

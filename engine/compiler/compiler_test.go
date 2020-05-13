@@ -22,9 +22,9 @@ import (
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/secret"
 
+	"github.com/dchest/uniuri"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/dchest/uniuri"
 )
 
 var nocontext = context.Background()
@@ -99,7 +99,7 @@ func TestCompile_Secrets(t *testing.T) {
 	manifest, _ := manifest.ParseFile("testdata/secret.yml")
 
 	compiler := &Compiler{
-		Environ:  provider.Static(nil),
+		Environ: provider.Static(nil),
 		Secret: secret.StaticVars(map[string]string{
 			"token":       "3DA541559918A808C2402BBA5012F6C60B27661C",
 			"password":    "password",
@@ -134,7 +134,7 @@ func TestCompile_Secrets(t *testing.T) {
 		},
 	}
 	if diff := cmp.Diff(got, want); len(diff) != 0 {
-		// TODO(bradrydzewski) ordering is not guaranteed. this
+		// BUG(bradrydzewski) ordering is not guaranteed. this
 		// unit tests needs to be adjusted accordingly.
 		t.Skipf(diff)
 	}
@@ -160,7 +160,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 	}
 
 	compiler := &Compiler{
-		Environ:  provider.Static(nil),
+		Environ: provider.Static(nil),
 		Secret: secret.StaticVars(map[string]string{
 			"token":       "3DA541559918A808C2402BBA5012F6C60B27661C",
 			"password":    "password",

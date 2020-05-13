@@ -62,7 +62,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	// step := stepv.(*Step)
 
 	// TODO execute the pipeline step
-	// TODO write the pipeine step output to the io.Writer
+	// TODO write the pipeline step output to the io.Writer
 	// TODO return the pipeline step results
 
 	return &runtime.State{

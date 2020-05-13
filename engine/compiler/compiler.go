@@ -62,19 +62,84 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			Variant: pipeline.Platform.Variant,
 			Version: pipeline.Platform.Version,
 		},
-		Settings: engine.Settings{
-			// TODO replace or remove
-			Param1: c.Settings.Param1,
-			Param2: c.Settings.Param2,
+		Account: engine.Account{
+			AccessKeyID:     pipeline.Account.AccessKeyID.Value,
+			AccessKeySecret: pipeline.Account.AccessKeySecret.Value,
+			Region:          pipeline.Account.Region,
+		},
+		Instance: engine.Instance{
+			AMI:    pipeline.Instance.AMI,
+			Type:   pipeline.Instance.Type,
+			Market: pipeline.Instance.Market,
+			Network: engine.Network{
+				VPC:               pipeline.Instance.Network.VPC,
+				VPCSecurityGroups: pipeline.Instance.Network.VPCSecurityGroups,
+				SecurityGroups:    pipeline.Instance.Network.SecurityGroups,
+				SubnetID:          pipeline.Instance.Network.SubnetID,
+				PrivateIP:         pipeline.Instance.Network.PrivateIP,
+			},
+			Disk: engine.Disk{
+				Size: pipeline.Instance.Disk.Size,
+				Type: pipeline.Instance.Disk.Type,
+				Iops: pipeline.Instance.Disk.Iops,
+			},
+			Device: engine.Device{
+				Name: pipeline.Instance.Device.Name,
+			},
 		},
 	}
 
-	// IMPORTANT:
-	// this pipeline starter project is optimized for pipelines
-	// that execute all steps on the same host. It is not optimized
-	// for pipelines that execute each step inside a different
-	// linux container. If you are building a container-based pipeline
-	// please see the Docker runner source for inspiration.
+	// maybe source the aws_access_key_id from a secret.
+	if s, ok := c.findSecret(ctx, args, pipeline.Account.AccessKeyID.Secret); ok {
+		spec.Account.AccessKeyID = s
+	}
+
+	// maybe source the aws_access_key_secret from a secret.
+	if s, ok := c.findSecret(ctx, args, pipeline.Account.AccessKeySecret.Secret); ok {
+		spec.Account.AccessKeySecret = s
+	}
+
+	// set default instance type if not provided
+	if spec.Instance.Type == "" {
+		spec.Instance.Type = "t3.nano"
+		if pipeline.Platform.Arch == "arm64" {
+			spec.Instance.Type = "a1.medium"
+		}
+	}
+
+	// set the default region if not provided
+	if spec.Account.Region == "" {
+		spec.Account.Region = "us-east-1"
+	}
+
+	// set the default disk size if not provided
+	if spec.Instance.Disk.Size == 0 {
+		spec.Instance.Disk.Size = 32
+	}
+
+	// set the default disk type if not provided
+	if spec.Instance.Disk.Type == "" {
+		spec.Instance.Disk.Type = "gp2"
+	}
+
+	// set the default iops
+	if spec.Instance.Disk.Type == "io1" && spec.Instance.Disk.Iops == 0 {
+		spec.Instance.Disk.Iops = 100
+	}
+
+	// set the default device
+	if spec.Instance.Device.Name == "" {
+		spec.Instance.Device.Name = "/dev/sda1"
+	}
+
+	// set the default ssh user. this user account is
+	// responsible for executing the pipeline script.
+	switch {
+	case spec.Instance.User == "" && spec.Platform.OS == "windows":
+		spec.Instance.User = "Administrator"
+	case spec.Instance.User == "":
+		spec.Instance.User = "root"
+	}
 
 	// create the root directory
 	spec.Root = tempdir(os)

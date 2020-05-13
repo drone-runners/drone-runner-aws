@@ -42,22 +42,13 @@ type Config struct {
 	}
 
 	Runner struct {
-		Name       string            `envconfig:"DRONE_RUNNER_NAME"`
-		Capacity   int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"2"`
-		Procs      int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
-		Environ    map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
-		EnvFile    string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
-		Secrets    map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
-		Labels     map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
-	}
-
-	Platform struct {
-		// TODO set default os and architectures if the runner
-		// is os or architecture-specific, otherwise remove.
-		OS      string `envconfig:"DRONE_PLATFORM_OS"`
-		Arch    string `envconfig:"DRONE_PLATFORM_ARCH"`
-		Kernel  string `envconfig:"DRONE_PLATFORM_KERNEL"`
-		Variant string `envconfig:"DRONE_PLATFORM_VARIANT"`
+		Name     string            `envconfig:"DRONE_RUNNER_NAME"`
+		Capacity int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"2"`
+		Procs    int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
+		Environ  map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
+		EnvFile  string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
+		Secrets  map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
+		Labels   map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
 	}
 
 	Limit struct {

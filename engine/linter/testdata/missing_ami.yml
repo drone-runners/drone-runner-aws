@@ -3,9 +3,6 @@ kind: pipeline
 type: aws
 name: test
 
-instance:
-  ami: ami12354
-
 steps:
 - name: build
   commands:
