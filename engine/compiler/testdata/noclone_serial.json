@@ -1,7 +1,21 @@
-  
 {
-  "platform": {},
   "root": "/tmp/drone-random",
+  "platform": {},
+  "account": {
+    "region": "us-east-1"
+  },
+  "instance": {
+    "type": "t3.nano",
+    "user": "root",
+    "disk": {
+      "size": 32,
+      "type": "gp2"
+    },
+    "network": {},
+    "device": {
+      "name": "/dev/sda1"
+    }
+  },
   "files": [
     {
       "path": "/tmp/drone-random/home",
@@ -41,6 +55,7 @@
         "/tmp/drone-random/opt/build"
       ],
       "command": "/bin/sh",
+      "environment": {},
       "files": [
         {
           "path": "/tmp/drone-random/opt/build",

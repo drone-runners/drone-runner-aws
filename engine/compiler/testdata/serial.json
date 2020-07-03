@@ -1,6 +1,21 @@
 {
-  "platform": {},
   "root": "/tmp/drone-random",
+  "platform": {},
+  "account": {
+    "region": "us-east-1"
+  },
+  "instance": {
+    "type": "t3.nano",
+    "user": "root",
+    "disk": {
+      "size": 32,
+      "type": "gp2"
+    },
+    "network": {},
+    "device": {
+      "name": "/dev/sda1"
+    }
+  },
   "files": [
     {
       "path": "/tmp/drone-random/home",
@@ -40,6 +55,7 @@
         "/tmp/drone-random/opt/clone"
       ],
       "command": "/bin/sh",
+      "environment": {},
       "files": [
         {
           "path": "/tmp/drone-random/opt/clone",
@@ -47,7 +63,6 @@
           "data": "CnNldCAtZQoKZWNobyArICJnaXQgaW5pdCIKZ2l0IGluaXQKCmVjaG8gKyAiZ2l0IHJlbW90ZSBhZGQgb3JpZ2luICIKZ2l0IHJlbW90ZSBhZGQgb3JpZ2luIAoKZWNobyArICJnaXQgZmV0Y2ggIG9yaWdpbiArcmVmcy9oZWFkcy9tYXN0ZXI6IgpnaXQgZmV0Y2ggIG9yaWdpbiArcmVmcy9oZWFkcy9tYXN0ZXI6CgplY2hvICsgImdpdCBjaGVja291dCAgLWIgbWFzdGVyIgpnaXQgY2hlY2tvdXQgIC1iIG1hc3Rlcgo="
         }
       ],
-      "secrets": [],
       "name": "clone",
       "run_policy": "always",
       "working_dir": "/tmp/drone-random/drone/src"
@@ -61,6 +76,7 @@
       "depends_on": [
         "clone"
       ],
+      "environment": {},
       "files": [
         {
           "path": "/tmp/drone-random/opt/build",
@@ -68,7 +84,6 @@
           "data": "CnNldCAtZQoKZWNobyArICJnbyBidWlsZCIKZ28gYnVpbGQK"
         }
       ],
-      "secrets": [],
       "name": "build",
       "working_dir": "/tmp/drone-random/drone/src"
     },
@@ -81,6 +96,7 @@
       "depends_on": [
         "build"
       ],
+      "environment": {},
       "files": [
         {
           "path": "/tmp/drone-random/opt/test",
@@ -88,7 +104,6 @@
           "data": "CnNldCAtZQoKZWNobyArICJnbyB0ZXN0IgpnbyB0ZXN0Cg=="
         }
       ],
-      "secrets": [],
       "name": "test",
       "working_dir": "/tmp/drone-random/drone/src"
     }
