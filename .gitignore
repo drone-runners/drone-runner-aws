@@ -2,4 +2,6 @@ drone-runner-aws
 drone-runner-aws.exe
 release/*
 .env
+.vscode/
 TODO.md
+simple.yml

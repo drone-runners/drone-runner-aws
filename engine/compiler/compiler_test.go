@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
@@ -200,10 +199,4 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 	}
 
 	return got.(*engine.Spec)
-}
-
-func dump(v interface{}) {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	enc.Encode(v)
 }

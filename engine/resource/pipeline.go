@@ -107,13 +107,15 @@ type (
 
 	// Instance provides instance settings.
 	Instance struct {
-		AMI     string  `json:"ami,omitempty"`
-		Type    string  `json:"type,omitempty"`
-		User    string  `json:"user,omitempty"`
-		Disk    Disk    `json:"disk,omitempty"`
-		Network Network `json:"network,omitempty"`
-		Market  string  `json:"market_type,omitempty" yaml:"market_type"`
-		Device  Device  `json:"device,omitempty"`
+		AMI           string  `json:"ami,omitempty"`
+		IAMProfileARN string  `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
+		KeyPair       string  `json:"key_pair,omitempty" yaml:"key_pair"`
+		Type          string  `json:"type,omitempty"`
+		User          string  `json:"user,omitempty"`
+		Disk          Disk    `json:"disk,omitempty"`
+		Network       Network `json:"network,omitempty"`
+		Market        string  `json:"market_type,omitempty" yaml:"market_type"`
+		Device        Device  `json:"device,omitempty"`
 	}
 
 	// Network provides network settings.

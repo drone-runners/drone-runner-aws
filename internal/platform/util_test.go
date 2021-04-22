@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/kr/pretty"
 )
 
@@ -28,5 +29,15 @@ func TestConvertTags(t *testing.T) {
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("unexpected tag conversion")
 		pretty.Ldiff(t, a, b)
+	}
+}
+
+func TestCreateCopy(t *testing.T) {
+	a := map[string]string{"foo": "bar", "baz": "qux"}
+
+	got := createCopy(a)
+
+	if diff := cmp.Diff(got, a); diff != "" {
+		t.Errorf(diff)
 	}
 }

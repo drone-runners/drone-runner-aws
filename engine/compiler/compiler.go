@@ -10,6 +10,8 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/sshkey"
+	"github.com/drone-runners/drone-runner-aws/internal/userdata"
 
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
@@ -29,9 +31,9 @@ var random = func() string {
 
 // Settings defines default settings.
 type Settings struct {
-	// TODO replace or remove
-	Param1 string
-	Param2 string
+	AwsAccessKeyID     string
+	AwsAccessKeySecret string
+	AwsRegion          string
 }
 
 // Compiler compiles the Yaml configuration file to an
@@ -68,9 +70,11 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			Region:          pipeline.Account.Region,
 		},
 		Instance: engine.Instance{
-			AMI:    pipeline.Instance.AMI,
-			Type:   pipeline.Instance.Type,
-			Market: pipeline.Instance.Market,
+			AMI:           pipeline.Instance.AMI,
+			IAMProfileARN: pipeline.Instance.IAMProfileARN,
+			KeyPair:       pipeline.Instance.KeyPair,
+			Type:          pipeline.Instance.Type,
+			Market:        pipeline.Instance.Market,
 			Network: engine.Network{
 				VPC:               pipeline.Instance.Network.VPC,
 				VPCSecurityGroups: pipeline.Instance.Network.VPCSecurityGroups,
@@ -89,14 +93,25 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		},
 	}
 
-	// maybe source the aws_access_key_id from a secret.
+	// source the aws_access_key_id from a secret. finally try config
 	if s, ok := c.findSecret(ctx, args, pipeline.Account.AccessKeyID.Secret); ok {
 		spec.Account.AccessKeyID = s
+	} else if spec.Account.AccessKeyID == "" {
+		spec.Account.AccessKeyID = c.Settings.AwsAccessKeyID
 	}
 
-	// maybe source the aws_access_key_secret from a secret.
+	// source the aws_access_key_secret from a secret. finally try config
 	if s, ok := c.findSecret(ctx, args, pipeline.Account.AccessKeySecret.Secret); ok {
 		spec.Account.AccessKeySecret = s
+	} else if spec.Account.AccessKeySecret == "" {
+		spec.Account.AccessKeySecret = c.Settings.AwsAccessKeySecret
+	}
+
+	// try config first. then set the default region if not provided
+	if spec.Account.Region == "" && c.Settings.AwsRegion != "" {
+		spec.Account.Region = c.Settings.AwsRegion
+	} else if spec.Account.Region == "" {
+		spec.Account.Region = "us-east-1"
 	}
 
 	// set default instance type if not provided
@@ -105,11 +120,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		if pipeline.Platform.Arch == "arm64" {
 			spec.Instance.Type = "a1.medium"
 		}
-	}
-
-	// set the default region if not provided
-	if spec.Account.Region == "" {
-		spec.Account.Region = "us-east-1"
 	}
 
 	// set the default disk size if not provided
@@ -132,21 +142,39 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		spec.Instance.Device.Name = "/dev/sda1"
 	}
 
-	// set the default ssh user. this user account is
-	// responsible for executing the pipeline script.
+	// set the default ssh user. this user account is responsible for executing the pipeline script.
 	switch {
 	case spec.Instance.User == "" && spec.Platform.OS == "windows":
 		spec.Instance.User = "Administrator"
 	case spec.Instance.User == "":
 		spec.Instance.User = "root"
 	}
+	// generate the keys used for ssh
+	publickey, privatekey, err := sshkey.GeneratePair()
+	if err != nil {
+		publickey = ""
+		privatekey = ""
+	}
+	spec.Instance.PrivateKey = privatekey
+	spec.Instance.PublicKey = publickey
+	// generate the cloudinit file
+	var userDataWithSSH string
+	if spec.Platform.OS == "windows" {
+		userDataWithSSH = userdata.Windows(userdata.Params{
+			PublicKey: spec.Instance.PublicKey,
+		})
+	} else {
+		// try using cloud init.
+		userDataWithSSH = userdata.Linux(userdata.Params{
+			PublicKey: spec.Instance.PublicKey,
+		})
+	}
+	spec.Instance.UserData = userDataWithSSH
 
 	// create the root directory
 	spec.Root = tempdir(os)
-
 	// creates a home directory in the root.
-	// note: mkdirall fails on windows so we need to create all
-	// directories in the tree.
+	// note: mkdirall fails on windows so we need to create all directories in the tree.
 	homedir := join(os, spec.Root, "home", "drone")
 	spec.Files = append(spec.Files, &engine.File{
 		Path:  join(os, spec.Root, "home"),
@@ -247,7 +275,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	}
 
 	// create the clone step, maybe
-	if pipeline.Clone.Disable == false {
+	if !pipeline.Clone.Disable {
 		clonepath := join(os, spec.Root, "opt", getExt(os, "clone"))
 		clonefile := genScript(os,
 			clone.Commands(
@@ -259,7 +287,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				},
 			),
 		)
-
 		cmd, args := getCommand(os, clonepath)
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Name:      "clone",
@@ -326,11 +353,11 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		}
 	}
 
-	if isGraph(spec) == false {
+	if !isGraph(spec) {
 		configureSerial(spec)
-	} else if pipeline.Clone.Disable == false {
+	} else if !pipeline.Clone.Disable {
 		configureCloneDeps(spec)
-	} else if pipeline.Clone.Disable == true {
+	} else if pipeline.Clone.Disable {
 		removeCloneDeps(spec)
 	}
 

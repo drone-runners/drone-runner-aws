@@ -29,8 +29,7 @@ func Generate() (*rsa.PrivateKey, error) {
 	return rsa.GenerateKey(rand.Reader, 2048)
 }
 
-// MarshalPublicKey marshalls an RSA Public Key to an SSH
-// .authorized_keys format
+// MarshalPublicKey marshalls an RSA Public Key to an SSH .authorized_keys format
 func MarshalPublicKey(pubkey *rsa.PublicKey) (string, error) {
 	pk, err := ssh.NewPublicKey(pubkey)
 	return string(ssh.MarshalAuthorizedKey(pk)), err
