@@ -54,7 +54,7 @@ type (
 )
 
 // Provision provisions the server instance.
-func create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instance, error) {
+func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instance, error) {
 	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
 
 	var iamProfile *ec2.IamInstanceProfileSpecification
@@ -223,6 +223,19 @@ func Destroy(ctx context.Context, creds Credentials, instance *Instance) error {
 
 	logger.Debugln("terminated")
 	return nil
+}
+
+// checks that we can log into EC2, and the regions respond
+func Ping(ctx context.Context, creds Credentials) error {
+	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+
+	allRegions := true
+	input := &ec2.DescribeRegionsInput{
+		AllRegions: &allRegions,
+	}
+	_, err := client.DescribeRegions(input)
+
+	return err
 }
 
 func getClient(ctx context.Context, region, client, secret string) *ec2.EC2 {

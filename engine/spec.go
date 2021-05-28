@@ -10,7 +10,6 @@ import (
 )
 
 type (
-
 	// Spec provides the pipeline spec. This provides the
 	// required instructions for reproducible pipeline
 	// execution.
@@ -32,19 +31,24 @@ type (
 
 	// Instance provides instance settings.
 	Instance struct {
-		AMI     string  `json:"ami,omitempty"`
-		Type    string  `json:"type,omitempty"`
-		User    string  `json:"user,omitempty"`
-		Disk    Disk    `json:"disk,omitempty"`
-		Network Network `json:"network,omitempty"`
-		Market  string  `json:"market_type,omitempty"`
-		Device  Device  `json:"device,omitempty"`
-
+		AMI           string  `json:"ami,omitempty"`
+		IAMProfileARN string  `json:"iam_profile_arn,omitempty"`
+		Type          string  `json:"type,omitempty"`
+		User          string  `json:"user,omitempty"`
+		PrivateKey    string  `json:"private_key,omitempty"`
+		PublicKey     string  `json:"public_key,omitempty"`
+		UserData      string  `json:"user_data,omitempty"`
+		Disk          Disk    `json:"disk,omitempty"`
+		Network       Network `json:"network,omitempty"`
+		// this is a keypair defined in AWS, it can make it easier to debug (optional)
+		KeyPair string `json:"key_pair,omitempty"`
+		Market  string `json:"market_type,omitempty"`
+		Device  Device `json:"device,omitempty"`
+		id      string
+		ip      string
 		// availability_zone
 		// placement_group
 		// tenancy
-
-		// iam_instance_profile
 	}
 
 	// Network provides network settings.
@@ -81,7 +85,7 @@ type (
 		ErrPolicy  runtime.ErrPolicy `json:"err_policy,omitempty"`
 		Envs       map[string]string `json:"environment,omitempty"`
 		Files      []*File           `json:"files,omitempty"`
-		Name       string            `json:"name,omitempt"`
+		Name       string            `json:"name,omitempty"`
 		RunPolicy  runtime.RunPolicy `json:"run_policy,omitempty"`
 		Secrets    []*Secret         `json:"secrets,omitempty"`
 		WorkingDir string            `json:"working_dir,omitempty"`

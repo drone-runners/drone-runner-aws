@@ -39,17 +39,17 @@ import (
 type execCommand struct {
 	*internal.Flags
 
-	Source     *os.File
-	Include    []string
-	Exclude    []string
-	Environ    map[string]string
-	Secrets    map[string]string
-	Settings   compiler.Settings
-	Pretty     bool
-	Procs      int64
-	Debug      bool
-	Trace      bool
-	Dump       bool
+	Source   *os.File
+	Include  []string
+	Exclude  []string
+	Environ  map[string]string
+	Secrets  map[string]string
+	Settings compiler.Settings
+	Pretty   bool
+	Procs    int64
+	Debug    bool
+	Trace    bool
+	Dump     bool
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error {
@@ -109,12 +109,11 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
-		Environ:    provider.Static(c.Environ),
-		Settings:   c.Settings,
-		Secret:     secret.StaticVars(c.Secrets),
+		Environ:  provider.Static(c.Environ),
+		Settings: c.Settings,
+		Secret:   secret.StaticVars(c.Secrets),
 	}
 
-	
 	args := runtime.CompilerArgs{
 		Pipeline: res,
 		Manifest: manifest,
@@ -279,17 +278,6 @@ func registerExec(app *kingpin.Application) {
 				),
 			),
 		).BoolVar(&c.Pretty)
-
-	//
-	// TODO replace or remove custom settings
-	//
- 
-	cmd.Flag("param1", "custom parameter 1").
-		StringVar(&c.Settings.Param1)
-
-	cmd.Flag("param2", "custom parameter 2").
-		StringVar(&c.Settings.Param2)
-
 	// shared pipeline flags
 	c.Flags = internal.ParseFlags(cmd)
 }

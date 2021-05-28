@@ -58,9 +58,9 @@ type Config struct {
 	}
 
 	Settings struct {
-		// TODO replace or remove custom settings
-		Param1 string `envconfig:"DRONE_PARAM1"`
-		Param2 string `envconfig:"DRONE_PARAM2"`
+		AwsAccessKeyID     string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_ID"`
+		AwsAccessKeySecret string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"`
+		AwsRegion          string `envconfig:"DRONE_SETTINGS_AWS_REGION"`
 	}
 
 	Environ struct {

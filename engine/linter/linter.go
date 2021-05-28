@@ -35,6 +35,9 @@ func checkPipeline(pipeline *resource.Pipeline, trusted bool) error {
 	if pipeline.Instance.AMI == "" {
 		return errors.New("Linter: invalid or missing AMI")
 	}
+	if pipeline.Instance.IAMProfileARN == "" && pipeline.Platform.OS == "windows" {
+		return errors.New("Linter: You must provide an IAMProfileARN if using a windows platform")
+	}
 	return nil
 }
 

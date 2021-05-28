@@ -6,7 +6,10 @@
 // executed by the cloud-init directive.
 package userdata
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Params defines parameters used to create userdata files.
 type Params struct {
@@ -19,14 +22,35 @@ func Linux(params Params) string {
 system_info:
   default_user: ~
 users:
+- default
 - name: root
   sudo: ALL=(ALL) NOPASSWD:ALL
+  groups: sudo
   ssh-authorized-keys:
-  - ssh-rsa %s drone@localhost	
-`, params.PublicKey)
+  - %s`, params.PublicKey)
 }
 
 // Windows creates a userdata file for the Windows operating system.
-func Windows() string {
-	return ""
+func Windows(params Params) string {
+	chunk1 := fmt.Sprintf(`<powershell>
+  Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+  choco install git.install -y
+  Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+  Set-Service -Name sshd -StartupType ‘Automatic’
+  Start-Service sshd
+  $key = "%s"
+  $key | Set-Content C:\ProgramData\ssh\administrators_authorized_keys
+  $acl = Get-Acl C:\ProgramData\ssh\administrators_authorized_keys
+  $acl.SetAccessRuleProtection($true, $false)
+  $acl.Access | `, strings.TrimSuffix(params.PublicKey, "\n"))
+	payload := chunk1 + "%" + `{$acl.RemoveAccessRule($_)} # strip everything
+  $administratorRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrator","FullControl","Allow")
+  $acl.SetAccessRule($administratorRule)
+  $administratorsRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrators","FullControl","Allow")
+  $acl.SetAccessRule($administratorsRule)
+  (Get-Item 'C:\ProgramData\ssh\administrators_authorized_keys').SetAccessControl($acl)
+  New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
+  restart-service sshd
+  </powershell>`
+	return payload
 }

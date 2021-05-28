@@ -19,8 +19,7 @@ var version = "0.0.0"
 // empty context
 var nocontext = context.Background()
 
-// Command parses the command line arguments and then executes a
-// subcommand program.
+// Command parses the command line arguments and then executes a subcommand program.
 func Command() {
 	app := kingpin.New("drone", "drone aws runner")
 	registerCompile(app)

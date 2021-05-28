@@ -85,20 +85,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		logrus.WithError(err).
 			Fatalln("cannot load the engine")
 	}
-	for {
-		err := engine.Ping(ctx)
-		if err == context.Canceled {
-			break
-		}
-		if err != nil {
-			logrus.WithError(err).
-				Errorln("cannot ping aws")
-			time.Sleep(time.Second)
-		} else {
-			logrus.Debugln("successfully pinged aws")
-			break
-		}
-	}
 
 	remote := remote.New(cli)
 	tracer := history.New(remote)
@@ -118,9 +104,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		),
 		Compiler: &compiler.Compiler{
 			Settings: compiler.Settings{
-				// TODO replace or remove
-				Param1: config.Settings.Param1,
-				Param2: config.Settings.Param2,
+				AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
+				AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
+				AwsRegion:          config.Settings.AwsRegion,
 			},
 			Environ: provider.Combine(
 				provider.Static(config.Runner.Environ),
@@ -175,8 +161,25 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return server.ListenAndServe(ctx)
 	})
 
-	// Ping the server and block until a successful connection
-	// to the server has been established.
+	// Connect to AWS making sure we can use creds provided.
+	if config.Settings.AwsAccessKeyID != "" || config.Settings.AwsAccessKeySecret != "" {
+		for {
+			err := engine.Ping(ctx, config.Settings.AwsAccessKeyID, config.Settings.AwsAccessKeySecret, config.Settings.AwsRegion)
+			if err == context.Canceled {
+				break
+			}
+			if err != nil {
+				logrus.WithError(err).
+					Errorln("cannot connect to aws")
+				time.Sleep(time.Second)
+			} else {
+				logrus.Infoln("successfully connected to aws")
+				break
+			}
+		}
+	}
+
+	// Ping the server and block until a successful connection to the server has been established.
 	for {
 		err := cli.Ping(ctx, config.Runner.Name)
 		select {

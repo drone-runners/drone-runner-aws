@@ -12,18 +12,15 @@ require (
 	github.com/drone/envsubst v1.0.2
 	github.com/drone/runner-go v1.6.1-0.20200415215637-a82f0982f1be
 	github.com/drone/signal v1.0.0
-	github.com/ghodss/yaml v1.0.0
-	github.com/golang/mock v1.3.1
 	github.com/google/go-cmp v0.3.0
 	github.com/gosimple/slug v1.9.0
-	github.com/hashicorp/go-multierror v1.0.0
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kr/pretty v0.2.0
 	github.com/mattn/go-isatty v0.0.8
-	github.com/natessilva/dag v0.0.0-20180124060714-7194b8dcc5c4
+	github.com/pkg/sftp v1.13.0
 	github.com/sirupsen/logrus v1.4.2
-	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )
