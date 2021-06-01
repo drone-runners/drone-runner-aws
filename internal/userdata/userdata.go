@@ -27,8 +27,18 @@ users:
   sudo: ALL=(ALL) NOPASSWD:ALL
   groups: sudo
   ssh-authorized-keys:
-  - %s`, params.PublicKey)
+  - %s
+apt:
+  sources:
+    docker.list:
+      source: deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+packages:
+- docker-ce`, params.PublicKey)
 }
+
+//  '{"experimental": true}' | Out-File -FilePath "C:\ProgramData\docker\config\daemon.json" -encoding ASCII
+//  restart-service docker
 
 // Windows creates a userdata file for the Windows operating system.
 func Windows(params Params) string {

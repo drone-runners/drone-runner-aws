@@ -16,9 +16,7 @@ import (
 
 const networkTimeout = time.Minute * 10
 
-// DialRetry configures and dials the ssh server and
-// retries until a connection is established or a timeout
-// is reached.
+// DialRetry configures and dials the ssh server and retries until a connection is established or a timeout is reached.
 func DialRetry(ctx context.Context, ip, username, privatekey string) (*ssh.Client, error) {
 	client, err := Dial(ip, username, privatekey)
 	if err == nil {
@@ -76,14 +74,3 @@ func Dial(server, username, privatekey string) (*ssh.Client, error) {
 	config.Auth = append(config.Auth, ssh.PublicKeys(signer))
 	return ssh.Dial("tcp", server, config)
 }
-
-// func dial(server, username, password string) (*ssh.Client, error) {
-// 	return ssh.Dial("tcp", server, &ssh.ClientConfig{
-// 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-
-// 		User: username,
-// 		Auth: []ssh.AuthMethod{
-// 			ssh.Password(password),
-// 		},
-// 	})
-// }

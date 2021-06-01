@@ -14,12 +14,13 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
-		Root     string   `json:"root,omitempty"`
-		Platform Platform `json:"platform,omitempty"`
-		Account  Account  `json:"account,omitempty"`
-		Instance Instance `json:"instance,omitempty"`
-		Files    []*File  `json:"files,omitempty"`
-		Steps    []*Step  `json:"steps,omitempty"`
+		Root     string    `json:"root,omitempty"`
+		Platform Platform  `json:"platform,omitempty"`
+		Account  Account   `json:"account,omitempty"`
+		Instance Instance  `json:"instance,omitempty"`
+		Files    []*File   `json:"files,omitempty"`
+		Steps    []*Step   `json:"steps,omitempty"`
+		Volumes  []*Volume `json:"volumes,omitempty"`
 	}
 
 	// Account provides account settings
@@ -31,21 +32,22 @@ type (
 
 	// Instance provides instance settings.
 	Instance struct {
-		AMI           string  `json:"ami,omitempty"`
-		IAMProfileARN string  `json:"iam_profile_arn,omitempty"`
-		Type          string  `json:"type,omitempty"`
-		User          string  `json:"user,omitempty"`
-		PrivateKey    string  `json:"private_key,omitempty"`
-		PublicKey     string  `json:"public_key,omitempty"`
-		UserData      string  `json:"user_data,omitempty"`
-		Disk          Disk    `json:"disk,omitempty"`
-		Network       Network `json:"network,omitempty"`
+		AMI           string            `json:"ami,omitempty"`
+		Tags          map[string]string `json:"tags,omitempty"`
+		IAMProfileARN string            `json:"iam_profile_arn,omitempty"`
+		Type          string            `json:"type,omitempty"`
+		User          string            `json:"user,omitempty"`
+		PrivateKey    string            `json:"private_key,omitempty"`
+		PublicKey     string            `json:"public_key,omitempty"`
+		UserData      string            `json:"user_data,omitempty"`
+		Disk          Disk              `json:"disk,omitempty"`
+		Network       Network           `json:"network,omitempty"`
 		// this is a keypair defined in AWS, it can make it easier to debug (optional)
 		KeyPair string `json:"key_pair,omitempty"`
 		Market  string `json:"market_type,omitempty"`
 		Device  Device `json:"device,omitempty"`
-		id      string
-		ip      string
+		ID      string
+		IP      string
 		// availability_zone
 		// placement_group
 		// tenancy
@@ -85,9 +87,11 @@ type (
 		ErrPolicy  runtime.ErrPolicy `json:"err_policy,omitempty"`
 		Envs       map[string]string `json:"environment,omitempty"`
 		Files      []*File           `json:"files,omitempty"`
+		Image      string            `json:"image,omitempty"`
 		Name       string            `json:"name,omitempty"`
 		RunPolicy  runtime.RunPolicy `json:"run_policy,omitempty"`
 		Secrets    []*Secret         `json:"secrets,omitempty"`
+		Volumes    []*VolumeMount    `json:"volumes,omitempty"`
 		WorkingDir string            `json:"working_dir,omitempty"`
 	}
 
@@ -105,6 +109,38 @@ type (
 		Arch    string `json:"arch,omitempty"`
 		Variant string `json:"variant,omitempty"`
 		Version string `json:"version,omitempty"`
+	}
+
+	// Volume that can be mounted by containers.
+	Volume struct {
+		EmptyDir *VolumeEmptyDir `json:"temp,omitempty"`
+		HostPath *VolumeHostPath `json:"host,omitempty"`
+	}
+
+	// VolumeMount describes a mounting of a Volume within a container.
+	VolumeMount struct {
+		Name string `json:"name,omitempty"`
+		Path string `json:"path,omitempty"`
+	}
+
+	// VolumeEmptyDir mounts a temporary directory from the
+	// host node's filesystem into the container. This can
+	// be used as a shared scratch space.
+	VolumeEmptyDir struct {
+		ID        string            `json:"id,omitempty"`
+		Name      string            `json:"name,omitempty"`
+		Medium    string            `json:"medium,omitempty"`
+		SizeLimit int64             `json:"size_limit,omitempty"`
+		Labels    map[string]string `json:"labels,omitempty"`
+	}
+
+	// VolumeHostPath mounts a file or directory from the host node's filesystem into your container.
+	VolumeHostPath struct {
+		ID       string            `json:"id,omitempty"`
+		Name     string            `json:"name,omitempty"`
+		Path     string            `json:"path,omitempty"`
+		Labels   map[string]string `json:"labels,omitempty"`
+		ReadOnly bool              `json:"read_only,omitempty"`
 	}
 
 	// File defines a file that should be uploaded or
@@ -146,6 +182,7 @@ func (s *Step) GetRunPolicy() runtime.RunPolicy  { return s.RunPolicy }
 func (s *Step) GetSecretAt(i int) runtime.Secret { return s.Secrets[i] }
 func (s *Step) GetSecretLen() int                { return len(s.Secrets) }
 func (s *Step) IsDetached() bool                 { return s.Detach }
+func (s *Step) GetImage() string                 { return s.Image }
 func (s *Step) Clone() runtime.Step {
 	dst := new(Step)
 	*dst = *s

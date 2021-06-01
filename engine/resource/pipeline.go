@@ -37,7 +37,9 @@ type Pipeline struct {
 	Account     Account           `json:"account,omitempty"`
 	Instance    Instance          `json:"instance,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
+	Services    []*Step           `json:"services,omitempty"`
 	Steps       []*Step           `json:"steps,omitempty"`
+	Volumes     []*Volume         `json:"volumes,omitempty"`
 	Workspace   Workspace         `json:"workspace,omitempty"`
 }
 
@@ -82,15 +84,18 @@ func (p *Pipeline) GetStep(name string) *Step {
 type (
 	// Step defines a Pipeline step.
 	Step struct {
-		Commands    []string                      `json:"commands,omitempty"`
-		Detach      bool                          `json:"detach,omitempty"`
-		DependsOn   []string                      `json:"depends_on,omitempty" yaml:"depends_on"`
-		Environment map[string]*manifest.Variable `json:"environment,omitempty"`
-		Failure     string                        `json:"failure,omitempty"`
-		Name        string                        `json:"name,omitempty"`
-		Shell       string                        `json:"shell,omitempty"`
-		When        manifest.Conditions           `json:"when,omitempty"`
-		WorkingDir  string                        `json:"working_dir,omitempty" yaml:"working_dir"`
+		Commands    []string                       `json:"commands,omitempty"`
+		Detach      bool                           `json:"detach,omitempty"`
+		DependsOn   []string                       `json:"depends_on,omitempty" yaml:"depends_on"`
+		Environment map[string]*manifest.Variable  `json:"environment,omitempty"`
+		Failure     string                         `json:"failure,omitempty"`
+		Image       string                         `json:"image,omitempty"`
+		Settings    map[string]*manifest.Parameter `json:"settings,omitempty"`
+		Name        string                         `json:"name,omitempty"`
+		Shell       string                         `json:"shell,omitempty"`
+		When        manifest.Conditions            `json:"when,omitempty"`
+		Volumes     []*VolumeMount                 `json:"volumes,omitempty"`
+		WorkingDir  string                         `json:"working_dir,omitempty" yaml:"working_dir"`
 	}
 
 	// Workspace represents the pipeline workspace configuration.
@@ -107,15 +112,16 @@ type (
 
 	// Instance provides instance settings.
 	Instance struct {
-		AMI           string  `json:"ami,omitempty"`
-		IAMProfileARN string  `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
-		KeyPair       string  `json:"key_pair,omitempty" yaml:"key_pair"`
-		Type          string  `json:"type,omitempty"`
-		User          string  `json:"user,omitempty"`
-		Disk          Disk    `json:"disk,omitempty"`
-		Network       Network `json:"network,omitempty"`
-		Market        string  `json:"market_type,omitempty" yaml:"market_type"`
-		Device        Device  `json:"device,omitempty"`
+		AMI           string            `json:"ami,omitempty"`
+		Tags          map[string]string `json:"tags,omitempty"`
+		IAMProfileARN string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
+		KeyPair       string            `json:"key_pair,omitempty" yaml:"key_pair"`
+		Type          string            `json:"type,omitempty"`
+		User          string            `json:"user,omitempty"`
+		Disk          Disk              `json:"disk,omitempty"`
+		Network       Network           `json:"network,omitempty"`
+		Market        string            `json:"market_type,omitempty" yaml:"market_type"`
+		Device        Device            `json:"device,omitempty"`
 	}
 
 	// Network provides network settings.
@@ -137,5 +143,32 @@ type (
 	// Device provides the device settings.
 	Device struct {
 		Name string `json:"name,omitempty"`
+	}
+	// Volume that can be mounted by containers.
+	Volume struct {
+		Name     string          `json:"name,omitempty"`
+		EmptyDir *VolumeEmptyDir `json:"temp,omitempty" yaml:"temp"`
+		HostPath *VolumeHostPath `json:"host,omitempty" yaml:"host"`
+	}
+
+	// VolumeMount describes a mounting of a Volume
+	// within a container.
+	VolumeMount struct {
+		Name      string `json:"name,omitempty"`
+		MountPath string `json:"path,omitempty" yaml:"path"`
+	}
+
+	// VolumeEmptyDir mounts a temporary directory from the
+	// host node's filesystem into the container. This can
+	// be used as a shared scratch space.
+	VolumeEmptyDir struct {
+		Medium    string             `json:"medium,omitempty"`
+		SizeLimit manifest.BytesSize `json:"size_limit,omitempty" yaml:"size_limit"`
+	}
+
+	// VolumeHostPath mounts a file or directory from the
+	// host node's filesystem into your container.
+	VolumeHostPath struct {
+		Path string `json:"path,omitempty"`
 	}
 )
