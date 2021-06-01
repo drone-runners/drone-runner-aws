@@ -12,6 +12,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/platform"
 	"github.com/drone-runners/drone-runner-aws/internal/ssh"
@@ -161,12 +162,12 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			return err
 		}
 	}
-
+	// sleep until docker is ok
+	time.Sleep(20 * time.Second)
 	logger.FromContext(ctx).
 		WithField("ip", instance.IP).
 		WithField("id", instance.ID).
 		Debug("server configuration complete")
-
 	return nil
 }
 

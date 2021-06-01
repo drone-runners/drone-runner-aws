@@ -82,15 +82,17 @@ func (p *Pipeline) GetStep(name string) *Step {
 type (
 	// Step defines a Pipeline step.
 	Step struct {
-		Commands    []string                      `json:"commands,omitempty"`
-		Detach      bool                          `json:"detach,omitempty"`
-		DependsOn   []string                      `json:"depends_on,omitempty" yaml:"depends_on"`
-		Environment map[string]*manifest.Variable `json:"environment,omitempty"`
-		Failure     string                        `json:"failure,omitempty"`
-		Name        string                        `json:"name,omitempty"`
-		Shell       string                        `json:"shell,omitempty"`
-		When        manifest.Conditions           `json:"when,omitempty"`
-		WorkingDir  string                        `json:"working_dir,omitempty" yaml:"working_dir"`
+		Commands    []string                       `json:"commands,omitempty"`
+		Detach      bool                           `json:"detach,omitempty"`
+		DependsOn   []string                       `json:"depends_on,omitempty" yaml:"depends_on"`
+		Environment map[string]*manifest.Variable  `json:"environment,omitempty"`
+		Failure     string                         `json:"failure,omitempty"`
+		Image       string                         `json:"image,omitempty"`
+		Settings    map[string]*manifest.Parameter `json:"settings,omitempty"`
+		Name        string                         `json:"name,omitempty"`
+		Shell       string                         `json:"shell,omitempty"`
+		When        manifest.Conditions            `json:"when,omitempty"`
+		WorkingDir  string                         `json:"working_dir,omitempty" yaml:"working_dir"`
 	}
 
 	// Workspace represents the pipeline workspace configuration.

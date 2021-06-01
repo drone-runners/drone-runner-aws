@@ -310,7 +310,16 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	for _, src := range pipeline.Steps {
 		buildslug := slug.Make(src.Name)
 		buildpath := join(os, spec.Root, "opt", getExt(os, buildslug))
-		buildfile := genScript(os, src.Commands)
+		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
+
+		// if there is an image associated with the step build a docker cli
+		var buildfile string
+		if src.Image == "" {
+			buildfile = genScript(os, src.Commands)
+		} else {
+			buildfile = genDockerScript(os, sourcedir, src, stepEnv)
+			fmt.Printf("\ndocker script\n%s\n", buildfile)
+		}
 
 		cmd, args := getCommand(os, buildpath)
 		dst := &engine.Step{
@@ -319,11 +328,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			Command:   cmd,
 			Detach:    src.Detach,
 			DependsOn: src.DependsOn,
-			Envs: environ.Combine(envs,
-				environ.Expand(
-					convertStaticEnv(src.Environment),
-				),
-			),
+			Envs:      stepEnv,
 			RunPolicy: runtime.RunOnSuccess,
 			Files: []*engine.File{
 				{

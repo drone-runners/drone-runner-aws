@@ -12,6 +12,7 @@ require (
 	github.com/drone/envsubst v1.0.2
 	github.com/drone/runner-go v1.6.1-0.20200415215637-a82f0982f1be
 	github.com/drone/signal v1.0.0
+	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.3.0
 	github.com/gosimple/slug v1.9.0
 	github.com/joho/godotenv v1.3.0
@@ -23,4 +24,6 @@ require (
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
+	gopkg.in/yaml.v2 v2.2.2
+	sigs.k8s.io/structured-merge-diff v1.0.2
 )

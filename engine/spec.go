@@ -85,6 +85,7 @@ type (
 		ErrPolicy  runtime.ErrPolicy `json:"err_policy,omitempty"`
 		Envs       map[string]string `json:"environment,omitempty"`
 		Files      []*File           `json:"files,omitempty"`
+		Image      string            `json:"image,omitempty"`
 		Name       string            `json:"name,omitempty"`
 		RunPolicy  runtime.RunPolicy `json:"run_policy,omitempty"`
 		Secrets    []*Secret         `json:"secrets,omitempty"`
@@ -146,6 +147,7 @@ func (s *Step) GetRunPolicy() runtime.RunPolicy  { return s.RunPolicy }
 func (s *Step) GetSecretAt(i int) runtime.Secret { return s.Secrets[i] }
 func (s *Step) GetSecretLen() int                { return len(s.Secrets) }
 func (s *Step) IsDetached() bool                 { return s.Detach }
+func (s *Step) GetImage() string                 { return s.Image }
 func (s *Step) Clone() runtime.Step {
 	dst := new(Step)
 	*dst = *s
