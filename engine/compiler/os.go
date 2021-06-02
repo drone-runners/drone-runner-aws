@@ -7,6 +7,8 @@ package compiler
 import (
 	"encoding/base64"
 	"fmt"
+	"log"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -84,11 +86,14 @@ func genScript(os string, commands []string) string {
 	}
 }
 
-func genDockerScript(os, sourcedir string, step *resource.Step, env map[string]string) string {
+func genDockerScript(os, sourcedir string, step *resource.Step, env map[string]string, pipeLineVolumeMap map[string]string) string {
 	// create the env params to be passed to the docker executable
 	envString := ""
-	for key, val := range env {
-		s := fmt.Sprintf(" --env %s=\"%s\"", key, val)
+	for key, value := range env {
+		if value == "" {
+			continue
+		}
+		s := fmt.Sprintf(" --env %s=\"%s\"", key, value)
 		envString = envString + (s)
 	}
 	// convert settings to env variables
@@ -114,38 +119,56 @@ func genDockerScript(os, sourcedir string, step *resource.Step, env map[string]s
 			envString = envString + (s)
 		}
 	}
-	// volumes to be attached for docker
+	// mount the source dir
 	volumeString := fmt.Sprintf(`-v "%s":/drone/src`, sourcedir)
-
-	if len(step.Commands) == 0 {
-		// no commands to execute
-		switch os {
-		case "windows":
-			base := powershell.Script(step.Commands)
-			return base
-		default:
-			base := fmt.Sprintf("docker run --tty %s %s %s", volumeString, envString, step.Image)
-			array := []string{}
-			array = append(array, base)
-			returnVal := bash.Script(array)
-			return returnVal
-		}
-	} else {
-		switch os {
-		case "windows":
-			base := powershell.Script(step.Commands)
-			return base
-		default:
-			// if we are executing commands (plural), build docker command lines
-			array := []string{}
-			for i := range step.Commands {
-				base := fmt.Sprintf("docker run --tty %s %s %s %s", volumeString, envString, step.Image, step.Commands[i])
-				array = append(array, base)
-			}
-			returnVal := bash.Script(array)
-			return returnVal
+	// mount volumes
+	for _, volume := range step.Volumes {
+		path, match := pipeLineVolumeMap[volume.Name]
+		if match {
+			v := fmt.Sprintf(` -v "%s":%s`, path, volume.MountPath)
+			volumeString = volumeString + v
 		}
 	}
+	// detached or interactive
+	interactiveDeamonString := "--tty"
+	if step.Detach {
+		interactiveDeamonString = "--detach"
+	}
+	// name of the container
+	reg, err := regexp.Compile("[^a-zA-Z0-9_.-]+")
+	if err != nil {
+		log.Fatal(err)
+	}
+	safeName := reg.ReplaceAllString(step.Name, "")
+	containerName := fmt.Sprintf(`--name='%s'`, safeName)
+	// networking
+	networkString := "--network='myNetwork'"
+	// if we are executing commands (plural), build docker command lines
+	entryPoint := ""
+	if len(step.Commands) > 0 {
+		for i := range step.Commands {
+			entryPoint = fmt.Sprintf(`%s %s;`, entryPoint, step.Commands[i])
+		}
+		entryPoint = fmt.Sprintf(`/bin/bash -c "%s"`, entryPoint)
+	}
+	commandBase := ""
+	switch os {
+	case "windows":
+		commandBase = powershell.Script(step.Commands)
+	default:
+		// -w set working dir, relies on the sourcedir being mounted
+		commandBase = fmt.Sprintf("docker run %s --privileged -w='/drone/src' %s %s %s %s %s %s", interactiveDeamonString, containerName, networkString, volumeString, envString, step.Image, entryPoint)
+	}
+	switch os {
+	case "windows":
+		base := powershell.Script(step.Commands)
+		return base
+	default:
+		array := append([]string{}, commandBase)
+		returnVal := bash.Script(array)
+		return returnVal
+	}
+
 }
 
 func encode(v interface{}) string {

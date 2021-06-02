@@ -6,6 +6,9 @@ package linter
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone/drone-go/drone"
@@ -38,11 +41,16 @@ func checkPipeline(pipeline *resource.Pipeline, trusted bool) error {
 	if pipeline.Instance.IAMProfileARN == "" && pipeline.Platform.OS == "windows" {
 		return errors.New("Linter: You must provide an IAMProfileARN if using a windows platform")
 	}
+	if err := checkVolumes(pipeline, trusted); err != nil {
+		return err
+	}
 	return nil
 }
 
 func checkSteps(pipeline *resource.Pipeline, trusted bool) error {
-	for _, step := range pipeline.Steps {
+	steps := append(pipeline.Services, pipeline.Steps...)
+
+	for _, step := range steps {
 		if step == nil {
 			return errors.New("Linter: nil step")
 		}
@@ -54,6 +62,27 @@ func checkSteps(pipeline *resource.Pipeline, trusted bool) error {
 }
 
 func checkStep(step *resource.Step, trusted bool) error {
-	// define pipeline step linting rules here.
+	for _, mount := range step.Volumes {
+		switch mount.Name {
+		case "workspace", "_workspace", "_docker_socket":
+			return fmt.Errorf("linter: invalid volume name: %s", mount.Name)
+		}
+		if strings.HasPrefix(filepath.Clean(mount.MountPath), "/run/drone") {
+			return fmt.Errorf("linter: cannot mount volume at /run/drone")
+		}
+	}
+
+	return nil
+}
+
+func checkVolumes(pipeline *resource.Pipeline, trusted bool) error {
+	for _, volume := range pipeline.Volumes {
+		switch volume.Name {
+		case "":
+			return fmt.Errorf("linter: missing volume name")
+		case "workspace", "_workspace", "_docker_socket":
+			return fmt.Errorf("linter: invalid volume name: %s", volume.Name)
+		}
+	}
 	return nil
 }

@@ -86,8 +86,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	spec.Instance.id = instance.ID
 	spec.Instance.ip = instance.IP
 
-	// establish an ssh connection with the server instance
-	// to setup the build environment (upload build scripts, etc)
+	// establish an ssh connection with the server instance to setup the build environment (upload build scripts, etc)
 
 	client, err := ssh.DialRetry(
 		ctx,
@@ -118,9 +117,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		defer clientftp.Close()
 	}
 
-	// the pipeline workspace is created before pipeline
-	// execution begins. All files and folders created during
-	// pipeline execution are isolated to this workspace.
+	// the pipeline workspace is created before pipeline execution begins. All files and folders created during pipeline execution are isolated to this workspace.
 	err = mkdir(clientftp, spec.Root, 0777)
 	if err != nil {
 		logger.FromContext(ctx).
@@ -130,9 +127,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 
-	// the pipeline specification may define global folders, such
-	// as the pipeline working directory, wich must be created
-	// before pipeline execution begins.
+	// the pipeline specification may define global folders, such as the pipeline working directory, which must be created before pipeline execution begins.
 	for _, file := range spec.Files {
 		if !file.IsDir {
 			continue
@@ -162,8 +157,42 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			return err
 		}
 	}
+	// create any folders needed for temporary volumes.
+	for _, volume := range spec.Volumes {
+		if volume.EmptyDir.ID != "" {
+			err = mkdir(clientftp, volume.EmptyDir.ID, 0777)
+			if err != nil {
+				logger.FromContext(ctx).
+					WithError(err).
+					WithField("path", volume.EmptyDir.ID).
+					Error("cannot create directory for temporary volume")
+				return err
+			}
+		}
+	}
 	// sleep until docker is ok
-	time.Sleep(20 * time.Second)
+	time.Sleep(50 * time.Second)
+	// create docker network
+	session, err := client.NewSession()
+	if err != nil {
+		logger.FromContext(ctx).
+			WithError(err).
+			WithField("ip", spec.Instance.ip).
+			WithField("id", spec.Instance.id).
+			Debug("failed to create session")
+		return err
+	}
+	defer session.Close()
+	err = session.Run("docker network create myNetwork")
+	if err != nil {
+		logger.FromContext(ctx).
+			WithError(err).
+			WithField("ip", spec.Instance.ip).
+			WithField("id", spec.Instance.id).
+			Debug("unable to create docker network")
+		return err
+	}
+
 	logger.FromContext(ctx).
 		WithField("ip", instance.IP).
 		WithField("id", instance.ID).
@@ -174,6 +203,11 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 // Destroy the pipeline environment.
 func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
+	fmt.Printf("\nkey\n%s\n", spec.Instance.PrivateKey)
+	fmt.Printf("\nssh -i temp.pem root@%s\n", spec.Instance.ip)
+	f, _ := os.OpenFile("temp.pem", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0400)
+	_, _ = f.WriteString(spec.Instance.PrivateKey)
+	_ = f.Close()
 
 	logger.FromContext(ctx).
 		WithField("ami", spec.Instance.AMI).

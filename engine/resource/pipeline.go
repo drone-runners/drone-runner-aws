@@ -37,7 +37,9 @@ type Pipeline struct {
 	Account     Account           `json:"account,omitempty"`
 	Instance    Instance          `json:"instance,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
+	Services    []*Step           `json:"services,omitempty"`
 	Steps       []*Step           `json:"steps,omitempty"`
+	Volumes     []*Volume         `json:"volumes,omitempty"`
 	Workspace   Workspace         `json:"workspace,omitempty"`
 }
 
@@ -92,6 +94,7 @@ type (
 		Name        string                         `json:"name,omitempty"`
 		Shell       string                         `json:"shell,omitempty"`
 		When        manifest.Conditions            `json:"when,omitempty"`
+		Volumes     []*VolumeMount                 `json:"volumes,omitempty"`
 		WorkingDir  string                         `json:"working_dir,omitempty" yaml:"working_dir"`
 	}
 
@@ -139,5 +142,32 @@ type (
 	// Device provides the device settings.
 	Device struct {
 		Name string `json:"name,omitempty"`
+	}
+	// Volume that can be mounted by containers.
+	Volume struct {
+		Name     string          `json:"name,omitempty"`
+		EmptyDir *VolumeEmptyDir `json:"temp,omitempty" yaml:"temp"`
+		HostPath *VolumeHostPath `json:"host,omitempty" yaml:"host"`
+	}
+
+	// VolumeMount describes a mounting of a Volume
+	// within a container.
+	VolumeMount struct {
+		Name      string `json:"name,omitempty"`
+		MountPath string `json:"path,omitempty" yaml:"path"`
+	}
+
+	// VolumeEmptyDir mounts a temporary directory from the
+	// host node's filesystem into the container. This can
+	// be used as a shared scratch space.
+	VolumeEmptyDir struct {
+		Medium    string             `json:"medium,omitempty"`
+		SizeLimit manifest.BytesSize `json:"size_limit,omitempty" yaml:"size_limit"`
+	}
+
+	// VolumeHostPath mounts a file or directory from the
+	// host node's filesystem into your container.
+	VolumeHostPath struct {
+		Path string `json:"path,omitempty"`
 	}
 )

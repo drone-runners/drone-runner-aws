@@ -5,3 +5,4 @@ release/*
 .vscode/
 TODO.md
 simple.yml
+__debug_bin

@@ -306,8 +306,35 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		})
 	}
 
+	// create volumes map, name of volume and real life path
+	var pipeLineVolumeMap = make(map[string]string, len(pipeline.Volumes))
+	for _, v := range pipeline.Volumes {
+		path := ""
+		if v.EmptyDir != nil {
+			path = join(os, spec.Root, random())
+			// we only need to pass temporary volumes through to engine, to have the folders created
+			src := new(engine.Volume)
+			src.EmptyDir = &engine.VolumeEmptyDir{
+				ID:   path,
+				Name: v.Name,
+			}
+			spec.Volumes = append(spec.Volumes, src)
+		} else if v.HostPath != nil {
+			path = v.HostPath.Path
+		} else {
+			continue
+		}
+		pipeLineVolumeMap[v.Name] = path
+	}
+
+	// services are the same as steps, but are executed first and are detached.
+	for _, src := range pipeline.Services {
+		src.Detach = true
+	}
+	// combine steps + services
+	combinedSteps := append(pipeline.Services, pipeline.Steps...)
 	// create steps
-	for _, src := range pipeline.Steps {
+	for _, src := range combinedSteps {
 		buildslug := slug.Make(src.Name)
 		buildpath := join(os, spec.Root, "opt", getExt(os, buildslug))
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
@@ -317,7 +344,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		if src.Image == "" {
 			buildfile = genScript(os, src.Commands)
 		} else {
-			buildfile = genDockerScript(os, sourcedir, src, stepEnv)
+			buildfile = genDockerScript(os, sourcedir, src, stepEnv, pipeLineVolumeMap)
 			fmt.Printf("\ndocker script\n%s\n", buildfile)
 		}
 

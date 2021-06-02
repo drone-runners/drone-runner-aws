@@ -14,12 +14,13 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
-		Root     string   `json:"root,omitempty"`
-		Platform Platform `json:"platform,omitempty"`
-		Account  Account  `json:"account,omitempty"`
-		Instance Instance `json:"instance,omitempty"`
-		Files    []*File  `json:"files,omitempty"`
-		Steps    []*Step  `json:"steps,omitempty"`
+		Root     string    `json:"root,omitempty"`
+		Platform Platform  `json:"platform,omitempty"`
+		Account  Account   `json:"account,omitempty"`
+		Instance Instance  `json:"instance,omitempty"`
+		Files    []*File   `json:"files,omitempty"`
+		Steps    []*Step   `json:"steps,omitempty"`
+		Volumes  []*Volume `json:"volumes,omitempty"`
 	}
 
 	// Account provides account settings
@@ -89,6 +90,7 @@ type (
 		Name       string            `json:"name,omitempty"`
 		RunPolicy  runtime.RunPolicy `json:"run_policy,omitempty"`
 		Secrets    []*Secret         `json:"secrets,omitempty"`
+		Volumes    []*VolumeMount    `json:"volumes,omitempty"`
 		WorkingDir string            `json:"working_dir,omitempty"`
 	}
 
@@ -106,6 +108,38 @@ type (
 		Arch    string `json:"arch,omitempty"`
 		Variant string `json:"variant,omitempty"`
 		Version string `json:"version,omitempty"`
+	}
+
+	// Volume that can be mounted by containers.
+	Volume struct {
+		EmptyDir *VolumeEmptyDir `json:"temp,omitempty"`
+		HostPath *VolumeHostPath `json:"host,omitempty"`
+	}
+
+	// VolumeMount describes a mounting of a Volume within a container.
+	VolumeMount struct {
+		Name string `json:"name,omitempty"`
+		Path string `json:"path,omitempty"`
+	}
+
+	// VolumeEmptyDir mounts a temporary directory from the
+	// host node's filesystem into the container. This can
+	// be used as a shared scratch space.
+	VolumeEmptyDir struct {
+		ID        string            `json:"id,omitempty"`
+		Name      string            `json:"name,omitempty"`
+		Medium    string            `json:"medium,omitempty"`
+		SizeLimit int64             `json:"size_limit,omitempty"`
+		Labels    map[string]string `json:"labels,omitempty"`
+	}
+
+	// VolumeHostPath mounts a file or directory from the host node's filesystem into your container.
+	VolumeHostPath struct {
+		ID       string            `json:"id,omitempty"`
+		Name     string            `json:"name,omitempty"`
+		Path     string            `json:"path,omitempty"`
+		Labels   map[string]string `json:"labels,omitempty"`
+		ReadOnly bool              `json:"read_only,omitempty"`
 	}
 
 	// File defines a file that should be uploaded or
