@@ -55,11 +55,11 @@ type Compiler struct {
 // Compile compiles the configuration file.
 func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec {
 	pipeline := args.Pipeline.(*resource.Pipeline)
-	os := pipeline.Platform.OS
+	pipelineOS := pipeline.Platform.OS
 
 	spec := &engine.Spec{
 		Platform: engine.Platform{
-			OS:      pipeline.Platform.OS,
+			OS:      pipelineOS,
 			Arch:    pipeline.Platform.Arch,
 			Variant: pipeline.Platform.Variant,
 			Version: pipeline.Platform.Version,
@@ -172,12 +172,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	spec.Instance.UserData = userDataWithSSH
 
 	// create the root directory
-	spec.Root = tempdir(os)
+	spec.Root = tempdir(pipelineOS)
 	// creates a home directory in the root.
 	// note: mkdirall fails on windows so we need to create all directories in the tree.
-	homedir := join(os, spec.Root, "home", "drone")
+	homedir := join(pipelineOS, spec.Root, "home", "drone")
 	spec.Files = append(spec.Files, &engine.File{
-		Path:  join(os, spec.Root, "home"),
+		Path:  join(pipelineOS, spec.Root, "home"),
 		Mode:  0700,
 		IsDir: true,
 	})
@@ -190,9 +190,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// creates a source directory in the root.
 	// note: mkdirall fails on windows so we need to create all
 	// directories in the tree.
-	sourcedir := join(os, spec.Root, "drone", "src")
+	sourcedir := join(pipelineOS, spec.Root, "drone", "src")
 	spec.Files = append(spec.Files, &engine.File{
-		Path:  join(os, spec.Root, "drone"),
+		Path:  join(pipelineOS, spec.Root, "drone"),
 		Mode:  0700,
 		IsDir: true,
 	})
@@ -204,15 +204,15 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// creates the opt directory to hold all scripts.
 	spec.Files = append(spec.Files, &engine.File{
-		Path:  join(os, spec.Root, "opt"),
+		Path:  join(pipelineOS, spec.Root, "opt"),
 		Mode:  0700,
 		IsDir: true,
 	})
 
 	// creates the netrc file
 	if args.Netrc != nil && args.Netrc.Password != "" {
-		netrcfile := getNetrc(os)
-		netrcpath := join(os, homedir, netrcfile)
+		netrcfile := getNetrc(pipelineOS)
+		netrcpath := join(pipelineOS, homedir, netrcfile)
 		netrcdata := fmt.Sprintf(
 			"machine %s login %s password %s",
 			args.Netrc.Machine,
@@ -276,8 +276,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// create the clone step, maybe
 	if !pipeline.Clone.Disable {
-		clonepath := join(os, spec.Root, "opt", getExt(os, "clone"))
-		clonefile := genScript(os,
+		clonepath := join(pipelineOS, spec.Root, "opt", getExt(pipelineOS, "clone"))
+		clonefile := genScript(pipelineOS,
 			clone.Commands(
 				clone.Args{
 					Branch: args.Build.Target,
@@ -287,7 +287,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				},
 			),
 		)
-		cmd, args := getCommand(os, clonepath)
+		cmd, args := getCommand(pipelineOS, clonepath)
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Name:      "clone",
 			Args:      args,
@@ -311,7 +311,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	for _, v := range pipeline.Volumes {
 		path := ""
 		if v.EmptyDir != nil {
-			path = join(os, spec.Root, random())
+			path = join(pipelineOS, spec.Root, random())
 			// we only need to pass temporary volumes through to engine, to have the folders created
 			src := new(engine.Volume)
 			src.EmptyDir = &engine.VolumeEmptyDir{
@@ -336,19 +336,19 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// create steps
 	for _, src := range combinedSteps {
 		buildslug := slug.Make(src.Name)
-		buildpath := join(os, spec.Root, "opt", getExt(os, buildslug))
+		buildpath := join(pipelineOS, spec.Root, "opt", getExt(pipelineOS, buildslug))
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
 
 		// if there is an image associated with the step build a docker cli
 		var buildfile string
 		if src.Image == "" {
-			buildfile = genScript(os, src.Commands)
+			buildfile = genScript(pipelineOS, src.Commands)
 		} else {
-			buildfile = genDockerScript(os, sourcedir, src, stepEnv, pipeLineVolumeMap)
+			buildfile = genDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
 			fmt.Printf("\ndocker script\n%s\n", buildfile)
 		}
 
-		cmd, args := getCommand(os, buildpath)
+		cmd, args := getCommand(pipelineOS, buildpath)
 		dst := &engine.Step{
 			Name:      src.Name,
 			Args:      args,

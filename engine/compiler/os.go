@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildkite/yaml"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/shell/bash"
 	"github.com/drone/runner-go/shell/powershell"
 	json "github.com/ghodss/yaml"
@@ -86,9 +87,7 @@ func genScript(os string, commands []string) string {
 	}
 }
 
-func genDockerScript(os, sourcedir string, step *resource.Step, env map[string]string, pipeLineVolumeMap map[string]string) string {
-	// create the env params to be passed to the docker executable
-	envString := ""
+func convertEnvMapToString(env map[string]string) (envString string) {
 	for key, value := range env {
 		if value == "" {
 			continue
@@ -96,8 +95,11 @@ func genDockerScript(os, sourcedir string, step *resource.Step, env map[string]s
 		s := fmt.Sprintf(" --env %s=\"%s\"", key, value)
 		envString = envString + (s)
 	}
-	// convert settings to env variables
-	for key, value := range step.Settings {
+	return envString
+}
+
+func convertSettingsToString(settings map[string]*manifest.Parameter) (envString string) {
+	for key, value := range settings {
 		// fix https://github.com/drone/drone-yaml/issues/13
 		if value == nil {
 			continue
@@ -119,47 +121,69 @@ func genDockerScript(os, sourcedir string, step *resource.Step, env map[string]s
 			envString = envString + (s)
 		}
 	}
-	// mount the source dir
-	volumeString := fmt.Sprintf(`-v "%s":/drone/src`, sourcedir)
-	// mount volumes
-	for _, volume := range step.Volumes {
+	return envString
+}
+
+func convertVolumesToString(sourcedir string, stepVolumes []*resource.VolumeMount, pipeLineVolumeMap map[string]string) (volumeString string) {
+	volumeString = fmt.Sprintf(`-v "%s":/drone/src`, sourcedir)
+	for _, volume := range stepVolumes {
 		path, match := pipeLineVolumeMap[volume.Name]
 		if match {
 			v := fmt.Sprintf(` -v "%s":%s`, path, volume.MountPath)
 			volumeString = volumeString + v
 		}
 	}
-	// detached or interactive
-	interactiveDeamonString := "--tty"
-	if step.Detach {
-		interactiveDeamonString = "--detach"
-	}
+	return volumeString
+}
+
+func convertStepNametoContainerString(stepName string) (containerName string) {
 	// name of the container
 	reg, err := regexp.Compile("[^a-zA-Z0-9_.-]+")
 	if err != nil {
 		log.Fatal(err)
 	}
-	safeName := reg.ReplaceAllString(step.Name, "")
-	containerName := fmt.Sprintf(`--name='%s'`, safeName)
-	// networking
-	networkString := "--network='myNetwork'"
-	// if we are executing commands (plural), build docker command lines
-	entryPoint := ""
-	if len(step.Commands) > 0 {
-		for i := range step.Commands {
-			entryPoint = fmt.Sprintf(`%s %s;`, entryPoint, step.Commands[i])
+	safeName := reg.ReplaceAllString(stepName, "")
+	containerName = fmt.Sprintf(`--name='%s'`, safeName)
+	return containerName
+}
+
+func convertCommandsToEntryPointString(commands []string) (entryPoint string) {
+	if len(commands) > 0 {
+		for i := range commands {
+			entryPoint = fmt.Sprintf(`%s %s;`, entryPoint, commands[i])
 		}
 		entryPoint = fmt.Sprintf(`/bin/bash -c "%s"`, entryPoint)
 	}
+	return entryPoint
+}
+
+func genDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env map[string]string, pipeLineVolumeMap map[string]string) string {
+	// create the env params to be passed to the docker executable
+	envString := convertEnvMapToString(env)
+	// convert settings to env variables
+	envString = envString + convertSettingsToString(step.Settings)
+	// mount the source dir
+	volumeString := convertVolumesToString(sourcedir, step.Volumes, pipeLineVolumeMap)
+	// detached or interactive
+	interactiveDeamonString := "--tty"
+	if step.Detach {
+		interactiveDeamonString = "--detach"
+	}
+	// container name
+	containerName := convertStepNametoContainerString(step.Name)
+	// networking
+	networkString := "--network='myNetwork'"
+	// if we are executing commands (plural), build docker command lines
+	entryPoint := convertCommandsToEntryPointString(step.Commands)
 	commandBase := ""
-	switch os {
+	switch pipelineOS {
 	case "windows":
 		commandBase = powershell.Script(step.Commands)
 	default:
 		// -w set working dir, relies on the sourcedir being mounted
 		commandBase = fmt.Sprintf("docker run %s --privileged -w='/drone/src' %s %s %s %s %s %s", interactiveDeamonString, containerName, networkString, volumeString, envString, step.Image, entryPoint)
 	}
-	switch os {
+	switch pipelineOS {
 	case "windows":
 		base := powershell.Script(step.Commands)
 		return base

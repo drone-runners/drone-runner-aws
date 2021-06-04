@@ -45,8 +45,8 @@ type (
 		KeyPair string `json:"key_pair,omitempty"`
 		Market  string `json:"market_type,omitempty"`
 		Device  Device `json:"device,omitempty"`
-		id      string
-		ip      string
+		ID      string
+		IP      string
 		// availability_zone
 		// placement_group
 		// tenancy
