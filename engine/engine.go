@@ -52,7 +52,6 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 	// provisioning information
 	provArgs := platform.ProvisionArgs{
-		Key:           spec.Instance.KeyPair,
 		Image:         spec.Instance.AMI,
 		IamProfileArn: spec.Instance.IAMProfileARN,
 		Name:          spec.Instance.User,
@@ -83,14 +82,13 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		WithField("ID", instance.ID).
 		WithField("IP", instance.IP).
 		Info("created the instance")
-	spec.Instance.id = instance.ID
-	spec.Instance.ip = instance.IP
+	spec.Instance.ID = instance.ID
+	spec.Instance.IP = instance.IP
 
 	// establish an ssh connection with the server instance to setup the build environment (upload build scripts, etc)
-
 	client, err := ssh.DialRetry(
 		ctx,
-		spec.Instance.ip,
+		spec.Instance.IP,
 		spec.Instance.User,
 		spec.Instance.PrivateKey,
 	)
@@ -170,25 +168,26 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			}
 		}
 	}
-	// sleep until docker is ok
-	time.Sleep(50 * time.Second)
 	// create docker network
 	session, err := client.NewSession()
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ip", spec.Instance.ip).
-			WithField("id", spec.Instance.id).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
 			Debug("failed to create session")
 		return err
 	}
 	defer session.Close()
+	// sleep until docker is ok
+	time.Sleep(60 * time.Second)
+
 	err = session.Run("docker network create myNetwork")
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ip", spec.Instance.ip).
-			WithField("id", spec.Instance.id).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
 			Debug("unable to create docker network")
 		return err
 	}
@@ -204,8 +203,9 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 	fmt.Printf("\nkey\n%s\n", spec.Instance.PrivateKey)
-	fmt.Printf("\nssh -i temp.pem root@%s\n", spec.Instance.ip)
-	f, _ := os.OpenFile("temp.pem", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0400)
+	fmt.Printf("\nssh -i temp.pem root@%s\n", spec.Instance.IP)
+	_ = os.Remove("temp.pem")
+	f, _ := os.OpenFile("temp.pem", os.O_RDWR|os.O_CREATE, 0400)
 	_, _ = f.WriteString(spec.Instance.PrivateKey)
 	_ = f.Close()
 
@@ -220,8 +220,8 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		Region: spec.Account.Region,
 	}
 	instance := platform.Instance{
-		ID: spec.Instance.id,
-		IP: spec.Instance.ip,
+		ID: spec.Instance.ID,
+		IP: spec.Instance.IP,
 	}
 	err := platform.Destroy(ctx, creds, &instance)
 	if err != nil {
@@ -240,7 +240,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	step := stepv.(*Step)
 
 	client, err := ssh.Dial(
-		spec.Instance.ip,
+		spec.Instance.IP,
 		spec.Instance.User,
 		spec.Instance.PrivateKey,
 	)
@@ -258,8 +258,8 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ip", spec.Instance.ip).
-			WithField("id", spec.Instance.id).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
 			Debug("failed to create sftp client")
 		return nil, err
 	}
@@ -289,8 +289,8 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ip", spec.Instance.ip).
-			WithField("id", spec.Instance.id).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
 			Debug("failed to create session")
 		return nil, err
 	}

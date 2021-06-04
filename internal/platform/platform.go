@@ -69,7 +69,7 @@ func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instan
 	tags["Name"] = args.Name
 
 	in := &ec2.RunInstancesInput{
-		KeyName:            aws.String(args.Key),
+		//KeyName:            aws.String(args.Key),
 		ImageId:            aws.String(args.Image),
 		InstanceType:       aws.String(args.Size),
 		MinCount:           aws.Int64(1),

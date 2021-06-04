@@ -1,0 +1,56 @@
+kind: pipeline
+type: aws
+name: default
+
+account:
+  access_key_id: AKIAYNEYDLRSERCH246T
+  secret_access_key: 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
+  region: us-east-2
+
+platform:
+ os: windows
+
+instance:
+# Microsoft Windows Server 2019 t1-micro ohio
+  ami: ami-0b697c4ae566cad55 
+  iam_profile_arn: "arn:aws:iam::577992088676:instance-profile/drone_iam_role"
+  key_pair: test_key_pair
+  type: t2.nano
+  network:
+    security_groups:
+      - sg-5d255b29
+
+
+steps:
+  - name: check install
+    commands:
+      - type C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log
+  - name: plugin
+    image: plugins/docker
+    settings:
+      dry_run: true
+      repo: foo/bar
+      tags: latest
+    volumes:
+      - name: cache
+        path: /go
+  - name: imagey + commands
+    image: golang
+    commands:
+      - go version
+      - go help
+  - name: docker status
+    commands:
+      - docker ps -a
+  - name: ping
+    image: redis
+    commands:
+      - redis-cli -h red ping
+
+services:
+  - name: red
+    image: redis
+
+volumes:
+- name: cache
+  temp: {}
