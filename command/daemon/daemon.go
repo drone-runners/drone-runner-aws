@@ -211,6 +211,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return nil
 	})
 
+	// seed a pool
+	// read a file if exists,
+	// run engine.setup
+
 	err = g.Wait()
 	if err != nil {
 		logrus.WithError(err).

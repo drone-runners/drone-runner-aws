@@ -193,9 +193,11 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 	opts := cmp.Options{
 		cmpopts.IgnoreUnexported(engine.Spec{}),
 		cmpopts.IgnoreFields(engine.Step{}, "Envs", "Secrets"),
+		cmpopts.IgnoreFields(engine.Spec{}, "Instance.PrivateKey", "Instance.PublicKey", "Instance.UserData"),
 	}
 	if diff := cmp.Diff(got, want, opts...); len(diff) != 0 {
-		t.Errorf(diff)
+
+		t.Errorf("%s\n%v", t.Name(), diff)
 	}
 
 	return got.(*engine.Spec)

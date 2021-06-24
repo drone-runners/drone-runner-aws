@@ -4,4 +4,6 @@ release/*
 .env
 .vscode/
 TODO.md
-simple.yml
+simple*.yml
+__debug_bin
+temp.pem

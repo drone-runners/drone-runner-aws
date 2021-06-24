@@ -1,6 +1,6 @@
 module github.com/drone-runners/drone-runner-aws
 
-go 1.12
+go 1.16
 
 require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
@@ -12,6 +12,7 @@ require (
 	github.com/drone/envsubst v1.0.2
 	github.com/drone/runner-go v1.6.1-0.20200415215637-a82f0982f1be
 	github.com/drone/signal v1.0.0
+	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.3.0
 	github.com/gosimple/slug v1.9.0
 	github.com/joho/godotenv v1.3.0
