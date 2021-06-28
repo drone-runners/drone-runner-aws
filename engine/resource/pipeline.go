@@ -22,11 +22,12 @@ const (
 // Pipeline is a pipeline resource that executes pipelines
 // on the host machine without any virtualization.
 type Pipeline struct {
-	Version string   `json:"version,omitempty"`
-	Kind    string   `json:"kind,omitempty"`
-	Type    string   `json:"type,omitempty"`
-	Name    string   `json:"name,omitempty"`
-	Deps    []string `json:"depends_on,omitempty"`
+	Version   string   `json:"version,omitempty"`
+	Kind      string   `json:"kind,omitempty"`
+	Type      string   `json:"type,omitempty"`
+	Name      string   `json:"name,omitempty"`
+	PoolCount int      `json:"pool_count,omitempty" yaml:"pool_count"`
+	Deps      []string `json:"depends_on,omitempty"`
 
 	Clone       manifest.Clone       `json:"clone,omitempty"`
 	Concurrency manifest.Concurrency `json:"concurrency,omitempty"`
@@ -113,9 +114,11 @@ type (
 	// Instance provides instance settings.
 	Instance struct {
 		AMI           string            `json:"ami,omitempty"`
+		UsePool       bool              `json:"use_pool,omitempty" yaml:"use_pool"`
+		PrivateKey    string            `json:"private_key,omitempty" yaml:"private_key"`
+		PublicKey     string            `json:"public_key,omitempty" yaml:"public_key"`
 		Tags          map[string]string `json:"tags,omitempty"`
 		IAMProfileARN string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
-		KeyPair       string            `json:"key_pair,omitempty" yaml:"key_pair"`
 		Type          string            `json:"type,omitempty"`
 		User          string            `json:"user,omitempty"`
 		Disk          Disk              `json:"disk,omitempty"`

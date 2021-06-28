@@ -61,6 +61,9 @@ type Config struct {
 		AwsAccessKeyID     string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_ID"`
 		AwsAccessKeySecret string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"`
 		AwsRegion          string `envconfig:"DRONE_SETTINGS_AWS_REGION"`
+		PrivateKeyFile     string `envconfig:"DRONE_SETTINGS_PRIVATE_KEY_FILE"`
+		PublicKeyFile      string `envconfig:"DRONE_SETTINGS_PUBLIC_KEY_FILE"`
+		ReusePool          bool   `envconfig:"DRONE_SETTINGS_REUSE_POOL"`
 	}
 
 	Environ struct {

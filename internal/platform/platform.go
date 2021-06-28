@@ -9,6 +9,8 @@ package platform
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/drone/runner-go/logger"
@@ -48,8 +50,17 @@ type (
 
 	// Instance represents a provisioned server instance.
 	Instance struct {
-		ID string
-		IP string
+		ID     string
+		IP     string
+		Status string
+	}
+
+	AwsPools struct {
+		Pools map[string]Pool
+	}
+
+	Pool struct {
+		Instances []Instance
 	}
 )
 
@@ -66,10 +77,9 @@ func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instan
 	}
 
 	tags := createCopy(args.Tags)
-	tags["Name"] = args.Name
+	tags["name"] = args.Name
 
 	in := &ec2.RunInstancesInput{
-		//KeyName:            aws.String(args.Key),
 		ImageId:            aws.String(args.Image),
 		InstanceType:       aws.String(args.Size),
 		MinCount:           aws.Int64(1),
@@ -223,6 +233,177 @@ func Destroy(ctx context.Context, creds Credentials, instance *Instance) error {
 
 	logger.Debugln("terminated")
 	return nil
+}
+
+func GetPools(ctx context.Context, creds Credentials) (awspools *ec2.DescribeInstancesOutput, err error) {
+	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+	params := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			&ec2.Filter{
+				Name: aws.String("instance-state-name"),
+				Values: []*string{
+					aws.String("running"),
+				},
+			},
+		},
+	}
+	return client.DescribeInstances(params)
+}
+
+func TagInstance(ctx context.Context, creds Credentials, instance, key, value string) (err error) {
+	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+	input := &ec2.CreateTagsInput{
+		Resources: []*string{
+			aws.String(instance),
+		},
+		Tags: []*ec2.Tag{&ec2.Tag{Key: aws.String(key), Value: aws.String(value)}},
+	}
+
+	_, tagErr := client.CreateTags(input)
+	if tagErr != nil {
+		return tagErr
+	}
+	return nil
+}
+
+func CleanPools(ctx context.Context, creds Credentials) (err error) {
+	poolFullyCleaned := true
+	logger := logger.FromContext(ctx)
+	logger.Debugln("clean pools")
+	resp, err := GetPools(ctx, creds)
+	if err != nil {
+		logger.WithError(err).
+			Errorln("cannot get pools from aws")
+		return err
+	}
+	// does any of the machines have the tags we want
+	for idx := range resp.Reservations {
+		for _, inst := range resp.Reservations[idx].Instances {
+			instanceFound := false
+			for _, keys := range inst.Tags {
+				if *keys.Key == "drone" {
+					if *keys.Value == "drone-runner-aws" {
+						instanceFound = true
+					}
+				}
+
+			}
+			if instanceFound {
+				destInstance := Instance{
+					ID: *inst.InstanceId,
+					IP: *inst.PublicIpAddress,
+				}
+				destErr := Destroy(ctx, creds, &destInstance)
+				if destErr != nil {
+					poolFullyCleaned = false
+					logger.WithError(err).
+						WithField("ID", inst.InstanceId).
+						Errorln("unable to terminate instance")
+				}
+			}
+		}
+	}
+	if poolFullyCleaned {
+		return nil
+	} else {
+		return fmt.Errorf("unable to fully clean the pool, check the logs")
+	}
+}
+
+func PoolCountFree(ctx context.Context, creds Credentials, poolName string, awsMutex *sync.Mutex) (free int, err error) {
+	logger := logger.FromContext(ctx).
+		WithField("pool", poolName)
+
+	logger.Debugln("check pool")
+	awsMutex.Lock()
+	defer awsMutex.Unlock()
+	resp, err := GetPools(ctx, creds)
+	if err != nil {
+		logger.WithError(err).
+			Errorln("cannot get pools from aws")
+		return 0, err
+	}
+	// does any of the machines have the tags we want
+	for idx := range resp.Reservations {
+		for _, inst := range resp.Reservations[idx].Instances {
+			poolFound := false
+			instanceFree := true
+			for _, keys := range inst.Tags {
+				if *keys.Key == "pool" {
+					if *keys.Value == poolName {
+						poolFound = true
+					}
+				}
+				if *keys.Key == "status" {
+					instanceFree = false
+				}
+
+			}
+			if poolFound && instanceFree {
+				free++
+			}
+		}
+	}
+	return free, nil
+}
+
+// TryPool will look for an instance in the pool, returning its is and ip. otherwise it return an error
+func TryPool(ctx context.Context, creds Credentials, poolName string, awsMutex *sync.Mutex) (found bool, instanceID, instanceIP string, err error) {
+	logger := logger.FromContext(ctx).
+		WithField("pool", poolName)
+
+	logger.Debugln("try pool")
+	awsMutex.Lock()
+	defer awsMutex.Unlock()
+	resp, poolErr := GetPools(ctx, creds)
+
+	if poolErr != nil {
+		logger.WithError(poolErr).
+			Errorln("cannot get pools from aws")
+		return false, "", "", poolErr
+	}
+
+	// do any of the machines have the tags we want
+	for idx := range resp.Reservations {
+		for _, inst := range resp.Reservations[idx].Instances {
+			poolFound := false
+			instanceFree := true
+			for _, keys := range inst.Tags {
+				if *keys.Key == "pool" {
+					if *keys.Value == poolName {
+						poolFound = true
+					}
+				}
+				if *keys.Key == "status" {
+					instanceFree = false
+				}
+			}
+			if poolFound && instanceFree {
+				found = true
+				instanceID = *inst.InstanceId
+				instanceIP = *inst.PublicIpAddress
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+
+	if !found {
+		logger.Debugln("no free instances")
+		return false, "", "", nil
+	}
+
+	logger.Debugln("found an instance")
+	tagErr := TagInstance(ctx, creds, instanceID, "status", "build in progress")
+	if tagErr != nil {
+		logger.WithError(tagErr).
+			WithField("instance", instanceID).
+			Errorln("cannot tag instance")
+		return false, "", "", tagErr
+	}
+	return true, instanceID, instanceIP, nil
 }
 
 // checks that we can log into EC2, and the regions respond
