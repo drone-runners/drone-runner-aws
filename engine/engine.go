@@ -163,7 +163,6 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	if clientftp != nil {
 		defer clientftp.Close()
 	}
-
 	// the pipeline workspace is created before pipeline execution begins. All files and folders created during pipeline execution are isolated to this workspace.
 	err = mkdir(clientftp, spec.Root, 0777)
 	if err != nil {
@@ -173,7 +172,6 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			Error("cannot create workspace directory")
 		return err
 	}
-
 	// the pipeline specification may define global folders, such as the pipeline working directory, which must be created before pipeline execution begins.
 	for _, file := range spec.Files {
 		if !file.IsDir {
@@ -188,10 +186,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			return err
 		}
 	}
-
-	// the pipeline specification may define global files such
-	// as authentication credentials that should be uploaded
-	// before pipeline execution begins.
+	// the pipeline specification may define global files such as authentication credentials that should be uploaded before pipeline execution begins.
 	for _, file := range spec.Files {
 		if file.IsDir {
 			continue
@@ -228,8 +223,17 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 	defer session.Close()
-	// sleep until docker is ok, `docker ps -q` is probably preferable
-	time.Sleep(80 * time.Second)
+	// keep checking until docker is ok
+	dockerErr := ssh.ApplicationRetry(ctx, client, "docker ps")
+	if dockerErr != nil {
+		logger.FromContext(ctx).
+			WithError(dockerErr).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
+			Debug("docker failed to start in a timely fashion")
+		return err
+	}
+
 	networkCommand := "docker network create myNetwork"
 	if spec.Platform.OS == "windows" {
 		networkCommand = "docker network create --driver nat myNetwork"
