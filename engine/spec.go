@@ -14,13 +14,15 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
-		Root     string    `json:"root,omitempty"`
-		Platform Platform  `json:"platform,omitempty"`
-		Account  Account   `json:"account,omitempty"`
-		Instance Instance  `json:"instance,omitempty"`
-		Files    []*File   `json:"files,omitempty"`
-		Steps    []*Step   `json:"steps,omitempty"`
-		Volumes  []*Volume `json:"volumes,omitempty"`
+		PoolName  string    `json:"Name,omitempty"`
+		PoolCount int       `json:"poolcount,omitempty"`
+		Root      string    `json:"root,omitempty"`
+		Platform  Platform  `json:"platform,omitempty"`
+		Account   Account   `json:"account,omitempty"`
+		Instance  Instance  `json:"instance,omitempty"`
+		Files     []*File   `json:"files,omitempty"`
+		Steps     []*Step   `json:"steps,omitempty"`
+		Volumes   []*Volume `json:"volumes,omitempty"`
 	}
 
 	// Account provides account settings
@@ -32,22 +34,21 @@ type (
 
 	// Instance provides instance settings.
 	Instance struct {
+		UsePool       bool              `json:"use_pool,omitempty" yaml:"use_pool"`
 		AMI           string            `json:"ami,omitempty"`
 		Tags          map[string]string `json:"tags,omitempty"`
 		IAMProfileARN string            `json:"iam_profile_arn,omitempty"`
 		Type          string            `json:"type,omitempty"`
 		User          string            `json:"user,omitempty"`
-		PrivateKey    string            `json:"private_key,omitempty"`
-		PublicKey     string            `json:"public_key,omitempty"`
+		PrivateKey    string            `json:"private_key,omitempty" yaml:"private_key"`
+		PublicKey     string            `json:"public_key,omitempty" yaml:"public_key"`
 		UserData      string            `json:"user_data,omitempty"`
 		Disk          Disk              `json:"disk,omitempty"`
 		Network       Network           `json:"network,omitempty"`
-		// this is a keypair defined in AWS, it can make it easier to debug (optional)
-		KeyPair string `json:"key_pair,omitempty"`
-		Market  string `json:"market_type,omitempty"`
-		Device  Device `json:"device,omitempty"`
-		ID      string
-		IP      string
+		Market        string            `json:"market_type,omitempty"`
+		Device        Device            `json:"device,omitempty"`
+		ID            string
+		IP            string
 		// availability_zone
 		// placement_group
 		// tenancy

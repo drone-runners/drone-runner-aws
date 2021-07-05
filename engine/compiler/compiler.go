@@ -7,6 +7,8 @@ package compiler
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
@@ -34,6 +36,8 @@ type Settings struct {
 	AwsAccessKeyID     string
 	AwsAccessKeySecret string
 	AwsRegion          string
+	PrivateKeyFile     string
+	PublicKeyFile      string
 }
 
 // Compiler compiles the Yaml configuration file to an
@@ -58,6 +62,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	pipelineOS := pipeline.Platform.OS
 
 	spec := &engine.Spec{
+		PoolName:  pipeline.Name,
+		PoolCount: pipeline.PoolCount,
 		Platform: engine.Platform{
 			OS:      pipelineOS,
 			Arch:    pipeline.Platform.Arch,
@@ -71,8 +77,10 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		},
 		Instance: engine.Instance{
 			AMI:           pipeline.Instance.AMI,
+			UsePool:       pipeline.Instance.UsePool,
+			PublicKey:     pipeline.Instance.PublicKey,
+			PrivateKey:    pipeline.Instance.PrivateKey,
 			IAMProfileARN: pipeline.Instance.IAMProfileARN,
-			KeyPair:       pipeline.Instance.KeyPair,
 			Type:          pipeline.Instance.Type,
 			Market:        pipeline.Instance.Market,
 			Tags:          pipeline.Instance.Tags,
@@ -93,7 +101,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			},
 		},
 	}
-
 	// source the aws_access_key_id from a secret. finally try config
 	if s, ok := c.findSecret(ctx, args, pipeline.Account.AccessKeyID.Secret); ok {
 		spec.Account.AccessKeyID = s
@@ -123,6 +130,11 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		}
 	}
 
+	// put something into tags even if empty
+	if spec.Instance.Tags == nil {
+		spec.Instance.Tags = make(map[string]string)
+	}
+
 	// set the default disk size if not provided
 	if spec.Instance.Disk.Size == 0 {
 		spec.Instance.Disk.Size = 32
@@ -150,14 +162,30 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	case spec.Instance.User == "":
 		spec.Instance.User = "root"
 	}
-	// generate the keys used for ssh
-	publickey, privatekey, err := sshkey.GeneratePair()
-	if err != nil {
-		publickey = ""
-		privatekey = ""
+
+	_, err := os.Stat(c.Settings.PrivateKeyFile)
+	if os.IsNotExist(err) {
+		// there are no key files
+		publickey, privatekey, err := sshkey.GeneratePair()
+		if err != nil {
+			publickey = ""
+			privatekey = ""
+		}
+		spec.Instance.PrivateKey = privatekey
+		spec.Instance.PublicKey = publickey
+	} else {
+		body, privateKeyErr := os.ReadFile(c.Settings.PrivateKeyFile)
+		if privateKeyErr != nil {
+			log.Fatalf("unable to read file ``: %v", privateKeyErr)
+		}
+		spec.Instance.PrivateKey = string(body)
+
+		body, publicKeyErr := os.ReadFile(c.Settings.PublicKeyFile)
+		if publicKeyErr != nil {
+			log.Fatalf("unable to read file: %v", publicKeyErr)
+		}
+		spec.Instance.PublicKey = string(body)
 	}
-	spec.Instance.PrivateKey = privatekey
-	spec.Instance.PublicKey = publickey
 	// generate the cloudinit file
 	var userDataWithSSH string
 	if spec.Platform.OS == "windows" {
@@ -346,7 +374,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			buildfile = genScript(pipelineOS, src.Commands)
 		} else {
 			buildfile = genDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
-			fmt.Printf("\ndocker script\n%s\n", buildfile)
+			//fmt.Printf("\ndocker script\n%s\n", buildfile)
 		}
 
 		cmd, args := getCommand(pipelineOS, buildpath)

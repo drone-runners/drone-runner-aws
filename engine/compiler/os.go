@@ -23,7 +23,8 @@ import (
 // helper function returns the base temporary directory based
 // on the target platform.
 func tempdir(os string) string {
-	dir := fmt.Sprintf("drone-%s", random())
+	// dir := fmt.Sprintf("drone-%s", random())
+	dir := "aws"
 	switch os {
 	case "windows":
 		return join(os, "C:\\Windows\\Temp", dir)

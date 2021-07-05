@@ -12,10 +12,12 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/platform"
 	"github.com/drone-runners/drone-runner-aws/internal/ssh"
+
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
 
@@ -23,37 +25,69 @@ import (
 	cryptoSSH "golang.org/x/crypto/ssh"
 )
 
+type Pool struct {
+	InstanceSpec *Spec
+	PoolSize     int
+}
+
 // Opts configures the Engine.
 type Opts struct {
+	AwsMutex   *sync.Mutex
+	RunnerName string
+	Pools      map[string]Pool
 }
 
 // Engine implements a pipeline engine.
 type Engine struct {
+	opts Opts
 }
 
 // New returns a new engine.
 func New(opts Opts) (*Engine, error) {
-	return &Engine{}, nil
+	return &Engine{opts}, nil
 }
 
 // Setup the pipeline environment.
 func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
-
-	logger.FromContext(ctx).
-		WithField("ami", spec.Instance.AMI).
-		Debug("creating instance")
-
 	// create creds
 	creds := platform.Credentials{
 		Client: spec.Account.AccessKeyID,
 		Secret: spec.Account.AccessKeySecret,
 		Region: spec.Account.Region,
 	}
-
+	if spec.Instance.UsePool {
+		found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.PoolName, e.opts.AwsMutex)
+		if poolErr != nil {
+			logger.FromContext(ctx).
+				WithError(poolErr).
+				WithField("ami", spec.Instance.AMI).
+				Errorf("failed to use pool")
+		}
+		if found {
+			// using the pool, use the provided keys
+			logger.FromContext(ctx).
+				WithField("ami", spec.Instance.AMI).
+				WithField("ip", ip).
+				WithField("id", id).
+				Debug("using pool instance")
+			spec.Instance.ID = id
+			spec.Instance.IP = ip
+			return nil
+		}
+		logger.FromContext(ctx).
+			WithField("ami", spec.Instance.AMI).
+			Debug("unable to use pool, creating an adhoc instance")
+	}
 	// add some tags
 	awsTags := spec.Instance.Tags
-	awsTags["Drone"] = "drone-runner-aws"
+	awsTags["drone"] = "drone-runner-aws"
+	awsTags["pool"] = spec.PoolName
+	awsTags["creator"] = e.opts.RunnerName
+	if spec.Instance.UsePool {
+		// tag so no other builds steel this instance. only happens when the pool is empty
+		awsTags["status"] = "build in progress"
+	}
 	// provisioning information
 	provArgs := platform.ProvisionArgs{
 		Image:         spec.Instance.AMI,
@@ -76,6 +110,10 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 	// create the instance
 	startTime := time.Now()
+	logger.FromContext(ctx).
+		WithField("ami", spec.Instance.AMI).
+		Debug("creating instance")
+
 	instance, createErr := platform.Create(ctx, creds, provArgs)
 	if createErr != nil {
 		logger.FromContext(ctx).
@@ -210,24 +248,13 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	logger.FromContext(ctx).
 		WithField("ip", instance.IP).
 		WithField("id", instance.ID).
-		Debug("server configuration complete")
+		Info("server configuration complete")
 	return nil
 }
 
 // Destroy the pipeline environment.
 func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
-	fmt.Printf("\nkey\n%s\n", spec.Instance.PrivateKey)
-	user := "root"
-	if spec.Platform.OS == "windows" {
-		user = "Administrator"
-	}
-	fmt.Printf("\nssh -i temp.pem %s@%s\n", user, spec.Instance.IP)
-	_ = os.Remove("temp.pem")
-	f, _ := os.OpenFile("temp.pem", os.O_RDWR|os.O_CREATE, 0400)
-	_, _ = f.WriteString(spec.Instance.PrivateKey)
-	_ = f.Close()
-
 	logger.FromContext(ctx).
 		WithField("ami", spec.Instance.AMI).
 		Debug("destroying instance")
@@ -249,6 +276,34 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 			WithField("ami", spec.Instance.AMI).
 			Debug("failed to destroy the instance")
 		return err
+	}
+
+	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
+	if spec.Instance.UsePool {
+		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.PoolName, e.opts.AwsMutex)
+		if countPoolErr != nil {
+			logger.FromContext(ctx).
+				WithError(countPoolErr).
+				WithField("ami", spec.Instance.AMI).
+				WithField("pool name", spec.PoolName).
+				Errorf("failed to count pool")
+		}
+
+		if poolCount < e.opts.Pools[spec.PoolName].PoolSize {
+			createInstanceErr := e.Setup(ctx, e.opts.Pools[spec.PoolName].InstanceSpec)
+			if createInstanceErr != nil {
+				logger.FromContext(ctx).
+					WithError(createInstanceErr).
+					WithField("ami", spec.Instance.AMI).
+					WithField("pool name", spec.PoolName).
+					Errorf("failed to add back to the pool")
+			} else {
+				logger.FromContext(ctx).
+					WithField("ami", spec.Instance.AMI).
+					WithField("pool name", spec.PoolName).
+					Debug("added to the pool")
+			}
+		}
 	}
 	return nil
 }

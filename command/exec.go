@@ -206,7 +206,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 
-	engine, err := engine.New(engine.Opts{})
+	engine, err := engine.New(engine.Opts{RunnerName: "exec"})
 	if err != nil {
 		return err
 	}
