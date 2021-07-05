@@ -56,8 +56,13 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		Secret: spec.Account.AccessKeySecret,
 		Region: spec.Account.Region,
 	}
-	if spec.Instance.UsePool {
-		found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.PoolName, e.opts.AwsMutex)
+	createInstance := true
+	justSetup := false // this is set to true, if creating an instance for a pool, only do basic setup
+	if spec.PoolCount != 0 {
+		justSetup = true
+	}
+	if spec.Instance.UsePool != "" {
+		found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.Instance.UsePool, e.opts.AwsMutex)
 		if poolErr != nil {
 			logger.FromContext(ctx).
 				WithError(poolErr).
@@ -73,19 +78,25 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 				Debug("using pool instance")
 			spec.Instance.ID = id
 			spec.Instance.IP = ip
-			return nil
+			createInstance = false
+		} else {
+			logger.FromContext(ctx).
+				WithField("ami", spec.Instance.AMI).
+				Debug("unable to use pool, creating an adhoc instance")
+			// do not use the build file to provision an adhoc instance, use the information from the pool file
+			spec.Instance = e.opts.Pools[spec.Instance.UsePool].InstanceSpec.Instance
 		}
-		logger.FromContext(ctx).
-			WithField("ami", spec.Instance.AMI).
-			Debug("unable to use pool, creating an adhoc instance")
 	}
 	// add some tags
 	awsTags := spec.Instance.Tags
 	awsTags["drone"] = "drone-runner-aws"
-	awsTags["pool"] = spec.PoolName
 	awsTags["creator"] = e.opts.RunnerName
-	if spec.Instance.UsePool {
-		// tag so no other builds steel this instance. only happens when the pool is empty
+	if justSetup {
+		// only set the poolname if we are spawning an instance from the pool file
+		awsTags["pool"] = spec.PoolName
+	}
+	if spec.Instance.UsePool != "" {
+		// tag so no other builds steal this instance. only happens when the pool is empty
 		awsTags["status"] = "build in progress"
 	}
 	// provisioning information
@@ -109,150 +120,171 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		VolumeIops: spec.Instance.Disk.Iops,
 	}
 	// create the instance
-	startTime := time.Now()
-	logger.FromContext(ctx).
-		WithField("ami", spec.Instance.AMI).
-		Debug("creating instance")
-
-	instance, createErr := platform.Create(ctx, creds, provArgs)
-	if createErr != nil {
+	if createInstance {
+		startTime := time.Now()
 		logger.FromContext(ctx).
-			WithError(createErr).
 			WithField("ami", spec.Instance.AMI).
-			Debug("failed to create the instance")
-		return createErr
-	}
-	logger.FromContext(ctx).
-		WithField("ID", instance.ID).
-		WithField("IP", instance.IP).
-		Info("created the instance")
-	spec.Instance.ID = instance.ID
-	spec.Instance.IP = instance.IP
+			Debug("creating instance")
 
+		instance, createErr := platform.Create(ctx, creds, provArgs)
+		if createErr != nil {
+			logger.FromContext(ctx).
+				WithError(createErr).
+				WithField("ami", spec.Instance.AMI).
+				Debug("failed to create the instance")
+			return createErr
+		}
+		logger.FromContext(ctx).
+			WithField("ID", instance.ID).
+			WithField("IP", instance.IP).
+			WithField("time(seconds)", (time.Since(startTime)).Seconds()).
+			Info("created the instance")
+
+		spec.Instance.ID = instance.ID
+		spec.Instance.IP = instance.IP
+	}
 	// establish an ssh connection with the server instance to setup the build environment (upload build scripts, etc)
-	client, err := ssh.DialRetry(
+	client, dialErr := ssh.DialRetry(
 		ctx,
 		spec.Instance.IP,
 		spec.Instance.User,
 		spec.Instance.PrivateKey,
 	)
-	if err != nil {
+	if dialErr != nil {
 		logger.FromContext(ctx).
-			WithError(createErr).
+			WithError(dialErr).
 			WithField("ami", spec.Instance.AMI).
-			WithField("error", err).
+			WithField("error", dialErr).
 			Debug("failed to create client for ssh")
-		return err
+		return dialErr
 	}
 	defer client.Close()
 
 	logger.FromContext(ctx).
-		WithField("ID", instance.ID).
-		WithField("time(seconds)", (time.Since(startTime)).Seconds()).
+		WithField("ip", spec.Instance.IP).
+		WithField("id", spec.Instance.ID).
 		Debug("Instance responding")
 
 	clientftp, err := sftp.NewClient(client)
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
 			Debug("failed to create sftp client")
 		return err
 	}
 	if clientftp != nil {
 		defer clientftp.Close()
 	}
-	// the pipeline workspace is created before pipeline execution begins. All files and folders created during pipeline execution are isolated to this workspace.
-	err = mkdir(clientftp, spec.Root, 0777)
-	if err != nil {
+	// setup common things, no matter what pipeline would use it
+	if createInstance {
+		mkdirErr := mkdir(clientftp, spec.Root, 0777)
+		if mkdirErr != nil {
+			logger.FromContext(ctx).
+				WithError(mkdirErr).
+				WithField("path", spec.Root).
+				Error("cannot create workspace directory")
+			return mkdirErr
+		}
+		// create docker network
+		session, err := client.NewSession()
+		if err != nil {
+			logger.FromContext(ctx).
+				WithError(err).
+				WithField("ip", spec.Instance.IP).
+				WithField("id", spec.Instance.ID).
+				Debug("failed to create session")
+			return err
+		}
+		defer session.Close()
+		// keep checking until docker is ok
+		dockerErr := ssh.ApplicationRetry(ctx, client, "docker ps")
+		if dockerErr != nil {
+			logger.FromContext(ctx).
+				WithError(dockerErr).
+				WithField("ip", spec.Instance.IP).
+				WithField("id", spec.Instance.ID).
+				Debug("docker failed to start in a timely fashion")
+			return err
+		}
+
+		networkCommand := "docker network create myNetwork"
+		if spec.Platform.OS == "windows" {
+			networkCommand = "docker network create --driver nat myNetwork"
+		}
+		err = session.Run(networkCommand)
+		if err != nil {
+			logger.FromContext(ctx).
+				WithError(err).
+				WithField("ip", spec.Instance.IP).
+				WithField("id", spec.Instance.ID).
+				WithField("command", networkCommand).
+				Error("unable to create docker network")
+			return err
+		}
 		logger.FromContext(ctx).
-			WithError(err).
-			WithField("path", spec.Root).
-			Error("cannot create workspace directory")
-		return err
+			WithField("ami", spec.Instance.AMI).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
+			Debug("generic setup complete")
 	}
-	// the pipeline specification may define global folders, such as the pipeline working directory, which must be created before pipeline execution begins.
-	for _, file := range spec.Files {
-		if !file.IsDir {
-			continue
-		}
-		err = mkdir(clientftp, file.Path, file.Mode)
-		if err != nil {
-			logger.FromContext(ctx).
-				WithError(err).
-				WithField("path", file.Path).
-				Error("cannot create directory")
-			return err
-		}
-	}
-	// the pipeline specification may define global files such as authentication credentials that should be uploaded before pipeline execution begins.
-	for _, file := range spec.Files {
-		if file.IsDir {
-			continue
-		}
-		err = upload(clientftp, file.Path, file.Data, file.Mode)
-		if err != nil {
-			logger.FromContext(ctx).
-				WithError(err).
-				Error("cannot write file")
-			return err
-		}
-	}
-	// create any folders needed for temporary volumes.
-	for _, volume := range spec.Volumes {
-		if volume.EmptyDir.ID != "" {
-			err = mkdir(clientftp, volume.EmptyDir.ID, 0777)
-			if err != nil {
+	// we are about to use the instance, this section contains pipeline specific info
+	if !justSetup {
+		// the pipeline specification may define global folders, such as the pipeline working directory, which must be created before pipeline execution begins.
+		for _, file := range spec.Files {
+			if !file.IsDir {
+				continue
+			}
+			mkdirErr := mkdir(clientftp, file.Path, file.Mode)
+			if mkdirErr != nil {
 				logger.FromContext(ctx).
-					WithError(err).
-					WithField("path", volume.EmptyDir.ID).
-					Error("cannot create directory for temporary volume")
-				return err
+					WithError(mkdirErr).
+					WithField("ip", spec.Instance.IP).
+					WithField("id", spec.Instance.ID).
+					WithField("path", file.Path).
+					Error("cannot create directory")
+				return mkdirErr
 			}
 		}
-	}
-	// create docker network
-	session, err := client.NewSession()
-	if err != nil {
-		logger.FromContext(ctx).
-			WithError(err).
-			WithField("ip", spec.Instance.IP).
-			WithField("id", spec.Instance.ID).
-			Debug("failed to create session")
-		return err
-	}
-	defer session.Close()
-	// keep checking until docker is ok
-	dockerErr := ssh.ApplicationRetry(ctx, client, "docker ps")
-	if dockerErr != nil {
-		logger.FromContext(ctx).
-			WithError(dockerErr).
-			WithField("ip", spec.Instance.IP).
-			WithField("id", spec.Instance.ID).
-			Debug("docker failed to start in a timely fashion")
-		return err
-	}
 
-	networkCommand := "docker network create myNetwork"
-	if spec.Platform.OS == "windows" {
-		networkCommand = "docker network create --driver nat myNetwork"
-	}
-	err = session.Run(networkCommand)
-	if err != nil {
+		// the pipeline specification may define global files such as authentication credentials that should be uploaded before pipeline execution begins.
+		for _, file := range spec.Files {
+			if file.IsDir {
+				continue
+			}
+			uploadErr := upload(clientftp, file.Path, file.Data, file.Mode)
+			if uploadErr != nil {
+				logger.FromContext(ctx).
+					WithError(uploadErr).
+					WithField("ip", spec.Instance.IP).
+					WithField("id", spec.Instance.ID).
+					Error("cannot write file")
+				return uploadErr
+			}
+		}
+
+		// create any folders needed for temporary volumes.
+		for _, volume := range spec.Volumes {
+			if volume.EmptyDir.ID != "" {
+				err = mkdir(clientftp, volume.EmptyDir.ID, 0777)
+				if err != nil {
+					logger.FromContext(ctx).
+						WithError(err).
+						WithField("ip", spec.Instance.IP).
+						WithField("id", spec.Instance.ID).
+						WithField("path", volume.EmptyDir.ID).
+						Error("cannot create directory for temporary volume")
+					return err
+				}
+			}
+		}
 		logger.FromContext(ctx).
-			WithError(err).
+			WithField("ami", spec.Instance.AMI).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
-			WithField("command", networkCommand).
-			Error("unable to create docker network")
-		return err
+			Debug("pipeline specific setup complete")
 	}
-
-	logger.FromContext(ctx).
-		WithField("ip", instance.IP).
-		WithField("id", instance.ID).
-		Info("server configuration complete")
 	return nil
 }
 
@@ -260,7 +292,8 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 	logger.FromContext(ctx).
-		WithField("ami", spec.Instance.AMI).
+		WithField("ip", spec.Instance.IP).
+		WithField("id", spec.Instance.ID).
 		Debug("destroying instance")
 
 	// create creds
@@ -277,34 +310,36 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ami", spec.Instance.AMI).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
 			Debug("failed to destroy the instance")
 		return err
 	}
 
 	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
-	if spec.Instance.UsePool {
-		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.PoolName, e.opts.AwsMutex)
+	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance. preventing too many instances being created for a pool
+	if spec.Instance.UsePool != "" {
+		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.Instance.UsePool, e.opts.AwsMutex)
 		if countPoolErr != nil {
 			logger.FromContext(ctx).
 				WithError(countPoolErr).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool name", spec.PoolName).
+				WithField("pool name", spec.Instance.UsePool).
 				Errorf("failed to count pool")
 		}
 
-		if poolCount < e.opts.Pools[spec.PoolName].PoolSize {
-			createInstanceErr := e.Setup(ctx, e.opts.Pools[spec.PoolName].InstanceSpec)
+		if poolCount < e.opts.Pools[spec.Instance.UsePool].PoolSize {
+			createInstanceErr := e.Setup(ctx, e.opts.Pools[spec.Instance.UsePool].InstanceSpec)
 			if createInstanceErr != nil {
 				logger.FromContext(ctx).
 					WithError(createInstanceErr).
 					WithField("ami", spec.Instance.AMI).
-					WithField("pool name", spec.PoolName).
+					WithField("pool name", spec.Instance.UsePool).
 					Errorf("failed to add back to the pool")
 			} else {
 				logger.FromContext(ctx).
 					WithField("ami", spec.Instance.AMI).
-					WithField("pool name", spec.PoolName).
+					WithField("pool name", spec.Instance.UsePool).
 					Debug("added to the pool")
 			}
 		}
@@ -331,7 +366,16 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		return nil, err
 	}
 	defer client.Close()
-
+	// keep checking until docker is ok
+	dockerErr := ssh.ApplicationRetry(ctx, client, "docker ps")
+	if dockerErr != nil {
+		logger.FromContext(ctx).
+			WithError(dockerErr).
+			WithField("ip", spec.Instance.IP).
+			WithField("id", spec.Instance.ID).
+			Debug("docker failed to start in a timely fashion")
+		return nil, err
+	}
 	clientftp, err := sftp.NewClient(client)
 	if err != nil {
 		logger.FromContext(ctx).
