@@ -72,3 +72,60 @@ steps:
   commands:
   - echo "hello world"
 ```
+
+To create a pool, create a file called `.drone_pool.yml`. This creates a single pool called default with one member.  
+
+```BASH
+kind: pipeline
+type: aws
+name: default
+pool_count: 1
+account:
+  region: us-east-2
+#platform:
+#  os: windows
+instance:
+# ubuntu 18.04 t1-micro ohio
+  ami: ami-051197ce9cbb023ea 
+# Microsoft Windows Server 2019 t1-micro ohio
+#  ami: ami-0b697c4ae566cad55 
+#  iam_profile_arn: "arn:aws:iam::577992088676:instance-profile/drone_iam_role"
+  private_key: ./private_key_file
+  public_key: ./public_key_file
+  type: t2.nano
+  network:
+    security_groups:
+    #  - sg-5d255b29 tp account
+      - sg-0f5aaeb48d35162a4 
+steps:
+  - name: check install
+    commands:
+      - cat /var/log/cloud-init-output.log
+  - name: plugin
+    image: plugins/docker
+    settings:
+      dry_run: true
+      repo: foo/bar
+      tags: latest
+    volumes:
+      - name: cache
+        path: /go
+  - name: imagey + commands
+    image: golang
+    commands:
+      - go version
+      - go help
+  - name: docker status
+    commands:
+      - docker ps -a
+  - name: ping
+    image: redis
+    commands:
+      - redis-cli -h red ping
+services:
+  - name: red
+    image: redis
+volumes:
+- name: cache
+  temp: {}
+```

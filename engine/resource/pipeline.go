@@ -114,7 +114,7 @@ type (
 	// Instance provides instance settings.
 	Instance struct {
 		AMI           string            `json:"ami,omitempty"`
-		UsePool       bool              `json:"use_pool,omitempty" yaml:"use_pool"`
+		UsePool       string            `json:"use_pool,omitempty" yaml:"use_pool"`
 		PrivateKey    string            `json:"private_key,omitempty" yaml:"private_key"`
 		PublicKey     string            `json:"public_key,omitempty" yaml:"public_key"`
 		Tags          map[string]string `json:"tags,omitempty"`

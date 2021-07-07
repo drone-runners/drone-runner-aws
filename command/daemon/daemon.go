@@ -333,7 +333,6 @@ func processPoolFile(poolFile []byte, compilerSettings compiler.Settings) (pools
 			Stage:    &drone.Stage{},
 		}
 		spec := comp.Compile(nocontext, args).(*engine.Spec)
-		// include only steps that are in the include list, if the list in non-empty.
 		pools[spec.PoolName] = engine.Pool{
 			InstanceSpec: spec,
 			PoolSize:     spec.PoolCount,
