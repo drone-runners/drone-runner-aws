@@ -1,6 +1,6 @@
 kind: pipeline
 type: docker
-name: linux
+name: unit tests
 
 platform:
   os: linux
@@ -8,27 +8,122 @@ platform:
 
 steps:
 - name: test
-  image: golang:1.12
+  image: golang:1.16
   commands:
   - go test -cover ./...
-  - sh scripts/build.sh
-
-- name: publish
-  image: plugins/docker
-  pull: if-not-exists
-  settings:
-    repo: drone/drone-runner-aws
-    auto_tag: true
-    dockerfile: docker/Dockerfile.linux.amd64
-    username:
-      from_secret: docker_username
-    password:
-      from_secret: docker_password
-  when:
-    ref:
-    - refs/heads/master
-    - refs/tags/*
 
 volumes:
 - name: go
   temp: {}
+---
+
+kind: pipeline
+type: docker
+name: build and publish container
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+  - name: build
+    image: golang:1.16
+    commands:
+    - sh scripts/build.sh
+  - name: publish
+    image: plugins/docker
+    pull: if-not-exists
+    settings:
+      repo: drone/drone-runner-aws
+      auto_tag: true
+      dockerfile: docker/Dockerfile.linux.amd64
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+    when:
+      ref:
+      - refs/tags/*
+
+volumes:
+- name: go
+  temp: {}
+
+trigger:
+  branch:
+  - release
+  depends_on:
+  - ubuntu instance acceptance tests
+  - windows instance acceptance tests
+
+---
+kind: pipeline
+type: aws
+name: ubuntu instance acceptance tests
+
+instance:
+  use_pool: ubuntu
+
+steps:
+  - name: check install
+    commands:
+      - cat /var/log/cloud-init-output.log
+  - name: build binary with golang image
+    image: golang:1.16
+    commands:
+      - GOPATH="" CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o release/linux/amd64/drone-runner-aws
+  - name: plugin
+    image: plugins/docker
+    settings:
+      dry_run: true
+      repo: foo/bar
+      tags: latest
+      dockerfile: docker/Dockerfile.linux.amd64
+    volumes:
+      - name: cache
+        path: /go
+  - name: docker status
+    commands:
+      - docker ps -a
+  - name: ping
+    image: redis
+    commands:
+      - redis-cli -h red ping
+
+services:
+  - name: red
+    image: redis
+
+volumes:
+- name: cache
+  temp: {}
+
+depends_on:
+- unit tests
+
+---
+kind: pipeline
+type: aws
+name: windows instance acceptance tests
+
+instance:
+  use_pool: windows
+
+platform:
+  os: windows
+
+steps:
+  - name: check install
+    commands:
+      - type C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log
+  - name: imagey + commands
+    image: golang:1.16.5-windowsservercore-1809
+    commands:
+      - go version
+      - go help
+  - name: docker status
+    commands:
+      - docker ps -a
+
+depends_on:
+- unit tests

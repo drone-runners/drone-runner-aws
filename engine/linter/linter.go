@@ -41,7 +41,7 @@ func checkPipeline(pipeline *resource.Pipeline, trusted bool) error {
 	if pipeline.Instance.AMI != "" && pipeline.Instance.UsePool != "" {
 		return errors.New("Linter: you can only specify instance AMI or instance use_pool")
 	}
-	if pipeline.Instance.IAMProfileARN == "" && pipeline.Platform.OS == "windows" {
+	if pipeline.Instance.IAMProfileARN == "" && pipeline.Platform.OS == "windows" && pipeline.Instance.AMI != "" {
 		return errors.New("Linter: You must provide an IAMProfileARN if using a windows platform")
 	}
 	if err := checkVolumes(pipeline, trusted); err != nil {
