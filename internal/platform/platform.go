@@ -125,9 +125,7 @@ func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instan
 	logger := logger.FromContext(ctx).
 		WithField("region", args.Region).
 		WithField("image", args.Image).
-		WithField("size", args.Size).
-		WithField("name", args.Name)
-
+		WithField("size", args.Size)
 	logger.Debug("instance create")
 
 	results, err := client.RunInstances(in)
