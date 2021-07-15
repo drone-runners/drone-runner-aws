@@ -103,7 +103,6 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	provArgs := platform.ProvisionArgs{
 		Image:         spec.Instance.AMI,
 		IamProfileArn: spec.Instance.IAMProfileARN,
-		Name:          spec.Instance.User,
 		Size:          spec.Instance.Type,
 		Region:        spec.Account.Region,
 		Userdata:      spec.Instance.UserData,

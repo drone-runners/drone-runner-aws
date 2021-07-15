@@ -139,3 +139,19 @@ steps:
   commands:
   - echo "hello world"
 ```
+
+## Complete example using the binary
+
+With a pool file, env settings.
+
+```BASH
+drone-runner-aws config/.env  config/.drone_pool.yml
+```
+
+## Complete example using the docker container
+
+Where we have the pool file, env settings and keys in the config folder
+
+```BASH
+docker run -it --mount type=bind,source=/home/tp/workspace/drone-runner-aws/config,target=/config --rm   drone/drone-runner-aws daemon /config/.env  /config/.drone_pool.yml
+```

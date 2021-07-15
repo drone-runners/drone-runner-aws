@@ -30,11 +30,11 @@ func Test_tempdir(t *testing.T) {
 		os   string
 		path string
 	}{
-		{os: "windows", path: "C:\\Windows\\Temp\\drone-random"},
-		{os: "linux", path: "/tmp/drone-random"},
-		{os: "openbsd", path: "/tmp/drone-random"},
-		{os: "netbsd", path: "/tmp/drone-random"},
-		{os: "freebsd", path: "/tmp/drone-random"},
+		{os: "windows", path: "C:\\Windows\\Temp\\aws"},
+		{os: "linux", path: "/tmp/aws"},
+		{os: "openbsd", path: "/tmp/aws"},
+		{os: "netbsd", path: "/tmp/aws"},
+		{os: "freebsd", path: "/tmp/aws"},
 	}
 
 	for _, test := range tests {
@@ -137,7 +137,7 @@ func Test_convertEnvMapToString(t *testing.T) {
 		{
 			name:          "one var",
 			args:          map[string]string{"DRONE_BRANCH": "main"},
-			wantEnvString: ` --env DRONE_BRANCH="main"`,
+			wantEnvString: ` --env DRONE_BRANCH='main'`,
 		},
 		{
 			name:          "empty var",
@@ -147,13 +147,13 @@ func Test_convertEnvMapToString(t *testing.T) {
 		{
 			name:          "multiple vars",
 			args:          map[string]string{"DRONE_BRANCH": "main", "DRONE_BUILD": "5"},
-			wantEnvString: ` --env DRONE_BRANCH="main" --env DRONE_BUILD="5"`,
+			wantEnvString: ` --env DRONE_BRANCH='main' --env DRONE_BUILD='5'`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if gotEnvString := convertEnvMapToString(tt.args); gotEnvString != tt.wantEnvString {
-				t.Errorf("convertEnvMapToString() = '%s', want '%s'", gotEnvString, tt.wantEnvString)
+				t.Errorf("convertEnvMapToString() = #%s#, want #%s#", gotEnvString, tt.wantEnvString)
 			}
 		})
 	}
@@ -168,23 +168,23 @@ func Test_convertSettingsToString(t *testing.T) {
 		{
 			name:          "one value",
 			args:          map[string]*manifest.Parameter{"setting_a": {Value: 7}},
-			wantEnvString: ` --env PLUGIN_SETTING_A="7"`,
+			wantEnvString: ` --env PLUGIN_SETTING_A='7'`,
 		},
 		{
 			name:          "one secret",
 			args:          map[string]*manifest.Parameter{"setting_b": {Secret: "bla"}},
-			wantEnvString: ` --env PLUGIN_SETTING_B="bla"`,
+			wantEnvString: ` --env PLUGIN_SETTING_B='bla'`,
 		},
 		{
 			name:          "one secret, one value",
 			args:          map[string]*manifest.Parameter{"setting_a": {Value: 7}, "setting_b": {Secret: "bla"}},
-			wantEnvString: ` --env PLUGIN_SETTING_A="7" --env PLUGIN_SETTING_B="bla"`,
+			wantEnvString: ` --env PLUGIN_SETTING_A='7' --env PLUGIN_SETTING_B='bla'`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if gotEnvString := convertSettingsToString(tt.args); gotEnvString != tt.wantEnvString {
-				t.Errorf("convertSettingsToString() = '%v', want '%v'", gotEnvString, tt.wantEnvString)
+				t.Errorf("convertSettingsToString() = #%v#, want #%v#", gotEnvString, tt.wantEnvString)
 			}
 		})
 	}
@@ -210,7 +210,7 @@ func Test_convertVolumesToString(t *testing.T) {
 				stepVolumes:       []*resource.VolumeMount{},
 				pipeLineVolumeMap: map[string]string{},
 			},
-			wantVolumeString: `-v "/bla":/drone/src`,
+			wantVolumeString: `-v '/bla':/drone/src`,
 		},
 		{
 			name: "linux: sourcedir, empty step volume",
@@ -220,7 +220,7 @@ func Test_convertVolumesToString(t *testing.T) {
 				stepVolumes:       []*resource.VolumeMount{},
 				pipeLineVolumeMap: map[string]string{"cache": "/some/path"},
 			},
-			wantVolumeString: `-v "/bla":/drone/src`,
+			wantVolumeString: `-v '/bla':/drone/src`,
 		},
 		{
 			name: "linux: sourcedir, step volume and volumeMap",
@@ -230,13 +230,13 @@ func Test_convertVolumesToString(t *testing.T) {
 				stepVolumes:       []*resource.VolumeMount{{Name: "cache", MountPath: "/container/mount/point"}},
 				pipeLineVolumeMap: map[string]string{"cache": "/host/some/path"},
 			},
-			wantVolumeString: `-v "/bla":/drone/src -v "/host/some/path":/container/mount/point`,
+			wantVolumeString: `-v '/bla':/drone/src -v '/host/some/path':/container/mount/point`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if gotVolumeString := convertVolumesToString(tt.args.pipelineOS, tt.args.sourcedir, tt.args.stepVolumes, tt.args.pipeLineVolumeMap); gotVolumeString != tt.wantVolumeString {
-				t.Errorf("convertVolumesToString() = '%v', want '%v'", gotVolumeString, tt.wantVolumeString)
+				t.Errorf("convertVolumesToString() = #%v#, want #%v#", gotVolumeString, tt.wantVolumeString)
 			}
 		})
 	}
@@ -249,21 +249,21 @@ func Test_convertStepNametoContainerString(t *testing.T) {
 	}{
 		{
 			stepName:          " spaces ",
-			wantContainerName: `--name="spaces"`,
+			wantContainerName: `--name='spaces'`,
 		},
 		{
 			stepName:          "weird characters &",
-			wantContainerName: `--name="weirdcharacters"`,
+			wantContainerName: `--name='weirdcharacters'`,
 		},
 		{
 			stepName:          "valid weird characters _-.",
-			wantContainerName: `--name="validweirdcharacters_-."`,
+			wantContainerName: `--name='validweirdcharacters_-.'`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.stepName, func(t *testing.T) {
 			if gotContainerName := convertStepNametoContainerString(tt.stepName); gotContainerName != tt.wantContainerName {
-				t.Errorf("convertStepNametoContainerString() = '%v', want '%v'", gotContainerName, tt.wantContainerName)
+				t.Errorf("convertStepNametoContainerString() = #%v#, want #%v#", gotContainerName, tt.wantContainerName)
 			}
 		})
 	}
