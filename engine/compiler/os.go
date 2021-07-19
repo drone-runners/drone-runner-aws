@@ -136,7 +136,7 @@ func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resourc
 		if match {
 			v := fmt.Sprintf(` -v '%s':%s`, path, volume.MountPath)
 			if pipelineOS == "windows" {
-				v = fmt.Sprintf(` -v %s:%s`, path, volume.MountPath)
+				v = fmt.Sprintf(" -v `%s`:%s", path, volume.MountPath)
 			}
 			volumeString = volumeString + v
 		}

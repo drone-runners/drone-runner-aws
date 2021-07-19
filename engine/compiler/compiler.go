@@ -398,17 +398,14 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		}
 		spec.Steps = append(spec.Steps, dst)
 
-		// set the pipeline step run policy. steps run on
-		// success by default, but may be optionally configured
-		// to run on failure.
+		// set the pipeline step run policy. steps run on success by default, but may be optionally configured to run on failure.
 		if isRunAlways(src) {
 			dst.RunPolicy = runtime.RunAlways
 		} else if isRunOnFailure(src) {
 			dst.RunPolicy = runtime.RunOnFailure
 		}
 
-		// if the pipeline step has unmet conditions the step is
-		// automatically skipped.
+		// if the pipeline step has unmet conditions the step is automatically skipped.
 		if !src.When.Match(match) {
 			dst.RunPolicy = runtime.RunNever
 		}
@@ -434,14 +431,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	return spec
 }
 
-// helper function attempts to find and return the named secret.
-// from the secret provider.
+// helper function attempts to find and return the named secret. from the secret provider.
 func (c *Compiler) findSecret(ctx context.Context, args runtime.CompilerArgs, name string) (s string, ok bool) {
 	if name == "" {
 		return
 	}
-	// source secrets from the global secret provider
-	// and the repository secret provider.
+	// source secrets from the global secret provider and the repository secret provider.
 	provider := secret.Combine(
 		args.Secret,
 		c.Secret,
