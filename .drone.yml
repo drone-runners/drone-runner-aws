@@ -121,9 +121,17 @@ steps:
     commands:
       - go version
       - go help
+      - dir c:/
+      - dir c:/volumes
+    volumes:
+      - name: cache
+        path: c:/volumes
   - name: docker status
     commands:
       - docker ps -a
 
+volumes:
+- name: cache
+  temp: {}
 depends_on:
 - unit tests

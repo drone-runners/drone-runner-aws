@@ -168,28 +168,31 @@ func Test_convertSettingsToString(t *testing.T) {
 	tests := []struct {
 		name          string
 		args          map[string]*manifest.Parameter
-		wantEnvString string
+		wantEnvString []string
 	}{
 		{
 			name:          "one value",
 			args:          map[string]*manifest.Parameter{"setting_a": {Value: 7}},
-			wantEnvString: ` --env PLUGIN_SETTING_A='7'`,
+			wantEnvString: []string{` --env PLUGIN_SETTING_A='7'`},
 		},
 		{
 			name:          "one secret",
 			args:          map[string]*manifest.Parameter{"setting_b": {Secret: "bla"}},
-			wantEnvString: ` --env PLUGIN_SETTING_B='bla'`,
+			wantEnvString: []string{` --env PLUGIN_SETTING_B='bla'`},
 		},
 		{
 			name:          "one secret, one value",
 			args:          map[string]*manifest.Parameter{"setting_a": {Value: 7}, "setting_b": {Secret: "bla"}},
-			wantEnvString: ` --env PLUGIN_SETTING_A='7' --env PLUGIN_SETTING_B='bla'`,
+			wantEnvString: []string{` --env PLUGIN_SETTING_A='7'`, ` --env PLUGIN_SETTING_B='bla'`},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if gotEnvString := convertSettingsToString(tt.args); gotEnvString != tt.wantEnvString {
-				t.Errorf("convertSettingsToString() = #%v#, want #%v#", gotEnvString, tt.wantEnvString)
+			gotSettingsString := convertSettingsToString(tt.args)
+			for _, want := range tt.wantEnvString {
+				if !strings.Contains(gotSettingsString, want) {
+					t.Errorf("convertSettingsToString() = #%s# contains #%s#", gotSettingsString, want)
+				}
 			}
 		})
 	}

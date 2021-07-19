@@ -178,8 +178,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 	ctx, cancel := context.WithTimeout(nocontext, timeout)
 	defer cancel()
 
-	// listen for operating system signals and cancel execution
-	// when received.
+	// listen for operating system signals and cancel execution when received.
 	ctx = signal.WithContextFunc(ctx, func() {
 		println("received signal, terminating process")
 		cancel()
