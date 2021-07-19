@@ -6,6 +6,7 @@ package compiler
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dchest/uniuri"
@@ -132,29 +133,33 @@ func Test_convertEnvMapToString(t *testing.T) {
 	tests := []struct {
 		name          string
 		args          map[string]string
-		wantEnvString string
+		wantEnvString []string
 	}{
 		{
 			name:          "one var",
 			args:          map[string]string{"DRONE_BRANCH": "main"},
-			wantEnvString: ` --env DRONE_BRANCH='main'`,
+			wantEnvString: []string{` --env DRONE_BRANCH='main'`},
 		},
 		{
 			name:          "empty var",
 			args:          map[string]string{"DRONE_BRANCH": ""},
-			wantEnvString: ``,
+			wantEnvString: []string{``},
 		},
 		{
 			name:          "multiple vars",
 			args:          map[string]string{"DRONE_BRANCH": "main", "DRONE_BUILD": "5"},
-			wantEnvString: ` --env DRONE_BRANCH='main' --env DRONE_BUILD='5'`,
+			wantEnvString: []string{` --env DRONE_BRANCH='main'`, ` --env DRONE_BUILD='5'`},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if gotEnvString := convertEnvMapToString(tt.args); gotEnvString != tt.wantEnvString {
-				t.Errorf("convertEnvMapToString() = #%s#, want #%s#", gotEnvString, tt.wantEnvString)
+			gotEnvString := convertEnvMapToString(tt.args)
+			for _, want := range tt.wantEnvString {
+				if !strings.Contains(gotEnvString, want) {
+					t.Errorf("convertEnvMapToString() = #%s# contains #%s#", gotEnvString, want)
+				}
 			}
+
 		})
 	}
 }

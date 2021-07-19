@@ -85,7 +85,7 @@ func ApplicationRetry(ctx context.Context, client *ssh.Client, command string) (
 				WithError(runErr).
 				WithField("function", "ApplicationRetry").
 				WithField("command", command).
-				Error("failed running command")
+				Trace("failed running command")
 		} else {
 			return nil
 		}
