@@ -323,6 +323,17 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 // Destroy the pipeline environment.
 func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
+	// fmt.Printf("\nkey\n%s\n", spec.Instance.PrivateKey)
+	// user := "root"
+	// if spec.Platform.OS == "windows" {
+	// 	user = "Administrator"
+	// }
+	// fmt.Printf("\nssh -i dev.pem %s@%s\n", user, spec.Instance.IP)
+	// _ = os.Remove("dev.pem")
+	// f, _ := os.OpenFile("dev.pem", os.O_RDWR|os.O_CREATE, 0400)
+	// _, _ = f.WriteString(spec.Instance.PrivateKey)
+	// _ = f.Close()
+
 	logger.FromContext(ctx).
 		WithField("ami", spec.Instance.AMI).
 		WithField("pool", spec.Instance.UsePool).
