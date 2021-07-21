@@ -129,9 +129,20 @@ steps:
   - name: docker status
     commands:
       - docker ps -a
+  - name: ping service sleepyserver
+    image: golang:1.16.5-windowsservercore-1809
+    commands:
+      - ping sleepyserver
 
 volumes:
 - name: cache
   temp: {}
+
+services:
+  - name: sleepyserver
+    image: golang:1.16.5-windowsservercore-1809
+    commands:
+      - powershell Start-Sleep -s 1800
+
 depends_on:
 - unit tests
