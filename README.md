@@ -37,7 +37,7 @@ DRONE_SETTINGS_PRIVATE_KEY_FILE=/config/private.key
 DRONE_SETTINGS_PUBLIC_KEY_FILE=/config/public.key
 ```
 
-## .drone_pool.yml file
+## `.drone_pool.yml` file
 
 This allows the setup of hot swap pools, where a build does not have to wait for an instance to spin up. For a deeper explanation of how this works, see the [design](https://github.com/drone/proposal/blob/master/design/01-aws-runner.md) documentation.
 
@@ -96,7 +96,7 @@ instance:
       - sg-0f5aaeb48d35162a4
 ```
 
-## running the drone-runner-aws daemon
+## Running the drone-runner-aws daemon
 
 With a pool file, env settings.
 
@@ -142,7 +142,7 @@ steps:
   - go version
 ```
 
-## windows build example
+## Windows build example
 
 You can only run windows containers on a windows instance. NB. you need to add a platform section to the build file.
 
