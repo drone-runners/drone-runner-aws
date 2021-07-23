@@ -123,7 +123,6 @@ type (
 		User          string            `json:"user,omitempty"`
 		Disk          Disk              `json:"disk,omitempty"`
 		Network       Network           `json:"network,omitempty"`
-		Market        string            `json:"market_type,omitempty" yaml:"market_type"`
 		Device        Device            `json:"device,omitempty"`
 	}
 

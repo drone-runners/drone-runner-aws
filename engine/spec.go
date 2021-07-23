@@ -45,7 +45,6 @@ type (
 		UserData      string            `json:"user_data,omitempty"`
 		Disk          Disk              `json:"disk,omitempty"`
 		Network       Network           `json:"network,omitempty"`
-		Market        string            `json:"market_type,omitempty"`
 		Device        Device            `json:"device,omitempty"`
 		ID            string
 		IP            string
