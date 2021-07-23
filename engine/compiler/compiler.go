@@ -82,7 +82,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			PrivateKey:    pipeline.Instance.PrivateKey,
 			IAMProfileARN: pipeline.Instance.IAMProfileARN,
 			Type:          pipeline.Instance.Type,
-			Market:        pipeline.Instance.Market,
 			Tags:          pipeline.Instance.Tags,
 			Network: engine.Network{
 				VPC:               pipeline.Instance.Network.VPC,
