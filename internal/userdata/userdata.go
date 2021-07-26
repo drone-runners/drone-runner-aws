@@ -41,6 +41,7 @@ packages:
 //  restart-service docker
 
 // Windows creates a userdata file for the Windows operating system.
+//nolint:lll // magic powershell line
 func Windows(params Params) string {
 	chunk1 := fmt.Sprintf(`<powershell>
   Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))

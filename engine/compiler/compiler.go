@@ -26,9 +26,11 @@ import (
 	"github.com/gosimple/slug"
 )
 
+const windowsString = "windows"
+
 // random generator function
 var random = func() string {
-	return "drone-" + uniuri.NewLen(20)
+	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
 }
 
 // Settings defines default settings.
@@ -57,7 +59,7 @@ type Compiler struct {
 }
 
 // Compile compiles the configuration file.
-func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec {
+func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:funlen,gocritic,gocyclo // its complex but standard
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	pipelineOS := pipeline.Platform.OS
 
@@ -156,7 +158,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// set the default ssh user. this user account is responsible for executing the pipeline script.
 	switch {
-	case spec.Instance.User == "" && spec.Platform.OS == "windows":
+	case spec.Instance.User == "" && spec.Platform.OS == windowsString:
 		spec.Instance.User = "Administrator"
 	case spec.Instance.User == "":
 		spec.Instance.User = "root"
@@ -187,7 +189,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	}
 	// generate the cloudinit file
 	var userDataWithSSH string
-	if spec.Platform.OS == "windows" {
+	if spec.Platform.OS == windowsString {
 		userDataWithSSH = userdata.Windows(userdata.Params{
 			PublicKey: spec.Instance.PublicKey,
 		})
@@ -208,8 +210,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		Path:  join(pipelineOS, spec.Root, "home"),
 		Mode:  0700,
 		IsDir: true,
-	})
-	spec.Files = append(spec.Files, &engine.File{
+	}, &engine.File{
 		Path:  homedir,
 		Mode:  0700,
 		IsDir: true,
@@ -223,15 +224,11 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		Path:  join(pipelineOS, spec.Root, "drone"),
 		Mode:  0700,
 		IsDir: true,
-	})
-	spec.Files = append(spec.Files, &engine.File{
+	}, &engine.File{
 		Path:  sourcedir,
 		Mode:  0700,
 		IsDir: true,
-	})
-
-	// creates the opt directory to hold all scripts.
-	spec.Files = append(spec.Files, &engine.File{
+	}, &engine.File{
 		Path:  join(pipelineOS, spec.Root, "opt"),
 		Mode:  0700,
 		IsDir: true,
@@ -429,7 +426,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 }
 
 // helper function attempts to find and return the named secret. from the secret provider.
-func (c *Compiler) findSecret(ctx context.Context, args runtime.CompilerArgs, name string) (s string, ok bool) {
+func (c *Compiler) findSecret(ctx context.Context, args runtime.CompilerArgs, name string) (s string, ok bool) { //nolint:gocritic // its complex but standard
 	if name == "" {
 		return
 	}

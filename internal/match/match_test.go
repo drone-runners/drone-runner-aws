@@ -10,7 +10,7 @@ import (
 	"github.com/drone/drone-go/drone"
 )
 
-func TestFunc(t *testing.T) {
+func TestFunc(t *testing.T) { //nolint:funlen // unit test
 	tests := []struct {
 		repo    string
 		event   string
@@ -18,10 +18,7 @@ func TestFunc(t *testing.T) {
 		match   bool
 		matcher func(*drone.Repo, *drone.Build) bool
 	}{
-		//
 		// Expect match true
-		//
-
 		// repository, event and trusted flag matching
 		{
 			repo:    "octocat/hello-world",
@@ -54,11 +51,7 @@ func TestFunc(t *testing.T) {
 			match:   true,
 			matcher: Func([]string{}, []string{}, true),
 		},
-
-		//
 		// Expect match false
-		//
-
 		// repository matching
 		{
 			repo:    "spaceghost/hello-world",
@@ -108,7 +101,6 @@ func TestFunc(t *testing.T) {
 			matcher: Func([]string{"spaceghost/*", "octocat/*"}, []string{"push"}, true),
 		},
 	}
-
 	for i, test := range tests {
 		repo := &drone.Repo{
 			Slug:    test.repo,

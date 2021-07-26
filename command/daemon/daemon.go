@@ -47,9 +47,12 @@ type daemonCommand struct {
 	poolfile *os.File
 }
 
-func (c *daemonCommand) run(*kingpin.ParseContext) error {
+func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
 	// load environment variables from file.
-	godotenv.Load(c.envfile)
+	envErr := godotenv.Load(c.envfile)
+	if envErr != nil {
+		return envErr
+	}
 
 	// load the configuration from the environment
 	config, err := fromEnviron()
@@ -58,7 +61,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// setup the global logrus logger.
-	setupLogger(config)
+	setupLogger(&config)
 
 	ctx, cancel := context.WithCancel(nocontext)
 	defer cancel()
@@ -106,7 +109,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("unable to parse pool")
-			os.Exit(1)
+			os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 		}
 	}
 
@@ -297,7 +300,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	return err
 }
 
-func processPoolFile(poolFile []byte, compilerSettings compiler.Settings) (pools map[string]engine.Pool, err error) {
+func processPoolFile(poolFile []byte, compilerSettings compiler.Settings) (pools map[string]engine.Pool, err error) { //nolint:gocritic // its complex but standard
 	pools = make(map[string]engine.Pool)
 	// evaluates string replacement expressions and returns an update configuration.
 	config := string(poolFile)
@@ -357,7 +360,7 @@ func buildPools(ctx context.Context, pools map[string]engine.Pool, eng *engine.E
 
 // helper function configures the global logger from
 // the loaded configuration.
-func setupLogger(config Config) {
+func setupLogger(config *Config) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),

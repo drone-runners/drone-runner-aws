@@ -97,7 +97,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	// encode the pipeline in json format and print to the console for inspection.
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(spec)
+	_ = enc.Encode(spec)
 	return nil
 }
 

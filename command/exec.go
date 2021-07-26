@@ -52,7 +52,7 @@ type execCommand struct {
 	Dump     bool
 }
 
-func (c *execCommand) run(*kingpin.ParseContext) error {
+func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
 	rawsource, err := ioutil.ReadAll(c.Source)
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 	}
 	switch state.Stage.Status {
 	case drone.StatusError, drone.StatusFailing, drone.StatusKilled:
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // failing out if something goes wrong
 	}
 	return nil
 }
@@ -232,7 +232,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 func dump(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	_ = enc.Encode(v)
 }
 
 func registerExec(app *kingpin.Application) {

@@ -12,7 +12,7 @@ import (
 	"github.com/buildkite/yaml"
 )
 
-func init() {
+func init() { //nolint:gochecknoinits
 	manifest.Register(parse)
 }
 

@@ -48,7 +48,7 @@ func New(opts Opts) (*Engine, error) {
 }
 
 // Setup the pipeline environment.
-func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
+func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint:funlen,gocyclo // its complex but standard
 	spec := specv.(*Spec)
 	// create creds
 	creds := platform.Credentials{
@@ -130,7 +130,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			WithField("pool", spec.Instance.UsePool).
 			Debug("creating instance")
 
-		instance, createErr := platform.Create(ctx, creds, provArgs)
+		instance, createErr := platform.Create(ctx, creds, &provArgs)
 		if createErr != nil {
 			logger.FromContext(ctx).
 				WithError(createErr).
@@ -323,7 +323,8 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 // Destroy the pipeline environment.
 func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
-	// fmt.Printf("\nkey\n%s\n", spec.Instance.PrivateKey)
+	//nolint: gocritic
+	// fmt.Printf("\nkey\n%s\n", spec.Instance.PrivateKey) //nolint: gocritic
 	// user := "root"
 	// if spec.Platform.OS == "windows" {
 	// 	user = "Administrator"
@@ -396,7 +397,7 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 }
 
 // Run runs the pipeline step.
-func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step, output io.Writer) (*runtime.State, error) {
+func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step, output io.Writer) (*runtime.State, error) { //nolint:funlen // its complex but standard
 	spec := specv.(*Spec)
 	step := stepv.(*Step)
 

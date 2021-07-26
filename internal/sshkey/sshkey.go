@@ -14,7 +14,7 @@ import (
 )
 
 // GeneratePair generates an RSA Key pair.
-func GeneratePair() (public string, private string, err error) {
+func GeneratePair() (public, private string, err error) {
 	key, err := Generate()
 	if err != nil {
 		return

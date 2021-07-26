@@ -69,7 +69,7 @@ type (
 )
 
 // Provision provisions the server instance.
-func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instance, error) {
+func Create(ctx context.Context, creds Credentials, args *ProvisionArgs) (*Instance, error) { //nolint:funlen // its complex but standard
 	client := getClient(creds.Region, creds.Client, creds.Secret)
 
 	var iamProfile *ec2.IamInstanceProfileSpecification
