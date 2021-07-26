@@ -28,40 +28,40 @@ func New() *Linter {
 // Lint executes the linting rules for the pipeline
 // configuration.
 func (l *Linter) Lint(pipeline manifest.Resource, repo *drone.Repo) error {
-	return checkPipeline(pipeline.(*resource.Pipeline), repo.Trusted)
+	return checkPipeline(pipeline.(*resource.Pipeline))
 }
 
-func checkPipeline(pipeline *resource.Pipeline, trusted bool) error {
-	if err := checkSteps(pipeline, trusted); err != nil {
+func checkPipeline(pipeline *resource.Pipeline) error {
+	if err := checkSteps(pipeline); err != nil {
 		return err
 	}
 	if pipeline.Instance.AMI == "" && pipeline.Instance.UsePool == "" {
-		return errors.New("Linter: invalid or missing instance AMI or instance use_pool")
+		return errors.New("linter: invalid or missing instance AMI or instance use_pool")
 	}
 	if pipeline.Instance.AMI != "" && pipeline.Instance.UsePool != "" {
-		return errors.New("Linter: you can only specify instance AMI or instance use_pool")
+		return errors.New("linter: you can only specify instance AMI or instance use_pool")
 	}
-	if err := checkVolumes(pipeline, trusted); err != nil {
+	if err := checkVolumes(pipeline); err != nil {
 		return err
 	}
 	return nil
 }
 
-func checkSteps(pipeline *resource.Pipeline, trusted bool) error {
+func checkSteps(pipeline *resource.Pipeline) error {
 	steps := append(pipeline.Services, pipeline.Steps...)
 
 	for _, step := range steps {
 		if step == nil {
-			return errors.New("Linter: nil step")
+			return errors.New("linter: nil step")
 		}
-		if err := checkStep(step, trusted); err != nil {
+		if err := checkStep(step); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func checkStep(step *resource.Step, trusted bool) error {
+func checkStep(step *resource.Step) error {
 	for _, mount := range step.Volumes {
 		switch mount.Name {
 		case "workspace", "_workspace", "_docker_socket":
@@ -75,7 +75,7 @@ func checkStep(step *resource.Step, trusted bool) error {
 	return nil
 }
 
-func checkVolumes(pipeline *resource.Pipeline, trusted bool) error {
+func checkVolumes(pipeline *resource.Pipeline) error {
 	for _, volume := range pipeline.Volumes {
 		switch volume.Name {
 		case "":

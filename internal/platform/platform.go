@@ -21,6 +21,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
+const maxRetries = 10
+const poolString = "pool"
+const statusString = "status"
+
 type (
 	// Credentials provides platform credentials.
 	Credentials struct {
@@ -66,7 +70,7 @@ type (
 
 // Provision provisions the server instance.
 func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instance, error) {
-	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+	client := getClient(creds.Region, creds.Client, creds.Secret)
 
 	var iamProfile *ec2.IamInstanceProfileSpecification
 
@@ -122,15 +126,15 @@ func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instan
 		}
 	}
 
-	logger := logger.FromContext(ctx).
+	logr := logger.FromContext(ctx).
 		WithField("region", args.Region).
 		WithField("image", args.Image).
 		WithField("size", args.Size)
-	logger.Debug("instance create")
+	logr.Debug("instance create")
 
 	results, err := client.RunInstances(in)
 	if err != nil {
-		logger.WithError(err).
+		logr.WithError(err).
 			Error("instance create failed")
 		return nil, err
 	}
@@ -141,7 +145,7 @@ func Create(ctx context.Context, creds Credentials, args ProvisionArgs) (*Instan
 		ID: *amazonInstance.InstanceId,
 	}
 
-	logger.WithField("id", instance.ID).
+	logr.WithField("id", instance.ID).
 		Infoln("instance create success")
 
 	// poll the amazon endpoint for server updates
@@ -151,14 +155,14 @@ poller:
 	for {
 		select {
 		case <-ctx.Done():
-			logger.WithField("name", instance.ID).
+			logr.WithField("name", instance.ID).
 				Debugln("instance network deadline exceeded")
 
 			return instance, ctx.Err()
 		case <-time.After(interval):
 			interval = time.Minute
 
-			logger.WithField("name", instance.ID).
+			logr.WithField("name", instance.ID).
 				Debugln("check instance network")
 
 			desc, err := client.DescribeInstances(
@@ -169,17 +173,17 @@ poller:
 				},
 			)
 			if err != nil {
-				logger.WithError(err).
+				logr.WithError(err).
 					Warnln("instance details failed")
 				continue
 			}
 
 			if len(desc.Reservations) == 0 {
-				logger.Warnln("empty reservations in details")
+				logr.Warnln("empty reservations in details")
 				continue
 			}
 			if len(desc.Reservations[0].Instances) == 0 {
-				logger.Warnln("empty instances in reservations")
+				logr.Warnln("empty instances in reservations")
 				continue
 			}
 
@@ -199,7 +203,7 @@ poller:
 		}
 	}
 
-	logger.
+	logr.
 		WithField("id", instance.ID).
 		WithField("ip", instance.IP).
 		Debugln("instance network ready")
@@ -209,13 +213,13 @@ poller:
 
 // Destroy destroys the server instance.
 func Destroy(ctx context.Context, creds Credentials, instance *Instance) error {
-	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+	client := getClient(creds.Region, creds.Client, creds.Secret)
 
-	logger := logger.FromContext(ctx).
+	logr := logger.FromContext(ctx).
 		WithField("id", instance.ID).
 		WithField("ip", instance.IP)
 
-	logger.Debugln("terminate instance")
+	logr.Debugln("terminate instance")
 
 	input := &ec2.TerminateInstancesInput{
 		InstanceIds: []*string{
@@ -224,20 +228,20 @@ func Destroy(ctx context.Context, creds Credentials, instance *Instance) error {
 	}
 	_, err := client.TerminateInstances(input)
 	if err != nil {
-		logger.WithError(err).
+		logr.WithError(err).
 			Errorln("cannot terminate instance")
 		return err
 	}
 
-	logger.Debugln("terminated")
+	logr.Debugln("terminated")
 	return nil
 }
 
 func GetPools(ctx context.Context, creds Credentials) (awspools *ec2.DescribeInstancesOutput, err error) {
-	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+	client := getClient(creds.Region, creds.Client, creds.Secret)
 	params := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
-			&ec2.Filter{
+			{
 				Name: aws.String("instance-state-name"),
 				Values: []*string{
 					aws.String("running"),
@@ -249,12 +253,12 @@ func GetPools(ctx context.Context, creds Credentials) (awspools *ec2.DescribeIns
 }
 
 func TagInstance(ctx context.Context, creds Credentials, instance, key, value string) (err error) {
-	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+	client := getClient(creds.Region, creds.Client, creds.Secret)
 	input := &ec2.CreateTagsInput{
 		Resources: []*string{
 			aws.String(instance),
 		},
-		Tags: []*ec2.Tag{&ec2.Tag{Key: aws.String(key), Value: aws.String(value)}},
+		Tags: []*ec2.Tag{{Key: aws.String(key), Value: aws.String(value)}},
 	}
 
 	_, tagErr := client.CreateTags(input)
@@ -266,11 +270,11 @@ func TagInstance(ctx context.Context, creds Credentials, instance, key, value st
 
 func CleanPools(ctx context.Context, creds Credentials) (err error) {
 	poolFullyCleaned := true
-	logger := logger.FromContext(ctx)
-	logger.Debugln("clean pools")
+	logr := logger.FromContext(ctx)
+	logr.Debugln("clean pools")
 	resp, err := GetPools(ctx, creds)
 	if err != nil {
-		logger.WithError(err).
+		logr.WithError(err).
 			Errorln("cannot get pools from aws")
 		return err
 	}
@@ -284,7 +288,6 @@ func CleanPools(ctx context.Context, creds Credentials) (err error) {
 						instanceFound = true
 					}
 				}
-
 			}
 			if instanceFound {
 				destInstance := Instance{
@@ -294,7 +297,7 @@ func CleanPools(ctx context.Context, creds Credentials) (err error) {
 				destErr := Destroy(ctx, creds, &destInstance)
 				if destErr != nil {
 					poolFullyCleaned = false
-					logger.WithError(err).
+					logr.WithError(err).
 						WithField("ID", inst.InstanceId).
 						Errorln("unable to terminate instance")
 				}
@@ -303,21 +306,20 @@ func CleanPools(ctx context.Context, creds Credentials) (err error) {
 	}
 	if poolFullyCleaned {
 		return nil
-	} else {
-		return fmt.Errorf("unable to fully clean the pool, check the logs")
 	}
+	return fmt.Errorf("unable to fully clean the pool, check the logs")
 }
 
 func PoolCountFree(ctx context.Context, creds Credentials, poolName string, awsMutex *sync.Mutex) (free int, err error) {
-	logger := logger.FromContext(ctx).
+	logr := logger.FromContext(ctx).
 		WithField("pool", poolName)
 
-	logger.Debugln("check pool")
+	logr.Debugln("check pool")
 	awsMutex.Lock()
 	defer awsMutex.Unlock()
 	resp, err := GetPools(ctx, creds)
 	if err != nil {
-		logger.WithError(err).
+		logr.WithError(err).
 			Errorln("cannot get pools from aws")
 		return 0, err
 	}
@@ -327,15 +329,14 @@ func PoolCountFree(ctx context.Context, creds Credentials, poolName string, awsM
 			poolFound := false
 			instanceFree := true
 			for _, keys := range inst.Tags {
-				if *keys.Key == "pool" {
+				if *keys.Key == poolString {
 					if *keys.Value == poolName {
 						poolFound = true
 					}
 				}
-				if *keys.Key == "status" {
+				if *keys.Key == statusString {
 					instanceFree = false
 				}
-
 			}
 			if poolFound && instanceFree {
 				free++
@@ -347,16 +348,16 @@ func PoolCountFree(ctx context.Context, creds Credentials, poolName string, awsM
 
 // TryPool will look for an instance in the pool, returning its is and ip. otherwise it return an error
 func TryPool(ctx context.Context, creds Credentials, poolName string, awsMutex *sync.Mutex) (found bool, instanceID, instanceIP string, err error) {
-	logger := logger.FromContext(ctx).
+	logr := logger.FromContext(ctx).
 		WithField("pool", poolName)
 
-	logger.Debugln("try pool")
+	logr.Debugln("try pool")
 	awsMutex.Lock()
 	defer awsMutex.Unlock()
 	resp, poolErr := GetPools(ctx, creds)
 
 	if poolErr != nil {
-		logger.WithError(poolErr).
+		logr.WithError(poolErr).
 			Errorln("cannot get pools from aws")
 		return false, "", "", poolErr
 	}
@@ -367,12 +368,12 @@ func TryPool(ctx context.Context, creds Credentials, poolName string, awsMutex *
 			poolFound := false
 			instanceFree := true
 			for _, keys := range inst.Tags {
-				if *keys.Key == "pool" {
+				if *keys.Key == poolString {
 					if *keys.Value == poolName {
 						poolFound = true
 					}
 				}
-				if *keys.Key == "status" {
+				if *keys.Key == statusString {
 					instanceFree = false
 				}
 			}
@@ -389,14 +390,14 @@ func TryPool(ctx context.Context, creds Credentials, poolName string, awsMutex *
 	}
 
 	if !found {
-		logger.Debugln("no free instances")
+		logr.Debugln("no free instances")
 		return false, "", "", nil
 	}
 
-	logger.Debugln("found an instance")
+	logr.Debugln("found an instance")
 	tagErr := TagInstance(ctx, creds, instanceID, "status", "build in progress")
 	if tagErr != nil {
-		logger.WithError(tagErr).
+		logr.WithError(tagErr).
 			WithField("instance", instanceID).
 			Errorln("cannot tag instance")
 		return false, "", "", tagErr
@@ -406,7 +407,7 @@ func TryPool(ctx context.Context, creds Credentials, poolName string, awsMutex *
 
 // checks that we can log into EC2, and the regions respond
 func Ping(ctx context.Context, creds Credentials) error {
-	client := getClient(ctx, creds.Region, creds.Client, creds.Secret)
+	client := getClient(creds.Region, creds.Client, creds.Secret)
 
 	allRegions := true
 	input := &ec2.DescribeRegionsInput{
@@ -417,12 +418,16 @@ func Ping(ctx context.Context, creds Credentials) error {
 	return err
 }
 
-func getClient(ctx context.Context, region, client, secret string) *ec2.EC2 {
+func getClient(region, client, secret string) *ec2.EC2 {
 	config := aws.NewConfig()
 	config = config.WithRegion(region)
-	config = config.WithMaxRetries(10)
+	config = config.WithMaxRetries(maxRetries)
 	config = config.WithCredentials(
 		credentials.NewStaticCredentials(client, secret, ""),
 	)
-	return ec2.New(session.New(config))
+	mySession := session.Must(session.NewSession())
+
+	// Create a EC2 client from just a session.
+	_ = ec2.New(mySession)
+	return ec2.New(mySession, config)
 }

@@ -206,16 +206,16 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			return mkdirErr
 		}
 		// create docker network
-		session, err := client.NewSession()
-		if err != nil {
+		session, sessionErr := client.NewSession()
+		if sessionErr != nil {
 			logger.FromContext(ctx).
-				WithError(err).
+				WithError(sessionErr).
 				WithField("ami", spec.Instance.AMI).
 				WithField("pool", spec.Instance.UsePool).
 				WithField("ip", spec.Instance.IP).
 				WithField("id", spec.Instance.ID).
 				Debug("failed to create session")
-			return err
+			return sessionErr
 		}
 		defer session.Close()
 		// keep checking until docker is ok
@@ -364,7 +364,8 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
-	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance. preventing too many instances being created for a pool
+	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance.
+	// preventing too many instances being created for a pool
 	if spec.Instance.UsePool != "" {
 		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.Instance.UsePool, e.opts.AwsMutex)
 		if countPoolErr != nil {
@@ -497,8 +498,8 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		// command and will not signal remote processes. This may
 		// be resolved in openssh 7.9 or higher. Please subscribe
 		// to https://github.com/golang/go/issues/16597.
-		if err := session.Signal(cryptoSSH.SIGKILL); err != nil {
-			log.WithError(err).Debug("kill remote process")
+		if sigErr := session.Signal(cryptoSSH.SIGKILL); sigErr != nil {
+			log.WithError(sigErr).Debug("kill remote process")
 		}
 
 		log.Debug("ssh session killed")
@@ -544,29 +545,29 @@ func writeWorkdir(w io.Writer, path string) {
 
 // helper function writes a shell command to the io.Writer that
 // exports all secrets as environment variables.
-func writeSecrets(w io.Writer, os string, secrets []*Secret) {
-	for _, s := range secrets {
-		writeEnv(w, os, s.Env, string(s.Data))
+func writeSecrets(w io.Writer, osString string, secretSlice []*Secret) {
+	for _, s := range secretSlice {
+		writeEnv(w, osString, s.Env, string(s.Data))
 	}
 }
 
 // helper function writes a shell command to the io.Writer that
 // exports the key value pairs as environment variables.
-func writeEnviron(w io.Writer, os string, envs map[string]string) {
+func writeEnviron(w io.Writer, osString string, envs map[string]string) {
 	var keys []string
 	for k := range envs {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		writeEnv(w, os, k, envs[k])
+		writeEnv(w, osString, k, envs[k])
 	}
 }
 
 // helper function writes a shell command to the io.Writer that
 // exports and key value pair as an environment variable.
-func writeEnv(w io.Writer, os, key, value string) {
-	switch os {
+func writeEnv(w io.Writer, osString, key, value string) {
+	switch osString {
 	case "windows":
 		fmt.Fprintf(w, "$Env:%s = %q", key, value)
 		fmt.Fprintln(w)
@@ -582,12 +583,12 @@ func upload(client *sftp.Client, path string, data []byte, mode uint32) error {
 		return err
 	}
 	defer f.Close()
-	if _, err := f.Write(data); err != nil {
-		return err
+	if _, writeErr := f.Write(data); err != nil {
+		return writeErr
 	}
-	err = f.Chmod(os.FileMode(mode))
-	if err != nil {
-		return err
+	chmodErr := f.Chmod(os.FileMode(mode))
+	if chmodErr != nil {
+		return chmodErr
 	}
 	return nil
 }

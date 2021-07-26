@@ -29,7 +29,7 @@ func TestLint(t *testing.T) {
 	for _, test := range tests {
 		name := path.Base(test.path)
 		if test.trusted {
-			name = name + "/trusted"
+			name += "/trusted"
 		}
 		t.Run(name, func(t *testing.T) {
 			resources, err := manifest.ParseFile(test.path)

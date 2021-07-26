@@ -116,14 +116,14 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		Pools:      pools,
 	}
 
-	engine, err := engine.New(opts)
-	if err != nil {
-		logrus.WithError(err).
+	engInstance, engineErr := engine.New(opts)
+	if engineErr != nil {
+		logrus.WithError(engineErr).
 			Fatalln("cannot load the engine")
 	}
 
-	remote := remote.New(cli)
-	tracer := history.New(remote)
+	remoteInstance := remote.New(cli)
+	tracer := history.New(remoteInstance)
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
@@ -167,13 +167,13 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		},
 		Exec: runtime.NewExecer(
 			tracer,
-			remote,
-			engine,
+			remoteInstance,
+			engInstance,
 			config.Runner.Procs,
 		).Exec,
 	}
 
-	poller := &poller.Poller{
+	pollerInstance := &poller.Poller{
 		Client:   cli,
 		Dispatch: runner.Run,
 		Filter: &client.Filter{
@@ -183,7 +183,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	var g errgroup.Group
-	server := server.Server{
+	serverInstance := server.Server{
 		Addr: config.Server.Port,
 		Handler: router.New(tracer, hook, router.Config{
 			Username: config.Dashboard.Username,
@@ -196,18 +196,18 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		Infoln("starting the server")
 
 	g.Go(func() error {
-		return server.ListenAndServe(ctx)
+		return serverInstance.ListenAndServe(ctx)
 	})
 
 	// Connect to AWS making sure we can use creds provided.
 	if config.Settings.AwsAccessKeyID != "" || config.Settings.AwsAccessKeySecret != "" {
 		for {
-			err := engine.Ping(ctx, config.Settings.AwsAccessKeyID, config.Settings.AwsAccessKeySecret, config.Settings.AwsRegion)
-			if err == context.Canceled {
+			pingErr := engInstance.Ping(ctx, config.Settings.AwsAccessKeyID, config.Settings.AwsAccessKeySecret, config.Settings.AwsRegion)
+			if pingErr == context.Canceled {
 				break
 			}
-			if err != nil {
-				logrus.WithError(err).
+			if pingErr != nil {
+				logrus.WithError(pingErr).
 					Errorln("cannot connect to aws")
 				time.Sleep(time.Second)
 			} else {
@@ -224,7 +224,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 	// Ping the server and block until a successful connection to the server has been established.
 	for {
-		err := cli.Ping(ctx, config.Runner.Name)
+		pingErr := cli.Ping(ctx, config.Runner.Name)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -233,8 +233,8 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		if ctx.Err() != nil {
 			break
 		}
-		if err != nil {
-			logrus.WithError(err).
+		if pingErr != nil {
+			logrus.WithError(pingErr).
 				Errorln("cannot ping the remote server")
 			time.Sleep(time.Second)
 		} else {
@@ -250,7 +250,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 			WithField("type", resource.Type).
 			Infoln("polling the remote server")
 
-		poller.Poll(ctx, config.Runner.Capacity)
+		pollerInstance.Poll(ctx, config.Runner.Capacity)
 		return nil
 	})
 
@@ -267,7 +267,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 
 	// seed a pool
 	if pools != nil {
-		buildPoolErr := buildPools(ctx, pools, engine, creds, &awsMutex)
+		buildPoolErr := buildPools(ctx, pools, engInstance, creds, &awsMutex)
 		if buildPoolErr != nil {
 			logrus.WithError(buildPoolErr).
 				Errorln("unable to build pool")
@@ -299,16 +299,16 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 
 func processPoolFile(poolFile []byte, compilerSettings compiler.Settings) (pools map[string]engine.Pool, err error) {
 	pools = make(map[string]engine.Pool)
-	//evaluates string replacement expressions and returns an update configuration.
+	// evaluates string replacement expressions and returns an update configuration.
 	config := string(poolFile)
 	// parse and lint the configuration.
-	manifest, err := manifest.ParseString(config)
+	manifestInstance, err := manifest.ParseString(config)
 	if err != nil {
 		return pools, err
 	}
 
 	// this is where we need to iterate over the number of pipelines
-	for _, res := range manifest.Resources {
+	for _, res := range manifestInstance.Resources {
 		// lint the pipeline and return an error if any
 		// linting rules are broken
 		lint := linter.New()
@@ -326,7 +326,7 @@ func processPoolFile(poolFile []byte, compilerSettings compiler.Settings) (pools
 
 		args := runtime.CompilerArgs{
 			Pipeline: res,
-			Manifest: manifest,
+			Manifest: manifestInstance,
 			System:   &drone.System{},
 			Repo:     &drone.Repo{},
 			Build:    &drone.Build{},

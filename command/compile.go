@@ -27,11 +27,10 @@ import (
 
 type compileCommand struct {
 	*internal.Flags
-
-	Source     *os.File
-	Environ    map[string]string
-	Secrets    map[string]string
-	Settings   compiler.Settings
+	Source   *os.File
+	Environ  map[string]string
+	Secrets  map[string]string
+	Settings compiler.Settings
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
@@ -49,10 +48,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		environ.Link(c.Repo, c.Build, c.System),
 		c.Build.Params,
 	)
-
-	// string substitution function ensures that string
-	// replacement variables are escaped and quoted if they
-	// contain newlines.
+	// string substitution function ensures that string replacement variables are escaped and quoted if they contain newlines.
 	subf := func(k string) string {
 		v := envs[k]
 		if strings.Contains(v, "\n") {
@@ -60,45 +56,37 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		}
 		return v
 	}
-
-	// evaluates string replacement expressions and returns an
-	// update configuration.
+	// evaluates string replacement expressions and returns an update configuration.
 	config, err := envsubst.Eval(string(rawsource), subf)
 	if err != nil {
 		return err
 	}
-
 	// parse and lint the configuration
-	manifest, err := manifest.ParseString(config)
+	mnfst, err := manifest.ParseString(config)
 	if err != nil {
 		return err
 	}
-
-	// a configuration can contain multiple pipelines.
-	// get a specific pipeline resource for execution.
-	resource, err := resource.Lookup(c.Stage.Name, manifest)
+	// a configuration can contain multiple pipelines. get a specific pipeline resource for execution.
+	resourceInstance, err := resource.Lookup(c.Stage.Name, mnfst)
 	if err != nil {
 		return err
 	}
-
-	// lint the pipeline and return an error if any
-	// linting rules are broken
+	// lint the pipeline and return an error if any linting rules are broken
 	lint := linter.New()
-	err = lint.Lint(resource, c.Repo)
+	err = lint.Lint(resourceInstance, c.Repo)
 	if err != nil {
 		return err
 	}
-
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
-		Environ:    provider.Static(c.Environ),
-		Settings:   c.Settings,
-		Secret:     secret.StaticVars(c.Secrets),
+		Environ:  provider.Static(c.Environ),
+		Settings: c.Settings,
+		Secret:   secret.StaticVars(c.Secrets),
 	}
 
 	args := runtime.CompilerArgs{
-		Pipeline: resource,
-		Manifest: manifest,
+		Pipeline: resourceInstance,
+		Manifest: mnfst,
 		Build:    c.Build,
 		Netrc:    c.Netrc,
 		Repo:     c.Repo,
@@ -106,9 +94,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		System:   c.System,
 	}
 	spec := comp.Compile(nocontext, args)
-
-	// encode the pipeline in json format and print to the
-	// console for inspection.
+	// encode the pipeline in json format and print to the console for inspection.
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(spec)
@@ -132,7 +118,6 @@ func registerCompile(app *kingpin.Application) {
 
 	cmd.Flag("environ", "environment variables").
 		StringMapVar(&c.Environ)
-
 	// shared pipeline flags
 	c.Flags = internal.ParseFlags(cmd)
 }

@@ -366,14 +366,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		buildslug := slug.Make(src.Name)
 		buildpath := join(pipelineOS, spec.Root, "opt", getExt(pipelineOS, buildslug))
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
-
 		// if there is an image associated with the step build a docker cli
 		var buildfile string
 		if src.Image == "" {
 			buildfile = genScript(pipelineOS, src.Commands)
 		} else {
 			buildfile = genDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
-			//fmt.Printf("\ndocker script\n%s\n", buildfile)
 		}
 
 		cmd, args := getCommand(pipelineOS, buildpath)
@@ -420,9 +418,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	for _, step := range spec.Steps {
 		for _, s := range step.Secrets {
-			secret, ok := c.findSecret(ctx, args, s.Name)
+			actualSecret, ok := c.findSecret(ctx, args, s.Name)
 			if ok {
-				s.Data = []byte(secret)
+				s.Data = []byte(actualSecret)
 			}
 		}
 	}
@@ -436,7 +434,7 @@ func (c *Compiler) findSecret(ctx context.Context, args runtime.CompilerArgs, na
 		return
 	}
 	// source secrets from the global secret provider and the repository secret provider.
-	provider := secret.Combine(
+	p := secret.Combine(
 		args.Secret,
 		c.Secret,
 	)
@@ -444,7 +442,7 @@ func (c *Compiler) findSecret(ctx context.Context, args runtime.CompilerArgs, na
 	// currently ignore errors if the secret is not found,
 	// which is something that we'll need to address in the
 	// next major (breaking) release.
-	found, _ := provider.Find(ctx, &secret.Request{
+	found, _ := p.Find(ctx, &secret.Request{
 		Name:  name,
 		Build: args.Build,
 		Repo:  args.Repo,

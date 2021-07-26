@@ -87,14 +87,14 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// parse and lint the configuration.
-	manifest, err := manifest.ParseString(config)
+	mnfst, err := manifest.ParseString(config)
 	if err != nil {
 		return err
 	}
 
 	// a configuration can contain multiple pipelines.
 	// get a specific pipeline resource for execution.
-	res, err := resource.Lookup(c.Stage.Name, manifest)
+	res, err := resource.Lookup(c.Stage.Name, mnfst)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 
 	args := runtime.CompilerArgs{
 		Pipeline: res,
-		Manifest: manifest,
+		Manifest: mnfst,
 		Build:    c.Build,
 		Netrc:    c.Netrc,
 		Repo:     c.Repo,
@@ -145,7 +145,6 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 	// exclude steps that are in the exclude list,
 	// if the list in non-empty.
 	if len(c.Exclude) > 0 {
-	E:
 		for _, step := range spec.Steps {
 			if step.Name == "clone" {
 				continue
@@ -153,7 +152,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 			for _, name := range c.Exclude {
 				if step.Name == name {
 					step.RunPolicy = runtime.RunNever
-					continue E
+					break
 				}
 			}
 		}
@@ -205,7 +204,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 
-	engine, err := engine.New(engine.Opts{RunnerName: "exec"})
+	engineInstance, err := engine.New(engine.Opts{RunnerName: "exec"})
 	if err != nil {
 		return err
 	}
@@ -213,7 +212,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error {
 	err = runtime.NewExecer(
 		pipeline.NopReporter(),
 		console.New(c.Pretty),
-		engine,
+		engineInstance,
 		c.Procs,
 	).Exec(ctx, spec, state)
 

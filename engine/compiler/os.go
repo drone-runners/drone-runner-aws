@@ -7,7 +7,6 @@ package compiler
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -23,7 +22,6 @@ import (
 // helper function returns the base temporary directory based
 // on the target platform.
 func tempdir(os string) string {
-	// dir := fmt.Sprintf("drone-%s", random())
 	dir := "aws"
 	switch os {
 	case "windows":
@@ -56,10 +54,9 @@ func getExt(os, file string) (s string) {
 
 // helper function returns the shell command and arguments
 // based on the target platform to invoke the script
-func getCommand(os, script string) (string, []string) {
-	cmd, args := bash.Command()
-	switch os {
-	case "windows":
+func getCommand(os, script string) (cmd string, args []string) {
+	cmd, args = bash.Command()
+	if os == "windows" {
 		cmd, args = powershell.Command()
 	}
 	return cmd, append(args, script)
@@ -94,7 +91,7 @@ func convertEnvMapToString(env map[string]string) (envString string) {
 			continue
 		}
 		s := fmt.Sprintf(" --env %s='%s'", key, value)
-		envString = envString + (s)
+		envString += (s)
 	}
 	return envString
 }
@@ -105,21 +102,16 @@ func convertSettingsToString(settings map[string]*manifest.Parameter) (envString
 		if value == nil {
 			continue
 		}
-		// all settings are passed to the plugin env
-		// variables, prefixed with PLUGIN_
+		// all settings are passed to the plugin env variables, prefixed with PLUGIN_
 		key = "PLUGIN_" + strings.ToUpper(key)
-
-		// if the setting parameter is sources from the
-		// secret we create a secret enviornment variable.
+		// if the setting parameter is sources from the secret we create a secret environment variable.
 		if value.Secret != "" {
 			s := fmt.Sprintf(" --env %s='%s'", key, value.Secret)
-			envString = envString + (s)
+			envString += (s)
 		} else {
-			// else if the setting parameter is opaque
-			// we inject as a string-encoded environment
-			// variable.
+			// else if the setting parameter is opaque  we inject as a string-encoded environment variable.
 			s := fmt.Sprintf(" --env %s='%s'", key, encode(value.Value))
-			envString = envString + (s)
+			envString += (s)
 		}
 	}
 	return envString
@@ -138,7 +130,7 @@ func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resourc
 			if pipelineOS == "windows" {
 				v = fmt.Sprintf(" -v `%s`:%s", path, volume.MountPath)
 			}
-			volumeString = volumeString + v
+			volumeString += v
 		}
 	}
 	return volumeString
@@ -146,10 +138,7 @@ func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resourc
 
 func convertStepNametoContainerString(stepName string) (containerName string) {
 	// name of the container
-	reg, err := regexp.Compile("[^a-zA-Z0-9_.-]+")
-	if err != nil {
-		log.Fatal(err)
-	}
+	reg := regexp.MustCompile("[^a-zA-Z0-9_.-]+")
 	safeName := reg.ReplaceAllString(stepName, "")
 	containerName = fmt.Sprintf(`--name='%s'`, safeName)
 	return containerName
@@ -173,7 +162,7 @@ func genDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env
 	// create the env params to be passed to the docker executable
 	envString := convertEnvMapToString(env)
 	// convert settings to env variables
-	envString = envString + convertSettingsToString(step.Settings)
+	envString += convertSettingsToString(step.Settings)
 	// mount the source dir
 	volumeString := convertVolumesToString(pipelineOS, sourcedir, step.Volumes, pipeLineVolumeMap)
 	// detached or interactive
@@ -205,7 +194,6 @@ func genDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env
 		returnVal := bash.Script(array)
 		return returnVal
 	}
-
 }
 
 func encode(v interface{}) string {
