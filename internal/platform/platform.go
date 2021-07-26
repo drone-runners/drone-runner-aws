@@ -268,7 +268,7 @@ func TagInstance(ctx context.Context, creds Credentials, instance, key, value st
 	return nil
 }
 
-func CleanPools(ctx context.Context, creds Credentials) (err error) {
+func CleanPools(ctx context.Context, creds Credentials, runnerName string) (err error) {
 	poolFullyCleaned := true
 	logr := logger.FromContext(ctx)
 	logr.Debugln("clean pools")
@@ -281,15 +281,21 @@ func CleanPools(ctx context.Context, creds Credentials) (err error) {
 	// does any of the machines have the tags we want
 	for idx := range resp.Reservations {
 		for _, inst := range resp.Reservations[idx].Instances {
-			instanceFound := false
+			droneTagFound := false
+			runnerNameTagFound := false
 			for _, keys := range inst.Tags {
 				if *keys.Key == "drone" {
 					if *keys.Value == "drone-runner-aws" {
-						instanceFound = true
+						droneTagFound = true
+					}
+				}
+				if *keys.Key == "creator" {
+					if *keys.Value == runnerName {
+						runnerNameTagFound = true
 					}
 				}
 			}
-			if instanceFound {
+			if droneTagFound && runnerNameTagFound {
 				destInstance := Instance{
 					ID: *inst.InstanceId,
 					IP: *inst.PublicIpAddress,

@@ -259,7 +259,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 
 	// if there is no keyfiles lets remove any old instances.
 	if !config.Settings.ReusePool {
-		cleanErr := platform.CleanPools(ctx, creds)
+		cleanErr := platform.CleanPools(ctx, creds, config.Runner.Name)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("unable to clean pools")
@@ -282,7 +282,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	g.Go(func() error {
 		<-ctx.Done()
 		// clean up pool on termination
-		cleanErr := platform.CleanPools(ctx, creds)
+		cleanErr := platform.CleanPools(ctx, creds, config.Runner.Name)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("unable to clean pools")
