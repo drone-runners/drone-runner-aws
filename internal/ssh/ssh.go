@@ -14,6 +14,7 @@ import (
 	"github.com/drone/runner-go/logger"
 )
 
+const timeOut = 10
 const networkTimeout = time.Minute * 10
 
 // DialRetry configures and dials the ssh server and retries until a connection is established or a timeout is reached.
@@ -52,7 +53,7 @@ func DialRetry(ctx context.Context, ip, username, privatekey string) (*ssh.Clien
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(time.Second * 10):
+		case <-time.After(time.Second * timeOut):
 		}
 	}
 }
@@ -99,7 +100,7 @@ func ApplicationRetry(ctx context.Context, client *ssh.Client, command string) (
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Second * 10):
+		case <-time.After(time.Second * timeOut):
 		}
 	}
 }
@@ -107,7 +108,7 @@ func ApplicationRetry(ctx context.Context, client *ssh.Client, command string) (
 // Dial configures and dials the ssh server.
 func Dial(server, username, privatekey string) (*ssh.Client, error) {
 	if !strings.HasSuffix(server, ":22") {
-		server = server + ":22"
+		server += ":22"
 	}
 	config := &ssh.ClientConfig{
 		User:            username,

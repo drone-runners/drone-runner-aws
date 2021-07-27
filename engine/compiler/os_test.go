@@ -159,7 +159,6 @@ func Test_convertEnvMapToString(t *testing.T) {
 					t.Errorf("convertEnvMapToString() = #%s# contains #%s#", gotEnvString, want)
 				}
 			}
-
 		})
 	}
 }

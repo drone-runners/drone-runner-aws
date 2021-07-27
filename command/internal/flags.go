@@ -23,7 +23,7 @@ type Flags struct {
 }
 
 // ParseFlags parses the flags from the command args.
-func ParseFlags(cmd *kingpin.CmdClause) *Flags {
+func ParseFlags(cmd *kingpin.CmdClause) *Flags { //nolint:funlen // its complex but standard
 	f := &Flags{
 		Build:  &drone.Build{},
 		Netrc:  &drone.Netrc{},

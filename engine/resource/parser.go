@@ -12,9 +12,11 @@ import (
 	"github.com/buildkite/yaml"
 )
 
-func init() {
+func init() { //nolint:gochecknoinits
 	manifest.Register(parse)
 }
+
+const maxStepLength = 100
 
 // parse parses the raw resource and returns an Exec pipeline.
 func parse(r *manifest.RawResource) (manifest.Resource, bool, error) {
@@ -41,16 +43,16 @@ func lint(pipeline *Pipeline) error {
 	names := map[string]struct{}{}
 	for _, step := range pipeline.Steps {
 		if step == nil {
-			return errors.New("Linter: detected nil step")
+			return errors.New("linter: detected nil step")
 		}
 		if step.Name == "" {
-			return errors.New("Linter: invalid or missing step name")
+			return errors.New("linter: invalid or missing step name")
 		}
-		if len(step.Name) > 100 {
-			return errors.New("Linter: step name cannot exceed 100 characters")
+		if len(step.Name) > maxStepLength {
+			return errors.New("linter: step name cannot exceed 100 characters")
 		}
 		if _, ok := names[step.Name]; ok {
-			return errors.New("Linter: duplicate step name")
+			return errors.New("linter: duplicate step name")
 		}
 		names[step.Name] = struct{}{}
 	}

@@ -95,7 +95,7 @@ func TestCompile_RunFailure(t *testing.T) {
 // requested and stored in the intermediate representation
 // at compile time.
 func TestCompile_Secrets(t *testing.T) {
-	manifest, _ := manifest.ParseFile("testdata/secret.yml")
+	mnfst, _ := manifest.ParseFile("testdata/secret.yml")
 
 	compiler := &Compiler{
 		Environ: provider.Static(nil),
@@ -111,8 +111,8 @@ func TestCompile_Secrets(t *testing.T) {
 		Stage:    &drone.Stage{},
 		System:   &drone.System{},
 		Netrc:    &drone.Netrc{},
-		Manifest: manifest,
-		Pipeline: manifest.Resources[0].(*resource.Pipeline),
+		Manifest: mnfst,
+		Pipeline: mnfst.Resources[0].(*resource.Pipeline),
 		Secret:   secret.Static(nil),
 	}
 
@@ -132,7 +132,7 @@ func TestCompile_Secrets(t *testing.T) {
 			Mask: true,
 		},
 	}
-	if diff := cmp.Diff(got, want); len(diff) != 0 {
+	if diff := cmp.Diff(got, want); diff != "" {
 		// BUG(bradrydzewski) ordering is not guaranteed. this
 		// unit tests needs to be adjusted accordingly.
 		t.Skipf(diff)
@@ -152,7 +152,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		random = uniuri.New
 	}()
 
-	manifest, err := manifest.ParseFile(source)
+	mnfst, err := manifest.ParseFile(source)
 	if err != nil {
 		t.Error(err)
 		return nil
@@ -172,8 +172,8 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		Stage:    &drone.Stage{},
 		System:   &drone.System{},
 		Netrc:    &drone.Netrc{Machine: "github.com", Login: "octocat", Password: "correct-horse-battery-staple"},
-		Manifest: manifest,
-		Pipeline: manifest.Resources[0].(*resource.Pipeline),
+		Manifest: mnfst,
+		Pipeline: mnfst.Resources[0].(*resource.Pipeline),
 		Secret:   secret.Static(nil),
 	}
 
@@ -195,8 +195,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		cmpopts.IgnoreFields(engine.Step{}, "Envs", "Secrets"),
 		cmpopts.IgnoreFields(engine.Spec{}, "Instance.PrivateKey", "Instance.PublicKey", "Instance.UserData"),
 	}
-	if diff := cmp.Diff(got, want, opts...); len(diff) != 0 {
-
+	if diff := cmp.Diff(got, want, opts...); diff != "" {
 		t.Errorf("%s\n%v", t.Name(), diff)
 	}
 

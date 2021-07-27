@@ -13,6 +13,8 @@ import (
 	"github.com/drone/runner-go/manifest"
 )
 
+const cloneStep = "clone"
+
 // helper function returns true if the step is configured to
 // always run regardless of status.
 func isRunAlways(step *resource.Step) bool {
@@ -97,11 +99,11 @@ func convertSecretEnv(src map[string]*manifest.Variable) []*engine.Secret {
 // account for the clone step.
 func configureCloneDeps(spec *engine.Spec) {
 	for _, step := range spec.Steps {
-		if step.Name == "clone" {
+		if step.Name == cloneStep {
 			continue
 		}
 		if len(step.DependsOn) == 0 {
-			step.DependsOn = []string{"clone"}
+			step.DependsOn = []string{cloneStep}
 		}
 	}
 }
@@ -110,13 +112,13 @@ func configureCloneDeps(spec *engine.Spec) {
 // account for a disabled clone step.
 func removeCloneDeps(spec *engine.Spec) {
 	for _, step := range spec.Steps {
-		if step.Name == "clone" {
+		if step.Name == cloneStep {
 			return
 		}
 	}
 	for _, step := range spec.Steps {
 		if len(step.DependsOn) == 1 &&
-			step.DependsOn[0] == "clone" {
+			step.DependsOn[0] == cloneStep {
 			step.DependsOn = []string{}
 		}
 	}

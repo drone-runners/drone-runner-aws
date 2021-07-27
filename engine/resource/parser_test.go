@@ -139,7 +139,6 @@ func TestMatch(t *testing.T) {
 	if match(r) == true {
 		t.Errorf("Expect type mismatch, got true")
 	}
-
 }
 
 func TestLint(t *testing.T) {
