@@ -7,14 +7,19 @@ platform:
   arch: amd64
 
 steps:
-- name: test
+- name: go vet and unit tests
   image: golang:1.16
   commands:
-  - go test -cover ./...
-
-volumes:
-- name: go
-  temp: {}
+    - go vet ./...
+    - go test -cover ./...
+  depends_on:
+    - clone
+- name: golangci-lint
+  image: golangci/golangci-lint
+  commands:
+    - golangci-lint run
+  depends_on:
+    - clone
 ---
 
 kind: pipeline
@@ -62,7 +67,7 @@ type: aws
 name: ubuntu instance acceptance tests
 
 instance:
-  use_pool: ubuntu
+  use: ubuntu
 
 steps:
   - name: check install
@@ -107,7 +112,7 @@ type: aws
 name: windows instance acceptance tests
 
 instance:
-  use_pool: windows
+  use: windows
 
 platform:
   os: windows

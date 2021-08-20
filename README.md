@@ -1,6 +1,6 @@
 # AWS Runner
 
-This runner provisions EC2 instances in AWS. It also sets up SSH access to the instances, and installs git and docker on the instances. Advanced users can also avail of instance pools to improve build spin up time.
+This runner provisions EC2 instances in AWS. It also sets up SSH access and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Advanced users can also avail of instance pools to improve build spin up time. 
 
 ## AWS EC2 prerequisites
 
@@ -122,7 +122,7 @@ This is were you can specify the pool to use (recommended) or specify the full i
 
 Key | Description
 --- | -------------
-`use_pool` | the pool to use for that pipeline.
+`use` | the pool to use for that pipeline.
 
 ## Basic example of a `.drone.yml` build using a pool
 
@@ -132,7 +132,7 @@ type: aws
 name: ubuntu acceptance tests
 
 instance:
-  use_pool: ubuntu
+  use: ubuntu
 
 steps:
 - name: display go version
@@ -155,7 +155,7 @@ platform:
  os: windows
 
 instance:
-  use_pool: windows
+  use: windows
   tags:
     cat: dog
 
@@ -193,6 +193,11 @@ steps:
 ```
 
 ## Future Improvements
+
+Brad's changes
++ Add OS to the pool file for instances. reflect this through the compiler
++ Omit the docker command from the output logs.
++ update the runner on gcp with the new pool file format, dont forget the config files.
 
 + tmate integration
 + cli sub command to print ec2 instances information

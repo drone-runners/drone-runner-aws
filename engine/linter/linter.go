@@ -35,20 +35,18 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 	if err := checkSteps(pipeline); err != nil {
 		return err
 	}
-	if pipeline.Instance.AMI == "" && pipeline.Instance.UsePool == "" {
-		return errors.New("linter: invalid or missing instance AMI or instance use_pool")
+	if pipeline.Instance.AMI == "" && pipeline.Instance.Use == "" {
+		return errors.New("linter: when defining instance, you must specify 'ami' or 'use'")
 	}
-	if pipeline.Instance.AMI != "" && pipeline.Instance.UsePool != "" {
-		return errors.New("linter: you can only specify instance AMI or instance use_pool")
+	if pipeline.Instance.AMI != "" && pipeline.Instance.Use != "" {
+		return errors.New("linter: when defining instance, you can only specify 'ami' or 'use'")
 	}
-	if err := checkVolumes(pipeline); err != nil {
-		return err
-	}
-	return nil
+	err := checkVolumes(pipeline)
+	return err
 }
 
 func checkSteps(pipeline *resource.Pipeline) error {
-	steps := append(pipeline.Services, pipeline.Steps...)
+	steps := append(pipeline.Services, pipeline.Steps...) //nolint:gocritic // creating a new slice is ok
 
 	for _, step := range steps {
 		if step == nil {

@@ -26,7 +26,7 @@ func GeneratePair() (public, private string, err error) {
 
 // Generate generates an RSA Private Key.
 func Generate() (*rsa.PrivateKey, error) {
-	return rsa.GenerateKey(rand.Reader, 2048)
+	return rsa.GenerateKey(rand.Reader, 2048) //nolint:gomnd
 }
 
 // MarshalPublicKey marshalls an RSA Public Key to an SSH .authorized_keys format
