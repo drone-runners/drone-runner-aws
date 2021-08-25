@@ -79,7 +79,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		},
 		Instance: engine.Instance{
 			AMI:           pipeline.Instance.AMI,
-			UsePool:       pipeline.Instance.UsePool,
+			Use:           pipeline.Instance.Use,
 			PublicKey:     pipeline.Instance.PublicKey,
 			PrivateKey:    pipeline.Instance.PrivateKey,
 			IAMProfileARN: pipeline.Instance.IAMProfileARN,
@@ -357,7 +357,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		src.Detach = true
 	}
 	// combine steps + services
-	combinedSteps := append(pipeline.Services, pipeline.Steps...)
+	combinedSteps := append(pipeline.Services, pipeline.Steps...) //nolint:gocritic // creating a new slice is ok
 	// create steps
 	for _, src := range combinedSteps {
 		buildslug := slug.Make(src.Name)

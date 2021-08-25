@@ -34,7 +34,7 @@ type (
 
 	// Instance provides instance settings.
 	Instance struct {
-		UsePool       string            `json:"use_pool,omitempty" yaml:"use_pool"`
+		Use           string            `json:"use,omitempty" yaml:"use"`
 		AMI           string            `json:"ami,omitempty"`
 		Tags          map[string]string `json:"tags,omitempty"`
 		IAMProfileARN string            `json:"iam_profile_arn,omitempty"`

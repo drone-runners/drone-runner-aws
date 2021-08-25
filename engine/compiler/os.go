@@ -205,7 +205,7 @@ func encode(v interface{}) string {
 	case int:
 		return strconv.Itoa(v)
 	case float64:
-		return strconv.FormatFloat(v, 'g', -1, 64)
+		return strconv.FormatFloat(v, 'g', -1, 64) //nolint:gomnd // base 64
 	case []byte:
 		return base64.StdEncoding.EncodeToString(v)
 	case []interface{}:

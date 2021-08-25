@@ -61,20 +61,20 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 	if spec.PoolCount != 0 {
 		justSetup = true
 	}
-	if spec.Instance.UsePool != "" {
-		found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.Instance.UsePool, e.opts.AwsMutex)
+	if spec.Instance.Use != "" {
+		found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.Instance.Use, e.opts.AwsMutex)
 		if poolErr != nil {
 			logger.FromContext(ctx).
 				WithError(poolErr).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				Errorf("failed to use pool")
 		}
 		if found {
 			// using the pool, use the provided keys
 			logger.FromContext(ctx).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				WithField("ip", ip).
 				WithField("id", id).
 				Debug("using pool instance")
@@ -84,10 +84,10 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		} else {
 			logger.FromContext(ctx).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				Debug("unable to use pool, creating an adhoc instance")
 			// do not use the build file to provision an adhoc instance, use the information from the pool file
-			spec.Instance = e.opts.Pools[spec.Instance.UsePool].InstanceSpec.Instance
+			spec.Instance = e.opts.Pools[spec.Instance.Use].InstanceSpec.Instance
 		}
 	}
 	// add some tags
@@ -98,7 +98,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		// only set the poolname if we are spawning an instance from the pool file
 		awsTags["pool"] = spec.PoolName
 	}
-	if spec.Instance.UsePool != "" {
+	if spec.Instance.Use != "" {
 		// tag so no other builds steal this instance. only happens when the pool is empty
 		awsTags["status"] = "build in progress"
 	}
@@ -127,7 +127,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		startTime := time.Now()
 		logger.FromContext(ctx).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			Debug("creating instance")
 
 		instance, createErr := platform.Create(ctx, creds, &provArgs)
@@ -135,13 +135,13 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 			logger.FromContext(ctx).
 				WithError(createErr).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				Debug("failed to create the instance")
 			return createErr
 		}
 		logger.FromContext(ctx).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("id", instance.ID).
 			WithField("ip", instance.IP).
 			WithField("time(seconds)", (time.Since(startTime)).Seconds()).
@@ -161,7 +161,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		logger.FromContext(ctx).
 			WithError(dialErr).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			WithField("error", dialErr).
@@ -172,7 +172,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 
 	logger.FromContext(ctx).
 		WithField("ami", spec.Instance.AMI).
-		WithField("pool", spec.Instance.UsePool).
+		WithField("pool", spec.Instance.Use).
 		WithField("ip", spec.Instance.IP).
 		WithField("id", spec.Instance.ID).
 		Debug("Instance responding")
@@ -182,7 +182,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		logger.FromContext(ctx).
 			WithError(err).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			Debug("failed to create sftp client")
@@ -193,12 +193,12 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 	}
 	// setup common things, no matter what pipeline would use it
 	if createInstance {
-		mkdirErr := mkdir(clientftp, spec.Root, 0777)
+		mkdirErr := mkdir(clientftp, spec.Root, 0777) //nolint:gomnd // r/w/x for all users
 		if mkdirErr != nil {
 			logger.FromContext(ctx).
 				WithError(mkdirErr).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				WithField("ip", spec.Instance.IP).
 				WithField("id", spec.Instance.ID).
 				WithField("path", spec.Root).
@@ -211,7 +211,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 			logger.FromContext(ctx).
 				WithError(sessionErr).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				WithField("ip", spec.Instance.IP).
 				WithField("id", spec.Instance.ID).
 				Debug("failed to create session")
@@ -224,7 +224,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 			logger.FromContext(ctx).
 				WithError(dockerErr).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				WithField("ip", spec.Instance.IP).
 				WithField("id", spec.Instance.ID).
 				Debug("docker failed to start in a timely fashion")
@@ -240,7 +240,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 			logger.FromContext(ctx).
 				WithError(err).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				WithField("ip", spec.Instance.IP).
 				WithField("id", spec.Instance.ID).
 				WithField("command", networkCommand).
@@ -249,7 +249,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		}
 		logger.FromContext(ctx).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			Debug("generic setup complete")
@@ -266,7 +266,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 				logger.FromContext(ctx).
 					WithError(mkdirErr).
 					WithField("ami", spec.Instance.AMI).
-					WithField("pool", spec.Instance.UsePool).
+					WithField("pool", spec.Instance.Use).
 					WithField("ip", spec.Instance.IP).
 					WithField("id", spec.Instance.ID).
 					WithField("path", file.Path).
@@ -285,7 +285,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 				logger.FromContext(ctx).
 					WithError(uploadErr).
 					WithField("ami", spec.Instance.AMI).
-					WithField("pool", spec.Instance.UsePool).
+					WithField("pool", spec.Instance.Use).
 					WithField("ip", spec.Instance.IP).
 					WithField("id", spec.Instance.ID).
 					Error("cannot write file")
@@ -296,12 +296,12 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		// create any folders needed for temporary volumes.
 		for _, volume := range spec.Volumes {
 			if volume.EmptyDir.ID != "" {
-				err = mkdir(clientftp, volume.EmptyDir.ID, 0777)
+				err = mkdir(clientftp, volume.EmptyDir.ID, 0777) //nolint:gomnd // r/w/x for all users
 				if err != nil {
 					logger.FromContext(ctx).
 						WithError(err).
 						WithField("ami", spec.Instance.AMI).
-						WithField("pool", spec.Instance.UsePool).
+						WithField("pool", spec.Instance.Use).
 						WithField("ip", spec.Instance.IP).
 						WithField("id", spec.Instance.ID).
 						WithField("path", volume.EmptyDir.ID).
@@ -312,7 +312,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint
 		}
 		logger.FromContext(ctx).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			Debug("pipeline specific setup complete")
@@ -337,7 +337,7 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 
 	logger.FromContext(ctx).
 		WithField("ami", spec.Instance.AMI).
-		WithField("pool", spec.Instance.UsePool).
+		WithField("pool", spec.Instance.Use).
 		WithField("ip", spec.Instance.IP).
 		WithField("id", spec.Instance.ID).
 		Debug("destroying instance")
@@ -357,7 +357,7 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		logger.FromContext(ctx).
 			WithError(err).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			Debug("failed to destroy the instance")
@@ -367,28 +367,28 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
 	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance.
 	// preventing too many instances being created for a pool
-	if spec.Instance.UsePool != "" {
-		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.Instance.UsePool, e.opts.AwsMutex)
+	if spec.Instance.Use != "" {
+		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.Instance.Use, e.opts.AwsMutex)
 		if countPoolErr != nil {
 			logger.FromContext(ctx).
 				WithError(countPoolErr).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				Errorf("failed to count pool")
 		}
 
-		if poolCount < e.opts.Pools[spec.Instance.UsePool].PoolSize {
-			createInstanceErr := e.Setup(ctx, e.opts.Pools[spec.Instance.UsePool].InstanceSpec)
+		if poolCount < e.opts.Pools[spec.Instance.Use].PoolSize {
+			createInstanceErr := e.Setup(ctx, e.opts.Pools[spec.Instance.Use].InstanceSpec)
 			if createInstanceErr != nil {
 				logger.FromContext(ctx).
 					WithError(createInstanceErr).
 					WithField("ami", spec.Instance.AMI).
-					WithField("pool", spec.Instance.UsePool).
+					WithField("pool", spec.Instance.Use).
 					Errorf("failed to add back to the pool")
 			} else {
 				logger.FromContext(ctx).
 					WithField("ami", spec.Instance.AMI).
-					WithField("pool", spec.Instance.UsePool).
+					WithField("pool", spec.Instance.Use).
 					Debug("added to the pool")
 			}
 		}
@@ -410,7 +410,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		logger.FromContext(ctx).
 			WithError(err).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			WithField("error", err).
@@ -424,7 +424,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		logger.FromContext(ctx).
 			WithError(dockerErr).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			Debug("docker failed to start in a timely fashion")
@@ -435,7 +435,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		logger.FromContext(ctx).
 			WithError(err).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			Debug("failed to create sftp client")
@@ -458,7 +458,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 			logger.FromContext(ctx).
 				WithError(err).
 				WithField("ami", spec.Instance.AMI).
-				WithField("pool", spec.Instance.UsePool).
+				WithField("pool", spec.Instance.Use).
 				WithField("ip", spec.Instance.IP).
 				WithField("id", spec.Instance.ID).
 				WithField("path", file.Path).
@@ -472,7 +472,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		logger.FromContext(ctx).
 			WithError(err).
 			WithField("ami", spec.Instance.AMI).
-			WithField("pool", spec.Instance.UsePool).
+			WithField("pool", spec.Instance.Use).
 			WithField("ip", spec.Instance.IP).
 			WithField("id", spec.Instance.ID).
 			Debug("failed to create session")
@@ -521,7 +521,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 
 	log.WithField("ssh.exit", state.ExitCode).
 		WithField("ami", spec.Instance.AMI).
-		WithField("pool", spec.Instance.UsePool).
+		WithField("pool", spec.Instance.Use).
 		WithField("ip", spec.Instance.IP).
 		WithField("id", spec.Instance.ID).
 		Debug("ssh session finished")

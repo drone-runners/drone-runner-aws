@@ -112,7 +112,7 @@ func Dial(server, username, privatekey string) (*ssh.Client, error) {
 	}
 	config := &ssh.ClientConfig{
 		User:            username,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec //machines are ephemeral.
 	}
 	pem := []byte(privatekey)
 	signer, err := ssh.ParsePrivateKey(pem)
