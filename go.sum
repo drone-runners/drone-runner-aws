@@ -21,12 +21,12 @@ github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9 h1:74lLNRzvsdIlkTgfD
 github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9/go.mod h1:GgB8SF9nRG+GqaDtLcwJZsQFhcogVCJ79j4EdT0c2V4=
 github.com/docker/go-units v0.4.0 h1:3uh0PgVws3nIA0Q+MwDC8yjEPf9zjRfZZWXZYDct3Tw=
 github.com/docker/go-units v0.4.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
-github.com/drone/drone-go v1.2.1-0.20200326064413-195394da1018 h1:aHRv4GohqzHXZEGks/Qyrd8kI7hkCdLhJO1QoYtQMjU=
-github.com/drone/drone-go v1.2.1-0.20200326064413-195394da1018/go.mod h1:GxyeGClYohaKNYJv/ZpsmVHtMJ7WhoT+uDaJNcDIrk4=
+github.com/drone/drone-go v1.6.0 h1:HJXienGtXlUKLe8z0iDsX6012CE9/2of5pQpUiD+zSA=
+github.com/drone/drone-go v1.6.0/go.mod h1:fxCf9jAnXDZV1yDr0ckTuWd1intvcQwfJmTRpTZ1mXg=
 github.com/drone/envsubst v1.0.2 h1:dpYLMAspQHW0a8dZpLRKe9jCNvIGZPhCPrycZzIHdqo=
 github.com/drone/envsubst v1.0.2/go.mod h1:bkZbnc/2vh1M12Ecn7EYScpI4YGYU0etwLJICOWi8Z0=
-github.com/drone/runner-go v1.6.1-0.20200415215637-a82f0982f1be h1:OrDS3TyMcXgj40bT5OctlNiDFRF3d5a/BF30okxfoyA=
-github.com/drone/runner-go v1.6.1-0.20200415215637-a82f0982f1be/go.mod h1:+Zc4z9/xqlqkFkAcqOtuYjYS77d2PeuWh0PxxibHfNs=
+github.com/drone/runner-go v1.9.0 h1:kVEk/hdgIBvTqPABnLO5t70o1wbZCJ5dycamd9TQNGE=
+github.com/drone/runner-go v1.9.0/go.mod h1:rKn98jQVmPzrXYX8kPCupAn3QwxyhmR0lX9hvFiJJI8=
 github.com/drone/signal v1.0.0 h1:NrnM2M/4yAuU/tXs6RP1a1ZfxnaHwYkd0kJurA1p6uI=
 github.com/drone/signal v1.0.0/go.mod h1:S8t92eFT0g4WUgEc/LxG+LCuiskpMNsG0ajAMGnyZpc=
 github.com/ghodss/yaml v1.0.0 h1:wQHKEahhL6wmXdzwWG11gIVCkOv05bNOh+Rxn0yngAk=

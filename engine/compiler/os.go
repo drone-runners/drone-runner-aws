@@ -184,16 +184,15 @@ func genDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env
 		// -w set working dir, relies on the sourcedir being mounted
 		commandBase = fmt.Sprintf("docker run %s --privileged -w='/drone/src' %s %s %s %s %s %s", interactiveDeamonString, containerName, networkString, volumeString, envString, step.Image, entryPoint)
 	}
+	var returnVal string
+	array := append([]string{}, commandBase)
 	switch pipelineOS {
 	case windowsString:
-		array := append([]string{}, commandBase)
-		base := powershell.Script(array)
-		return base
+		returnVal = powershell.SilentScript(array)
 	default:
-		array := append([]string{}, commandBase)
-		returnVal := bash.Script(array)
-		return returnVal
+		returnVal = bash.SilentScript(array)
 	}
+	return returnVal
 }
 
 func encode(v interface{}) string {
