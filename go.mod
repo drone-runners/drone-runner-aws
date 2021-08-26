@@ -8,9 +8,9 @@ require (
 	github.com/aws/aws-sdk-go v1.31.7
 	github.com/buildkite/yaml v2.1.0+incompatible
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
-	github.com/drone/drone-go v1.2.1-0.20200326064413-195394da1018
+	github.com/drone/drone-go v1.6.0
 	github.com/drone/envsubst v1.0.2
-	github.com/drone/runner-go v1.6.1-0.20200415215637-a82f0982f1be
+	github.com/drone/runner-go v1.9.0
 	github.com/drone/signal v1.0.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.3.0
