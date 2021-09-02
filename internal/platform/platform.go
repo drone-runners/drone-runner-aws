@@ -32,7 +32,6 @@ type (
 		Secret string
 		Region string
 	}
-
 	// ProvisionArgs provides arguments to provision instances.
 	ProvisionArgs struct {
 		Key           string
@@ -51,7 +50,6 @@ type (
 		Userdata      string
 		Tags          map[string]string
 	}
-
 	// Instance represents a provisioned server instance.
 	Instance struct {
 		ID     string
@@ -71,18 +69,14 @@ type (
 // Provision provisions the server instance.
 func Create(ctx context.Context, creds Credentials, args *ProvisionArgs) (*Instance, error) { //nolint:funlen // its complex but standard
 	client := getClient(creds.Region, creds.Client, creds.Secret)
-
 	var iamProfile *ec2.IamInstanceProfileSpecification
-
 	if args.IamProfileArn != "" {
 		iamProfile = &ec2.IamInstanceProfileSpecification{
 			Arn: aws.String(args.IamProfileArn),
 		}
 	}
-
 	tags := createCopy(args.Tags)
 	tags["name"] = args.Name
-
 	in := &ec2.RunInstancesInput{
 		ImageId:            aws.String(args.Image),
 		InstanceType:       aws.String(args.Size),

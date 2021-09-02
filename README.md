@@ -194,11 +194,11 @@ steps:
 
 ## Future Improvements
 
-Brad's changes
-+ Add OS to the pool file for instances. reflect this through the compiler
-+ Omit the docker command from the output logs.
-+ update the runner on gcp with the new pool file format, dont forget the config files.
-
 + tmate integration
 + cli sub command to print ec2 instances information
 + cli sub command to terminate ec2 instances
+
+### Brad's changes
+
++ Add OS to the pool file for instances. reflect this through the compiler.
++ update the runner on gcp with the new pool file format, dont forget the config files.
