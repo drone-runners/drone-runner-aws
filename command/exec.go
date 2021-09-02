@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/internal"
@@ -203,8 +204,10 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 			logrus.StandardLogger(),
 		),
 	)
-
-	engineInstance, err := engine.New(engine.Opts{RunnerName: "exec"})
+	var awsMutex sync.Mutex
+	engineInstance, err := engine.New(engine.Opts{
+		RunnerName: "exec",
+		AwsMutex:   &awsMutex})
 	if err != nil {
 		return err
 	}

@@ -14,30 +14,33 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
-		PoolName  string    `json:"Name,omitempty"`
-		PoolCount int       `json:"poolcount,omitempty"`
-		Root      string    `json:"root,omitempty"`
-		Platform  Platform  `json:"platform,omitempty"`
-		Account   Account   `json:"account,omitempty"`
-		Instance  Instance  `json:"instance,omitempty"`
-		Files     []*File   `json:"files,omitempty"`
-		Steps     []*Step   `json:"steps,omitempty"`
-		Volumes   []*Volume `json:"volumes,omitempty"`
+		Pool    Pool      `json:"pool,omitempty"`
+		Root    string    `json:"root,omitempty"`
+		Files   []*File   `json:"files,omitempty"`
+		Steps   []*Step   `json:"steps,omitempty"`
+		Volumes []*Volume `json:"volumes,omitempty"`
 	}
 
+	Pool struct {
+		Name        string   `json:"name,omitempty"`
+		Root        string   `json:"root,omitempty"`
+		MaxPoolSize int      `json:"max_pool_size,omitempty" yaml:"max_pool_size"`
+		Platform    Platform `json:"platform,omitempty"`
+		Account     Account  `json:"account,omitempty"`
+		Instance    Instance `json:"instance,omitempty"`
+	}
 	// Account provides account settings
 	Account struct {
-		AccessKeyID     string `json:"access_key_id,omitempty"`
-		AccessKeySecret string `json:"secret_access_key,omitempty"`
+		AccessKeyID     string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
+		AccessKeySecret string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
 		Region          string `json:"region,omitempty"`
 	}
 
 	// Instance provides instance settings.
 	Instance struct {
-		Use           string            `json:"use,omitempty" yaml:"use"`
 		AMI           string            `json:"ami,omitempty"`
 		Tags          map[string]string `json:"tags,omitempty"`
-		IAMProfileARN string            `json:"iam_profile_arn,omitempty"`
+		IAMProfileARN string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
 		Type          string            `json:"type,omitempty"`
 		User          string            `json:"user,omitempty"`
 		PrivateKey    string            `json:"private_key,omitempty" yaml:"private_key"`
@@ -46,24 +49,17 @@ type (
 		Disk          Disk              `json:"disk,omitempty"`
 		Network       Network           `json:"network,omitempty"`
 		Device        Device            `json:"device,omitempty"`
-		ID            string
-		IP            string
-		// availability_zone
-		// placement_group
-		// tenancy
+		ID            string            `json:"id,omitempty"`
+		IP            string            `json:"ip,omitempty"`
 	}
 
 	// Network provides network settings.
 	Network struct {
 		VPC               string   `json:"vpc,omitempty"`
-		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty"`
-		SecurityGroups    []string `json:"security_groups,omitempty"`
-		SubnetID          string   `json:"subnet_id,omitempty"`
-		PrivateIP         bool     `json:"private_ip,omitempty"`
-
-		// public_dns
-		// private_dns
-		// network_interface
+		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
+		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
+		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
+		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
 	}
 
 	// Disk provides disk size and type.

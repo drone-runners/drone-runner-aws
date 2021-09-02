@@ -35,7 +35,7 @@ func DialRetry(ctx context.Context, ip, username, privatekey string) (*ssh.Clien
 		logger.FromContext(ctx).
 			WithField("ip", ip).
 			WithField("attempt", i).
-			Trace("DialRetry: dialing the vm")
+			Trace("DialRetry:")
 		client, err = Dial(ip, username, privatekey)
 		if err == nil {
 			return client, nil
@@ -70,7 +70,8 @@ func RetryApplication(ctx context.Context, client *ssh.Client, command string) (
 		}
 		logger.FromContext(ctx).
 			WithField("attempt", i).
-			Trace("RetryApplication: running the command")
+			WithField("command", command).
+			Trace("RetryApplication")
 		session, newSessionErr := client.NewSession()
 		if newSessionErr != nil {
 			logger.FromContext(ctx).
@@ -92,6 +93,7 @@ func RetryApplication(ctx context.Context, client *ssh.Client, command string) (
 		logger.FromContext(ctx).
 			WithError(runErr).
 			WithField("attempt", i).
+			WithField("command", command).
 			Trace("RetryApplication: failed running command")
 
 		select {
