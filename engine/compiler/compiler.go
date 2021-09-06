@@ -44,6 +44,7 @@ type Settings struct {
 	AwsRegion          string
 	PrivateKeyFile     string
 	PublicKeyFile      string
+	PoolFile           string
 }
 
 // Compiler compiles the Yaml configuration file to an
@@ -68,13 +69,18 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	spec := &engine.Spec{}
 	// read pool file first.
 	targetPool := pipeline.Pool.Use
-	pools, poolFileErr := c.ProcessPoolFile(ctx, ".drone_pool.yml", &c.Settings)
+	pools, poolFileErr := c.ProcessPoolFile(ctx, &c.Settings)
 	if poolFileErr != nil {
-		log.Printf("unable to read pool file: %s", poolFileErr)
-		return spec
+		log.Printf("unable to read pool file '%s': %s", c.Settings.PoolFile, poolFileErr)
+		os.Exit(1)
 	}
 	// move the pool from the `pool file` into the spec of this pipeline.
 	spec.Pool = pools[targetPool]
+	// if we dont match lets exit
+	if spec.Pool.Name != targetPool {
+		log.Printf("unable to find pool '%s' in pool file '%s'", targetPool, c.Settings.PoolFile)
+		return spec
+	}
 	spec.Root = pools[targetPool].Root
 	//
 	pipelineOS := spec.Pool.Platform.OS
@@ -395,10 +401,10 @@ func (c *Compiler) compilePoolFile(rawPool engine.Pool) (engine.Pool, error) { /
 	return rawPool, nil
 }
 
-func (c *Compiler) ProcessPoolFile(ctx context.Context, file string, compilerSettings *Settings) (foundPools map[string]engine.Pool, err error) {
-	rawPool, readPoolFileErr := ioutil.ReadFile(file)
+func (c *Compiler) ProcessPoolFile(ctx context.Context, compilerSettings *Settings) (foundPools map[string]engine.Pool, err error) {
+	rawPool, readPoolFileErr := ioutil.ReadFile(compilerSettings.PoolFile)
 	if readPoolFileErr != nil {
-		errorMessage := fmt.Sprintf("unable to read file: %s", file)
+		errorMessage := fmt.Sprintf("unable to read file: %s", compilerSettings.PoolFile)
 		return nil, fmt.Errorf(errorMessage, readPoolFileErr)
 	}
 	foundPools = make(map[string]engine.Pool)
@@ -414,7 +420,10 @@ func (c *Compiler) ProcessPoolFile(ctx context.Context, file string, compilerSet
 		if err != nil {
 			return nil, err
 		}
-		preppedPool, _ := c.compilePoolFile(*rawPool)
+		preppedPool, compilePoolFileErr := c.compilePoolFile(*rawPool)
+		if compilePoolFileErr != nil {
+			return nil, compilePoolFileErr
+		}
 		foundPools[rawPool.Name] = preppedPool
 	}
 	return foundPools, nil

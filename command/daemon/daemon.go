@@ -41,7 +41,7 @@ var nocontext = context.Background()
 
 type daemonCommand struct {
 	envfile  string
-	poolfile string
+	Poolfile string
 }
 
 func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
@@ -95,6 +95,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		AwsRegion:          config.Settings.AwsRegion,
 		PrivateKeyFile:     config.Settings.PrivateKeyFile,
 		PublicKeyFile:      config.Settings.PublicKeyFile,
+		PoolFile:           c.Poolfile,
 	}
 
 	comp := &compiler.Compiler{
@@ -103,10 +104,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		Secret:   secret.Combine(secret.Combine()),
 	}
 
-	pools, poolFileErr := comp.ProcessPoolFile(ctx, c.poolfile, &compilerSettings)
+	pools, poolFileErr := comp.ProcessPoolFile(ctx, &compilerSettings)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
-			Errorln("daemon: unable to parse pool")
+			Errorln("daemon: unable to parse pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 
@@ -140,13 +141,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 			config.Limit.Trusted,
 		),
 		Compiler: &compiler.Compiler{
-			Settings: compiler.Settings{
-				AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
-				AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
-				AwsRegion:          config.Settings.AwsRegion,
-				PrivateKeyFile:     config.Settings.PrivateKeyFile,
-				PublicKeyFile:      config.Settings.PublicKeyFile,
-			},
+			Settings: compilerSettings,
 			Environ: provider.Combine(
 				provider.Static(config.Runner.Environ),
 				provider.External(
@@ -342,5 +337,5 @@ func Register(app *kingpin.Application) {
 		StringVar(&c.envfile)
 	cmd.Arg("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
-		StringVar(&c.poolfile)
+		StringVar(&c.Poolfile)
 }

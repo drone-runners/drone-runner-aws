@@ -28,6 +28,7 @@ import (
 type compileCommand struct {
 	*internal.Flags
 	Source   *os.File
+	Poolfile string
 	Environ  map[string]string
 	Secrets  map[string]string
 	Settings compiler.Settings
@@ -77,6 +78,8 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
+	// set the poolfile
+	c.Settings.PoolFile = c.Poolfile
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
 		Environ:  provider.Static(c.Environ),
@@ -112,6 +115,10 @@ func registerCompile(app *kingpin.Application) {
 	cmd.Flag("source", "source file location").
 		Default(".drone.yml").
 		FileVar(&c.Source)
+
+	cmd.Arg("poolfile", "file to seed the aws pool").
+		Default(".drone_pool.yml").
+		StringVar(&c.Poolfile)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)

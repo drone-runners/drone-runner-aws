@@ -2,6 +2,9 @@ kind: pipeline
 type: aws
 name: default
 
+pool:
+  use: ubuntu
+  
 clone:
   disable: true
 
