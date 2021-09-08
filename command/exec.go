@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/internal"
@@ -38,8 +39,8 @@ import (
 
 type execCommand struct {
 	*internal.Flags
-
 	Source   *os.File
+	Poolfile string
 	Include  []string
 	Exclude  []string
 	Environ  map[string]string
@@ -106,7 +107,8 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 	if err != nil {
 		return err
 	}
-
+	// set the poolfile
+	c.Settings.PoolFile = c.Poolfile
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
 		Environ:  provider.Static(c.Environ),
@@ -203,8 +205,10 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 			logrus.StandardLogger(),
 		),
 	)
-
-	engineInstance, err := engine.New(engine.Opts{RunnerName: "exec"})
+	var awsMutex sync.Mutex
+	engineInstance, err := engine.New(engine.Opts{
+		RunnerName: "exec",
+		AwsMutex:   &awsMutex})
 	if err != nil {
 		return err
 	}
@@ -246,6 +250,10 @@ func registerExec(app *kingpin.Application) {
 	cmd.Arg("source", "source file location").
 		Default(".drone.yml").
 		FileVar(&c.Source)
+
+	cmd.Arg("poolfile", "file to seed the aws pool").
+		Default(".drone_pool.yml").
+		StringVar(&c.Poolfile)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)

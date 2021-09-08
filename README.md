@@ -1,6 +1,6 @@
 # AWS Runner
 
-This runner provisions EC2 instances in AWS. It also sets up SSH access and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Advanced users can also avail of instance pools to improve build spin up time. 
+This runner provisions EC2 instances in AWS. It also sets up SSH access and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Advanced users can also avail of instance pools to improve build spin up time.
 
 ## AWS EC2 prerequisites
 
@@ -39,22 +39,19 @@ DRONE_SETTINGS_PUBLIC_KEY_FILE=/config/public.key
 
 ## `.drone_pool.yml` file
 
-This allows the setup of hot swap pools, where a build does not have to wait for an instance to spin up. For a deeper explanation of how this works, see the [design](https://github.com/drone/proposal/blob/master/design/01-aws-runner.md) documentation.
+This setsup the build pools, it allows builds to use a pre-spun instance (you do not have to wait for an instance to spin up). For a deeper explanation of how this works, see the [design](https://github.com/drone/proposal/blob/master/design/01-aws-runner.md) documentation.
 
 + drone_pool.yml is the default file name.
-+ Each pool only has one instance type.
-+ There can be multiple pools. Different build pipelines can use the same pool
-+ You can specify the size of the pool.
++ Each pool can only has one instance type.
++ Multiple pools can be configured. Different build pipelines can use the same pool.
++ You can specify the maximum size of the pool.
 + A pool can only belong to one region.
-+ A pipeline can use a pool, or specify its own aws instance configuration.
 
 The name and pools size are entered under the type and kind of build.
 Key | Description
---- | -------------
-`kind` | is the type of build, it will always be `pipeline`.
-`type` | it will always be `aws`.
+--- | -----------------
 `name` | is the name of your pool.
-`pool_count` | is the number of instances to spawn in the pool.
+`max_pool_size` | is the number of instances to spawn in the pool.
 
 EC2 Instance information are stored in the instance section:
 
@@ -79,10 +76,8 @@ Key | Description
 An example .drone_pool.yml file.
 
 ```YAML
-kind: pipeline
-type: aws
 name: common
-pool_count: 1
+max_pool_size: 1
 
 account:
   region: us-east-2
@@ -131,7 +126,7 @@ kind: pipeline
 type: aws
 name: ubuntu acceptance tests
 
-instance:
+pool:
   use: ubuntu
 
 steps:
@@ -154,10 +149,8 @@ name: default
 platform:
  os: windows
 
-instance:
+pool:
   use: windows
-  tags:
-    cat: dog
 
 steps:
   - name: check install
@@ -165,40 +158,9 @@ steps:
       - type C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log
 ```
 
-## Specifying the aws configuation in a .drone.yml build file
-
-This is not recommended way to run, but can be useful in development.
-
-```YAML
-kind: pipeline
-type: aws
-name: default
-
-account:
-  access_key_id: XXXXXX
-  secret_access_key: XXXXXX
-  region: us-east-2
-
-instance:
-  ami: ami-051197ce9cbb023ea
-  key_pair: test_key_pair # this sets up the instance with an AWS key pair as well
-  network:
-    security_groups:
-      - sg-5d255b29 # security group id
-
-steps:
-- name: build
-  commands:
-  - uname -a
-```
-
 ## Future Improvements
-
-Brad's changes
-+ Add OS to the pool file for instances. reflect this through the compiler
-+ Omit the docker command from the output logs.
-+ update the runner on gcp with the new pool file format, dont forget the config files.
 
 + tmate integration
 + cli sub command to print ec2 instances information
 + cli sub command to terminate ec2 instances
++ cli sub command to refresh the pool

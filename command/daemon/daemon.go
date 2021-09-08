@@ -6,7 +6,6 @@ package daemon
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -18,13 +17,11 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/platform"
 
-	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/handler/router"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
-	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/reporter/history"
 	"github.com/drone/runner-go/pipeline/reporter/remote"
 	"github.com/drone/runner-go/pipeline/runtime"
@@ -44,7 +41,7 @@ var nocontext = context.Background()
 
 type daemonCommand struct {
 	envfile  string
-	poolfile *os.File
+	Poolfile string
 }
 
 func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
@@ -69,7 +66,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	// listen for termination signals to gracefully shutdown
 	// the runner daemon.
 	ctx = signal.WithContextFunc(ctx, func() {
-		println("received signal, terminating process")
+		println("daemon: received signal, terminating process")
 		cancel()
 	})
 
@@ -90,29 +87,31 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	)
 
 	if (config.Settings.PrivateKeyFile != "" && config.Settings.PublicKeyFile == "") || (config.Settings.PrivateKeyFile == "" && config.Settings.PublicKeyFile != "") {
-		logrus.Fatalln("specify a private key file and public key file or leave both settings empty to generate keys")
+		logrus.Fatalln("daemon: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
-	var awsMutex sync.Mutex
-	var pools map[string]engine.Pool
-	// read pool file, if it exists
-	rawPool, readPoolFileErr := ioutil.ReadAll(c.poolfile)
-	if readPoolFileErr == nil {
-		logrus.Infoln("pool file exists")
-		configSettings := compiler.Settings{
-			AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
-			AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
-			AwsRegion:          config.Settings.AwsRegion,
-			PrivateKeyFile:     config.Settings.PrivateKeyFile,
-			PublicKeyFile:      config.Settings.PublicKeyFile,
-		}
-		pools, err = processPoolFile(rawPool, configSettings)
-		if err != nil {
-			logrus.WithError(err).
-				Errorln("unable to parse pool")
-			os.Exit(1) //nolint:gocritic // failing fast before we do any work.
-		}
+	compilerSettings := compiler.Settings{
+		AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
+		AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
+		AwsRegion:          config.Settings.AwsRegion,
+		PrivateKeyFile:     config.Settings.PrivateKeyFile,
+		PublicKeyFile:      config.Settings.PublicKeyFile,
+		PoolFile:           c.Poolfile,
 	}
 
+	comp := &compiler.Compiler{
+		Environ:  provider.Static(make(map[string]string)),
+		Settings: compilerSettings,
+		Secret:   secret.Combine(secret.Combine()),
+	}
+
+	pools, poolFileErr := comp.ProcessPoolFile(ctx, &compilerSettings)
+	if poolFileErr != nil {
+		logrus.WithError(poolFileErr).
+			Errorln("daemon: unable to parse pool file")
+		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	}
+
+	var awsMutex sync.Mutex
 	opts := engine.Opts{
 		AwsMutex:   &awsMutex,
 		RunnerName: config.Runner.Name,
@@ -122,7 +121,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	engInstance, engineErr := engine.New(opts)
 	if engineErr != nil {
 		logrus.WithError(engineErr).
-			Fatalln("cannot load the engine")
+			Fatalln("daemon: cannot load the engine")
 	}
 
 	remoteInstance := remote.New(cli)
@@ -142,13 +141,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 			config.Limit.Trusted,
 		),
 		Compiler: &compiler.Compiler{
-			Settings: compiler.Settings{
-				AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
-				AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
-				AwsRegion:          config.Settings.AwsRegion,
-				PrivateKeyFile:     config.Settings.PrivateKeyFile,
-				PublicKeyFile:      config.Settings.PublicKeyFile,
-			},
+			Settings: compilerSettings,
 			Environ: provider.Combine(
 				provider.Static(config.Runner.Environ),
 				provider.External(
@@ -196,7 +189,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	}
 
 	logrus.WithField("addr", config.Server.Port).
-		Infoln("starting the server")
+		Infoln("daemon: starting the server")
 
 	g.Go(func() error {
 		return serverInstance.ListenAndServe(ctx)
@@ -211,10 +204,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 			}
 			if pingErr != nil {
 				logrus.WithError(pingErr).
-					Errorln("cannot connect to aws")
+					Errorln("daemon: cannot connect to aws")
 				time.Sleep(time.Second)
 			} else {
-				logrus.Infoln("successfully connected to aws")
+				logrus.Infoln("daemon: successfully connected to aws")
 				break
 			}
 		}
@@ -238,10 +231,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		}
 		if pingErr != nil {
 			logrus.WithError(pingErr).
-				Errorln("cannot ping the remote server")
+				Errorln("daemon: cannot ping the remote drone server")
 			time.Sleep(time.Second)
 		} else {
-			logrus.Infoln("successfully pinged the remote server")
+			logrus.Infoln("daemon: successfully pinged the remote drone server")
 			break
 		}
 	}
@@ -251,7 +244,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 			WithField("endpoint", config.Client.Address).
 			WithField("kind", resource.Kind).
 			WithField("type", resource.Type).
-			Infoln("polling the remote server")
+			Infoln("daemon: polling the remote drone server")
 
 		pollerInstance.Poll(ctx, config.Runner.Capacity)
 		return nil
@@ -262,9 +255,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		cleanErr := platform.CleanPools(ctx, creds, config.Runner.Name)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
-				Errorln("unable to clean pools")
+				Errorln("daemon: unable to clean pools")
 		} else {
-			logrus.Infoln("pools cleaned")
+			logrus.Infoln("daemon: pools cleaned")
 		}
 	}
 
@@ -273,10 +266,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		buildPoolErr := buildPools(ctx, pools, engInstance, creds, &awsMutex)
 		if buildPoolErr != nil {
 			logrus.WithError(buildPoolErr).
-				Errorln("unable to build pool")
+				Errorln("daemon: unable to build pool")
 			os.Exit(1)
 		}
-		logrus.Infoln("pool created")
+		logrus.Infoln("daemon: pool created")
 	}
 
 	g.Go(func() error {
@@ -285,9 +278,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		cleanErr := platform.CleanPools(ctx, creds, config.Runner.Name)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
-				Errorln("unable to clean pools")
+				Errorln("daemon: unable to clean pools")
 		} else {
-			logrus.Infoln("pools cleaned")
+			logrus.Infoln("daemon: pools cleaned")
 		}
 		return cleanErr
 	})
@@ -295,63 +288,21 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	err = g.Wait()
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("shutting down the server")
+			Errorln("daemon: shutting down the server")
 	}
 	return err
 }
 
-func processPoolFile(poolFile []byte, compilerSettings compiler.Settings) (pools map[string]engine.Pool, err error) { //nolint:gocritic // its complex but standard
-	pools = make(map[string]engine.Pool)
-	// evaluates string replacement expressions and returns an update configuration.
-	config := string(poolFile)
-	// parse and lint the configuration.
-	manifestInstance, err := manifest.ParseString(config)
-	if err != nil {
-		return pools, err
-	}
-
-	// this is where we need to iterate over the number of pipelines
-	for _, res := range manifestInstance.Resources {
-		// lint the pipeline and return an error if any
-		// linting rules are broken
-		lint := linter.New()
-		err = lint.Lint(res, &drone.Repo{Trusted: true})
-		if err != nil {
-			return pools, err
-		}
-
-		// compile the pipeline to an intermediate representation.
-		comp := &compiler.Compiler{
-			Environ:  provider.Static(make(map[string]string)),
-			Settings: compilerSettings,
-			Secret:   secret.Combine(secret.Combine()),
-		}
-
-		args := runtime.CompilerArgs{
-			Pipeline: res,
-			Manifest: manifestInstance,
-			System:   &drone.System{},
-			Repo:     &drone.Repo{},
-			Build:    &drone.Build{},
-			Stage:    &drone.Stage{},
-		}
-		spec := comp.Compile(nocontext, args).(*engine.Spec)
-		pools[spec.PoolName] = engine.Pool{
-			InstanceSpec: spec,
-			PoolSize:     spec.PoolCount,
-		}
-	}
-	return pools, nil
-}
-
 func buildPools(ctx context.Context, pools map[string]engine.Pool, eng *engine.Engine, creds platform.Credentials, awsMutex *sync.Mutex) error {
-	for poolname, pool := range pools {
-		poolcount, _ := platform.PoolCountFree(ctx, creds, poolname, awsMutex)
-		for poolcount < pool.PoolSize {
-			setupErr := eng.Setup(ctx, pool.InstanceSpec)
+	for i := range pools {
+		poolcount, _ := platform.PoolCountFree(ctx, creds, pools[i].Name, awsMutex)
+		for poolcount < pools[i].MaxPoolSize {
+			poolInstance := pools[i]
+			id, ip, setupErr := eng.Provision(ctx, &poolInstance, false)
 			if setupErr != nil {
 				return setupErr
 			}
+			logrus.Infof("buildPools: created instance %s %s %s", pools[i].Name, id, ip)
 			poolcount++
 		}
 	}
@@ -386,5 +337,5 @@ func Register(app *kingpin.Application) {
 		StringVar(&c.envfile)
 	cmd.Arg("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
-		FileVar(&c.poolfile)
+		StringVar(&c.Poolfile)
 }

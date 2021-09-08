@@ -36,7 +36,7 @@ type Pipeline struct {
 	Trigger     manifest.Conditions  `json:"conditions,omitempty"`
 
 	Account     Account           `json:"account,omitempty"`
-	Instance    Instance          `json:"instance,omitempty"`
+	Pool        Pool              `json:"pool,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 	Services    []*Step           `json:"services,omitempty"`
 	Steps       []*Step           `json:"steps,omitempty"`
@@ -111,41 +111,11 @@ type (
 		Region          string            `json:"region,omitempty"`
 	}
 
+	Pool struct {
+		Use string `json:"use,omitempty" yaml:"use"`
+	}
 	// Instance provides instance settings.
-	Instance struct {
-		AMI           string            `json:"ami,omitempty"`
-		Use           string            `json:"use,omitempty" yaml:"use"`
-		PrivateKey    string            `json:"private_key,omitempty" yaml:"private_key"`
-		PublicKey     string            `json:"public_key,omitempty" yaml:"public_key"`
-		Tags          map[string]string `json:"tags,omitempty"`
-		IAMProfileARN string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
-		Type          string            `json:"type,omitempty"`
-		User          string            `json:"user,omitempty"`
-		Disk          Disk              `json:"disk,omitempty"`
-		Network       Network           `json:"network,omitempty"`
-		Device        Device            `json:"device,omitempty"`
-	}
 
-	// Network provides network settings.
-	Network struct {
-		VPC               string   `json:"vpc,omitempty"`
-		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_group_ids"`
-		SecurityGroups    []string `json:"security_groups,omitempty"        yaml:"security_groups"`
-		SubnetID          string   `json:"subnet_id,omitempty"              yaml:"subnet_id"`
-		PrivateIP         bool     `json:"private_ip,omitempty"             yaml:"private_ip"`
-	}
-
-	// Disk provides disk size and type.
-	Disk struct {
-		Size int64  `json:"size,omitempty"`
-		Type string `json:"type,omitempty"`
-		Iops int64  `json:"iops,omitempty"`
-	}
-
-	// Device provides the device settings.
-	Device struct {
-		Name string `json:"name,omitempty"`
-	}
 	// Volume that can be mounted by containers.
 	Volume struct {
 		Name     string          `json:"name,omitempty"`

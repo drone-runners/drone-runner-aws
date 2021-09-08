@@ -35,7 +35,7 @@ func DialRetry(ctx context.Context, ip, username, privatekey string) (*ssh.Clien
 		logger.FromContext(ctx).
 			WithField("ip", ip).
 			WithField("attempt", i).
-			Trace("dialing the vm")
+			Trace("DialRetry:")
 		client, err = Dial(ip, username, privatekey)
 		if err == nil {
 			return client, nil
@@ -44,7 +44,7 @@ func DialRetry(ctx context.Context, ip, username, privatekey string) (*ssh.Clien
 			WithError(err).
 			WithField("ip", ip).
 			WithField("attempt", i).
-			Trace("failed to re-dial vm")
+			Trace("DialRetry: failed to re-dial vm")
 
 		if client != nil {
 			client.Close()
@@ -58,8 +58,8 @@ func DialRetry(ctx context.Context, ip, username, privatekey string) (*ssh.Clien
 	}
 }
 
-// ApplicationRetry retries a command until is returns without an error or a timeout is reached.
-func ApplicationRetry(ctx context.Context, client *ssh.Client, command string) (err error) {
+// RetryApplication retries a command until is returns without an error or a timeout is reached.
+func RetryApplication(ctx context.Context, client *ssh.Client, command string) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, networkTimeout)
 	defer cancel()
 	for i := 0; ; i++ {
@@ -69,14 +69,14 @@ func ApplicationRetry(ctx context.Context, client *ssh.Client, command string) (
 		default:
 		}
 		logger.FromContext(ctx).
-			WithField("function", "ApplicationRetry").
 			WithField("attempt", i).
-			Trace("running the command")
+			WithField("command", command).
+			Trace("RetryApplication")
 		session, newSessionErr := client.NewSession()
 		if newSessionErr != nil {
 			logger.FromContext(ctx).
 				WithError(newSessionErr).
-				Debug("failed to create session")
+				Debug("RetryApplication: failed to create session")
 			return newSessionErr
 		}
 		runErr := session.Run(command)
@@ -84,18 +84,17 @@ func ApplicationRetry(ctx context.Context, client *ssh.Client, command string) (
 		if runErr != nil {
 			logger.FromContext(ctx).
 				WithError(runErr).
-				WithField("function", "ApplicationRetry").
 				WithField("command", command).
-				Trace("failed running command")
+				Trace("RetryApplication: failed running command")
 		} else {
 			return nil
 		}
 
 		logger.FromContext(ctx).
 			WithError(runErr).
-			WithField("function", "ApplicationRetry").
 			WithField("attempt", i).
-			Trace("failed running command")
+			WithField("command", command).
+			Trace("RetryApplication: failed running command")
 
 		select {
 		case <-ctx.Done():

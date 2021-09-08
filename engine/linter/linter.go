@@ -35,11 +35,8 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 	if err := checkSteps(pipeline); err != nil {
 		return err
 	}
-	if pipeline.Instance.AMI == "" && pipeline.Instance.Use == "" {
-		return errors.New("linter: when defining instance, you must specify 'ami' or 'use'")
-	}
-	if pipeline.Instance.AMI != "" && pipeline.Instance.Use != "" {
-		return errors.New("linter: when defining instance, you can only specify 'ami' or 'use'")
+	if pipeline.Pool.Use == "" {
+		return errors.New("linter: you must specify a 'pool' to 'use'")
 	}
 	err := checkVolumes(pipeline)
 	return err

@@ -17,7 +17,7 @@ steps:
 - name: golangci-lint
   image: golangci/golangci-lint
   commands:
-    - golangci-lint run
+    - golangci-lint run --timeout 300s
   depends_on:
     - clone
 ---
