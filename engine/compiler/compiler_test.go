@@ -2,8 +2,6 @@
 // Use of this source code is governed by the Polyform License
 // that can be found in the LICENSE file.
 
-// +build !windows
-
 package compiler
 
 import (
@@ -96,6 +94,10 @@ func TestCompile_RunFailure(t *testing.T) {
 // at compile time.
 func TestCompile_Secrets(t *testing.T) {
 	mnfst, _ := manifest.ParseFile("testdata/secret.yml")
+	compilerSettings := Settings{
+		AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+	}
+	pools, _ := ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
 
 	compiler := &Compiler{
 		Environ: provider.Static(nil),
@@ -104,9 +106,7 @@ func TestCompile_Secrets(t *testing.T) {
 			"password":    "password",
 			"my_username": "octocat",
 		}),
-		Settings: Settings{
-			PoolFile: "testdata/drone_pool.yml",
-		},
+		Pools: pools,
 	}
 	args := runtime.CompilerArgs{
 		Repo:     &drone.Repo{},
@@ -161,6 +161,10 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
+	compilerSettings := Settings{
+		AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+	}
+	pools, _ := ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
 	compiler := &Compiler{
 		Environ: provider.Static(nil),
 		Secret: secret.StaticVars(map[string]string{
@@ -168,9 +172,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 			"password":    "password",
 			"my_username": "octocat",
 		}),
-		Settings: Settings{
-			PoolFile: "testdata/drone_pool.yml",
-		},
+		Pools: pools,
 	}
 	args := runtime.CompilerArgs{
 		Repo:     &drone.Repo{},

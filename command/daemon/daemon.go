@@ -95,16 +95,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		AwsRegion:          config.Settings.AwsRegion,
 		PrivateKeyFile:     config.Settings.PrivateKeyFile,
 		PublicKeyFile:      config.Settings.PublicKeyFile,
-		PoolFile:           c.Poolfile,
 	}
 
-	comp := &compiler.Compiler{
-		Environ:  provider.Static(make(map[string]string)),
-		Settings: compilerSettings,
-		Secret:   secret.Combine(secret.Combine()),
-	}
-
-	pools, poolFileErr := comp.ProcessPoolFile(ctx, &compilerSettings)
+	pools, poolFileErr := compiler.ProcessPoolFile(c.Poolfile, &compilerSettings)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
 			Errorln("daemon: unable to parse pool file")
@@ -129,12 +122,14 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
+	daemonLint := linter.New()
+	daemonLint.Pools = pools
 	runner := &runtime.Runner{
 		Client:   cli,
 		Machine:  config.Runner.Name,
 		Reporter: tracer,
 		Lookup:   resource.Lookup,
-		Lint:     linter.New().Lint,
+		Lint:     daemonLint.Lint,
 		Match: match.Func(
 			config.Limit.Repos,
 			config.Limit.Events,
@@ -142,6 +137,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		),
 		Compiler: &compiler.Compiler{
 			Settings: compilerSettings,
+			Pools:    pools,
 			Environ: provider.Combine(
 				provider.Static(config.Runner.Environ),
 				provider.External(

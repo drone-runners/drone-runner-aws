@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
@@ -18,28 +19,48 @@ import (
 // Linter evaluates the pipeline against a set of
 // rules and returns an error if one or more of the
 // rules are broken.
-type Linter struct{}
+type Linter struct {
+	Pools map[string]engine.Pool
+}
 
 // New returns a new Linter.
 func New() *Linter {
 	return new(Linter)
 }
 
-// Lint executes the linting rules for the pipeline
-// configuration.
+// Lint executes the linting rules for the pipeline configuration.
 func (l *Linter) Lint(pipeline manifest.Resource, repo *drone.Repo) error {
-	return checkPipeline(pipeline.(*resource.Pipeline))
+	if err := checkPipeline(pipeline.(*resource.Pipeline)); err != nil {
+		return err
+	}
+	if err := checkPools(pipeline.(*resource.Pipeline), l.Pools); err != nil {
+		return err
+	}
+	return nil
 }
 
 func checkPipeline(pipeline *resource.Pipeline) error {
 	if err := checkSteps(pipeline); err != nil {
 		return err
 	}
-	if pipeline.Pool.Use == "" {
-		return errors.New("linter: you must specify a 'pool' to 'use'")
-	}
 	err := checkVolumes(pipeline)
 	return err
+}
+
+func checkPools(pipeline *resource.Pipeline, pools map[string]engine.Pool) error {
+	if len(pools) == 0 {
+		return fmt.Errorf("linter: there are no pools in the pool file")
+	}
+	if pipeline.Pool.Use == "" {
+		return fmt.Errorf("linter: you must specify a 'pool' to 'use'")
+	}
+	// if we dont match lets exit
+	_, found := pools[pipeline.Pool.Use]
+	if !found {
+		errMsg := fmt.Sprintf("linter: unable to find pool '%s' in pool file.", pipeline.Pool.Use)
+		return errors.New(errMsg)
+	}
+	return nil
 }
 
 func checkSteps(pipeline *resource.Pipeline) error {

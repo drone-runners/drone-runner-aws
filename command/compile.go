@@ -72,21 +72,25 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
+	// read the poolfile
+	pools, poolFileErr := compiler.ProcessPoolFile(c.Poolfile, &c.Settings)
+	if poolFileErr != nil {
+		return poolFileErr
+	}
 	// lint the pipeline and return an error if any linting rules are broken
 	lint := linter.New()
+	lint.Pools = pools
 	err = lint.Lint(resourceInstance, c.Repo)
 	if err != nil {
 		return err
 	}
-	// set the poolfile
-	c.Settings.PoolFile = c.Poolfile
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
 		Environ:  provider.Static(c.Environ),
 		Settings: c.Settings,
 		Secret:   secret.StaticVars(c.Secrets),
+		Pools:    pools,
 	}
-
 	args := runtime.CompilerArgs{
 		Pipeline: resourceInstance,
 		Manifest: mnfst,
