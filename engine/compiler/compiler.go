@@ -44,23 +44,19 @@ type Settings struct {
 	AwsRegion          string
 	PrivateKeyFile     string
 	PublicKeyFile      string
-	PoolFile           string
 }
 
 // Compiler compiles the Yaml configuration file to an
 // intermediate representation optimized for simple execution.
 type Compiler struct {
-	// Environ provides a set of environment variables that
-	// should be added to each pipeline step by default.
+	// Environ provides a set of environment variables that should be added to each pipeline step by default.
 	Environ provider.Provider
-
-	// Secret returns a named secret value that can be injected
-	// into the pipeline step.
+	// Secret returns a named secret value that can be injected into the pipeline step.
 	Secret secret.Provider
-
-	// Settings provides global settings that apply to
-	// all pipelines.
+	// Settings provides global settings that apply to all pipelines.
 	Settings Settings
+	// Pools is a map of named pools that can be referenced by a pipeline.
+	Pools map[string]engine.Pool
 }
 
 // Compile compiles the configuration file.
@@ -69,19 +65,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	spec := &engine.Spec{}
 	// read pool file first.
 	targetPool := pipeline.Pool.Use
-	pools, poolFileErr := c.ProcessPoolFile(ctx, &c.Settings)
-	if poolFileErr != nil {
-		log.Printf("unable to read pool file '%s': %s", c.Settings.PoolFile, poolFileErr)
-		os.Exit(1)
-	}
-	// move the pool from the `pool file` into the spec of this pipeline.
-	spec.Pool = pools[targetPool]
-	// if we dont match lets exit
-	if spec.Pool.Name != targetPool {
-		log.Printf("unable to find pool '%s' in pool file '%s'", targetPool, c.Settings.PoolFile)
-		return spec
-	}
-	spec.Root = pools[targetPool].Root
+	// move the pool from the `mapping of pools` into the spec of this pipeline.
+	spec.Pool = c.Pools[targetPool]
+	spec.Root = c.Pools[targetPool].Root
 	//
 	pipelineOS := spec.Pool.Platform.OS
 	// creates a home directory in the root.
@@ -306,22 +292,22 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	return spec
 }
 
-func (c *Compiler) compilePoolFile(rawPool engine.Pool) (engine.Pool, error) { //nolint:gocritic,gocyclo // its complex but standard
+func compilePoolFile(rawPool engine.Pool, settings *Settings) (engine.Pool, error) { //nolint:gocritic,gocyclo // its complex but standard
 	pipelineOS := rawPool.Platform.OS
 	// secrets and error here
 	if rawPool.Account.AccessKeyID == "" {
-		rawPool.Account.AccessKeyID = c.Settings.AwsAccessKeyID
+		rawPool.Account.AccessKeyID = settings.AwsAccessKeyID
 	}
 	if rawPool.Account.AccessKeySecret == "" {
-		rawPool.Account.AccessKeySecret = c.Settings.AwsAccessKeySecret
+		rawPool.Account.AccessKeySecret = settings.AwsAccessKeySecret
 	}
 	// we need Access, error if its still empty
 	if rawPool.Account.AccessKeyID == "" || rawPool.Account.AccessKeySecret == "" {
 		return engine.Pool{}, fmt.Errorf("missing AWS access key or AWS secret. Add to .env file or pool file")
 	}
 	// try config first. then set the default region if not provided
-	if rawPool.Account.Region == "" && c.Settings.AwsRegion != "" {
-		rawPool.Account.Region = c.Settings.AwsRegion
+	if rawPool.Account.Region == "" && settings.AwsRegion != "" {
+		rawPool.Account.Region = settings.AwsRegion
 	} else if rawPool.Account.Region == "" {
 		rawPool.Account.Region = "us-east-1"
 	}
@@ -359,7 +345,7 @@ func (c *Compiler) compilePoolFile(rawPool engine.Pool) (engine.Pool, error) { /
 	case rawPool.Instance.User == "":
 		rawPool.Instance.User = "root"
 	}
-	_, statErr := os.Stat(c.Settings.PrivateKeyFile)
+	_, statErr := os.Stat(settings.PrivateKeyFile)
 	if os.IsNotExist(statErr) {
 		// there are no key files
 		publickey, privatekey, generateKeyErr := sshkey.GeneratePair()
@@ -370,13 +356,13 @@ func (c *Compiler) compilePoolFile(rawPool engine.Pool) (engine.Pool, error) { /
 		rawPool.Instance.PrivateKey = privatekey
 		rawPool.Instance.PublicKey = publickey
 	} else {
-		body, privateKeyErr := os.ReadFile(c.Settings.PrivateKeyFile)
+		body, privateKeyErr := os.ReadFile(settings.PrivateKeyFile)
 		if privateKeyErr != nil {
 			log.Fatalf("unable to read file ``: %v", privateKeyErr)
 		}
 		rawPool.Instance.PrivateKey = string(body)
 
-		body, publicKeyErr := os.ReadFile(c.Settings.PublicKeyFile)
+		body, publicKeyErr := os.ReadFile(settings.PublicKeyFile)
 		if publicKeyErr != nil {
 			log.Fatalf("unable to read file: %v", publicKeyErr)
 		}
@@ -401,10 +387,10 @@ func (c *Compiler) compilePoolFile(rawPool engine.Pool) (engine.Pool, error) { /
 	return rawPool, nil
 }
 
-func (c *Compiler) ProcessPoolFile(ctx context.Context, compilerSettings *Settings) (foundPools map[string]engine.Pool, err error) {
-	rawPool, readPoolFileErr := ioutil.ReadFile(compilerSettings.PoolFile)
+func ProcessPoolFile(rawFile string, settings *Settings) (foundPools map[string]engine.Pool, err error) {
+	rawPool, readPoolFileErr := ioutil.ReadFile(rawFile)
 	if readPoolFileErr != nil {
-		errorMessage := fmt.Sprintf("unable to read file: %s", compilerSettings.PoolFile)
+		errorMessage := fmt.Sprintf("unable to read file: %s", rawFile)
 		return nil, fmt.Errorf(errorMessage, readPoolFileErr)
 	}
 	foundPools = make(map[string]engine.Pool)
@@ -420,7 +406,7 @@ func (c *Compiler) ProcessPoolFile(ctx context.Context, compilerSettings *Settin
 		if err != nil {
 			return nil, err
 		}
-		preppedPool, compilePoolFileErr := c.compilePoolFile(*rawPool)
+		preppedPool, compilePoolFileErr := compilePoolFile(*rawPool, settings)
 		if compilePoolFileErr != nil {
 			return nil, compilePoolFileErr
 		}
