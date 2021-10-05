@@ -1,0 +1,41 @@
+kind: pipeline
+type: aws
+name: default
+
+pool:
+  use: windows 2019
+
+steps:
+  - name: check install
+    commands:
+      - type C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log
+  - name: imagey + commands
+    image: golang:1.16.5-windowsservercore-1809
+    commands:
+      - go version
+      - go help
+      - dir c:/
+      - dir c:/volumes
+    volumes:
+      - name: cache
+        path: c:/volumes
+  - name: docker status
+    commands:
+      - docker ps -a
+  - name: ping service sleepyserver
+    image: golang:1.16.5-windowsservercore-1809
+    commands:
+      - ping sleepyserver
+
+volumes:
+  - name: cache
+    temp: {}
+
+services:
+  - name: sleepyserver
+    image: golang:1.16.5-windowsservercore-1809
+    commands:
+      - powershell Start-Sleep -s 1800
+
+depends_on:
+  - unit tests
