@@ -1,0 +1,36 @@
+name: ubuntu
+max_pool_size: 1
+
+account:
+  region: us-east-2
+  access_key_id: asdasdasd
+  access_key_secret: asdasdasdasd
+
+instance:
+  ami: ami-051197ce9cbb023ea 
+  type: t2.micro
+  network:
+    security_groups:
+      - sg-0f5aaeb48d35162a4 
+
+---
+name: windows 2019
+max_pool_size: 1
+
+platform:
+ os: windows
+
+account:
+  region: us-east-2
+  access_key_id: qweqweq 
+  access_key_secret: qeqweqe
+
+instance:
+  ami: ami-0840994b9b4c03cb1
+  type: t2.medium
+  network:
+    security_groups:
+      - sg-0f5aaeb48d35162a4 
+  tags:
+    cat: dog
+  
