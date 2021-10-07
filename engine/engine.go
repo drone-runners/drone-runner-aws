@@ -213,7 +213,7 @@ func (eng *Engine) Provision(ctx context.Context, poolInfo *Pool, addBuildingTag
 		WithField("adhoc", addBuildingTag).
 		WithField("ip", poolInfo.Instance.IP).
 		WithField("id", poolInfo.Instance.ID).
-		Debug("provision: complete")
+		Info("provision: complete")
 	return poolInfo.Instance.ID, poolInfo.Instance.IP, nil
 }
 
