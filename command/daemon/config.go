@@ -43,7 +43,7 @@ type Config struct {
 
 	Runner struct {
 		Name     string            `envconfig:"DRONE_RUNNER_NAME"`
-		Capacity int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"2"`
+		Capacity int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
 		Procs    int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
 		Environ  map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
 		EnvFile  string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
@@ -91,7 +91,7 @@ var legacy = map[string]string{
 	// "DRONE_VARIABLE_OLD": "DRONE_VARIABLE_NEW"
 }
 
-func fromEnviron() (Config, error) {
+func FromEnviron() (Config, error) {
 	// loop through legacy environment variable and, if set
 	// rewrite to the new variable name.
 	for k, v := range legacy {

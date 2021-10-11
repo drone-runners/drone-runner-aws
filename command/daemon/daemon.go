@@ -52,13 +52,13 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	}
 
 	// load the configuration from the environment
-	config, err := fromEnviron()
+	config, err := FromEnviron()
 	if err != nil {
 		return err
 	}
 
 	// setup the global logrus logger.
-	setupLogger(&config)
+	SetupLogger(&config)
 
 	ctx, cancel := context.WithCancel(nocontext)
 	defer cancel()
@@ -259,7 +259,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 
 	// seed a pool
 	if pools != nil {
-		buildPoolErr := buildPools(ctx, pools, engInstance, creds, &awsMutex)
+		buildPoolErr := BuildPools(ctx, pools, engInstance, creds, &awsMutex)
 		if buildPoolErr != nil {
 			logrus.WithError(buildPoolErr).
 				Errorln("daemon: unable to build pool")
@@ -289,7 +289,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	return err
 }
 
-func buildPools(ctx context.Context, pools map[string]engine.Pool, eng *engine.Engine, creds platform.Credentials, awsMutex *sync.Mutex) error {
+func BuildPools(ctx context.Context, pools map[string]engine.Pool, eng *engine.Engine, creds platform.Credentials, awsMutex *sync.Mutex) error {
 	for i := range pools {
 		poolcount, _ := platform.PoolCountFree(ctx, creds, pools[i].Name, awsMutex)
 		for poolcount < pools[i].MaxPoolSize {
@@ -298,7 +298,7 @@ func buildPools(ctx context.Context, pools map[string]engine.Pool, eng *engine.E
 			if setupErr != nil {
 				return setupErr
 			}
-			logrus.Infof("buildPools: created instance %s %s %s", pools[i].Name, id, ip)
+			logrus.Infof("BuildPools: created instance %s %s %s", pools[i].Name, id, ip)
 			poolcount++
 		}
 	}
@@ -307,7 +307,7 @@ func buildPools(ctx context.Context, pools map[string]engine.Pool, eng *engine.E
 
 // helper function configures the global logger from
 // the loaded configuration.
-func setupLogger(config *Config) {
+func SetupLogger(config *Config) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),

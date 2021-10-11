@@ -7,6 +7,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -225,6 +226,9 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 		Client: spec.Pool.Account.AccessKeyID,
 		Secret: spec.Pool.Account.AccessKeySecret,
 		Region: spec.Pool.Account.Region,
+	}
+	if spec.Pool.Name == "" {
+		return errors.New("setup: pool name is nil")
 	}
 	// lets see if there is anything in the pool
 	found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.Pool.Name, eng.opts.AwsMutex)
