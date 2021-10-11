@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
+	"github.com/drone-runners/drone-runner-aws/command/delegate"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -25,6 +26,7 @@ func Command() {
 	registerCompile(app)
 	registerExec(app)
 	daemon.Register(app)
+	delegate.RegisterDelegate(app)
 
 	kingpin.Version(version)
 	kingpin.MustParse(app.Parse(os.Args[1:]))

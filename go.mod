@@ -7,6 +7,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/aws/aws-sdk-go v1.31.7
 	github.com/buildkite/yaml v2.1.0+incompatible
+	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
 	github.com/drone/drone-go v1.6.0
 	github.com/drone/envsubst v1.0.2
