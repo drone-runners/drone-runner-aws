@@ -187,7 +187,42 @@ func delegateListener(eng *engine.Engine, creds platform.Credentials, pools map[
 	mux.HandleFunc("/setup", handleSetup(eng, creds, pools))
 	mux.HandleFunc("/destroy", handleDestroy(eng))
 	mux.HandleFunc("/step", handleStep(eng))
+	mux.HandleFunc("/pool_owner", handlePools(pools))
 	return mux
+}
+
+func handlePools(pools map[string]engine.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			fmt.Println("failed to read setup get request")
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+		keys, ok := r.URL.Query()["pool"]
+
+		if !ok || len(keys[0]) < 1 {
+			fmt.Println("Url Param 'pool' is missing")
+			http.Error(w, "Url Param 'pool' is missing", http.StatusBadRequest)
+			return
+		}
+
+		// Query()["key"] will return an array of items, we only want the single item.
+		pool := keys[0]
+		fmt.Println("pool: ", pool)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		_, ok = pools[pool]
+
+		type Response struct {
+			Owner bool `json:"owner"`
+		}
+
+		response := Response{
+			Owner: ok,
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	}
 }
 
 func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[string]engine.Pool) http.HandlerFunc {
