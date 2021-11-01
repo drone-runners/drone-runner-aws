@@ -4,7 +4,7 @@
 
 // Package userdata contains code to generate userdata scripts
 // executed by the cloud-init directive.
-package userdata
+package cloudinit
 
 import (
 	"fmt"
@@ -13,12 +13,14 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	PublicKey string
+	PublicKey      string
+	LiteEnginePath string
 }
 
 // Linux creates a userdata file for the Linux operating system.
-func Linux(params Params) string {
-	return fmt.Sprintf(`#cloud-config
+func Linux(params Params) (payload string) {
+	if params.LiteEnginePath == "" {
+		payload = fmt.Sprintf(`#cloud-config
 system_info:
   default_user: ~
 users:
@@ -35,6 +37,10 @@ apt:
       keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 packages:
 - docker-ce`, params.PublicKey)
+	} else {
+		payload = ""
+	}
+	return payload
 }
 
 //  '{"experimental": true}' | Out-File -FilePath "C:\ProgramData\docker\config\daemon.json" -encoding ASCII
@@ -42,8 +48,9 @@ packages:
 
 // Windows creates a userdata file for the Windows operating system.
 //nolint:lll // magic powershell line
-func Windows(params Params) string {
-	chunk1 := fmt.Sprintf(`<powershell>
+func Windows(params Params) (payload string) {
+	if params.LiteEnginePath == "" {
+		chunk1 := fmt.Sprintf(`<powershell>
   Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
   choco install git.install -y
   Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
@@ -54,7 +61,7 @@ func Windows(params Params) string {
   $acl = Get-Acl C:\ProgramData\ssh\administrators_authorized_keys
   $acl.SetAccessRuleProtection($true, $false)
   $acl.Access | `, strings.TrimSuffix(params.PublicKey, "\n"))
-	payload := chunk1 + "%" + `{$acl.RemoveAccessRule($_)} # strip everything
+		payload = chunk1 + "%" + `{$acl.RemoveAccessRule($_)} # strip everything
   $administratorRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrator","FullControl","Allow")
   $acl.SetAccessRule($administratorRule)
   $administratorsRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrators","FullControl","Allow")
@@ -63,5 +70,8 @@ func Windows(params Params) string {
   New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
   restart-service sshd
   </powershell>`
+	} else {
+		payload = ""
+	}
 	return payload
 }

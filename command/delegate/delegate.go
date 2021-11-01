@@ -22,9 +22,9 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
 
 	"github.com/drone-runners/drone-runner-aws/command/delegate/livelog"
-	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/platform"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	loghistory "github.com/drone/runner-go/logger/history"
@@ -81,7 +81,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 		logrus.Fatalln("delegate: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
 
-	compilerSettings := compiler.Settings{
+	poolSettings := poolfile.PoolSettings{
 		AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
 		AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
 		AwsRegion:          config.Settings.AwsRegion,
@@ -89,7 +89,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 		PublicKeyFile:      config.Settings.PublicKeyFile,
 	}
 
-	pools, poolFileErr := compiler.ProcessPoolFile(c.poolfile, &compilerSettings)
+	pools, poolFileErr := poolfile.ProcessPoolFile(c.poolfile, &poolSettings)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
 			Errorln("delegate: unable to parse pool file")

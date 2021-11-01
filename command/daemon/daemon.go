@@ -16,6 +16,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/platform"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
@@ -89,7 +90,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	if (config.Settings.PrivateKeyFile != "" && config.Settings.PublicKeyFile == "") || (config.Settings.PrivateKeyFile == "" && config.Settings.PublicKeyFile != "") {
 		logrus.Fatalln("daemon: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
-	compilerSettings := compiler.Settings{
+	poolSettings := poolfile.PoolSettings{
 		AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
 		AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
 		AwsRegion:          config.Settings.AwsRegion,
@@ -97,7 +98,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		PublicKeyFile:      config.Settings.PublicKeyFile,
 	}
 
-	pools, poolFileErr := compiler.ProcessPoolFile(c.Poolfile, &compilerSettings)
+	pools, poolFileErr := poolfile.ProcessPoolFile(c.Poolfile, &poolSettings)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
 			Errorln("daemon: unable to parse pool file")
@@ -136,7 +137,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 			config.Limit.Trusted,
 		),
 		Compiler: &compiler.Compiler{
-			Settings: compilerSettings,
+			Settings: poolSettings,
 			Pools:    pools,
 			Environ: provider.Combine(
 				provider.Static(config.Runner.Environ),

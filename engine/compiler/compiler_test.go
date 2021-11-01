@@ -12,6 +12,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
@@ -94,10 +95,10 @@ func TestCompile_RunFailure(t *testing.T) {
 // at compile time.
 func TestCompile_Secrets(t *testing.T) {
 	mnfst, _ := manifest.ParseFile("testdata/secret.yml")
-	compilerSettings := Settings{
+	compilerSettings := poolfile.PoolSettings{
 		AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
 	}
-	pools, _ := ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
+	pools, _ := poolfile.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
 
 	compiler := &Compiler{
 		Environ: provider.Static(nil),
@@ -161,10 +162,10 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	compilerSettings := Settings{
+	compilerSettings := poolfile.PoolSettings{
 		AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
 	}
-	pools, _ := ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
+	pools, _ := poolfile.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
 	compiler := &Compiler{
 		Environ: provider.Static(nil),
 		Secret: secret.StaticVars(map[string]string{
