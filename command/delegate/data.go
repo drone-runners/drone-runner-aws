@@ -48,6 +48,8 @@ type SetupRequest struct {
 	SecretEnvStr  string `json:"secret_env"`
 	SecretEnvVars map[string]string
 
+	Pool string `json:"pool"`
+
 	DataDump SetupDataDump `json:"dump"`
 }
 

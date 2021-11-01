@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/drone/runner-go/environ"
+	"github.com/drone/runner-go/logger"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 
@@ -39,6 +40,8 @@ type delegateCommand struct {
 	envfile  string
 	poolfile string
 }
+
+var delegateEngineOpts engine.Opts
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, gocyclo
 	// load environment variables from file.
@@ -94,13 +97,13 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	}
 
 	var awsMutex sync.Mutex
-	opts := engine.Opts{
+	delegateEngineOpts = engine.Opts{
 		AwsMutex:   &awsMutex,
 		RunnerName: config.Runner.Name,
 		Pools:      pools,
 	}
 
-	engineInstance, engineErr := engine.New(opts)
+	engineInstance, engineErr := engine.New(delegateEngineOpts)
 	if engineErr != nil {
 		logrus.WithError(engineErr).
 			Errorln("cannot create engine")
@@ -228,21 +231,28 @@ func handlePools(pools map[string]engine.Pool) http.HandlerFunc {
 func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[string]engine.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			fmt.Println("failed to read setup post request")
+			fmt.Println("handleSetup: failed to read setup post request")
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
 
 		reqData, err := GetSetupRequest(r.Body)
 		if err != nil {
-			fmt.Println("failed to read setup request")
+			fmt.Println("handleSetup: failed to read setup request")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-		fmt.Printf("\n\nExecuting setup: %v\n", reqData)
+
+		pool, ok := pools[reqData.Pool]
+		if !ok {
+			fmt.Println("handleSetup: failed to find pool")
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		fmt.Printf("handleSetup: Executing setup: %v\n", reqData)
 		stageID := reqData.StageID
 
-		pool := pools["ubuntu"]
 		spec, err := CompileDelegateSetupStage(creds, &pool)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -252,18 +262,44 @@ func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[strin
 		err = Stages.Store(stageID, spec, reqData.StageEnvVars, reqData.SecretEnvVars)
 		if err != nil {
 			logrus.WithError(err).
-				Errorln("failed to store spec")
+				Errorln("handleSetup: failed to store spec")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
 		err = eng.Setup(r.Context(), spec)
 		if err != nil {
 			logrus.WithError(err).
-				Errorln("cannot setup the docker environment")
+				Errorln("handleSetup: cannot setup the docker environment")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
 		w.WriteHeader(http.StatusOK)
+		// we have successfully setup the environment lets replace the lost pool member
+		poolCount, countPoolErr := platform.PoolCountFree(r.Context(), creds, reqData.Pool, delegateEngineOpts.AwsMutex)
+		if countPoolErr != nil {
+			logger.FromContext(r.Context()).
+				WithError(countPoolErr).
+				WithField("ami", pool.Instance.AMI).
+				WithField("pool", pool.Name).
+				Errorf("handleSetup: failed checking pool")
+		}
+		if poolCount < pool.MaxPoolSize {
+			id, ip, provisionErr := eng.Provision(r.Context(), &pool, false)
+			if provisionErr != nil {
+				logger.FromContext(r.Context()).
+					WithError(provisionErr).
+					WithField("ami", pool.Instance.AMI).
+					WithField("pool", pool.Name).
+					Errorf("handleSetup: failed to add back to the pool")
+			} else {
+				logger.FromContext(r.Context()).
+					WithField("ami", pool.Instance.AMI).
+					WithField("ip", ip).
+					WithField("id", id).
+					WithField("pool", pool.Name).
+					Debug("handleSetup: add back to the pool")
+			}
+		}
 	}
 }
 
