@@ -7,7 +7,7 @@ package compiler
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
@@ -188,7 +188,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 
 	got := compiler.Compile(nocontext, args)
 
-	raw, err := ioutil.ReadFile(golden)
+	raw, err := os.ReadFile(golden)
 	if err != nil {
 		t.Error(err)
 	}

@@ -2,12 +2,12 @@ package delegate
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"testing"
 )
 
 func TestGetSetupRequestHappyPath(t *testing.T) {
-	raw, _ := ioutil.ReadFile("test_data/setup_happy_payload.json")
+	raw, _ := os.ReadFile("test_data/setup_happy_payload.json")
 	got, err := GetSetupRequest(bytes.NewReader(raw))
 	if err != nil {
 		t.Errorf("GetSetupRequest() error should be nil, got %v", err)

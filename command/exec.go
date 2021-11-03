@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -55,7 +55,7 @@ type execCommand struct {
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
-	rawsource, err := ioutil.ReadAll(c.Source)
+	rawsource, err := io.ReadAll(c.Source)
 	if err != nil {
 		return err
 	}
