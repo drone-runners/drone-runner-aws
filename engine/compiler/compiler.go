@@ -5,19 +5,13 @@
 package compiler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"os"
 
-	"github.com/buildkite/yaml"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/sshkey"
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/oshelp"
 
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
@@ -30,20 +24,9 @@ import (
 	"github.com/gosimple/slug"
 )
 
-const windowsString = "windows"
-
 // random generator function
 var random = func() string {
 	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
-}
-
-// Settings defines default settings.
-type Settings struct {
-	AwsAccessKeyID     string
-	AwsAccessKeySecret string
-	AwsRegion          string
-	PrivateKeyFile     string
-	PublicKeyFile      string
 }
 
 // Compiler compiles the Yaml configuration file to an
@@ -54,7 +37,7 @@ type Compiler struct {
 	// Secret returns a named secret value that can be injected into the pipeline step.
 	Secret secret.Provider
 	// Settings provides global settings that apply to all pipelines.
-	Settings Settings
+	Settings poolfile.PoolSettings
 	// Pools is a map of named pools that can be referenced by a pipeline.
 	Pools map[string]engine.Pool
 }
@@ -72,9 +55,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	pipelineOS := spec.Pool.Platform.OS
 	// creates a home directory in the root.
 	// note: mkdirall fails on windows so we need to create all directories in the tree.
-	homedir := join(pipelineOS, spec.Root, "home", "drone")
+	homedir := oshelp.JoinPaths(pipelineOS, spec.Root, "home", "drone")
 	spec.Files = append(spec.Files, &engine.File{
-		Path:  join(pipelineOS, spec.Root, "home"),
+		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "home"),
 		Mode:  0700,
 		IsDir: true,
 	}, &engine.File{
@@ -86,9 +69,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// creates a source directory in the root.
 	// note: mkdirall fails on windows so we need to create all
 	// directories in the tree.
-	sourcedir := join(pipelineOS, spec.Root, "drone", "src")
+	sourcedir := oshelp.JoinPaths(pipelineOS, spec.Root, "drone", "src")
 	spec.Files = append(spec.Files, &engine.File{
-		Path:  join(pipelineOS, spec.Root, "drone"),
+		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "drone"),
 		Mode:  0700,
 		IsDir: true,
 	}, &engine.File{
@@ -96,15 +79,15 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		Mode:  0700,
 		IsDir: true,
 	}, &engine.File{
-		Path:  join(pipelineOS, spec.Root, "opt"),
+		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "opt"),
 		Mode:  0700,
 		IsDir: true,
 	})
 
 	// creates the netrc file
 	if args.Netrc != nil && args.Netrc.Password != "" {
-		netrcfile := getNetrc(pipelineOS)
-		netrcpath := join(pipelineOS, homedir, netrcfile)
+		netrcfile := oshelp.GetNetrc(pipelineOS)
+		netrcpath := oshelp.JoinPaths(pipelineOS, homedir, netrcfile)
 		netrcdata := fmt.Sprintf(
 			"machine %s login %s password %s",
 			args.Netrc.Machine,
@@ -168,8 +151,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// create the clone step, maybe
 	if !pipeline.Clone.Disable {
-		clonepath := join(pipelineOS, spec.Root, "opt", getExt(pipelineOS, "clone"))
-		clonefile := genScript(pipelineOS,
+		clonepath := oshelp.JoinPaths(pipelineOS, spec.Root, "opt", oshelp.GetExt(pipelineOS, "clone"))
+		clonefile := oshelp.GenScript(pipelineOS,
 			clone.Commands(
 				clone.Args{
 					Branch: args.Build.Target,
@@ -179,7 +162,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				},
 			),
 		)
-		cmd, args := getCommand(pipelineOS, clonepath)
+		cmd, args := oshelp.GetCommand(pipelineOS, clonepath)
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Name:      "clone",
 			Args:      args,
@@ -203,7 +186,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	for _, v := range pipeline.Volumes {
 		path := ""
 		if v.EmptyDir != nil {
-			path = join(pipelineOS, spec.Root, random())
+			path = oshelp.JoinPaths(pipelineOS, spec.Root, random())
 			// we only need to pass temporary volumes through to engine, to have the folders created
 			src := new(engine.Volume)
 			src.EmptyDir = &engine.VolumeEmptyDir{
@@ -228,17 +211,17 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// create steps
 	for _, src := range combinedSteps {
 		buildslug := slug.Make(src.Name)
-		buildpath := join(pipelineOS, spec.Root, "opt", getExt(pipelineOS, buildslug))
+		buildpath := oshelp.JoinPaths(pipelineOS, spec.Root, "opt", oshelp.GetExt(pipelineOS, buildslug))
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
 		// if there is an image associated with the step build a docker cli
 		var buildfile string
 		if src.Image == "" {
-			buildfile = genScript(pipelineOS, src.Commands)
+			buildfile = oshelp.GenScript(pipelineOS, src.Commands)
 		} else {
-			buildfile = genDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
+			buildfile = oshelp.GenerateDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
 		}
 
-		cmd, args := getCommand(pipelineOS, buildpath)
+		cmd, args := oshelp.GetCommand(pipelineOS, buildpath)
 		dst := &engine.Step{
 			Name:      src.Name,
 			Args:      args,
@@ -290,129 +273,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	}
 
 	return spec
-}
-
-func compilePoolFile(rawPool engine.Pool, settings *Settings) (engine.Pool, error) { //nolint:gocritic,gocyclo // its complex but standard
-	pipelineOS := rawPool.Platform.OS
-	// secrets and error here
-	if rawPool.Account.AccessKeyID == "" {
-		rawPool.Account.AccessKeyID = settings.AwsAccessKeyID
-	}
-	if rawPool.Account.AccessKeySecret == "" {
-		rawPool.Account.AccessKeySecret = settings.AwsAccessKeySecret
-	}
-	// we need Access, error if its still empty
-	if rawPool.Account.AccessKeyID == "" || rawPool.Account.AccessKeySecret == "" {
-		return engine.Pool{}, fmt.Errorf("missing AWS access key or AWS secret. Add to .env file or pool file")
-	}
-	// try config first. then set the default region if not provided
-	if rawPool.Account.Region == "" && settings.AwsRegion != "" {
-		rawPool.Account.Region = settings.AwsRegion
-	} else if rawPool.Account.Region == "" {
-		rawPool.Account.Region = "us-east-1"
-	}
-	// set default instance type if not provided
-	if rawPool.Instance.Type == "" {
-		rawPool.Instance.Type = "t3.nano"
-		if rawPool.Platform.Arch == "arm64" {
-			rawPool.Instance.Type = "a1.medium"
-		}
-	}
-	// put something into tags even if empty
-	if rawPool.Instance.Tags == nil {
-		rawPool.Instance.Tags = make(map[string]string)
-	}
-	// set the default disk size if not provided
-	if rawPool.Instance.Disk.Size == 0 {
-		rawPool.Instance.Disk.Size = 32
-	}
-	// set the default disk type if not provided
-	if rawPool.Instance.Disk.Type == "" {
-		rawPool.Instance.Disk.Type = "gp2"
-	}
-	// set the default iops
-	if rawPool.Instance.Disk.Type == "io1" && rawPool.Instance.Disk.Iops == 0 {
-		rawPool.Instance.Disk.Iops = 100
-	}
-	// set the default device
-	if rawPool.Instance.Device.Name == "" {
-		rawPool.Instance.Device.Name = "/dev/sda1"
-	}
-	// set the default ssh user. this user account is responsible for executing the pipeline script.
-	switch {
-	case rawPool.Instance.User == "" && rawPool.Platform.OS == windowsString:
-		rawPool.Instance.User = "Administrator"
-	case rawPool.Instance.User == "":
-		rawPool.Instance.User = "root"
-	}
-	_, statErr := os.Stat(settings.PrivateKeyFile)
-	if os.IsNotExist(statErr) {
-		// there are no key files
-		publickey, privatekey, generateKeyErr := sshkey.GeneratePair()
-		if generateKeyErr != nil {
-			publickey = ""
-			privatekey = ""
-		}
-		rawPool.Instance.PrivateKey = privatekey
-		rawPool.Instance.PublicKey = publickey
-	} else {
-		body, privateKeyErr := os.ReadFile(settings.PrivateKeyFile)
-		if privateKeyErr != nil {
-			log.Fatalf("unable to read file ``: %v", privateKeyErr)
-		}
-		rawPool.Instance.PrivateKey = string(body)
-
-		body, publicKeyErr := os.ReadFile(settings.PublicKeyFile)
-		if publicKeyErr != nil {
-			log.Fatalf("unable to read file: %v", publicKeyErr)
-		}
-		rawPool.Instance.PublicKey = string(body)
-	}
-	// generate the cloudinit file
-	var userDataWithSSH string
-	if rawPool.Platform.OS == windowsString {
-		userDataWithSSH = userdata.Windows(userdata.Params{
-			PublicKey: rawPool.Instance.PublicKey,
-		})
-	} else {
-		// try using cloud init.
-		userDataWithSSH = userdata.Linux(userdata.Params{
-			PublicKey: rawPool.Instance.PublicKey,
-		})
-	}
-	rawPool.Instance.UserData = userDataWithSSH
-	// create the root directory
-	rawPool.Root = tempdir(pipelineOS)
-
-	return rawPool, nil
-}
-
-func ProcessPoolFile(rawFile string, settings *Settings) (foundPools map[string]engine.Pool, err error) {
-	rawPool, readPoolFileErr := ioutil.ReadFile(rawFile)
-	if readPoolFileErr != nil {
-		errorMessage := fmt.Sprintf("unable to read file: %s", rawFile)
-		return nil, fmt.Errorf(errorMessage, readPoolFileErr)
-	}
-	foundPools = make(map[string]engine.Pool)
-	buf := bytes.NewBuffer(rawPool)
-	dec := yaml.NewDecoder(buf)
-
-	for {
-		rawPool := new(engine.Pool)
-		err := dec.Decode(rawPool)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		preppedPool, compilePoolFileErr := compilePoolFile(*rawPool, settings)
-		if compilePoolFileErr != nil {
-			return nil, compilePoolFileErr
-		}
-		foundPools[rawPool.Name] = preppedPool
-	}
-	return foundPools, nil
 }
 
 // helper function attempts to find and return the named secret. from the secret provider.

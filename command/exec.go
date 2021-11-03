@@ -19,6 +19,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
@@ -39,18 +40,18 @@ import (
 
 type execCommand struct {
 	*internal.Flags
-	Source   *os.File
-	Poolfile string
-	Include  []string
-	Exclude  []string
-	Environ  map[string]string
-	Secrets  map[string]string
-	Settings compiler.Settings
-	Pretty   bool
-	Procs    int64
-	Debug    bool
-	Trace    bool
-	Dump     bool
+	Source       *os.File
+	Poolfile     string
+	Include      []string
+	Exclude      []string
+	Environ      map[string]string
+	Secrets      map[string]string
+	PoolSettings poolfile.PoolSettings
+	Pretty       bool
+	Procs        int64
+	Debug        bool
+	Trace        bool
+	Dump         bool
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
@@ -102,11 +103,11 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
 		Environ:  provider.Static(c.Environ),
-		Settings: c.Settings,
+		Settings: c.PoolSettings,
 		Secret:   secret.StaticVars(c.Secrets),
 	}
 	// read the pool file
-	pools, poolFileErr := compiler.ProcessPoolFile(c.Poolfile, &comp.Settings)
+	pools, poolFileErr := poolfile.ProcessPoolFile(c.Poolfile, &comp.Settings)
 	if poolFileErr != nil {
 		return poolFileErr
 	}

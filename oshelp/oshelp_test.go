@@ -2,48 +2,18 @@
 // Use of this source code is governed by the Polyform License
 // that can be found in the LICENSE file.
 
-package compiler
+package oshelp
 
 import (
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/dchest/uniuri"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/shell/bash"
 	"github.com/drone/runner-go/shell/powershell"
 )
-
-func Test_tempdir(t *testing.T) {
-	// replace the default random function with one that
-	// is deterministic, for testing purposes.
-	random = notRandom
-
-	// restore the default random function and the previously
-	// specified temporary directory
-	defer func() {
-		random = uniuri.New
-	}()
-
-	tests := []struct {
-		os   string
-		path string
-	}{
-		{os: "windows", path: "C:\\Windows\\Temp\\aws"},
-		{os: "linux", path: "/tmp/aws"},
-		{os: "openbsd", path: "/tmp/aws"},
-		{os: "netbsd", path: "/tmp/aws"},
-		{os: "freebsd", path: "/tmp/aws"},
-	}
-
-	for _, test := range tests {
-		if got, want := tempdir(test.os), test.path; got != want {
-			t.Errorf("Want tempdir %s, got %s", want, got)
-		}
-	}
-}
 
 func Test_join(t *testing.T) {
 	tests := []struct {
@@ -55,7 +25,7 @@ func Test_join(t *testing.T) {
 		{os: "linux", a: []string{"/tmp", "foo", "bar"}, b: "/tmp/foo/bar"},
 	}
 	for _, test := range tests {
-		if got, want := join(test.os, test.a...), test.b; got != want {
+		if got, want := JoinPaths(test.os, test.a...), test.b; got != want {
 			t.Errorf("Want %s, got %s", want, got)
 		}
 	}
@@ -71,14 +41,14 @@ func Test_getExt(t *testing.T) {
 		{os: "linux", a: "clone", b: "clone"},
 	}
 	for _, test := range tests {
-		if got, want := getExt(test.os, test.a), test.b; got != want {
+		if got, want := GetExt(test.os, test.a), test.b; got != want {
 			t.Errorf("Want %s, got %s", want, got)
 		}
 	}
 }
 
 func Test_getCommand(t *testing.T) {
-	cmd, args := getCommand("linux", "clone.sh")
+	cmd, args := GetCommand("linux", "clone.sh")
 	if got, want := cmd, "/bin/sh"; got != want {
 		t.Errorf("Want command %s, got %s", want, got)
 	}
@@ -86,7 +56,7 @@ func Test_getCommand(t *testing.T) {
 		t.Errorf("Unexpected args %v", args)
 	}
 
-	cmd, args = getCommand("windows", "clone.ps1")
+	cmd, args = GetCommand("windows", "clone.ps1")
 	if got, want := cmd, "powershell"; got != want {
 		t.Errorf("Want command %s, got %s", want, got)
 	}
@@ -107,7 +77,7 @@ func Test_getNetrc(t *testing.T) {
 		{os: "freebsd", name: ".netrc"},
 	}
 	for _, test := range tests {
-		if got, want := getNetrc(test.os), test.name; got != want {
+		if got, want := GetNetrc(test.os), test.name; got != want {
 			t.Errorf("Want %s on %s, got %s", want, test.os, got)
 		}
 	}
@@ -116,13 +86,13 @@ func Test_getNetrc(t *testing.T) {
 func Test_getScript(t *testing.T) {
 	commands := []string{"go build"}
 
-	a := genScript("windows", commands)
+	a := GenScript("windows", commands)
 	b := powershell.Script(commands)
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("Generated windows linux script")
 	}
 
-	a = genScript("linux", commands)
+	a = GenScript("linux", commands)
 	b = bash.Script(commands)
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("Generated invalid linux script")

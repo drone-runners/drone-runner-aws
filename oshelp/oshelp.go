@@ -2,7 +2,7 @@
 // Use of this source code is governed by the Polyform License
 // that can be found in the LICENSE file.
 
-package compiler
+package oshelp
 
 import (
 	"encoding/base64"
@@ -19,22 +19,12 @@ import (
 	json "github.com/ghodss/yaml"
 )
 
-// helper function returns the base temporary directory based
-// on the target platform.
-func tempdir(os string) string {
-	dir := "aws"
-	switch os {
-	case windowsString:
-		return join(os, "C:\\Windows\\Temp", dir)
-	default:
-		return join(os, "/tmp", dir)
-	}
-}
+const WindowsString = "windows"
 
 // helper function joins the file paths.
-func join(os string, paths ...string) string {
+func JoinPaths(os string, paths ...string) string {
 	switch os {
-	case windowsString:
+	case WindowsString:
 		return strings.Join(paths, "\\")
 	default:
 		return strings.Join(paths, "/")
@@ -43,9 +33,9 @@ func join(os string, paths ...string) string {
 
 // helper function returns the shell extension based on the
 // target platform.
-func getExt(os, file string) (s string) {
+func GetExt(os, file string) (s string) {
 	switch os {
-	case windowsString:
+	case WindowsString:
 		return file + ".ps1"
 	default:
 		return file
@@ -54,18 +44,18 @@ func getExt(os, file string) (s string) {
 
 // helper function returns the shell command and arguments
 // based on the target platform to invoke the script
-func getCommand(os, script string) (cmd string, args []string) {
+func GetCommand(os, script string) (cmd string, args []string) {
 	cmd, args = bash.Command()
-	if os == windowsString {
+	if os == WindowsString {
 		cmd, args = powershell.Command()
 	}
 	return cmd, append(args, script)
 }
 
 // helper function returns the netrc file name based on the target platform.
-func getNetrc(os string) string {
+func GetNetrc(os string) string {
 	switch os {
-	case windowsString:
+	case WindowsString:
 		return "_netrc"
 	default:
 		return ".netrc"
@@ -76,9 +66,9 @@ func getNetrc(os string) string {
 // execute the provided shell commands. The shell scripting
 // language (bash vs powershell) is determined by the operating
 // system.
-func genScript(os string, commands []string) string {
+func GenScript(os string, commands []string) string {
 	switch os {
-	case windowsString:
+	case WindowsString:
 		return powershell.Script(commands)
 	default:
 		return bash.Script(commands)
@@ -118,7 +108,7 @@ func convertSettingsToString(settings map[string]*manifest.Parameter) (envString
 }
 
 func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resource.VolumeMount, pipeLineVolumeMap map[string]string) (volumeString string) {
-	if pipelineOS == windowsString {
+	if pipelineOS == WindowsString {
 		volumeString = fmt.Sprintf("-v `%s`:c:/drone/src", sourcedir)
 	} else {
 		volumeString = fmt.Sprintf(`-v '%s':/drone/src`, sourcedir)
@@ -127,7 +117,7 @@ func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resourc
 		path, match := pipeLineVolumeMap[volume.Name]
 		if match {
 			v := fmt.Sprintf(` -v '%s':%s`, path, volume.MountPath)
-			if pipelineOS == windowsString {
+			if pipelineOS == WindowsString {
 				v = fmt.Sprintf(" -v `%s`:%s", path, volume.MountPath)
 			}
 			volumeString += v
@@ -149,7 +139,7 @@ func convertCommandsToEntryPointString(pipelineOS string, commands []string) (en
 		for i := range commands {
 			entryPoint = fmt.Sprintf(`%s %s;`, entryPoint, commands[i])
 		}
-		if pipelineOS == windowsString {
+		if pipelineOS == WindowsString {
 			entryPoint = fmt.Sprintf(`powershell '%s'`, entryPoint)
 		} else {
 			entryPoint = fmt.Sprintf(`/bin/bash -c %q`, entryPoint)
@@ -158,7 +148,7 @@ func convertCommandsToEntryPointString(pipelineOS string, commands []string) (en
 	return entryPoint
 }
 
-func genDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env, pipeLineVolumeMap map[string]string) string {
+func GenerateDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env, pipeLineVolumeMap map[string]string) string {
 	// create the env params to be passed to the docker executable
 	envString := convertEnvMapToString(env)
 	// convert settings to env variables
@@ -178,7 +168,7 @@ func genDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env
 	entryPoint := convertCommandsToEntryPointString(pipelineOS, step.Commands)
 	commandBase := ""
 	switch pipelineOS {
-	case windowsString:
+	case WindowsString:
 		commandBase = fmt.Sprintf("docker run %s -w='c:/drone/src' %s %s %s %s %s %s", interactiveDeamonString, containerName, networkString, volumeString, envString, step.Image, entryPoint)
 	default:
 		// -w set working dir, relies on the sourcedir being mounted
@@ -187,7 +177,7 @@ func genDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step, env
 	var returnVal string
 	array := append([]string{}, commandBase)
 	switch pipelineOS {
-	case windowsString:
+	case WindowsString:
 		returnVal = powershell.SilentScript(array)
 	default:
 		returnVal = bash.SilentScript(array)

@@ -15,6 +15,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -27,11 +28,11 @@ import (
 
 type compileCommand struct {
 	*internal.Flags
-	Source   *os.File
-	Poolfile string
-	Environ  map[string]string
-	Secrets  map[string]string
-	Settings compiler.Settings
+	Source       *os.File
+	Poolfile     string
+	Environ      map[string]string
+	Secrets      map[string]string
+	PoolSettings poolfile.PoolSettings
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
@@ -73,7 +74,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// read the poolfile
-	pools, poolFileErr := compiler.ProcessPoolFile(c.Poolfile, &c.Settings)
+	pools, poolFileErr := poolfile.ProcessPoolFile(c.Poolfile, &c.PoolSettings)
 	if poolFileErr != nil {
 		return poolFileErr
 	}
@@ -87,7 +88,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
 		Environ:  provider.Static(c.Environ),
-		Settings: c.Settings,
+		Settings: c.PoolSettings,
 		Secret:   secret.StaticVars(c.Secrets),
 		Pools:    pools,
 	}
