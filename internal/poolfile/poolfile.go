@@ -23,6 +23,7 @@ import (
 // PoolSettings defines default settings.
 type PoolSettings struct {
 	AwsAccessKeyID     string
+	LiteEnginePath     string
 	AwsAccessKeySecret string
 	AwsRegion          string
 	PrivateKeyFile     string
@@ -125,7 +126,8 @@ func compilePoolFile(rawPool engine.Pool, settings *PoolSettings) (engine.Pool, 
 	} else {
 		// try using cloud init.
 		userDataWithSSH = cloudinit.Linux(cloudinit.Params{
-			PublicKey: rawPool.Instance.PublicKey,
+			PublicKey:      rawPool.Instance.PublicKey,
+			LiteEnginePath: settings.LiteEnginePath,
 		})
 	}
 	rawPool.Instance.UserData = userDataWithSSH

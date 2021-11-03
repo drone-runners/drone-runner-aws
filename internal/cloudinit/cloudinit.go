@@ -38,7 +38,29 @@ apt:
 packages:
 - docker-ce`, params.PublicKey)
 	} else {
-		payload = ""
+		payload = fmt.Sprintf(`#cloud-config
+system_info:
+  default_user: ~
+users:
+- default
+- name: root
+  sudo: ALL=(ALL) NOPASSWD:ALL
+  groups: sudo
+  ssh-authorized-keys:
+  - %s
+apt:
+  sources:
+    docker.list:
+      source: deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+packages:
+- docker-ce
+- wget
+runcmd:
+- 'wget "%s" -O /usr/bin/lite-engine'
+- 'chmod 777 /usr/bin/lite-engine'
+- '/usr/bin/lite-engine certs'
+- '/usr/bin/lite-engine server > /var/log/lite-engine.log 2>&1 &'`, params.PublicKey, params.LiteEnginePath)
 	}
 	return payload
 }
