@@ -21,7 +21,7 @@ const defaultLimit = 5242880 // 5MB
 
 // Writer is an io.Writer that sends logs to the server.
 type Writer struct {
-	sync.Mutex
+	logMutex sync.Mutex
 
 	client Client
 
@@ -92,14 +92,14 @@ func (b *Writer) Write(p []byte) (n int, err error) {
 		b.num++
 
 		if !b.stopped() {
-			b.Lock()
+			b.logMutex.Lock()
 			b.pending = append(b.pending, line)
-			b.Unlock()
+			b.logMutex.Unlock()
 		}
 
-		b.Lock()
+		b.logMutex.Lock()
 		b.history = append(b.history, line)
-		b.Unlock()
+		b.logMutex.Unlock()
 	}
 
 	select {
@@ -143,10 +143,10 @@ func (b *Writer) upload() error {
 
 // flush batch uploads all buffered logs to the server.
 func (b *Writer) flush() error {
-	b.Lock()
+	b.logMutex.Lock()
 	lines := b.copy()
 	b.clear()
-	b.Unlock()
+	b.logMutex.Unlock()
 	if len(lines) == 0 {
 		return nil
 	}
@@ -165,21 +165,21 @@ func (b *Writer) clear() {
 }
 
 func (b *Writer) stop() bool {
-	b.Lock()
+	b.logMutex.Lock()
 	var closed bool
 	if !b.closed {
 		close(b.close)
 		closed = true
 		b.closed = true
 	}
-	b.Unlock()
+	b.logMutex.Unlock()
 	return closed
 }
 
 func (b *Writer) stopped() bool {
-	b.Lock()
+	b.logMutex.Lock()
 	closed := b.closed
-	b.Unlock()
+	b.logMutex.Unlock()
 	return closed
 }
 

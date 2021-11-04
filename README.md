@@ -23,3 +23,11 @@ This runner was initially designed in the following [proposal](https://github.co
 + tmate integration
 + cli sub command to print ec2 instances information
 + cli sub command to terminate all runner ec2 instances
+
+## developer setup for testing / using the lite engine
+
++ build the lite-engine
++ host the lite-engine binary `python3 -m http.server`
++ run ngrok to expose the webserver `ngrok http 8000`
++ add the ngrok url to the env file `DRONE_SETTINGS_LITE_ENGINE_PATH=https://c6bf-80-7-0-64.ngrok.io
++ make sure to add port 9079 to your incoming network aws security group.

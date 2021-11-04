@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -162,7 +161,7 @@ func (c *HTTPClient) do(ctx context.Context, path, method string, in, out interf
 		defer func() {
 			// drain the response body so we can reuse
 			// this connection.
-			_, _ = io.Copy(ioutil.Discard, io.LimitReader(res.Body, 4096)) // nolint: gomnd
+			_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 4096)) // nolint: gomnd
 			res.Body.Close()
 		}()
 	}
@@ -178,7 +177,7 @@ func (c *HTTPClient) do(ctx context.Context, path, method string, in, out interf
 	}
 
 	// else read the response body into a byte slice.
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return res, err
 	}

@@ -63,6 +63,7 @@ type Config struct {
 		AwsRegion          string `envconfig:"DRONE_SETTINGS_AWS_REGION"`
 		PrivateKeyFile     string `envconfig:"DRONE_SETTINGS_PRIVATE_KEY_FILE"`
 		PublicKeyFile      string `envconfig:"DRONE_SETTINGS_PUBLIC_KEY_FILE"`
+		LiteEnginePath     string `envconfig:"DRONE_SETTINGS_LITE_ENGINE_PATH"`
 		ReusePool          bool   `envconfig:"DRONE_SETTINGS_REUSE_POOL"`
 	}
 

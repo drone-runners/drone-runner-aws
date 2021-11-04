@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -23,6 +22,7 @@ import (
 // PoolSettings defines default settings.
 type PoolSettings struct {
 	AwsAccessKeyID     string
+	LiteEnginePath     string
 	AwsAccessKeySecret string
 	AwsRegion          string
 	PrivateKeyFile     string
@@ -120,12 +120,14 @@ func compilePoolFile(rawPool engine.Pool, settings *PoolSettings) (engine.Pool, 
 	var userDataWithSSH string
 	if rawPool.Platform.OS == oshelp.WindowsString {
 		userDataWithSSH = cloudinit.Windows(cloudinit.Params{
-			PublicKey: rawPool.Instance.PublicKey,
+			PublicKey:      rawPool.Instance.PublicKey,
+			LiteEnginePath: settings.LiteEnginePath,
 		})
 	} else {
 		// try using cloud init.
 		userDataWithSSH = cloudinit.Linux(cloudinit.Params{
-			PublicKey: rawPool.Instance.PublicKey,
+			PublicKey:      rawPool.Instance.PublicKey,
+			LiteEnginePath: settings.LiteEnginePath,
 		})
 	}
 	rawPool.Instance.UserData = userDataWithSSH
@@ -136,7 +138,7 @@ func compilePoolFile(rawPool engine.Pool, settings *PoolSettings) (engine.Pool, 
 }
 
 func ProcessPoolFile(rawFile string, settings *PoolSettings) (foundPools map[string]engine.Pool, err error) {
-	rawPool, readPoolFileErr := ioutil.ReadFile(rawFile)
+	rawPool, readPoolFileErr := os.ReadFile(rawFile)
 	if readPoolFileErr != nil {
 		errorMessage := fmt.Sprintf("unable to read file: %s", rawFile)
 		return nil, fmt.Errorf(errorMessage, readPoolFileErr)

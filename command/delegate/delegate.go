@@ -87,6 +87,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 		AwsRegion:          config.Settings.AwsRegion,
 		PrivateKeyFile:     config.Settings.PrivateKeyFile,
 		PublicKeyFile:      config.Settings.PublicKeyFile,
+		LiteEnginePath:     config.Settings.LiteEnginePath,
 	}
 
 	pools, poolFileErr := poolfile.ProcessPoolFile(c.poolfile, &poolSettings)
