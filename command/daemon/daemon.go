@@ -260,7 +260,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 
 	// seed a pool
 	if pools != nil {
-		buildPoolErr := BuildPools(ctx, pools, engInstance, creds, &awsMutex)
+		buildPoolErr := poolfile.BuildPools(ctx, pools, creds, &awsMutex)
 		if buildPoolErr != nil {
 			logrus.WithError(buildPoolErr).
 				Errorln("daemon: unable to build pool")
@@ -288,22 +288,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 			Errorln("daemon: shutting down the server")
 	}
 	return err
-}
-
-func BuildPools(ctx context.Context, pools map[string]engine.Pool, eng *engine.Engine, creds platform.Credentials, awsMutex *sync.Mutex) error {
-	for i := range pools {
-		poolcount, _ := platform.PoolCountFree(ctx, creds, pools[i].Name, awsMutex)
-		for poolcount < pools[i].MaxPoolSize {
-			poolInstance := pools[i]
-			id, ip, setupErr := eng.Provision(ctx, &poolInstance, false)
-			if setupErr != nil {
-				return setupErr
-			}
-			logrus.Infof("BuildPools: created instance %s %s %s", pools[i].Name, id, ip)
-			poolcount++
-		}
-	}
-	return nil
 }
 
 // helper function configures the global logger from

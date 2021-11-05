@@ -39,7 +39,7 @@ type Compiler struct {
 	// Settings provides global settings that apply to all pipelines.
 	Settings poolfile.PoolSettings
 	// Pools is a map of named pools that can be referenced by a pipeline.
-	Pools map[string]engine.Pool
+	Pools map[string]poolfile.Pool
 }
 
 // Compile compiles the configuration file.
@@ -49,10 +49,10 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// read pool file first.
 	targetPool := pipeline.Pool.Use
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
-	spec.Pool = c.Pools[targetPool]
+	spec.Pool.Name = targetPool
 	spec.Root = c.Pools[targetPool].Root
-	//
-	pipelineOS := spec.Pool.Platform.OS
+
+	pipelineOS := c.Pools[targetPool].Platform.OS
 	// creates a home directory in the root.
 	// note: mkdirall fails on windows so we need to create all directories in the tree.
 	homedir := oshelp.JoinPaths(pipelineOS, spec.Root, "home", "drone")
