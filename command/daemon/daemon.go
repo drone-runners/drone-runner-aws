@@ -260,7 +260,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 
 	// seed a pool
 	if pools != nil {
-		buildPoolErr := poolfile.BuildPools(ctx, pools, creds, &awsMutex)
+		buildPoolErr := poolfile.BuildPools(ctx, pools, creds, "daemon_runner", &awsMutex)
 		if buildPoolErr != nil {
 			logrus.WithError(buildPoolErr).
 				Errorln("daemon: unable to build pool")

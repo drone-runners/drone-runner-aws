@@ -49,7 +49,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// read pool file first.
 	targetPool := pipeline.Pool.Use
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
-	spec.Pool.Name = targetPool
+	spec.CloudInstance.PoolName = targetPool
 	spec.Root = c.Pools[targetPool].Root
 
 	pipelineOS := c.Pools[targetPool].Platform.OS

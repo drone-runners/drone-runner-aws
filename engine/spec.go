@@ -14,18 +14,19 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
-		Pool    Pool      `json:"pool,omitempty"`
-		Root    string    `json:"root,omitempty"`
-		Files   []*File   `json:"files,omitempty"`
-		Steps   []*Step   `json:"steps,omitempty"`
-		Volumes []*Volume `json:"volumes,omitempty"`
+		CloudInstance CloudInstance `json:"cloud_instance,omitempty"`
+		Root          string        `json:"root,omitempty"`
+		Files         []*File       `json:"files,omitempty"`
+		Steps         []*Step       `json:"steps,omitempty"`
+		Volumes       []*Volume     `json:"volumes,omitempty"`
 	}
 
-	// Pool provides the pipeline pool. This provides the
-	Pool struct {
-		Name string `json:"name,omitempty"`
-		ID   string `json:"id,omitempty"`
-		IP   string `json:"ip,omitempty"`
+	// CloudInstance provides basic instance information
+	CloudInstance struct {
+		PoolName string `json:"pool_name,omitempty"`
+		Cloud    string `json:"cloud,omitempty"`
+		ID       string `json:"id,omitempty"`
+		IP       string `json:"ip,omitempty"`
 	}
 	// Step defines a pipeline step.
 	Step struct {

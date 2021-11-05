@@ -19,15 +19,9 @@ func CompileDelegateSetupStage(creds platform.Credentials, pool *poolfile.Pool) 
 
 	vols := []*engine.Volume{vol}
 
-	switch {
-	case pool.Instance.User == "" && pool.Platform.OS == "windows":
-		pool.Instance.User = "Administrator"
-	case pool.Instance.User == "":
-		pool.Instance.User = "root"
-	}
 	speccy := &engine.Spec{
-		Pool: engine.Pool{
-			Name: pool.Name,
+		CloudInstance: engine.CloudInstance{
+			PoolName: pool.Name,
 		},
 		Volumes: vols,
 	}

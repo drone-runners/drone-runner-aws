@@ -408,12 +408,12 @@ func Provision(ctx context.Context, poolInfo *Pool, runnerName string, addBuildi
 	return poolInfo.Instance.ID, poolInfo.Instance.IP, nil
 }
 
-func BuildPools(ctx context.Context, pools map[string]Pool, creds platform.Credentials, awsMutex *sync.Mutex) error {
+func BuildPools(ctx context.Context, pools map[string]Pool, creds platform.Credentials, runnerName string, awsMutex *sync.Mutex) error {
 	for i := range pools {
 		poolcount, _ := platform.PoolCountFree(ctx, creds, pools[i].Name, awsMutex)
 		for poolcount < pools[i].MaxPoolSize {
 			poolInstance := pools[i]
-			id, ip, setupErr := Provision(ctx, &poolInstance, "jim", false)
+			id, ip, setupErr := Provision(ctx, &poolInstance, runnerName, false)
 			if setupErr != nil {
 				return setupErr
 			}

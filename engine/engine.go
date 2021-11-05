@@ -5,16 +5,20 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/drone-runners/drone-runner-aws/internal/platform"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/internal/ssh"
+	cryptoSSH "golang.org/x/crypto/ssh"
 
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
@@ -42,148 +46,148 @@ func New(opts Opts) (*Engine, error) {
 // Setup the pipeline environment.
 func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint:funlen,gocyclo // its complex but standard
 	spec := specv.(*Spec)
-	// create creds
-	// creds := platform.Credentials{
-	// 	Client: spec.Pool.Account.AccessKeyID,
-	// 	Secret: spec.Pool.Account.AccessKeySecret,
-	// 	Region: spec.Pool.Account.Region,
-	// }
-	if spec.Pool.Name == "" {
+	if spec.CloudInstance.PoolName == "" {
 		return errors.New("setup: pool name is nil")
 	}
-
+	// create creds
+	creds := platform.Credentials{
+		Client: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeyID,
+		Secret: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeySecret,
+		Region: eng.opts.Pools[spec.CloudInstance.PoolName].Account.Region,
+	}
 	// lets see if there is anything in the pool
-	// found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.Pool.Name, eng.opts.AwsMutex)
-	// if poolErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(poolErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		Errorf("setup: failed to use pool")
-	// }
-	// if found {
-	// 	// using the pool, use the provided keys
-	// 	logger.FromContext(ctx).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", ip).
-	// 		WithField("id", id).
-	// 		Debug("setup: using pool instance")
-	// 	spec.Pool.Instance.ID = id
-	// 	spec.Pool.Instance.IP = ip
-	// } else {
-	// 	logger.FromContext(ctx).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		Debug("setup: pool empty, creating an adhoc instance")
-	// 	var provisionErr error
-	// 	spec.Pool.Instance.ID, spec.Pool.Instance.IP, provisionErr = eng.Provision(ctx, &spec.Pool, true)
-	// 	if provisionErr != nil {
-	// 		return provisionErr
-	// 	}
-	// }
-	// // we are about to use the instance, this section contains pipeline specific info
-	// client, sshErr := ssh.Dial(
-	// 	spec.Pool.Instance.IP,
-	// 	spec.Pool.Instance.User,
-	// 	spec.Pool.Instance.PrivateKey,
-	// )
-	// if sshErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(sshErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		WithField("error", sshErr).
-	// 		Debug("setup: failed to create client for ssh")
-	// 	return sshErr
-	// }
-	// defer client.Close()
-	// // keep checking until docker is ok
-	// dockerErr := ssh.RetryApplication(ctx, client, "docker ps")
-	// if dockerErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(dockerErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		Debug("setup: docker failed to start in a timely fashion")
-	// 	return dockerErr
-	// }
-	// clientftp, clientErr := sftp.NewClient(client)
-	// if clientErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(clientErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		Debug("setup: failed to create sftp client")
-	// 	return clientErr
-	// }
-	// defer clientftp.Close()
-	// // the pipeline specification may define global folders, such as the pipeline working directory, which must be created before pipeline execution begins.
-	// for _, file := range spec.Files {
-	// 	if !file.IsDir {
-	// 		continue
-	// 	}
-	// 	mkdirErr := mkdir(clientftp, file.Path, file.Mode)
-	// 	if mkdirErr != nil {
-	// 		logger.FromContext(ctx).
-	// 			WithError(mkdirErr).
-	// 			WithField("ami", spec.Pool.Instance.AMI).
-	// 			WithField("pool", spec.Pool.Name).
-	// 			WithField("ip", spec.Pool.Instance.IP).
-	// 			WithField("id", spec.Pool.Instance.ID).
-	// 			WithField("path", file.Path).
-	// 			Error("setup: cannot create directory")
-	// 		return mkdirErr
-	// 	}
-	// }
+	found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.CloudInstance.PoolName, eng.opts.AwsMutex)
+	if poolErr != nil {
+		logger.FromContext(ctx).
+			WithError(poolErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			Errorf("setup: failed to use pool")
+	}
+	if found {
+		// using the pool, use the provided keys
+		logger.FromContext(ctx).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", ip).
+			WithField("id", id).
+			Debug("setup: using pool instance")
+		spec.CloudInstance.ID = id
+		spec.CloudInstance.IP = ip
+	} else {
+		logger.FromContext(ctx).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			Debug("setup: pool empty, creating an adhoc instance")
+		var provisionErr error
+		poolinstance := eng.opts.Pools[spec.CloudInstance.PoolName]
+		spec.CloudInstance.ID, spec.CloudInstance.IP, provisionErr = poolfile.Provision(ctx, &poolinstance, eng.opts.RunnerName, true)
+		if provisionErr != nil {
+			return provisionErr
+		}
+	}
+	// we are about to use the instance, this section contains pipeline specific info
+	client, sshErr := ssh.Dial(
+		spec.CloudInstance.IP,
+		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.User,
+		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.PrivateKey,
+	)
+	if sshErr != nil {
+		logger.FromContext(ctx).
+			WithError(sshErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			WithField("error", sshErr).
+			Debug("setup: failed to create client for ssh")
+		return sshErr
+	}
+	defer client.Close()
+	// keep checking until docker is ok
+	dockerErr := ssh.RetryApplication(ctx, client, "docker ps")
+	if dockerErr != nil {
+		logger.FromContext(ctx).
+			WithError(dockerErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			Debug("setup: docker failed to start in a timely fashion")
+		return dockerErr
+	}
+	clientftp, clientErr := sftp.NewClient(client)
+	if clientErr != nil {
+		logger.FromContext(ctx).
+			WithError(clientErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			Debug("setup: failed to create sftp client")
+		return clientErr
+	}
+	defer clientftp.Close()
+	// the pipeline specification may define global folders, such as the pipeline working directory, which must be created before pipeline execution begins.
+	for _, file := range spec.Files {
+		if !file.IsDir {
+			continue
+		}
+		mkdirErr := mkdir(clientftp, file.Path, file.Mode)
+		if mkdirErr != nil {
+			logger.FromContext(ctx).
+				WithError(mkdirErr).
+				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("pool", spec.CloudInstance.PoolName).
+				WithField("ip", spec.CloudInstance.IP).
+				WithField("id", spec.CloudInstance.ID).
+				WithField("path", file.Path).
+				Error("setup: cannot create directory")
+			return mkdirErr
+		}
+	}
 
-	// // the pipeline specification may define global files such as authentication credentials that should be uploaded before pipeline execution begins.
-	// for _, file := range spec.Files {
-	// 	if file.IsDir {
-	// 		continue
-	// 	}
-	// 	uploadErr := upload(clientftp, file.Path, file.Data, file.Mode)
-	// 	if uploadErr != nil {
-	// 		logger.FromContext(ctx).
-	// 			WithError(uploadErr).
-	// 			WithField("ami", spec.Pool.Instance.AMI).
-	// 			WithField("pool", spec.Pool.Name).
-	// 			WithField("ip", spec.Pool.Instance.IP).
-	// 			WithField("id", spec.Pool.Instance.ID).
-	// 			Error("setup: cannot write file")
-	// 		return uploadErr
-	// 	}
-	// }
+	// the pipeline specification may define global files such as authentication credentials that should be uploaded before pipeline execution begins.
+	for _, file := range spec.Files {
+		if file.IsDir {
+			continue
+		}
+		uploadErr := upload(clientftp, file.Path, file.Data, file.Mode)
+		if uploadErr != nil {
+			logger.FromContext(ctx).
+				WithError(uploadErr).
+				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("pool", spec.CloudInstance.PoolName).
+				WithField("ip", spec.CloudInstance.IP).
+				WithField("id", spec.CloudInstance.ID).
+				Error("setup: cannot write file")
+			return uploadErr
+		}
+	}
 
-	// // create any folders needed for temporary volumes.
-	// for _, volume := range spec.Volumes {
-	// 	if volume.EmptyDir.ID != "" {
-	// 		mkdirErr := mkdir(clientftp, volume.EmptyDir.ID, 0777) //nolint:gomnd // r/w/x for all users
-	// 		if mkdirErr != nil {
-	// 			logger.FromContext(ctx).
-	// 				WithError(mkdirErr).
-	// 				WithField("ami", spec.Pool.Instance.AMI).
-	// 				WithField("pool", spec.Pool.Name).
-	// 				WithField("ip", spec.Pool.Instance.IP).
-	// 				WithField("id", spec.Pool.Instance.ID).
-	// 				WithField("path", volume.EmptyDir.ID).
-	// 				Error("setup: cannot create directory for temporary volume")
-	// 			return mkdirErr
-	// 		}
-	// 	}
-	// }
-	// logger.FromContext(ctx).
-	// 	WithField("ami", spec.Pool.Instance.AMI).
-	// 	WithField("pool", spec.Pool.Name).
-	// 	WithField("ip", spec.Pool.Instance.IP).
-	// 	WithField("id", spec.Pool.Instance.ID).
-	// 	Debug("setup: complete")
+	// create any folders needed for temporary volumes.
+	for _, volume := range spec.Volumes {
+		if volume.EmptyDir.ID != "" {
+			mkdirErr := mkdir(clientftp, volume.EmptyDir.ID, 0777) //nolint:gomnd // r/w/x for all users
+			if mkdirErr != nil {
+				logger.FromContext(ctx).
+					WithError(mkdirErr).
+					WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+					WithField("pool", spec.CloudInstance.PoolName).
+					WithField("ip", spec.CloudInstance.IP).
+					WithField("id", spec.CloudInstance.ID).
+					WithField("path", volume.EmptyDir.ID).
+					Error("setup: cannot create directory for temporary volume")
+				return mkdirErr
+			}
+		}
+	}
+	logger.FromContext(ctx).
+		WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+		WithField("pool", spec.CloudInstance.PoolName).
+		WithField("ip", spec.CloudInstance.IP).
+		WithField("id", spec.CloudInstance.ID).
+		Debug("setup: complete")
 
 	return nil
 }
@@ -192,210 +196,210 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 	//nolint: gocritic
-	// fmt.Printf("\nssh -i dev.pem %s@%s\n", spec.Pool.Instance.User, spec.Pool.Instance.IP)
+	// fmt.Printf("\nssh -i dev.pem %s@%s\n", spec.CloudInstance.User, spec.CloudInstance.IP)
 	// _ = os.Remove("dev.pem")
 	// f, _ := os.OpenFile("dev.pem", os.O_RDWR|os.O_CREATE, 0400) //nolint: gomnd
-	// _, _ = f.WriteString(spec.Pool.Instance.PrivateKey)
+	// _, _ = f.WriteString(spec.CloudInstance.PrivateKey)
 	// _ = f.Close()
 	logger.FromContext(ctx).
-		WithField("pool", spec.Pool.Name).
-		WithField("ip", spec.Pool.IP).
-		WithField("id", spec.Pool.ID).
+		WithField("pool", spec.CloudInstance.PoolName).
+		WithField("ip", spec.CloudInstance.IP).
+		WithField("id", spec.CloudInstance.ID).
 		Debug("destroy: start")
 
 	// create creds
-	// creds := platform.Credentials{
-	// 	Client: spec.Pool.Account.AccessKeyID,
-	// 	Secret: spec.Pool.Account.AccessKeySecret,
-	// 	Region: spec.Pool.Account.Region,
-	// }
-	// instance := platform.Instance{
-	// 	ID: spec.Pool.Instance.ID,
-	// 	IP: spec.Pool.Instance.IP,
-	// }
-	// err := platform.Destroy(ctx, creds, &instance)
-	// if err != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(err).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		Debug("destroy: failed to destroy the instance")
-	// 	return err
-	// }
+	creds := platform.Credentials{
+		Client: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeyID,
+		Secret: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeySecret,
+		Region: eng.opts.Pools[spec.CloudInstance.PoolName].Account.Region,
+	}
+	instance := platform.Instance{
+		ID: spec.CloudInstance.ID,
+		IP: spec.CloudInstance.IP,
+	}
+	err := platform.Destroy(ctx, creds, &instance)
+	if err != nil {
+		logger.FromContext(ctx).
+			WithError(err).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			Debug("destroy: failed to destroy the instance")
+		return err
+	}
 
-	// // repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
-	// // NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance.
-	// // preventing too many instances being created for a pool
-	// if eng.opts.RunnerName != "exec" {
-	// 	poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.Pool.Name, eng.opts.AwsMutex)
-	// 	if countPoolErr != nil {
-	// 		logger.FromContext(ctx).
-	// 			WithError(countPoolErr).
-	// 			WithField("ami", spec.Pool.Instance.AMI).
-	// 			WithField("pool", spec.Pool.Name).
-	// 			Errorf("destroy: failed to checking pool")
-	// 	}
-	// 	if poolCount < spec.Pool.MaxPoolSize {
-	// 		id, ip, provisionErr := eng.Provision(ctx, &spec.Pool, false)
-	// 		if provisionErr != nil {
-	// 			logger.FromContext(ctx).
-	// 				WithError(provisionErr).
-	// 				WithField("ami", spec.Pool.Instance.AMI).
-	// 				WithField("pool", spec.Pool.Name).
-	// 				Errorf("destroy: failed to add back to the pool")
-	// 		} else {
-	// 			logger.FromContext(ctx).
-	// 				WithField("ami", spec.Pool.Instance.AMI).
-	// 				WithField("ip", ip).
-	// 				WithField("id", id).
-	// 				WithField("pool", spec.Pool.Name).
-	// 				Debug("destroy: add back to the pool")
-	// 		}
-	// 	}
-	// }
-	// logger.FromContext(ctx).
-	// 	WithField("ami", spec.Pool.Instance.AMI).
-	// 	WithField("pool", spec.Pool.Name).
-	// 	WithField("ip", spec.Pool.Instance.IP).
-	// 	WithField("id", spec.Pool.Instance.ID).
-	// 	Debug("destroy: complete")
+	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
+	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance.
+	// preventing too many instances being created for a pool
+	if eng.opts.RunnerName != "exec" {
+		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.CloudInstance.PoolName, eng.opts.AwsMutex)
+		if countPoolErr != nil {
+			logger.FromContext(ctx).
+				WithError(countPoolErr).
+				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("pool", spec.CloudInstance.PoolName).
+				Errorf("destroy: failed to checking pool")
+		}
+		if poolCount < eng.opts.Pools[spec.CloudInstance.PoolName].MaxPoolSize {
+			tmp := eng.opts.Pools[spec.CloudInstance.PoolName]
+			id, ip, provisionErr := poolfile.Provision(ctx, &tmp, eng.opts.RunnerName, false)
+			if provisionErr != nil {
+				logger.FromContext(ctx).
+					WithError(provisionErr).
+					WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+					WithField("pool", spec.CloudInstance.PoolName).
+					Errorf("destroy: failed to add back to the pool")
+			} else {
+				logger.FromContext(ctx).
+					WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+					WithField("ip", ip).
+					WithField("id", id).
+					WithField("pool", spec.CloudInstance.PoolName).
+					Debug("destroy: add back to the pool")
+			}
+		}
+	}
+	logger.FromContext(ctx).
+		WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+		WithField("pool", spec.CloudInstance.PoolName).
+		WithField("ip", spec.CloudInstance.IP).
+		WithField("id", spec.CloudInstance.ID).
+		Debug("destroy: complete")
 	return nil
 }
 
 // Run runs the pipeline step.
 func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step, output io.Writer) (*runtime.State, error) { //nolint:funlen // its complex but standard
-	//spec := specv.(*Spec)
-	//step := stepv.(*Step)
+	spec := specv.(*Spec)
+	step := stepv.(*Step)
 
-	// client, clientErr := ssh.Dial(
-	// 	spec.Pool.Instance.IP,
-	// 	spec.Pool.Instance.User,
-	// 	spec.Pool.Instance.PrivateKey,
-	// )
-	// if clientErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(clientErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		WithField("error", clientErr).
-	// 		Debug("run: failed to create client for ssh")
-	// 	return nil, clientErr
-	// }
-	// defer client.Close()
-	// // keep checking until docker is ok
-	// dockerErr := ssh.RetryApplication(ctx, client, "docker ps")
-	// if dockerErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(dockerErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		Debug("run: docker failed to start in a timely fashion")
-	// 	return nil, dockerErr
-	// }
-	// clientftp, ftpErr := sftp.NewClient(client)
-	// if ftpErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(ftpErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		Debug("run: failed to create sftp client")
-	// 	return nil, ftpErr
-	// }
-	// defer clientftp.Close()
+	client, clientErr := ssh.Dial(
+		spec.CloudInstance.IP,
+		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.User,
+		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.PrivateKey,
+	)
+	if clientErr != nil {
+		logger.FromContext(ctx).
+			WithError(clientErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			WithField("error", clientErr).
+			Debug("run: failed to create client for ssh")
+		return nil, clientErr
+	}
+	defer client.Close()
+	// keep checking until docker is ok
+	dockerErr := ssh.RetryApplication(ctx, client, "docker ps")
+	if dockerErr != nil {
+		logger.FromContext(ctx).
+			WithError(dockerErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			Debug("run: docker failed to start in a timely fashion")
+		return nil, dockerErr
+	}
+	clientftp, ftpErr := sftp.NewClient(client)
+	if ftpErr != nil {
+		logger.FromContext(ctx).
+			WithError(ftpErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			Debug("run: failed to create sftp client")
+		return nil, ftpErr
+	}
+	defer clientftp.Close()
 
-	// // unlike os/exec there is no good way to set environment
-	// // the working directory or configure environment variables.
-	// // we work around this by pre-pending these configurations
-	// // to the pipeline execution script.
-	// for _, file := range step.Files {
-	// 	w := new(bytes.Buffer)
-	// 	writeWorkdir(w, step.WorkingDir)
-	// 	writeSecrets(w, spec.Pool.Platform.OS, step.Secrets)
-	// 	writeEnviron(w, spec.Pool.Platform.OS, step.Envs)
-	// 	w.Write(file.Data)
-	// 	uploadErr := upload(clientftp, file.Path, w.Bytes(), file.Mode)
-	// 	if uploadErr != nil {
-	// 		logger.FromContext(ctx).
-	// 			WithError(uploadErr).
-	// 			WithField("ami", spec.Pool.Instance.AMI).
-	// 			WithField("pool", spec.Pool.Name).
-	// 			WithField("ip", spec.Pool.Instance.IP).
-	// 			WithField("id", spec.Pool.Instance.ID).
-	// 			WithField("path", file.Path).
-	// 			Error("run: cannot write file")
-	// 		return nil, uploadErr
-	// 	}
-	// }
+	// unlike os/exec there is no good way to set environment
+	// the working directory or configure environment variables.
+	// we work around this by pre-pending these configurations
+	// to the pipeline execution script.
+	for _, file := range step.Files {
+		w := new(bytes.Buffer)
+		writeWorkdir(w, step.WorkingDir)
+		writeSecrets(w, eng.opts.Pools[spec.CloudInstance.PoolName].Platform.OS, step.Secrets)
+		writeEnviron(w, eng.opts.Pools[spec.CloudInstance.PoolName].Platform.OS, step.Envs)
+		w.Write(file.Data)
+		uploadErr := upload(clientftp, file.Path, w.Bytes(), file.Mode)
+		if uploadErr != nil {
+			logger.FromContext(ctx).
+				WithError(uploadErr).
+				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("pool", spec.CloudInstance.PoolName).
+				WithField("ip", spec.CloudInstance.IP).
+				WithField("id", spec.CloudInstance.ID).
+				WithField("path", file.Path).
+				Error("run: cannot write file")
+			return nil, uploadErr
+		}
+	}
 
-	// session, sessionErr := client.NewSession()
-	// if sessionErr != nil {
-	// 	logger.FromContext(ctx).
-	// 		WithError(sessionErr).
-	// 		WithField("ami", spec.Pool.Instance.AMI).
-	// 		WithField("pool", spec.Pool.Name).
-	// 		WithField("ip", spec.Pool.Instance.IP).
-	// 		WithField("id", spec.Pool.Instance.ID).
-	// 		Debug("run: failed to create session")
-	// 	return nil, sessionErr
-	// }
-	// defer session.Close()
+	session, sessionErr := client.NewSession()
+	if sessionErr != nil {
+		logger.FromContext(ctx).
+			WithError(sessionErr).
+			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", spec.CloudInstance.IP).
+			WithField("id", spec.CloudInstance.ID).
+			Debug("run: failed to create session")
+		return nil, sessionErr
+	}
+	defer session.Close()
 
-	// session.Stdout = output
-	// session.Stderr = output
-	// cmd := step.Command + " " + strings.Join(step.Args, " ")
+	session.Stdout = output
+	session.Stderr = output
+	cmd := step.Command + " " + strings.Join(step.Args, " ")
 
-	// log := logger.FromContext(ctx)
-	// log.Debug("run: ssh session started")
+	log := logger.FromContext(ctx)
+	log.Debug("run: ssh session started")
 
-	// done := make(chan error)
-	// go func() {
-	// 	done <- session.Run(cmd)
-	// }()
+	done := make(chan error)
+	go func() {
+		done <- session.Run(cmd)
+	}()
 
-	// var stepErr error
-	// select {
-	// case stepErr = <-done:
-	// case <-ctx.Done():
-	// 	// BUG(bradrydzewski): openssh does not support the signal
-	// 	// command and will not signal remote processes. This may
-	// 	// be resolved in openssh 7.9 or higher. Please subscribe
-	// 	// to https://github.com/golang/go/issues/16597.
-	// 	if sigErr := session.Signal(cryptoSSH.SIGKILL); sigErr != nil {
-	// 		log.WithError(sigErr).Debug("run: kill remote process")
-	// 	}
+	var stepErr error
+	select {
+	case stepErr = <-done:
+	case <-ctx.Done():
+		// BUG(bradrydzewski): openssh does not support the signal
+		// command and will not signal remote processes. This may
+		// be resolved in openssh 7.9 or higher. Please subscribe
+		// to https://github.com/golang/go/issues/16597.
+		if sigErr := session.Signal(cryptoSSH.SIGKILL); sigErr != nil {
+			log.WithError(sigErr).Debug("run: kill remote process")
+		}
 
-	// 	log.Debug("run: ssh session killed")
-	// 	return nil, ctx.Err()
-	// }
+		log.Debug("run: ssh session killed")
+		return nil, ctx.Err()
+	}
 
-	// state := &runtime.State{
-	// 	ExitCode:  0,
-	// 	Exited:    true,
-	// 	OOMKilled: false,
-	// }
-	// if stepErr != nil {
-	// 	state.ExitCode = 255
-	// }
-	// if exiterr, ok := stepErr.(*cryptoSSH.ExitError); ok {
-	// 	state.ExitCode = exiterr.ExitStatus()
-	// }
+	state := &runtime.State{
+		ExitCode:  0,
+		Exited:    true,
+		OOMKilled: false,
+	}
+	if stepErr != nil {
+		state.ExitCode = 255
+	}
+	if exiterr, ok := stepErr.(*cryptoSSH.ExitError); ok {
+		state.ExitCode = exiterr.ExitStatus()
+	}
 
-	// log.WithField("ssh.exit", state.ExitCode).
-	// 	WithField("ami", spec.Pool.Instance.AMI).
-	// 	WithField("pool", spec.Pool.Name).
-	// 	WithField("ip", spec.Pool.Instance.IP).
-	// 	WithField("id", spec.Pool.Instance.ID).
-	// 	Debug("run: ssh session finished")
-	//return state, stepErr
-	return nil, nil
+	log.WithField("ssh.exit", state.ExitCode).
+		WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+		WithField("pool", spec.CloudInstance.PoolName).
+		WithField("ip", spec.CloudInstance.IP).
+		WithField("id", spec.CloudInstance.ID).
+		Debug("run: ssh session finished")
+	return state, stepErr
 }
 
 func (eng *Engine) Ping(ctx context.Context, accessKeyID, accessKeySecret, region string) error {
@@ -462,4 +466,12 @@ func upload(client *sftp.Client, path string, data []byte, mode uint32) error {
 		return chmodErr
 	}
 	return nil
+}
+
+func mkdir(client *sftp.Client, path string, mode uint32) error {
+	err := client.MkdirAll(path)
+	if err != nil {
+		return err
+	}
+	return client.Chmod(path, os.FileMode(mode))
 }
