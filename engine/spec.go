@@ -14,66 +14,20 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
-		Pool    Pool      `json:"pool,omitempty"`
-		Root    string    `json:"root,omitempty"`
-		Files   []*File   `json:"files,omitempty"`
-		Steps   []*Step   `json:"steps,omitempty"`
-		Volumes []*Volume `json:"volumes,omitempty"`
+		CloudInstance CloudInstance `json:"cloud_instance,omitempty"`
+		Root          string        `json:"root,omitempty"`
+		Files         []*File       `json:"files,omitempty"`
+		Steps         []*Step       `json:"steps,omitempty"`
+		Volumes       []*Volume     `json:"volumes,omitempty"`
 	}
 
-	Pool struct {
-		Name        string   `json:"name,omitempty"`
-		Root        string   `json:"root,omitempty"`
-		MaxPoolSize int      `json:"max_pool_size,omitempty" yaml:"max_pool_size"`
-		Platform    Platform `json:"platform,omitempty"`
-		Account     Account  `json:"account,omitempty"`
-		Instance    Instance `json:"instance,omitempty"`
+	// CloudInstance provides basic instance information
+	CloudInstance struct {
+		PoolName string `json:"pool_name,omitempty"`
+		Cloud    string `json:"cloud,omitempty"`
+		ID       string `json:"id,omitempty"`
+		IP       string `json:"ip,omitempty"`
 	}
-	// Account provides account settings
-	Account struct {
-		AccessKeyID     string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
-		AccessKeySecret string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
-		Region          string `json:"region,omitempty"`
-	}
-
-	// Instance provides instance settings.
-	Instance struct {
-		AMI           string            `json:"ami,omitempty"`
-		Tags          map[string]string `json:"tags,omitempty"`
-		IAMProfileARN string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
-		Type          string            `json:"type,omitempty"`
-		User          string            `json:"user,omitempty"`
-		PrivateKey    string            `json:"private_key,omitempty" yaml:"private_key"`
-		PublicKey     string            `json:"public_key,omitempty" yaml:"public_key"`
-		UserData      string            `json:"user_data,omitempty"`
-		Disk          Disk              `json:"disk,omitempty"`
-		Network       Network           `json:"network,omitempty"`
-		Device        Device            `json:"device,omitempty"`
-		ID            string            `json:"id,omitempty"`
-		IP            string            `json:"ip,omitempty"`
-	}
-
-	// Network provides network settings.
-	Network struct {
-		VPC               string   `json:"vpc,omitempty"`
-		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
-		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
-		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
-		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
-	}
-
-	// Disk provides disk size and type.
-	Disk struct {
-		Size int64  `json:"size,omitempty"`
-		Type string `json:"type,omitempty"`
-		Iops int64  `json:"iops,omitempty"`
-	}
-
-	// Device provides the device settings.
-	Device struct {
-		Name string `json:"name,omitempty"`
-	}
-
 	// Step defines a pipeline step.
 	Step struct {
 		Args       []string          `json:"args,omitempty"`

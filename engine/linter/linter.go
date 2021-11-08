@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -20,7 +20,7 @@ import (
 // rules and returns an error if one or more of the
 // rules are broken.
 type Linter struct {
-	Pools map[string]engine.Pool
+	Pools map[string]poolfile.Pool
 }
 
 // New returns a new Linter.
@@ -47,7 +47,7 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 	return err
 }
 
-func checkPools(pipeline *resource.Pipeline, pools map[string]engine.Pool) error {
+func checkPools(pipeline *resource.Pipeline, pools map[string]poolfile.Pool) error {
 	if len(pools) == 0 {
 		return fmt.Errorf("linter: there are no pools in the pool file")
 	}

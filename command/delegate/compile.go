@@ -3,10 +3,11 @@ package delegate
 import (
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/internal/platform"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/runner-go/pipeline/runtime"
 )
 
-func CompileDelegateSetupStage(creds platform.Credentials, pool *engine.Pool) (runtime.Spec, error) {
+func CompileDelegateSetupStage(creds platform.Credentials, pool *poolfile.Pool) (runtime.Spec, error) {
 	vol := &engine.Volume{
 		EmptyDir: &engine.VolumeEmptyDir{
 			ID:   "volumeID",
@@ -18,24 +19,9 @@ func CompileDelegateSetupStage(creds platform.Credentials, pool *engine.Pool) (r
 
 	vols := []*engine.Volume{vol}
 
-	switch {
-	case pool.Instance.User == "" && pool.Platform.OS == "windows":
-		pool.Instance.User = "Administrator"
-	case pool.Instance.User == "":
-		pool.Instance.User = "root"
-	}
 	speccy := &engine.Spec{
-		Pool: engine.Pool{
-			Name: pool.Name,
-			Account: engine.Account{
-				AccessKeyID:     creds.Client,
-				AccessKeySecret: creds.Secret,
-				Region:          creds.Region,
-			},
-			Instance: engine.Instance{
-				PrivateKey: pool.Instance.PrivateKey,
-				User:       pool.Instance.User,
-			},
+		CloudInstance: engine.CloudInstance{
+			PoolName: pool.Name,
 		},
 		Volumes: vols,
 	}

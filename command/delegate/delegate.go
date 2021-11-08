@@ -143,7 +143,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 
 	// seed a pool
 	if pools != nil {
-		buildPoolErr := daemon.BuildPools(ctx, pools, engineInstance, creds, &awsMutex)
+		buildPoolErr := poolfile.BuildPools(ctx, pools, creds, config.Runner.Name, &awsMutex)
 		if buildPoolErr != nil {
 			logrus.WithError(buildPoolErr).
 				Errorln("delegate: unable to build pool")
@@ -158,7 +158,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	var g errgroup.Group
 	runnerServer := server.Server{
 		Addr:    ":3000", // config.Server.Port,
-		Handler: delegateListener(engineInstance, creds, pools),
+		Handler: delegateListener(engineInstance, creds, pools, config.Runner.Name),
 	}
 
 	logrus.WithField("addr", ":3000" /*config.Server.Port*/).
@@ -186,16 +186,16 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	return waitErr
 }
 
-func delegateListener(eng *engine.Engine, creds platform.Credentials, pools map[string]engine.Pool) http.Handler {
+func delegateListener(eng *engine.Engine, creds platform.Credentials, pools map[string]poolfile.Pool, runnerName string) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/setup", handleSetup(eng, creds, pools))
+	mux.HandleFunc("/setup", handleSetup(eng, creds, pools, runnerName))
 	mux.HandleFunc("/destroy", handleDestroy(eng))
 	mux.HandleFunc("/step", handleStep(eng))
 	mux.HandleFunc("/pool_owner", handlePools(pools))
 	return mux
 }
 
-func handlePools(pools map[string]engine.Pool) http.HandlerFunc {
+func handlePools(pools map[string]poolfile.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			fmt.Println("failed to read setup get request")
@@ -229,7 +229,7 @@ func handlePools(pools map[string]engine.Pool) http.HandlerFunc {
 	}
 }
 
-func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[string]engine.Pool) http.HandlerFunc {
+func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[string]poolfile.Pool, runnerName string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			fmt.Println("handleSetup: failed to read setup post request")
@@ -285,7 +285,7 @@ func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[strin
 				Errorf("handleSetup: failed checking pool")
 		}
 		if poolCount < pool.MaxPoolSize {
-			id, ip, provisionErr := eng.Provision(r.Context(), &pool, false)
+			id, ip, provisionErr := poolfile.Provision(r.Context(), &pool, runnerName, false)
 			if provisionErr != nil {
 				logger.FromContext(r.Context()).
 					WithError(provisionErr).

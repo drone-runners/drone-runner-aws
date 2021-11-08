@@ -8,8 +8,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -41,8 +41,8 @@ func TestLint(t *testing.T) {
 				return
 			}
 
-			pools := make(map[string]engine.Pool)
-			pools["cats"] = engine.Pool{
+			pools := make(map[string]poolfile.Pool)
+			pools["cats"] = poolfile.Pool{
 				Name: "cats"}
 
 			lint := New()
@@ -80,12 +80,12 @@ func TestLint(t *testing.T) {
 func Test_checkPools(t *testing.T) {
 	type args struct {
 		pipeline *resource.Pipeline
-		pools    map[string]engine.Pool
+		pools    map[string]poolfile.Pool
 	}
-	poolInstance := engine.Pool{
+	poolInstance := poolfile.Pool{
 		Name: "test",
 	}
-	poolWithOne := map[string]engine.Pool{
+	poolWithOne := map[string]poolfile.Pool{
 		"test": poolInstance,
 	}
 	tests := []struct {
@@ -97,7 +97,7 @@ func Test_checkPools(t *testing.T) {
 			name: "no pools",
 			args: args{
 				pipeline: &resource.Pipeline{},
-				pools:    make(map[string]engine.Pool),
+				pools:    make(map[string]poolfile.Pool),
 			},
 			wantErr: true,
 		},
