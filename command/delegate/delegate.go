@@ -8,23 +8,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
-	"github.com/drone-runners/drone-runner-aws/command/delegate/livelog"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
-	"github.com/drone/runner-go/environ"
-	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
-
 	"github.com/drone/signal"
+	"github.com/harness/lite-engine/api"
+	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/harness/lite-engine/engine/spec"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -58,16 +56,12 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	if err != nil {
 		return err
 	}
-
-	config.Runner.Name = "delegate"
 	// setup the global logrus logger.
 	daemon.SetupLogger(&config)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// listen for termination signals to gracefully shutdown
-	// the runner daemon.
+	// listen for termination signals to gracefully shutdown the runner.
 	ctx = signal.WithContextFunc(ctx, func() {
 		println("received signal, terminating process")
 		cancel()
@@ -78,11 +72,19 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	}
 
 	awsAccessSettings := cloudaws.AccessSettings{
-		AccessKey:      config.Settings.AwsAccessKeyID,
-		AccessSecret:   config.Settings.AwsAccessKeySecret,
-		Region:         config.Settings.AwsRegion,
-		PrivateKeyFile: config.Settings.PrivateKeyFile,
-		PublicKeyFile:  config.Settings.PublicKeyFile,
+		AccessKey:         config.Settings.AwsAccessKeyID,
+		AccessSecret:      config.Settings.AwsAccessKeySecret,
+		Region:            config.Settings.AwsRegion,
+		PrivateKeyFile:    config.Settings.PrivateKeyFile,
+		PublicKeyFile:     config.Settings.PublicKeyFile,
+		LiteEnginePath:    config.Settings.LiteEnginePath,
+		CertificateFolder: config.Settings.CertificateFolder,
+	}
+
+	certGenerationErr := le.GenerateLECerts(config.Runner.Name, config.Settings.CertificateFolder)
+	if certGenerationErr != nil {
+		logrus.WithError(processEnvErr).
+			Errorln("failed to generate certificates")
 	}
 
 	pools, poolFileErr := cloudaws.ProcessPoolFile(c.poolfile, &awsAccessSettings, config.Runner.Name)
@@ -115,8 +117,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 			Errorln("cannot create engine")
 		return engineErr
 	}
-
-	// if there is no keyfiles lets remove any old instances.
+	// lets remove any old instances.
 	if !config.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx)
 		if cleanErr != nil {
@@ -126,7 +127,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 			logrus.Infoln("delegate: pools cleaned")
 		}
 	}
-
 	// seed a pool
 	err = poolManager.BuildPools(ctx)
 	if err != nil {
@@ -142,7 +142,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	var g errgroup.Group
 	runnerServer := server.Server{
 		Addr:    ":3000", // config.Server.Port,
-		Handler: delegateListener(engineInstance, poolManager),
+		Handler: delegateListener(engineInstance, poolManager, config.Runner.Name, config.Settings.CertificateFolder),
 	}
 
 	logrus.WithField("addr", ":3000" /*config.Server.Port*/).
@@ -170,11 +170,11 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	return waitErr
 }
 
-func delegateListener(eng *engine.Engine, poolManager *vmpool.Manager) http.Handler {
+func delegateListener(eng *engine.Engine, poolManager *vmpool.Manager, runnerName, certFolder string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/setup", handleSetup(eng, poolManager))
 	mux.HandleFunc("/destroy", handleDestroy(eng))
-	mux.HandleFunc("/step", handleStep(eng))
+	mux.HandleFunc("/step", handleStep(runnerName, certFolder))
 	mux.HandleFunc("/pool_owner", handlePools(poolManager))
 	return mux
 }
@@ -236,57 +236,46 @@ func handleSetup(eng *engine.Engine, poolManager *vmpool.Manager) http.HandlerFu
 		fmt.Printf("handleSetup: Executing setup: %v\n", reqData)
 		stageID := reqData.StageID
 
-		spec, err := CompileDelegateSetupStage(pool)
+		setupSpec, err := CompileDelegateSetupStage(pool)
+
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		err = Stages.Store(stageID, spec, reqData.StageEnvVars, reqData.SecretEnvVars)
-		if err != nil {
-			logrus.WithError(err).
-				Errorln("handleSetup: failed to store spec")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-
-		err = eng.Setup(r.Context(), spec)
+		err = eng.Setup(r.Context(), setupSpec)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("handleSetup: cannot setup the docker environment")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
+		err = Stages.Store(stageID, setupSpec, reqData.StageEnvVars, reqData.SecretEnvVars)
+		if err != nil {
+			logrus.WithError(err).
+				Errorln("handleSetup: failed to store spec")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		w.WriteHeader(http.StatusOK)
 		// we have successfully setup the environment lets replace the lost pool member
 		poolCount, countPoolErr := pool.PoolCountFree(r.Context())
 		if countPoolErr != nil {
-			logger.FromContext(r.Context()).
-				WithError(countPoolErr).
-				WithField("ami", pool.GetInstanceType()).
-				WithField("pool", pool.GetName()).
-				Errorf("handleSetup: failed checking pool")
+			logrus.WithError(countPoolErr).
+				Errorln("handleSetup: failed checking pool")
 		}
 		if poolCount < pool.GetMaxSize() {
 			instance, provisionErr := pool.Provision(r.Context(), false)
 			if provisionErr != nil {
-				logger.FromContext(r.Context()).
-					WithError(provisionErr).
-					WithField("ami", pool.GetInstanceType()).
-					WithField("pool", pool.GetName()).
-					Errorf("handleSetup: failed to add back to the pool")
+				logrus.WithError(provisionErr).
+					Errorln("handleSetup: failed to add back to the pool")
 			} else {
-				logger.FromContext(r.Context()).
-					WithField("ami", pool.GetInstanceType()).
-					WithField("pool", pool.GetName()).
-					WithField("ip", instance.IP).
-					WithField("id", instance.ID).
-					Debug("handleSetup: add back to the pool")
+				logrus.Debugf("handleSetup: add back to the pool %s %s", instance.ID, instance.IP)
 			}
 		}
 	}
 }
 
-func handleStep(eng *engine.Engine) http.HandlerFunc { // nolint: funlen
+func handleStep(runnerName, certFolder string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			fmt.Println("failed to read setup step request")
@@ -303,81 +292,62 @@ func handleStep(eng *engine.Engine) http.HandlerFunc { // nolint: funlen
 
 		fmt.Printf("\n\nExecuting step: %v\n", reqData)
 		stageID := reqData.StageID
-
-		spec, envVars, secretVars, err := Stages.Get(stageID)
+		stepID := reqData.StepID
+		// get info of instance
+		intputSpec, _, _, err := Stages.Get(stageID)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("failed to get the stage")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		if spec == nil {
+		if intputSpec == nil {
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
 		}
+		instanceSpec := intputSpec.(*engine.Spec)
+		fmt.Printf("\n\nExecuting step: %v\n", instanceSpec)
 
-		// create a step to run, why do we do this ? why not use the engine.spec
-		steppy := engine.Step{
-			//	ID:         stepID,
-			Name:       reqData.StepID,
-			WorkingDir: "/drone/src",
-			Image:      reqData.Image,
-			Envs:       environ.Combine(reqData.EnvVars, envVars, secretVars),
+		stepInstance := &api.StartStepRequest{
+			ID:    stepID,
+			Kind:  api.Run,
+			Image: reqData.Image,
+			Volumes: []*spec.VolumeMount{
+				{
+					Name: "_workspace",
+					Path: "/tmp/aws",
+				},
+			},
+			WorkingDir: "/tmp/aws",
 		}
 
-		// this only handles a single command run on the ec2 instance
-		if reqData.Command != "" {
-			steppy.Command = reqData.Command
-		}
+		stepInstance.Run.Command = []string{fmt.Sprintf("set -xe; pwd; %s", reqData.Command)}
+		stepInstance.Run.Entrypoint = []string{"sh", "-c"}
 
-		mount := &engine.VolumeMount{
-			Name: "_workspace",
-			Path: "/drone/src",
-		}
-
-		steppy.Volumes = append(steppy.Volumes, mount)
-
-		for name, value := range secretVars {
-			steppy.Secrets = append(steppy.Secrets, &engine.Secret{
-				Name: name,
-				Env:  name,
-				Data: []byte(value),
-				Mask: true,
-			})
-		}
-
-		logStreamURL := reqData.LogStreamURL
-		if logStreamURL == "" {
-			logStreamURL = "http://localhost:8079"
-		}
-
-		logStreamAccountID := reqData.LogStreamAccountID
-		if logStreamAccountID == "" {
-			logStreamAccountID = "accountID"
-		}
-
-		logStreamToken := reqData.LogStreamToken
-		if logStreamToken == "" {
-			logStreamToken = "token"
-		}
-
-		c := livelog.NewHTTPClient(logStreamURL, logStreamAccountID, logStreamToken, true)
-
-		// create a writer
-		wc := livelog.New(c, reqData.LogKey)
-		defer wc.Close()
-
-		out := io.MultiWriter(wc, os.Stdout)
-		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", steppy.Name)
-
-		state, err := eng.Run(r.Context(), spec, &steppy, out)
+		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", stepID)
+		client, err := lehttp.NewHTTPClient(
+			fmt.Sprintf("https://%s:9079/", instanceSpec.CloudInstance.IP),
+			runnerName, fmt.Sprintf("%s/ca-cert.pem", certFolder), fmt.Sprintf("%s/server-cert.pem", certFolder), fmt.Sprintf("%s/server-key.pem", certFolder))
 		if err != nil {
 			logrus.WithError(err).
-				Errorln("running the step failed. this is a runner error")
+				Errorln("failed to create client")
+			return
 		}
 
-		fmt.Fprintf(os.Stdout, "--- step=%s end --- ^^^ ---\n", steppy.Name)
+		stepResponse, stepErr := client.StartStep(r.Context(), stepInstance)
+		if stepErr != nil {
+			logrus.WithError(stepErr).Errorln("start step1 call failed")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		logrus.Infof("step response: %v\nPolling step", stepResponse)
+		pollResponse, stepErr := client.PollStep(r.Context(), &api.PollStepRequest{ID: stepID})
+		if stepErr != nil {
+			logrus.WithError(stepErr).Errorln("poll step1 call failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+
+		fmt.Fprintf(os.Stdout, "--- step=%s end --- ^^^ ---\n", stepID)
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -385,7 +355,7 @@ func handleStep(eng *engine.Engine) http.HandlerFunc { // nolint: funlen
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 
-			_ = json.NewEncoder(w).Encode(state)
+			_ = json.NewEncoder(w).Encode(pollResponse)
 		}
 	}
 }
@@ -406,7 +376,7 @@ func handleDestroy(eng *engine.Engine) http.HandlerFunc {
 		fmt.Printf("\n\nExecuting cleanup: %v\n", reqData)
 		stageID := reqData.StageID
 
-		spec, _, _, err := Stages.Get(stageID)
+		destroySpec, _, _, err := Stages.Get(stageID)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("failed to delete the stage")
@@ -414,7 +384,7 @@ func handleDestroy(eng *engine.Engine) http.HandlerFunc {
 			return
 		}
 
-		err = eng.Destroy(r.Context(), spec)
+		err = eng.Destroy(r.Context(), destroySpec)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("cannot destroy the docker environment")
