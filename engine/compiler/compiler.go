@@ -8,9 +8,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
 	"github.com/drone/runner-go/clone"
@@ -36,23 +37,23 @@ type Compiler struct {
 	Environ provider.Provider
 	// Secret returns a named secret value that can be injected into the pipeline step.
 	Secret secret.Provider
-	// Settings provides global settings that apply to all pipelines.
-	Settings poolfile.PoolSettings
 	// Pools is a map of named pools that can be referenced by a pipeline.
-	Pools map[string]poolfile.Pool
+	PoolManager *vmpool.Manager
 }
 
 // Compile compiles the configuration file.
 func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:funlen,gocritic,gocyclo // its complex but standard
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	spec := &engine.Spec{}
-	// read pool file first.
+
 	targetPool := pipeline.Pool.Use
+	pool := c.PoolManager.Get(targetPool)
+
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
 	spec.CloudInstance.PoolName = targetPool
-	spec.Root = c.Pools[targetPool].Root
+	spec.Root = pool.GetRootDir()
 
-	pipelineOS := c.Pools[targetPool].Platform.OS
+	pipelineOS := pool.GetOS()
 	// creates a home directory in the root.
 	// note: mkdirall fails on windows so we need to create all directories in the tree.
 	homedir := oshelp.JoinPaths(pipelineOS, spec.Root, "home", "drone")

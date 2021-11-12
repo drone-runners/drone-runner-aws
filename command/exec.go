@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/internal"
@@ -19,7 +18,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
@@ -40,21 +40,23 @@ import (
 
 type execCommand struct {
 	*internal.Flags
-	Source       *os.File
-	Poolfile     string
-	Include      []string
-	Exclude      []string
-	Environ      map[string]string
-	Secrets      map[string]string
-	PoolSettings poolfile.PoolSettings
-	Pretty       bool
-	Procs        int64
-	Debug        bool
-	Trace        bool
-	Dump         bool
+	Source    *os.File
+	Poolfile  string
+	Include   []string
+	Exclude   []string
+	Environ   map[string]string
+	Secrets   map[string]string
+	AWSAccess cloudaws.AccessSettings
+	Pretty    bool
+	Procs     int64
+	Debug     bool
+	Trace     bool
+	Dump      bool
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
+	const runnerName = "exec"
+
 	rawsource, err := io.ReadAll(c.Source)
 	if err != nil {
 		return err
@@ -100,26 +102,36 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 	if err != nil {
 		return err
 	}
-	// compile the pipeline to an intermediate representation.
-	comp := &compiler.Compiler{
-		Environ:  provider.Static(c.Environ),
-		Settings: c.PoolSettings,
-		Secret:   secret.StaticVars(c.Secrets),
-	}
+
 	// read the pool file
-	pools, poolFileErr := poolfile.ProcessPoolFile(c.Poolfile, &comp.Settings)
+	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &c.AWSAccess, runnerName)
 	if poolFileErr != nil {
 		return poolFileErr
 	}
+
+	poolManager := &vmpool.Manager{}
+	err = poolManager.Add(pools...)
+	if err != nil {
+		return err
+	}
+
+	// compile the pipeline to an intermediate representation.
+	comp := &compiler.Compiler{
+		Environ:     provider.Static(c.Environ),
+		Secret:      secret.StaticVars(c.Secrets),
+		PoolManager: poolManager,
+	}
+
 	// lint the pipeline and return an error if any linting rules are broken
 	lint := linter.New()
-	lint.Pools = pools
+	lint.PoolManager = poolManager
 	err = lint.Lint(res, c.Repo)
 	if err != nil {
 		return err
 	}
+
 	// set the pools into the compiler
-	comp.Pools = pools
+	comp.PoolManager = poolManager
 	args := runtime.CompilerArgs{
 		Pipeline: res,
 		Manifest: mnfst,
@@ -209,10 +221,11 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 			logrus.StandardLogger(),
 		),
 	)
-	var awsMutex sync.Mutex
+
 	engineInstance, err := engine.New(engine.Opts{
-		RunnerName: "exec",
-		AwsMutex:   &awsMutex})
+		DoNotRepopulate: true,
+		PoolManager:     poolManager,
+	})
 	if err != nil {
 		return err
 	}
