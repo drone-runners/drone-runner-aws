@@ -223,8 +223,8 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 	)
 
 	engineInstance, err := engine.New(engine.Opts{
-		DoNotRepopulate: true,
-		PoolManager:     poolManager,
+		Repopulate:  false,
+		PoolManager: poolManager,
 	})
 	if err != nil {
 		return err

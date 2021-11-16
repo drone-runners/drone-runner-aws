@@ -26,8 +26,8 @@ import (
 
 // Opts configures the Engine.
 type Opts struct {
-	DoNotRepopulate bool
-	PoolManager     *vmpool.Manager
+	Repopulate  bool
+	PoolManager *vmpool.Manager
 }
 
 // Engine implements a pipeline engine.
@@ -229,7 +229,7 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
 	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance.
 	// preventing too many instances being created for a pool
-	if eng.opts.DoNotRepopulate {
+	if eng.opts.Repopulate {
 		poolCount, countPoolErr := pool.PoolCountFree(ctx)
 		if countPoolErr != nil {
 			logger.FromContext(ctx).
