@@ -13,24 +13,21 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 
-	"github.com/drone-runners/drone-runner-aws/internal/platform"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/internal/ssh"
-	cryptoSSH "golang.org/x/crypto/ssh"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
 
 	"github.com/pkg/sftp"
+	cryptoSSH "golang.org/x/crypto/ssh"
 )
 
 // Opts configures the Engine.
 type Opts struct {
-	AwsMutex   *sync.Mutex
-	RunnerName string
-	Pools      map[string]poolfile.Pool
+	Repopulate  bool
+	PoolManager *vmpool.Manager
 }
 
 // Engine implements a pipeline engine.
@@ -49,53 +46,56 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 	if spec.CloudInstance.PoolName == "" {
 		return errors.New("setup: pool name is nil")
 	}
-	// create creds
-	creds := platform.Credentials{
-		Client: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeyID,
-		Secret: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeySecret,
-		Region: eng.opts.Pools[spec.CloudInstance.PoolName].Account.Region,
+
+	pool := eng.opts.PoolManager.Get(spec.CloudInstance.PoolName)
+	if pool == nil {
+		return fmt.Errorf("setup: pool %q not found", spec.CloudInstance.PoolName)
 	}
+
 	// lets see if there is anything in the pool
-	found, id, ip, poolErr := platform.TryPool(ctx, creds, spec.CloudInstance.PoolName, eng.opts.AwsMutex)
+	instance, poolErr := pool.TryPool(ctx)
 	if poolErr != nil {
 		logger.FromContext(ctx).
 			WithError(poolErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			Errorf("setup: failed to use pool")
 	}
-	if found {
+	if instance != nil {
 		// using the pool, use the provided keys
 		logger.FromContext(ctx).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
-			WithField("ip", ip).
-			WithField("id", id).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
 			Debug("setup: using pool instance")
-		spec.CloudInstance.ID = id
-		spec.CloudInstance.IP = ip
+		spec.CloudInstance.ID = instance.ID
+		spec.CloudInstance.IP = instance.IP
 	} else {
 		logger.FromContext(ctx).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			Debug("setup: pool empty, creating an adhoc instance")
+
 		var provisionErr error
-		poolinstance := eng.opts.Pools[spec.CloudInstance.PoolName]
-		spec.CloudInstance.ID, spec.CloudInstance.IP, provisionErr = poolfile.Provision(ctx, &poolinstance, eng.opts.RunnerName, true)
+		instance, provisionErr = pool.Provision(ctx, true)
 		if provisionErr != nil {
 			return provisionErr
 		}
+
+		spec.CloudInstance.ID = instance.ID
+		spec.CloudInstance.IP = instance.IP
 	}
 	// we are about to use the instance, this section contains pipeline specific info
 	client, sshErr := ssh.Dial(
 		spec.CloudInstance.IP,
-		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.User,
-		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.PrivateKey,
+		pool.GetUser(),
+		pool.GetPrivateKey(),
 	)
 	if sshErr != nil {
 		logger.FromContext(ctx).
 			WithError(sshErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -109,7 +109,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 	if dockerErr != nil {
 		logger.FromContext(ctx).
 			WithError(dockerErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -120,7 +120,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 	if clientErr != nil {
 		logger.FromContext(ctx).
 			WithError(clientErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -137,7 +137,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 		if mkdirErr != nil {
 			logger.FromContext(ctx).
 				WithError(mkdirErr).
-				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", spec.CloudInstance.PoolName).
 				WithField("ip", spec.CloudInstance.IP).
 				WithField("id", spec.CloudInstance.ID).
@@ -156,7 +156,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 		if uploadErr != nil {
 			logger.FromContext(ctx).
 				WithError(uploadErr).
-				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", spec.CloudInstance.PoolName).
 				WithField("ip", spec.CloudInstance.IP).
 				WithField("id", spec.CloudInstance.ID).
@@ -172,7 +172,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 			if mkdirErr != nil {
 				logger.FromContext(ctx).
 					WithError(mkdirErr).
-					WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+					WithField("ami", pool.GetInstanceType()).
 					WithField("pool", spec.CloudInstance.PoolName).
 					WithField("ip", spec.CloudInstance.IP).
 					WithField("id", spec.CloudInstance.ID).
@@ -183,7 +183,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 		}
 	}
 	logger.FromContext(ctx).
-		WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+		WithField("ami", pool.GetInstanceType()).
 		WithField("pool", spec.CloudInstance.PoolName).
 		WithField("ip", spec.CloudInstance.IP).
 		WithField("id", spec.CloudInstance.ID).
@@ -207,21 +207,18 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		WithField("id", spec.CloudInstance.ID).
 		Debug("destroy: start")
 
+	pool := eng.opts.PoolManager.Get(spec.CloudInstance.PoolName)
+
 	// create creds
-	creds := platform.Credentials{
-		Client: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeyID,
-		Secret: eng.opts.Pools[spec.CloudInstance.PoolName].Account.AccessKeySecret,
-		Region: eng.opts.Pools[spec.CloudInstance.PoolName].Account.Region,
-	}
-	instance := platform.Instance{
+	instance := &vmpool.Instance{
 		ID: spec.CloudInstance.ID,
 		IP: spec.CloudInstance.IP,
 	}
-	err := platform.Destroy(ctx, creds, &instance)
+	err := pool.Destroy(ctx, instance)
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -232,36 +229,36 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
 	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance.
 	// preventing too many instances being created for a pool
-	if eng.opts.RunnerName != "exec" {
-		poolCount, countPoolErr := platform.PoolCountFree(ctx, creds, spec.CloudInstance.PoolName, eng.opts.AwsMutex)
+	if eng.opts.Repopulate {
+		poolCount, countPoolErr := pool.PoolCountFree(ctx)
 		if countPoolErr != nil {
 			logger.FromContext(ctx).
 				WithError(countPoolErr).
-				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", spec.CloudInstance.PoolName).
 				Errorf("destroy: failed to checking pool")
 		}
-		if poolCount < eng.opts.Pools[spec.CloudInstance.PoolName].MaxPoolSize {
-			tmp := eng.opts.Pools[spec.CloudInstance.PoolName]
-			id, ip, provisionErr := poolfile.Provision(ctx, &tmp, eng.opts.RunnerName, false)
+		if poolCount < pool.GetMaxSize() {
+			var provisionErr error
+			instance, provisionErr = pool.Provision(ctx, false)
 			if provisionErr != nil {
 				logger.FromContext(ctx).
 					WithError(provisionErr).
-					WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+					WithField("ami", pool.GetInstanceType()).
 					WithField("pool", spec.CloudInstance.PoolName).
 					Errorf("destroy: failed to add back to the pool")
 			} else {
 				logger.FromContext(ctx).
-					WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
-					WithField("ip", ip).
-					WithField("id", id).
+					WithField("ami", pool.GetInstanceType()).
+					WithField("ip", instance.IP).
+					WithField("id", instance.ID).
 					WithField("pool", spec.CloudInstance.PoolName).
 					Debug("destroy: add back to the pool")
 			}
 		}
 	}
 	logger.FromContext(ctx).
-		WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+		WithField("ami", pool.GetInstanceType()).
 		WithField("pool", spec.CloudInstance.PoolName).
 		WithField("ip", spec.CloudInstance.IP).
 		WithField("id", spec.CloudInstance.ID).
@@ -274,15 +271,17 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	spec := specv.(*Spec)
 	step := stepv.(*Step)
 
+	pool := eng.opts.PoolManager.Get(spec.CloudInstance.PoolName)
+
 	client, clientErr := ssh.Dial(
 		spec.CloudInstance.IP,
-		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.User,
-		eng.opts.Pools[spec.CloudInstance.PoolName].Instance.PrivateKey,
+		pool.GetUser(),
+		pool.GetPrivateKey(),
 	)
 	if clientErr != nil {
 		logger.FromContext(ctx).
 			WithError(clientErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -296,7 +295,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	if dockerErr != nil {
 		logger.FromContext(ctx).
 			WithError(dockerErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -307,7 +306,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	if ftpErr != nil {
 		logger.FromContext(ctx).
 			WithError(ftpErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -323,14 +322,14 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	for _, file := range step.Files {
 		w := new(bytes.Buffer)
 		writeWorkdir(w, step.WorkingDir)
-		writeSecrets(w, eng.opts.Pools[spec.CloudInstance.PoolName].Platform.OS, step.Secrets)
-		writeEnviron(w, eng.opts.Pools[spec.CloudInstance.PoolName].Platform.OS, step.Envs)
+		writeSecrets(w, pool.GetOS(), step.Secrets)
+		writeEnviron(w, pool.GetOS(), step.Envs)
 		w.Write(file.Data)
 		uploadErr := upload(clientftp, file.Path, w.Bytes(), file.Mode)
 		if uploadErr != nil {
 			logger.FromContext(ctx).
 				WithError(uploadErr).
-				WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", spec.CloudInstance.PoolName).
 				WithField("ip", spec.CloudInstance.IP).
 				WithField("id", spec.CloudInstance.ID).
@@ -344,7 +343,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	if sessionErr != nil {
 		logger.FromContext(ctx).
 			WithError(sessionErr).
-			WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -394,23 +393,12 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	}
 
 	log.WithField("ssh.exit", state.ExitCode).
-		WithField("ami", eng.opts.Pools[spec.CloudInstance.PoolName].Instance.AMI).
+		WithField("ami", pool.GetInstanceType()).
 		WithField("pool", spec.CloudInstance.PoolName).
 		WithField("ip", spec.CloudInstance.IP).
 		WithField("id", spec.CloudInstance.ID).
 		Debug("run: ssh session finished")
 	return state, stepErr
-}
-
-func (eng *Engine) Ping(ctx context.Context, accessKeyID, accessKeySecret, region string) error {
-	// create creds
-	creds := platform.Credentials{
-		Client: accessKeyID,
-		Secret: accessKeySecret,
-		Region: region,
-	}
-	err := platform.Ping(ctx, creds)
-	return err
 }
 
 func writeWorkdir(w io.Writer, path string) {

@@ -7,16 +7,17 @@ package daemon
 import (
 	"context"
 	"os"
-	"sync"
 	"time"
+
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
-	"github.com/drone-runners/drone-runner-aws/internal/platform"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
@@ -90,26 +91,38 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	if (config.Settings.PrivateKeyFile != "" && config.Settings.PublicKeyFile == "") || (config.Settings.PrivateKeyFile == "" && config.Settings.PublicKeyFile != "") {
 		logrus.Fatalln("daemon: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
-	poolSettings := poolfile.PoolSettings{
-		AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
-		AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
-		AwsRegion:          config.Settings.AwsRegion,
-		PrivateKeyFile:     config.Settings.PrivateKeyFile,
-		PublicKeyFile:      config.Settings.PublicKeyFile,
+
+	awsAccessSettings := &cloudaws.AccessSettings{
+		AccessKey:      config.Settings.AwsAccessKeyID,
+		AccessSecret:   config.Settings.AwsAccessKeySecret,
+		Region:         config.Settings.AwsRegion,
+		PrivateKeyFile: config.Settings.PrivateKeyFile,
+		PublicKeyFile:  config.Settings.PublicKeyFile,
 	}
 
-	pools, poolFileErr := poolfile.ProcessPoolFile(c.Poolfile, &poolSettings)
+	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, awsAccessSettings, config.Runner.Name)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
 			Errorln("daemon: unable to parse pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 
-	var awsMutex sync.Mutex
+	poolManager := &vmpool.Manager{}
+	err = poolManager.Add(pools...)
+	if err != nil {
+		return err
+	}
+
+	err = poolManager.Ping(ctx)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: cannot connect to cloud provider")
+		return err
+	}
+
 	opts := engine.Opts{
-		AwsMutex:   &awsMutex,
-		RunnerName: config.Runner.Name,
-		Pools:      pools,
+		PoolManager: poolManager,
+		Repopulate:  true,
 	}
 
 	engInstance, engineErr := engine.New(opts)
@@ -124,7 +137,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	logrus.AddHook(hook)
 
 	daemonLint := linter.New()
-	daemonLint.Pools = pools
+	daemonLint.PoolManager = poolManager
 	runner := &runtime.Runner{
 		Client:   cli,
 		Machine:  config.Runner.Name,
@@ -137,8 +150,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 			config.Limit.Trusted,
 		),
 		Compiler: &compiler.Compiler{
-			Settings: poolSettings,
-			Pools:    pools,
 			Environ: provider.Combine(
 				provider.Static(config.Runner.Environ),
 				provider.External(
@@ -157,6 +168,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 					config.Secret.SkipVerify,
 				),
 			),
+			PoolManager: poolManager,
 		},
 		Exec: runtime.NewExecer(
 			tracer,
@@ -192,29 +204,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		return serverInstance.ListenAndServe(ctx)
 	})
 
-	// Connect to AWS making sure we can use creds provided.
-	if config.Settings.AwsAccessKeyID != "" || config.Settings.AwsAccessKeySecret != "" {
-		for {
-			pingErr := engInstance.Ping(ctx, config.Settings.AwsAccessKeyID, config.Settings.AwsAccessKeySecret, config.Settings.AwsRegion)
-			if pingErr == context.Canceled {
-				break
-			}
-			if pingErr != nil {
-				logrus.WithError(pingErr).
-					Errorln("daemon: cannot connect to aws")
-				time.Sleep(time.Second)
-			} else {
-				logrus.Infoln("daemon: successfully connected to aws")
-				break
-			}
-		}
-	}
-
-	creds := platform.Credentials{
-		Client: config.Settings.AwsAccessKeyID,
-		Secret: config.Settings.AwsAccessKeySecret,
-		Region: config.Settings.AwsRegion,
-	}
 	// Ping the server and block until a successful connection to the server has been established.
 	for {
 		pingErr := cli.Ping(ctx, config.Runner.Name)
@@ -249,7 +238,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 
 	// if there is no keyfiles lets remove any old instances.
 	if !config.Settings.ReusePool {
-		cleanErr := platform.CleanPools(ctx, creds, config.Runner.Name)
+		cleanErr := poolManager.CleanPools(ctx)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("daemon: unable to clean pools")
@@ -258,21 +247,18 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		}
 	}
 
-	// seed a pool
-	if pools != nil {
-		buildPoolErr := poolfile.BuildPools(ctx, pools, creds, "daemon_runner", &awsMutex)
-		if buildPoolErr != nil {
-			logrus.WithError(buildPoolErr).
-				Errorln("daemon: unable to build pool")
-			os.Exit(1)
-		}
-		logrus.Infoln("daemon: pool created")
+	err = poolManager.BuildPools(ctx)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to build pool")
+		os.Exit(1)
 	}
+	logrus.Infoln("daemon: pool created")
 
 	g.Go(func() error {
 		<-ctx.Done()
 		// clean up pool on termination
-		cleanErr := platform.CleanPools(ctx, creds, config.Runner.Name)
+		cleanErr := poolManager.CleanPools(ctx)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("daemon: unable to clean pools")

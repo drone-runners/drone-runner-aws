@@ -11,26 +11,22 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"sync"
-	"time"
+
+	"github.com/drone-runners/drone-runner-aws/command/daemon"
+	"github.com/drone-runners/drone-runner-aws/command/delegate/livelog"
+	"github.com/drone-runners/drone-runner-aws/engine"
+	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
-	"github.com/joho/godotenv"
-	"github.com/kelseyhightower/envconfig"
-
-	"github.com/drone-runners/drone-runner-aws/command/daemon"
-
-	"github.com/drone-runners/drone-runner-aws/command/delegate/livelog"
-	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/platform"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
-
-	"github.com/drone-runners/drone-runner-aws/engine"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
-	"github.com/drone/signal"
 
+	"github.com/drone/signal"
+	"github.com/joho/godotenv"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -81,27 +77,36 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 		logrus.Fatalln("delegate: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
 
-	poolSettings := poolfile.PoolSettings{
-		AwsAccessKeyID:     config.Settings.AwsAccessKeyID,
-		AwsAccessKeySecret: config.Settings.AwsAccessKeySecret,
-		AwsRegion:          config.Settings.AwsRegion,
-		PrivateKeyFile:     config.Settings.PrivateKeyFile,
-		PublicKeyFile:      config.Settings.PublicKeyFile,
-		LiteEnginePath:     config.Settings.LiteEnginePath,
+	awsAccessSettings := cloudaws.AccessSettings{
+		AccessKey:      config.Settings.AwsAccessKeyID,
+		AccessSecret:   config.Settings.AwsAccessKeySecret,
+		Region:         config.Settings.AwsRegion,
+		PrivateKeyFile: config.Settings.PrivateKeyFile,
+		PublicKeyFile:  config.Settings.PublicKeyFile,
 	}
 
-	pools, poolFileErr := poolfile.ProcessPoolFile(c.poolfile, &poolSettings)
+	pools, poolFileErr := cloudaws.ProcessPoolFile(c.poolfile, &awsAccessSettings, config.Runner.Name)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
 			Errorln("delegate: unable to parse pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 
-	var awsMutex sync.Mutex
+	poolManager := &vmpool.Manager{}
+	err = poolManager.Add(pools...)
+	if err != nil {
+		return err
+	}
+
+	err = poolManager.Ping(ctx)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: cannot connect to cloud provider")
+		return err
+	}
+
 	delegateEngineOpts = engine.Opts{
-		AwsMutex:   &awsMutex,
-		RunnerName: config.Runner.Name,
-		Pools:      pools,
+		PoolManager: poolManager,
 	}
 
 	engineInstance, engineErr := engine.New(delegateEngineOpts)
@@ -111,28 +116,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 		return engineErr
 	}
 
-	for {
-		pingErr := engineInstance.Ping(ctx, config.Settings.AwsAccessKeyID, config.Settings.AwsAccessKeySecret, config.Settings.AwsRegion)
-		if pingErr == context.Canceled {
-			break
-		}
-		if pingErr != nil {
-			logrus.WithError(pingErr).
-				Errorln("delegate: cannot connect to aws")
-			time.Sleep(time.Second)
-		} else {
-			logrus.Infoln("delegate: successfully connected to aws")
-			break
-		}
-	}
-	creds := platform.Credentials{
-		Client: config.Settings.AwsAccessKeyID,
-		Secret: config.Settings.AwsAccessKeySecret,
-		Region: config.Settings.AwsRegion,
-	}
 	// if there is no keyfiles lets remove any old instances.
 	if !config.Settings.ReusePool {
-		cleanErr := platform.CleanPools(ctx, creds, config.Runner.Name)
+		cleanErr := poolManager.CleanPools(ctx)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("delegate: unable to clean pools")
@@ -142,15 +128,13 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	}
 
 	// seed a pool
-	if pools != nil {
-		buildPoolErr := poolfile.BuildPools(ctx, pools, creds, config.Runner.Name, &awsMutex)
-		if buildPoolErr != nil {
-			logrus.WithError(buildPoolErr).
-				Errorln("delegate: unable to build pool")
-			os.Exit(1)
-		}
-		logrus.Infoln("delegate: pool created")
+	err = poolManager.BuildPools(ctx)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: unable to build pool")
+		os.Exit(1)
 	}
+	logrus.Infoln("delegate: pool created")
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
@@ -158,7 +142,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	var g errgroup.Group
 	runnerServer := server.Server{
 		Addr:    ":3000", // config.Server.Port,
-		Handler: delegateListener(engineInstance, creds, pools, config.Runner.Name),
+		Handler: delegateListener(engineInstance, poolManager),
 	}
 
 	logrus.WithField("addr", ":3000" /*config.Server.Port*/).
@@ -186,16 +170,16 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	return waitErr
 }
 
-func delegateListener(eng *engine.Engine, creds platform.Credentials, pools map[string]poolfile.Pool, runnerName string) http.Handler {
+func delegateListener(eng *engine.Engine, poolManager *vmpool.Manager) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/setup", handleSetup(eng, creds, pools, runnerName))
+	mux.HandleFunc("/setup", handleSetup(eng, poolManager))
 	mux.HandleFunc("/destroy", handleDestroy(eng))
 	mux.HandleFunc("/step", handleStep(eng))
-	mux.HandleFunc("/pool_owner", handlePools(pools))
+	mux.HandleFunc("/pool_owner", handlePools(poolManager))
 	return mux
 }
 
-func handlePools(pools map[string]poolfile.Pool) http.HandlerFunc {
+func handlePools(poolManager *vmpool.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			fmt.Println("failed to read setup get request")
@@ -216,20 +200,18 @@ func handlePools(pools map[string]poolfile.Pool) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		_, ok = pools[pool]
-
 		type Response struct {
 			Owner bool `json:"owner"`
 		}
 
 		response := Response{
-			Owner: ok,
+			Owner: poolManager.Get(pool) != nil,
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	}
 }
 
-func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[string]poolfile.Pool, runnerName string) http.HandlerFunc {
+func handleSetup(eng *engine.Engine, poolManager *vmpool.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			fmt.Println("handleSetup: failed to read setup post request")
@@ -244,8 +226,8 @@ func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[strin
 			return
 		}
 
-		pool, ok := pools[reqData.Pool]
-		if !ok {
+		pool := poolManager.Get(reqData.Pool)
+		if pool == nil {
 			fmt.Println("handleSetup: failed to find pool")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
@@ -254,7 +236,7 @@ func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[strin
 		fmt.Printf("handleSetup: Executing setup: %v\n", reqData)
 		stageID := reqData.StageID
 
-		spec, err := CompileDelegateSetupStage(creds, &pool)
+		spec, err := CompileDelegateSetupStage(pool)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -276,28 +258,28 @@ func handleSetup(eng *engine.Engine, creds platform.Credentials, pools map[strin
 
 		w.WriteHeader(http.StatusOK)
 		// we have successfully setup the environment lets replace the lost pool member
-		poolCount, countPoolErr := platform.PoolCountFree(r.Context(), creds, reqData.Pool, delegateEngineOpts.AwsMutex)
+		poolCount, countPoolErr := pool.PoolCountFree(r.Context())
 		if countPoolErr != nil {
 			logger.FromContext(r.Context()).
 				WithError(countPoolErr).
-				WithField("ami", pool.Instance.AMI).
-				WithField("pool", pool.Name).
+				WithField("ami", pool.GetInstanceType()).
+				WithField("pool", pool.GetName()).
 				Errorf("handleSetup: failed checking pool")
 		}
-		if poolCount < pool.MaxPoolSize {
-			id, ip, provisionErr := poolfile.Provision(r.Context(), &pool, runnerName, false)
+		if poolCount < pool.GetMaxSize() {
+			instance, provisionErr := pool.Provision(r.Context(), false)
 			if provisionErr != nil {
 				logger.FromContext(r.Context()).
 					WithError(provisionErr).
-					WithField("ami", pool.Instance.AMI).
-					WithField("pool", pool.Name).
+					WithField("ami", pool.GetInstanceType()).
+					WithField("pool", pool.GetName()).
 					Errorf("handleSetup: failed to add back to the pool")
 			} else {
 				logger.FromContext(r.Context()).
-					WithField("ami", pool.Instance.AMI).
-					WithField("ip", ip).
-					WithField("id", id).
-					WithField("pool", pool.Name).
+					WithField("ami", pool.GetInstanceType()).
+					WithField("pool", pool.GetName()).
+					WithField("ip", instance.IP).
+					WithField("id", instance.ID).
 					Debug("handleSetup: add back to the pool")
 			}
 		}

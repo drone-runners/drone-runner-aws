@@ -8,8 +8,11 @@ import (
 	"path"
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
+
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -41,12 +44,18 @@ func TestLint(t *testing.T) {
 				return
 			}
 
-			pools := make(map[string]poolfile.Pool)
-			pools["cats"] = poolfile.Pool{
-				Name: "cats"}
+			pool := cloudaws.DummyPool("cats", "runner")
+
+			poolManager := &vmpool.Manager{}
+			err = poolManager.Add(pool)
+			if err != nil {
+				t.Error(err)
+				return
+			}
 
 			lint := New()
-			lint.Pools = pools
+			lint.PoolManager = poolManager
+
 			opts := &drone.Repo{Trusted: test.trusted}
 			err = lint.Lint(resources.Resources[0].(*resource.Pipeline), opts)
 			if err == nil && test.invalid == true {
@@ -79,15 +88,15 @@ func TestLint(t *testing.T) {
 
 func Test_checkPools(t *testing.T) {
 	type args struct {
-		pipeline *resource.Pipeline
-		pools    map[string]poolfile.Pool
+		pipeline    *resource.Pipeline
+		poolManager *vmpool.Manager
 	}
-	poolInstance := poolfile.Pool{
-		Name: "test",
-	}
-	poolWithOne := map[string]poolfile.Pool{
-		"test": poolInstance,
-	}
+
+	poolInstance := cloudaws.DummyPool("test", "runner")
+	poolManagerEmpty := &vmpool.Manager{}
+	poolManagerWithOne := &vmpool.Manager{}
+	_ = poolManagerWithOne.Add(poolInstance)
+
 	tests := []struct {
 		name    string
 		args    args
@@ -96,8 +105,8 @@ func Test_checkPools(t *testing.T) {
 		{
 			name: "no pools",
 			args: args{
-				pipeline: &resource.Pipeline{},
-				pools:    make(map[string]poolfile.Pool),
+				pipeline:    &resource.Pipeline{},
+				poolManager: poolManagerEmpty,
 			},
 			wantErr: true,
 		},
@@ -110,7 +119,7 @@ func Test_checkPools(t *testing.T) {
 						Use: "",
 					},
 				},
-				pools: poolWithOne,
+				poolManager: poolManagerWithOne,
 			},
 			wantErr: true,
 		},
@@ -123,14 +132,14 @@ func Test_checkPools(t *testing.T) {
 						Use: "no one here",
 					},
 				},
-				pools: poolWithOne,
+				poolManager: poolManagerWithOne,
 			},
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := checkPools(tt.args.pipeline, tt.args.pools); (err != nil) != tt.wantErr {
+			if err := checkPools(tt.args.pipeline, tt.args.poolManager); (err != nil) != tt.wantErr {
 				t.Errorf("checkPools() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

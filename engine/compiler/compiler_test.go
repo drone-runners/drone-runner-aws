@@ -10,9 +10,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
+
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
@@ -20,7 +23,6 @@ import (
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/secret"
 
-	"github.com/dchest/uniuri"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -95,10 +97,22 @@ func TestCompile_RunFailure(t *testing.T) {
 // at compile time.
 func TestCompile_Secrets(t *testing.T) {
 	mnfst, _ := manifest.ParseFile("testdata/secret.yml")
-	compilerSettings := poolfile.PoolSettings{
-		AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+	compilerSettings := cloudaws.AccessSettings{
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
 	}
-	pools, _ := poolfile.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
+
+	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings, "runner")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	poolManager := &vmpool.Manager{}
+	err = poolManager.Add(pools...)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	compiler := &Compiler{
 		Environ: provider.Static(nil),
@@ -107,7 +121,7 @@ func TestCompile_Secrets(t *testing.T) {
 			"password":    "password",
 			"my_username": "octocat",
 		}),
-		Pools: pools,
+		PoolManager: poolManager,
 	}
 	args := runtime.CompilerArgs{
 		Repo:     &drone.Repo{},
@@ -147,13 +161,11 @@ func TestCompile_Secrets(t *testing.T) {
 // compares to a golden json file.
 func testCompile(t *testing.T, source, golden string) *engine.Spec {
 	// replace the default random function with one that
-	// is deterministic, for testing purposes.
+	// is deterministic, for testing purposes. restore it afterwards.
+	oldRandom := random
 	random = notRandom
-
-	// restore the default random function and the previously
-	// specified temporary directory
 	defer func() {
-		random = uniuri.New
+		random = oldRandom
 	}()
 
 	mnfst, err := manifest.ParseFile(source)
@@ -162,10 +174,23 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	compilerSettings := poolfile.PoolSettings{
-		AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+	compilerSettings := cloudaws.AccessSettings{
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
 	}
-	pools, _ := poolfile.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings)
+
+	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings, "runner")
+	if err != nil {
+		t.Error(err)
+		return nil
+	}
+
+	poolManager := &vmpool.Manager{}
+	err = poolManager.Add(pools...)
+	if err != nil {
+		t.Error(err)
+		return nil
+	}
+
 	compiler := &Compiler{
 		Environ: provider.Static(nil),
 		Secret: secret.StaticVars(map[string]string{
@@ -173,7 +198,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 			"password":    "password",
 			"my_username": "octocat",
 		}),
-		Pools: pools,
+		PoolManager: poolManager,
 	}
 	args := runtime.CompilerArgs{
 		Repo:     &drone.Repo{},

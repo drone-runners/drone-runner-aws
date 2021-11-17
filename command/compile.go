@@ -15,7 +15,9 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
+
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -28,14 +30,16 @@ import (
 
 type compileCommand struct {
 	*internal.Flags
-	Source       *os.File
-	Poolfile     string
-	Environ      map[string]string
-	Secrets      map[string]string
-	PoolSettings poolfile.PoolSettings
+	Source    *os.File
+	Poolfile  string
+	Environ   map[string]string
+	Secrets   map[string]string
+	AWSAccess cloudaws.AccessSettings
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
+	const runnerName = "drone-runner"
+
 	rawsource, err := io.ReadAll(c.Source)
 	if err != nil {
 		return err
@@ -73,24 +77,31 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
+
 	// read the poolfile
-	pools, poolFileErr := poolfile.ProcessPoolFile(c.Poolfile, &c.PoolSettings)
+	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &c.AWSAccess, runnerName)
 	if poolFileErr != nil {
 		return poolFileErr
 	}
+
+	poolManager := &vmpool.Manager{}
+	err = poolManager.Add(pools...)
+	if err != nil {
+		return err
+	}
+
 	// lint the pipeline and return an error if any linting rules are broken
 	lint := linter.New()
-	lint.Pools = pools
+	lint.PoolManager = poolManager
 	err = lint.Lint(resourceInstance, c.Repo)
 	if err != nil {
 		return err
 	}
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
-		Environ:  provider.Static(c.Environ),
-		Settings: c.PoolSettings,
-		Secret:   secret.StaticVars(c.Secrets),
-		Pools:    pools,
+		Environ:     provider.Static(c.Environ),
+		Secret:      secret.StaticVars(c.Secrets),
+		PoolManager: poolManager,
 	}
 	args := runtime.CompilerArgs{
 		Pipeline: resourceInstance,
