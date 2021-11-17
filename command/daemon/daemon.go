@@ -122,6 +122,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 
 	opts := engine.Opts{
 		PoolManager: poolManager,
+		Repopulate:  true,
 	}
 
 	engInstance, engineErr := engine.New(opts)

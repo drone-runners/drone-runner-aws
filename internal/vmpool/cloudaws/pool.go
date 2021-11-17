@@ -19,7 +19,7 @@ import (
 )
 
 // awsMutex is a global mutex for synchronizing API calls to AWS EC2
-var awsMutex *sync.Mutex
+var awsMutex = &sync.Mutex{}
 
 // awsPool is a struct that implements vmpool.Pool interface
 type awsPool struct {
@@ -38,6 +38,7 @@ type awsPool struct {
 	image         string
 	instanceType  string
 	user          string
+	userData      string
 	subnet        string
 	groups        []string
 	allocPublicIP bool
@@ -113,7 +114,7 @@ func (p *awsPool) Create(ctx context.Context) (*vmpool.Instance, error) { //noli
 		IamInstanceProfile: iamProfile,
 		UserData: aws.String(
 			base64.StdEncoding.EncodeToString(
-				[]byte(p.user),
+				[]byte(p.userData),
 			),
 		),
 		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
@@ -478,7 +479,9 @@ func (p *awsPool) Provision(ctx context.Context, addBuildingTag bool) (instance 
 		awsTags["status"] = "build in progress"
 	} else {
 		awsTags["pool"] = p.name
+		delete(awsTags, "status")
 	}
+	p.defaultTags = awsTags
 
 	// create the instance
 	startTime := time.Now()
@@ -548,7 +551,7 @@ func (p *awsPool) Provision(ctx context.Context, addBuildingTag bool) (instance 
 		defer clientftp.Close()
 	}
 	// setup common things, no matter what pipeline would use it
-	mkdirErr := mkdir(clientftp, p.GetUser(), 0777) //nolint:gomnd // r/w/x for all users
+	mkdirErr := mkdir(clientftp, p.rootDir, 0777) //nolint:gomnd // r/w/x for all users
 	if mkdirErr != nil {
 		logger.FromContext(ctx).
 			WithError(mkdirErr).
