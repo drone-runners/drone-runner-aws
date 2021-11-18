@@ -18,12 +18,13 @@ import (
 
 // AccessSettings defines settings for access
 type AccessSettings struct {
-	AccessKey      string
-	AccessSecret   string
-	Region         string
-	PrivateKeyFile string
-	PublicKeyFile  string
-	LiteEnginePath string // TODO: Location from where to download LE. Move this to be a global variable
+	AccessKey         string
+	AccessSecret      string
+	Region            string
+	PrivateKeyFile    string
+	PublicKeyFile     string
+	LiteEnginePath    string // TODO: Location from where to download LE. Move this to be a global variable
+	CertificateFolder string // TODO: physical location of the certificates
 }
 
 type (
@@ -225,14 +226,16 @@ func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerNa
 	var userDataWithSSH string
 	if rawPool.Platform.OS == oshelp.WindowsString {
 		userDataWithSSH = cloudinit.Windows(cloudinit.Params{
-			PublicKey:      rawPool.Instance.PublicKey,
-			LiteEnginePath: settings.LiteEnginePath,
+			PublicKey:               rawPool.Instance.PublicKey,
+			LiteEnginePath:          settings.LiteEnginePath,    // TODO this should be a global, not set in the poolfile
+			SourceCertificateFolder: settings.CertificateFolder, // TODO this should be a global, not set in the poolfile
 		})
 	} else {
 		// try using cloud init.
 		userDataWithSSH = cloudinit.Linux(cloudinit.Params{
-			PublicKey:      rawPool.Instance.PublicKey,
-			LiteEnginePath: settings.LiteEnginePath,
+			PublicKey:               rawPool.Instance.PublicKey,
+			LiteEnginePath:          settings.LiteEnginePath,    // TODO this should be a global, not set in the poolfile
+			SourceCertificateFolder: settings.CertificateFolder, // TODO this should be a global, not set in the poolfile
 		})
 	}
 	rawPool.Instance.UserData = userDataWithSSH

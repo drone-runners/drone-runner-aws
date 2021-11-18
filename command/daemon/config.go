@@ -64,6 +64,7 @@ type Config struct {
 		PrivateKeyFile     string `envconfig:"DRONE_SETTINGS_PRIVATE_KEY_FILE"`
 		PublicKeyFile      string `envconfig:"DRONE_SETTINGS_PUBLIC_KEY_FILE"`
 		LiteEnginePath     string `envconfig:"DRONE_SETTINGS_LITE_ENGINE_PATH"`
+		CertificateFolder  string `envconfig:"DRONE_SETTINGS_CERTIFICATE_FOLDER" default:"/tmp/certs"`
 		ReusePool          bool   `envconfig:"DRONE_SETTINGS_REUSE_POOL"`
 	}
 
