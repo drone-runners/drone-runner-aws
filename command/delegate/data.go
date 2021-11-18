@@ -306,6 +306,8 @@ func GetDestroyRequest(r io.Reader) (*DestroyRequest, error) {
 
 type DestroyRequest struct {
 	StageID string `json:"stage_id"`
+	Pool    string `json:"pool"`
+	ID      string `json:"id"`
 }
 
 func GetExecStepRequest(r io.Reader) (*ExecStepRequest, error) {
@@ -328,6 +330,7 @@ func GetExecStepRequest(r io.Reader) (*ExecStepRequest, error) {
 type ExecStepRequest struct {
 	StageID            string `json:"stage_id"`
 	StepID             string `json:"step_id"`
+	IP                 string `json:"ip"`
 	Command            string `json:"command"`
 	Image              string `json:"image"`
 	LogKey             string `json:"log_key"`
