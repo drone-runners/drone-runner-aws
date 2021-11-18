@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone/runner-go/pipeline/runtime"
+	"github.com/drone-runners/drone-runner-aws/engine"
 )
 
 // Stages is storage for stages
@@ -20,9 +20,9 @@ func init() { // nolint: gochecknoinits
 }
 
 type StageStorage interface {
-	Store(id string, spec runtime.Spec, envVars, secretVars map[string]string) error
+	Store(id string, instance engine.CloudInstance) error
 	Remove(id string) (bool, error)
-	Get(id string) (runtime.Spec, map[string]string, map[string]string, error)
+	Get(id string) (stage engine.CloudInstance, err error)
 }
 
 type storage struct {
@@ -33,26 +33,22 @@ type storage struct {
 type stageStorageEntry struct {
 	sync.Mutex
 
-	AddedAt    time.Time
-	Spec       runtime.Spec
-	EnvVars    map[string]string
-	SecretVars map[string]string
+	AddedAt  time.Time
+	Instance engine.CloudInstance
 }
 
-func (s *storage) Store(id string, spec runtime.Spec, envVars, secretVars map[string]string) error {
+func (s *storage) Store(stageID string, instance engine.CloudInstance) error {
 	s.Lock()
 	defer s.Unlock()
 
-	_, ok := s.storage[id]
+	_, ok := s.storage[stageID]
 	if ok {
-		return fmt.Errorf("stage with id=%s already present", id)
+		return fmt.Errorf("stage with id=%s already present", stageID)
 	}
 
-	s.storage[id] = &stageStorageEntry{
-		AddedAt:    time.Now(),
-		Spec:       spec,
-		EnvVars:    envVars,
-		SecretVars: secretVars,
+	s.storage[stageID] = &stageStorageEntry{
+		AddedAt:  time.Now(),
+		Instance: instance,
 	}
 
 	return nil
@@ -72,11 +68,11 @@ func (s *storage) Remove(id string) (bool, error) {
 	return true, nil
 }
 
-func (s *storage) Get(id string) (returnSpec runtime.Spec, vars, secretVars map[string]string, err error) {
+func (s *storage) Get(id string) (instance engine.CloudInstance, err error) {
 	s.Lock()
 	defer s.Unlock()
 
 	entry := s.storage[id]
 
-	return entry.Spec, entry.EnvVars, entry.SecretVars, nil
+	return entry.Instance, nil
 }

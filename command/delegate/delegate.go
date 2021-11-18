@@ -173,7 +173,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 func delegateListener(eng *engine.Engine, poolManager *vmpool.Manager, runnerName, certFolder string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/setup", handleSetup(eng, poolManager))
-	mux.HandleFunc("/destroy", handleDestroy(eng))
+	mux.HandleFunc("/destroy", handleDestroy(poolManager))
 	mux.HandleFunc("/step", handleStep(runnerName, certFolder))
 	mux.HandleFunc("/pool_owner", handlePools(poolManager))
 	return mux
@@ -249,8 +249,8 @@ func handleSetup(eng *engine.Engine, poolManager *vmpool.Manager) http.HandlerFu
 				Errorln("handleSetup: cannot setup the docker environment")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-
-		err = Stages.Store(stageID, setupSpec, reqData.StageEnvVars, reqData.SecretEnvVars)
+		intermediate := setupSpec.(*engine.Spec)
+		err = Stages.Store(stageID, intermediate.CloudInstance)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("handleSetup: failed to store spec")
@@ -293,20 +293,15 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 		fmt.Printf("\n\nExecuting step: %v\n", reqData)
 		stageID := reqData.StageID
 		stepID := reqData.StepID
-		// get info of instance
-		intputSpec, _, _, err := Stages.Get(stageID)
+		// get info of stage
+		stage, err := Stages.Get(stageID)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("failed to get the stage")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		if intputSpec == nil {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-			return
-		}
-		instanceSpec := intputSpec.(*engine.Spec)
-		fmt.Printf("\n\nExecuting step: %v\n", instanceSpec)
+		fmt.Printf("\n\nExecuting stage:%s machine:%s ip:%s step:%s \n", stageID, stage.ID, stage.IP, stepID)
 
 		stepInstance := &api.StartStepRequest{
 			ID:    stepID,
@@ -326,7 +321,7 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 
 		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", stepID)
 		client, err := lehttp.NewHTTPClient(
-			fmt.Sprintf("https://%s:9079/", instanceSpec.CloudInstance.IP),
+			fmt.Sprintf("https://%s:9079/", stage.IP),
 			runnerName, fmt.Sprintf("%s/ca-cert.pem", certFolder), fmt.Sprintf("%s/server-cert.pem", certFolder), fmt.Sprintf("%s/server-key.pem", certFolder))
 		if err != nil {
 			logrus.WithError(err).
@@ -360,7 +355,7 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 	}
 }
 
-func handleDestroy(eng *engine.Engine) http.HandlerFunc {
+func handleDestroy(poolManager *vmpool.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -376,23 +371,34 @@ func handleDestroy(eng *engine.Engine) http.HandlerFunc {
 		fmt.Printf("\n\nExecuting cleanup: %v\n", reqData)
 		stageID := reqData.StageID
 
-		destroySpec, _, _, err := Stages.Get(stageID)
+		stage, err := Stages.Get(stageID)
 		if err != nil {
 			logrus.WithError(err).
-				Errorln("failed to delete the stage")
+				Errorln("failed to get the stage")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		err = eng.Destroy(r.Context(), destroySpec)
+		pool := poolManager.Get(stage.PoolName)
+		instance := &vmpool.Instance{
+			ID: stage.ID,
+			IP: stage.IP,
+		}
+		destroyErr := pool.Destroy(r.Context(), instance)
 		if err != nil {
-			logrus.WithError(err).
-				Errorln("cannot destroy the docker environment")
+			logrus.WithError(destroyErr).
+				Errorln("cannot destroy the instance")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		_, _ = Stages.Remove(stageID)
+		_, removeErr := Stages.Remove(stageID)
+		if removeErr != nil {
+			logrus.WithError(err).
+				Errorln("cannot remove stage")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		w.WriteHeader(http.StatusOK)
 	}
