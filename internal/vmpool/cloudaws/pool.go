@@ -4,18 +4,15 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/ssh"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/pkg/sftp"
 )
 
 // awsMutex is a global mutex for synchronizing API calls to AWS EC2
@@ -93,155 +90,12 @@ func (p *awsPool) GetMaxSize() int {
 	return p.sizeMax
 }
 
-// Create creates the server instance.
-func (p *awsPool) Create(ctx context.Context) (*vmpool.Instance, error) { //nolint:funlen // its complex but standard
-	client := p.credentials.getClient()
-
-	var iamProfile *ec2.IamInstanceProfileSpecification
-	if p.iamProfileArn != "" {
-		iamProfile = &ec2.IamInstanceProfileSpecification{
-			Arn: aws.String(p.iamProfileArn),
-		}
-	}
-
-	tags := createCopy(p.defaultTags)
-	tags["name"] = p.name
-	in := &ec2.RunInstancesInput{
-		ImageId:            aws.String(p.image),
-		InstanceType:       aws.String(p.instanceType),
-		MinCount:           aws.Int64(1),
-		MaxCount:           aws.Int64(1),
-		IamInstanceProfile: iamProfile,
-		UserData: aws.String(
-			base64.StdEncoding.EncodeToString(
-				[]byte(p.userData),
-			),
-		),
-		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
-			{
-				AssociatePublicIpAddress: aws.Bool(p.allocPublicIP),
-				DeviceIndex:              aws.Int64(0),
-				SubnetId:                 aws.String(p.subnet),
-				Groups:                   aws.StringSlice(p.groups),
-			},
-		},
-		TagSpecifications: []*ec2.TagSpecification{
-			{
-				ResourceType: aws.String("instance"),
-				Tags:         convertTags(tags),
-			},
-		},
-		BlockDeviceMappings: []*ec2.BlockDeviceMapping{
-			{
-				DeviceName: aws.String(p.device),
-				Ebs: &ec2.EbsBlockDevice{
-					VolumeSize:          aws.Int64(p.volumeSize),
-					VolumeType:          aws.String(p.volumeType),
-					DeleteOnTermination: aws.Bool(true),
-				},
-			},
-		},
-	}
-
-	if p.volumeType == "io1" {
-		for _, blockDeviceMapping := range in.BlockDeviceMappings {
-			blockDeviceMapping.Ebs.Iops = aws.Int64(p.volumeIops)
-		}
-	}
-
-	logr := logger.FromContext(ctx).
-		WithField("region", p.region).
-		WithField("image", p.image).
-		WithField("size", p.instanceType).
-		WithField("provider", "aws")
-	logr.Debug("instance create")
-
-	results, err := client.RunInstances(in)
-	if err != nil {
-		logr.WithError(err).
-			Error("instance create failed")
-		return nil, err
-	}
-
-	amazonInstance := results.Instances[0]
-
-	instance := &vmpool.Instance{
-		ID: *amazonInstance.InstanceId,
-	}
-
-	logr.WithField("id", instance.ID).
-		Infoln("instance create success")
-
-	// poll the amazon endpoint for server updates
-	// and exit when a network address is allocated.
-	interval := time.Duration(0)
-poller:
-	for {
-		select {
-		case <-ctx.Done():
-			logr.WithField("name", instance.ID).
-				Debugln("instance network deadline exceeded")
-
-			return instance, ctx.Err()
-		case <-time.After(interval):
-			interval = time.Minute
-
-			logr.WithField("name", instance.ID).
-				Debugln("check instance network")
-
-			desc, err := client.DescribeInstances(
-				&ec2.DescribeInstancesInput{
-					InstanceIds: []*string{
-						amazonInstance.InstanceId,
-					},
-				},
-			)
-			if err != nil {
-				logr.WithError(err).
-					Warnln("instance details failed")
-				continue
-			}
-
-			if len(desc.Reservations) == 0 {
-				logr.Warnln("empty reservations in details")
-				continue
-			}
-			if len(desc.Reservations[0].Instances) == 0 {
-				logr.Warnln("empty instances in reservations")
-				continue
-			}
-
-			amazonInstance = desc.Reservations[0].Instances[0]
-
-			if !p.allocPublicIP {
-				if amazonInstance.PrivateIpAddress != nil {
-					instance.IP = *amazonInstance.PrivateIpAddress
-					break poller
-				}
-			}
-
-			if amazonInstance.PublicIpAddress != nil {
-				instance.IP = *amazonInstance.PublicIpAddress
-				break poller
-			}
-		}
-	}
-
-	logr.
-		WithField("id", instance.ID).
-		WithField("ip", instance.IP).
-		Debugln("instance network ready")
-
-	return instance, nil
-}
-
 // Destroy destroys the server instance.
 func (p *awsPool) Destroy(ctx context.Context, instance *vmpool.Instance) error {
 	client := p.credentials.getClient()
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instance.ID).
-		WithField("ip", instance.IP).
 		WithField("provider", "aws")
 
 	logr.Debugln("terminate instance")
@@ -490,16 +344,139 @@ func (p *awsPool) Provision(ctx context.Context, addBuildingTag bool) (instance 
 		WithField("pool", awsTags["pool"]).
 		WithField("adhoc", addBuildingTag).
 		Debug("provision: creating instance")
-	instance, createErr := p.Create(ctx)
-	if createErr != nil {
-		logger.FromContext(ctx).
-			WithError(createErr).
-			WithField("ami", p.GetInstanceType()).
-			WithField("pool", awsTags["pool"]).
-			WithField("adhoc", addBuildingTag).
-			Debug("provision: failed to create the instance")
-		return nil, createErr
+
+	client := p.credentials.getClient()
+
+	var iamProfile *ec2.IamInstanceProfileSpecification
+	if p.iamProfileArn != "" {
+		iamProfile = &ec2.IamInstanceProfileSpecification{
+			Arn: aws.String(p.iamProfileArn),
+		}
 	}
+
+	tags := createCopy(p.defaultTags)
+	tags["name"] = p.name
+	in := &ec2.RunInstancesInput{
+		ImageId:            aws.String(p.image),
+		InstanceType:       aws.String(p.instanceType),
+		MinCount:           aws.Int64(1),
+		MaxCount:           aws.Int64(1),
+		IamInstanceProfile: iamProfile,
+		UserData: aws.String(
+			base64.StdEncoding.EncodeToString(
+				[]byte(p.userData),
+			),
+		),
+		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
+			{
+				AssociatePublicIpAddress: aws.Bool(p.allocPublicIP),
+				DeviceIndex:              aws.Int64(0),
+				SubnetId:                 aws.String(p.subnet),
+				Groups:                   aws.StringSlice(p.groups),
+			},
+		},
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("instance"),
+				Tags:         convertTags(tags),
+			},
+		},
+		BlockDeviceMappings: []*ec2.BlockDeviceMapping{
+			{
+				DeviceName: aws.String(p.device),
+				Ebs: &ec2.EbsBlockDevice{
+					VolumeSize:          aws.Int64(p.volumeSize),
+					VolumeType:          aws.String(p.volumeType),
+					DeleteOnTermination: aws.Bool(true),
+				},
+			},
+		},
+	}
+
+	if p.volumeType == "io1" {
+		for _, blockDeviceMapping := range in.BlockDeviceMappings {
+			blockDeviceMapping.Ebs.Iops = aws.Int64(p.volumeIops)
+		}
+	}
+
+	logr := logger.FromContext(ctx).
+		WithField("region", p.region).
+		WithField("image", p.image).
+		WithField("size", p.instanceType).
+		WithField("provider", "aws")
+	logr.Debug("provision: instance create")
+
+	results, err := client.RunInstances(in)
+	if err != nil {
+		logr.WithError(err).
+			Error("provision: instance create failed")
+		return nil, err
+	}
+
+	amazonInstance := results.Instances[0]
+
+	instance = &vmpool.Instance{
+		ID: *amazonInstance.InstanceId,
+	}
+
+	logr.WithField("id", instance.ID).
+		Infoln("provision: instance create success")
+
+	// poll the amazon endpoint for server updates
+	// and exit when a network address is allocated.
+	interval := time.Duration(0)
+poller:
+	for {
+		select {
+		case <-ctx.Done():
+			logr.WithField("name", instance.ID).
+				Debugln("provision: instance network deadline exceeded")
+
+			return instance, ctx.Err()
+		case <-time.After(interval):
+			interval = time.Minute
+
+			logr.WithField("name", instance.ID).
+				Debugln("provision: check instance network")
+
+			desc, err := client.DescribeInstances(
+				&ec2.DescribeInstancesInput{
+					InstanceIds: []*string{
+						amazonInstance.InstanceId,
+					},
+				},
+			)
+			if err != nil {
+				logr.WithError(err).
+					Warnln("provision: instance details failed")
+				continue
+			}
+
+			if len(desc.Reservations) == 0 {
+				logr.Warnln("provision: empty reservations in details")
+				continue
+			}
+			if len(desc.Reservations[0].Instances) == 0 {
+				logr.Warnln("provision: empty instances in reservations")
+				continue
+			}
+
+			amazonInstance = desc.Reservations[0].Instances[0]
+
+			if !p.allocPublicIP {
+				if amazonInstance.PrivateIpAddress != nil {
+					instance.IP = *amazonInstance.PrivateIpAddress
+					break poller
+				}
+			}
+
+			if amazonInstance.PublicIpAddress != nil {
+				instance.IP = *amazonInstance.PublicIpAddress
+				break poller
+			}
+		}
+	}
+
 	logger.FromContext(ctx).
 		WithField("ami", p.GetInstanceType()).
 		WithField("pool", awsTags["pool"]).
@@ -507,123 +484,6 @@ func (p *awsPool) Provision(ctx context.Context, addBuildingTag bool) (instance 
 		WithField("id", instance.ID).
 		WithField("ip", instance.IP).
 		WithField("time(seconds)", (time.Since(startTime)).Seconds()).
-		Info("provision: created the instance")
-	// establish an ssh connection with the server
-	client, dialErr := ssh.DialRetry(
-		ctx,
-		instance.IP,
-		p.GetUser(),
-		p.GetPrivateKey(),
-	)
-	if dialErr != nil {
-		logger.FromContext(ctx).
-			WithError(dialErr).
-			WithField("ami", p.GetInstanceType()).
-			WithField("pool", awsTags["pool"]).
-			WithField("adhoc", addBuildingTag).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			WithField("error", dialErr).
-			Debug("provision: failed to create client for ssh")
-		return nil, dialErr
-	}
-	defer client.Close()
-	logger.FromContext(ctx).
-		WithField("ami", p.GetInstanceType()).
-		WithField("pool", awsTags["pool"]).
-		WithField("adhoc", addBuildingTag).
-		WithField("ip", instance.IP).
-		WithField("id", instance.ID).
-		Debug("provision: Instance responding")
-	clientftp, err := sftp.NewClient(client)
-	if err != nil {
-		logger.FromContext(ctx).
-			WithError(err).
-			WithField("ami", p.GetInstanceType()).
-			WithField("pool", awsTags["pool"]).
-			WithField("adhoc", addBuildingTag).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			Debug("provision: failed to create sftp client")
-		return nil, err
-	}
-	if clientftp != nil {
-		defer clientftp.Close()
-	}
-	// setup common things, no matter what pipeline would use it
-	mkdirErr := mkdir(clientftp, p.rootDir, 0777) //nolint:gomnd // r/w/x for all users
-	if mkdirErr != nil {
-		logger.FromContext(ctx).
-			WithError(mkdirErr).
-			WithField("ami", p.GetInstanceType()).
-			WithField("pool", awsTags["pool"]).
-			WithField("adhoc", addBuildingTag).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			WithField("path", p.GetUser()).
-			Error("provision: cannot create workspace directory")
-		return nil, mkdirErr
-	}
-	// create docker network
-	session, sessionErr := client.NewSession()
-	if sessionErr != nil {
-		logger.FromContext(ctx).
-			WithError(sessionErr).
-			WithField("ami", p.GetInstanceType()).
-			WithField("pool", awsTags["pool"]).
-			WithField("adhoc", addBuildingTag).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			Debug("provision: failed to create session")
-		return nil, sessionErr
-	}
-	defer session.Close()
-	// keep checking until docker is ok
-	dockerErr := ssh.RetryApplication(ctx, client, "docker ps")
-	if dockerErr != nil {
-		logger.FromContext(ctx).
-			WithError(dockerErr).
-			WithField("ami", p.GetInstanceType()).
-			WithField("pool", awsTags["pool"]).
-			WithField("adhoc", addBuildingTag).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			Debug("provision: docker failed to start in a timely fashion")
-		return nil, err
-	}
-	// create docker network
-	networkCommand := "docker network create myNetwork"
-	if p.os == "windows" {
-		networkCommand = "docker network create --driver nat myNetwork"
-	}
-	err = session.Run(networkCommand)
-	if err != nil {
-		logger.FromContext(ctx).
-			WithError(err).
-			WithField("ami", p.GetInstanceType()).
-			WithField("pool", awsTags["pool"]).
-			WithField("adhoc", addBuildingTag).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			WithField("command", networkCommand).
-			Error("provision: unable to create docker network")
-		return nil, err
-	}
-	logger.FromContext(ctx).
-		WithField("ami", p.GetInstanceType()).
-		WithField("pool", awsTags["pool"]).
-		WithField("adhoc", addBuildingTag).
-		WithField("ip", instance.IP).
-		WithField("id", instance.ID).
 		Info("provision: complete")
-
 	return instance, nil
-}
-
-func mkdir(client *sftp.Client, path string, mode uint32) error {
-	err := client.MkdirAll(path)
-	if err != nil {
-		return err
-	}
-	return client.Chmod(path, os.FileMode(mode))
 }
