@@ -19,9 +19,6 @@ type Pool interface {
 
 	Provision(ctx context.Context, addBuildingTag bool) (instance *Instance, err error)
 
-	// Create creates a new VM instance in the pool
-	Create(ctx context.Context) (*Instance, error)
-
 	// Destroy removes the instance
 	Destroy(ctx context.Context, instance *Instance) error
 

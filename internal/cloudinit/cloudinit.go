@@ -53,13 +53,7 @@ users:
   groups: sudo
   ssh-authorized-keys:
   - %s
-apt:
-  sources:
-    docker.list:
-      source: deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable
-      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 packages:
-- docker-ce
 - wget
 %s
 runcmd:
@@ -69,35 +63,6 @@ runcmd:
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`, params.PublicKey, createFilesSection(params.SourceCertificateFolder, "/tmp/certs/"), params.LiteEnginePath)
 	}
 	return payload
-}
-
-func readFileEncode(path string) (encodedString string, encodingErr error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	encodedString = base64.StdEncoding.EncodeToString(content)
-	return encodedString, err
-}
-
-func createFilesSection(sourceFolder, targetFolder string) (filesSection string) {
-	files := []string{"ca-cert.pem", "server-cert.pem", "server-key.pem"}
-	filesSection = "write_files:\n"
-	for file := range files {
-		sourceFile := filepath.Join(sourceFolder, files[file])
-		targetFile := filepath.Join(targetFolder, files[file])
-		encodedString, err := readFileEncode(sourceFile)
-		if err != nil {
-			fmt.Println(err)
-		}
-		filesSection += fmt.Sprintf(
-			`- path: %s
-  permissions: '0600'
-  encoding: b64
-  content: %s
-`, targetFile, encodedString)
-	}
-	return filesSection
 }
 
 func Windows(params Params) (payload string) {
@@ -142,15 +107,64 @@ $acl.SetAccessRule($administratorsRule)
 (Get-Item 'C:\ProgramData\ssh\administrators_authorized_keys').SetAccessControl($acl)
 New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
 restart-service sshd`
-		installLE := fmt.Sprintf(` 
-mkdir "C:\Program Files\lite-engine"
+		installLE := fmt.Sprintf(`
 Invoke-WebRequest -Uri "%s/lite-engine.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 Start-Process "C:\Program Files\lite-engine\lite-engine.exe" certs
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 nssm.exe install lite-engine "C:\Program Files\lite-engine\lite-engine.exe" server
 nssm.exe start lite-engine
 </powershell>`, params.LiteEnginePath)
-		payload = gitKeysInstall + adminAccessSSHRestart + installLE
+		certs := psWriteCerts(params.SourceCertificateFolder, "C:\\Program Files\\lite-engine\\certs")
+		payload = gitKeysInstall + adminAccessSSHRestart + certs + installLE
 	}
 	return payload
+}
+
+func readFileEncode(path string) (encodedString string, encodingErr error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	encodedString = base64.StdEncoding.EncodeToString(content)
+	return encodedString, err
+}
+
+func createFilesSection(sourceFolder, targetFolder string) (filesSection string) {
+	files := []string{"ca-cert.pem", "server-cert.pem", "server-key.pem"}
+	filesSection = "write_files:\n"
+	for file := range files {
+		sourceFile := filepath.Join(sourceFolder, files[file])
+		targetFile := filepath.Join(targetFolder, files[file])
+		encodedString, err := readFileEncode(sourceFile)
+		if err != nil {
+			fmt.Println(err)
+		}
+		filesSection += fmt.Sprintf(
+			`- path: %s
+  permissions: '0600'
+  encoding: b64
+  content: %s
+`, targetFile, encodedString)
+	}
+	return filesSection
+}
+
+func psWriteCerts(sourceFolder, targetFolder string) (filesSection string) {
+	files := []string{"ca-cert.pem", "server-cert.pem", "server-key.pem"}
+	filesSection = `mkdir "C:\Program Files\lite-engine"
+`
+	for file := range files {
+		sourceFile := filepath.Join(sourceFolder, files[file])
+		targetFile := filepath.Join(targetFolder, files[file])
+		encodedString, err := readFileEncode(sourceFile)
+		if err != nil {
+			fmt.Println(err)
+		}
+		filesSection += fmt.Sprintf(
+			`$object%d = "%s"
+$Object = [System.Convert]::FromBase64String($object%d)
+[system.io.file]::WriteAllBytes("%s",$object)
+`, file, encodedString, file, targetFile)
+	}
+	return filesSection
 }

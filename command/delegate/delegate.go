@@ -110,13 +110,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	delegateEngineOpts = engine.Opts{
 		PoolManager: poolManager,
 	}
-
-	engineInstance, engineErr := engine.New(delegateEngineOpts)
-	if engineErr != nil {
-		logrus.WithError(engineErr).
-			Errorln("cannot create engine")
-		return engineErr
-	}
 	// lets remove any old instances.
 	if !config.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx)
@@ -142,7 +135,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	var g errgroup.Group
 	runnerServer := server.Server{
 		Addr:    ":3000", // config.Server.Port,
-		Handler: delegateListener(engineInstance, poolManager, config.Runner.Name, config.Settings.CertificateFolder),
+		Handler: delegateListener(poolManager, config.Runner.Name, config.Settings.CertificateFolder),
 	}
 
 	logrus.WithField("addr", ":3000" /*config.Server.Port*/).
@@ -170,16 +163,16 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	return waitErr
 }
 
-func delegateListener(eng *engine.Engine, poolManager *vmpool.Manager, runnerName, certFolder string) http.Handler {
+func delegateListener(poolManager *vmpool.Manager, runnerName, certFolder string) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/setup", handleSetup(eng, poolManager))
+	mux.HandleFunc("/setup", handleSetup(poolManager, runnerName, certFolder))
 	mux.HandleFunc("/destroy", handleDestroy(poolManager))
 	mux.HandleFunc("/step", handleStep(runnerName, certFolder))
-	mux.HandleFunc("/pool_owner", handlePools(poolManager))
+	mux.HandleFunc("/pool_owner", handlePoolOwner(poolManager))
 	return mux
 }
 
-func handlePools(poolManager *vmpool.Manager) http.HandlerFunc {
+func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			fmt.Println("failed to read setup get request")
@@ -211,7 +204,7 @@ func handlePools(poolManager *vmpool.Manager) http.HandlerFunc {
 	}
 }
 
-func handleSetup(eng *engine.Engine, poolManager *vmpool.Manager) http.HandlerFunc {
+func handleSetup(poolManager *vmpool.Manager, runnerName, certFolder string) http.HandlerFunc { //nolint:funlen
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			fmt.Println("handleSetup: failed to read setup post request")
@@ -234,19 +227,77 @@ func handleSetup(eng *engine.Engine, poolManager *vmpool.Manager) http.HandlerFu
 		}
 
 		fmt.Printf("handleSetup: Executing setup: %v\n", reqData)
-		setupSpec, err := CompileDelegateSetupStage(pool)
+		// get an instance
+		instance, tryPoolErr := pool.TryPool(r.Context())
+		if tryPoolErr != nil {
+			logrus.WithError(tryPoolErr).
+				WithField("ami", pool.GetInstanceType()).
+				WithField("pool", pool.GetName()).
+				Errorf("handleSetup: failed trying pool")
+		}
+		if instance != nil {
+			// using the pool, use the provided keys
+			logrus.
+				WithField("ami", pool.GetInstanceType()).
+				WithField("pool", pool.GetName()).
+				WithField("ip", instance.IP).
+				WithField("id", instance.ID).
+				Debug("handleSetup: got a pool instance")
+		} else {
+			logrus.
+				WithField("ami", pool.GetInstanceType()).
+				WithField("pool", pool.GetName()).
+				Debug("handleSetup: pool empty, creating an adhoc instance")
 
+			var provisionErr error
+			instance, provisionErr = pool.Provision(r.Context(), true)
+			if provisionErr != nil {
+				logrus.WithError(provisionErr).
+					WithField("ami", pool.GetInstanceType()).
+					WithField("pool", pool.GetName()).
+					Errorf("handleSetup: failed provisioning")
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		client, err := lehttp.NewHTTPClient(
+			fmt.Sprintf("https://%s:9079/", instance.IP),
+			runnerName, fmt.Sprintf("%s/ca-cert.pem", certFolder), fmt.Sprintf("%s/server-cert.pem", certFolder), fmt.Sprintf("%s/server-key.pem", certFolder))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			logrus.WithError(err).
+				Errorln("failed to create client")
 			return
 		}
 
-		err = eng.Setup(r.Context(), setupSpec)
-		if err != nil {
-			logrus.WithError(err).
-				Errorln("handleSetup: cannot setup the docker environment")
+		healthResponse, healthErr := client.Health(r.Context())
+		if healthErr != nil {
+			logrus.WithError(healthErr).Errorln("poll health call failed")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
+		if !healthResponse.OK { // TODO: repeat until ready or dead
+			logrus.Errorln("poll health call failed")
+		}
+
+		logrus.Infof("setup health check response: %v", healthResponse)
+
+		setupRequest := &api.SetupRequest{
+			Network: spec.Network{
+				ID: "drone",
+			},
+		}
+		setupResponse, setupErr := client.Setup(r.Context(), setupRequest)
+		if setupErr != nil {
+			logrus.WithError(setupErr).
+				WithField("ami", pool.GetInstanceType()).
+				WithField("pool", pool.GetName()).
+				WithField("ip", instance.IP).
+				WithField("id", instance.ID).
+				Errorln("setup failed ")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		logrus.Infof("setup response: %v", setupResponse)
 
 		w.WriteHeader(http.StatusOK)
 		// we have successfully setup the environment lets replace the lost pool member
@@ -293,10 +344,10 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 			Volumes: []*spec.VolumeMount{
 				{
 					Name: "_workspace",
-					Path: "/tmp/aws",
+					Path: "/tmp/",
 				},
 			},
-			WorkingDir: "/tmp/aws",
+			WorkingDir: "/tmp/",
 		}
 
 		stepInstance.Run.Command = []string{fmt.Sprintf("set -xe; pwd; %s", reqData.Command)}

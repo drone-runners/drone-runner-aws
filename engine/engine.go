@@ -128,6 +128,49 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 		return clientErr
 	}
 	defer clientftp.Close()
+	// create the root folder
+	mkRootDirErr := mkdir(clientftp, pool.GetRootDir(), 0777) //nolint:gomnd // r/w/x for all users
+	if mkRootDirErr != nil {
+		logger.FromContext(ctx).
+			WithError(mkRootDirErr).
+			WithField("ami", pool.GetInstanceType()).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
+			WithField("path", pool.GetRootDir()).
+			Error("setup: cannot create rootDir")
+		return mkRootDirErr
+	}
+	// create docker network
+	session, sessionErr := client.NewSession()
+	if sessionErr != nil {
+		logger.FromContext(ctx).
+			WithError(sessionErr).
+			WithField("ami", pool.GetInstanceType()).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
+			Debug("setup: failed to create session")
+		return sessionErr
+	}
+	defer session.Close()
+	// create docker network
+	networkCommand := "docker network create myNetwork"
+	if pool.GetOS() == "windows" {
+		networkCommand = "docker network create --driver nat myNetwork"
+	}
+	dockerNetworkErr := session.Run(networkCommand)
+	if dockerNetworkErr != nil {
+		logger.FromContext(ctx).
+			WithError(dockerNetworkErr).
+			WithField("ami", pool.GetInstanceType()).
+			WithField("pool", spec.CloudInstance.PoolName).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
+			WithField("command", networkCommand).
+			Error("setup: unable to create docker network")
+		return dockerNetworkErr
+	}
 	// the pipeline specification may define global folders, such as the pipeline working directory, which must be created before pipeline execution begins.
 	for _, file := range spec.Files {
 		if !file.IsDir {
@@ -146,7 +189,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 			return mkdirErr
 		}
 	}
-
 	// the pipeline specification may define global files such as authentication credentials that should be uploaded before pipeline execution begins.
 	for _, file := range spec.Files {
 		if file.IsDir {
@@ -164,7 +206,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 			return uploadErr
 		}
 	}
-
 	// create any folders needed for temporary volumes.
 	for _, volume := range spec.Volumes {
 		if volume.EmptyDir.ID != "" {
