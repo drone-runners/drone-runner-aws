@@ -2,8 +2,7 @@
 // Use of this source code is governed by the Polyform License
 // that can be found in the LICENSE file.
 
-// Package userdata contains code to generate userdata scripts
-// executed by the cloud-init directive.
+// Package userdata contains code to generate userdata scripts executed by the cloud-init directive.
 //nolint:lll
 package cloudinit
 
@@ -13,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Params defines parameters used to create userdata files.
@@ -60,8 +61,9 @@ runcmd:
 - 'wget "%s/lite-engine" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 - 'touch /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`, params.PublicKey, createFilesSection(params.SourceCertificateFolder, "/tmp/certs/"), params.LiteEnginePath)
+- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`, params.PublicKey, createLinuxCertsSection(params.SourceCertificateFolder, "/tmp/certs/"), params.LiteEnginePath)
 	}
+	logrus.Infof("cloudinit:\n%s\n", payload)
 	return payload
 }
 
@@ -108,15 +110,16 @@ $acl.SetAccessRule($administratorsRule)
 New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
 restart-service sshd`
 		installLE := fmt.Sprintf(`
+fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 Invoke-WebRequest -Uri "%s/lite-engine.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
-Start-Process "C:\Program Files\lite-engine\lite-engine.exe" certs
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
-nssm.exe install lite-engine "C:\Program Files\lite-engine\lite-engine.exe" server
-nssm.exe start lite-engine
+nssm.exe install lite-engine "C:\Program Files\lite-engine\lite-engine.exe" server --env-file="""""""C:\Program Files\lite-engine\.env"""""""
+nssm.exe start lite-engine 
 </powershell>`, params.LiteEnginePath)
-		certs := psWriteCerts(params.SourceCertificateFolder, "C:\\Program Files\\lite-engine\\certs")
+		certs := createWindowsCertsSection(params.SourceCertificateFolder, "/tmp/certs")
 		payload = gitKeysInstall + adminAccessSSHRestart + certs + installLE
 	}
+	logrus.Infof("cloudinit:\n%s\n", payload)
 	return payload
 }
 
@@ -129,9 +132,9 @@ func readFileEncode(path string) (encodedString string, encodingErr error) {
 	return encodedString, err
 }
 
-func createFilesSection(sourceFolder, targetFolder string) (filesSection string) {
+func createLinuxCertsSection(sourceFolder, targetFolder string) (section string) {
 	files := []string{"ca-cert.pem", "server-cert.pem", "server-key.pem"}
-	filesSection = "write_files:\n"
+	section = "write_files:\n"
 	for file := range files {
 		sourceFile := filepath.Join(sourceFolder, files[file])
 		targetFile := filepath.Join(targetFolder, files[file])
@@ -139,20 +142,22 @@ func createFilesSection(sourceFolder, targetFolder string) (filesSection string)
 		if err != nil {
 			fmt.Println(err)
 		}
-		filesSection += fmt.Sprintf(
+		section += fmt.Sprintf(
 			`- path: %s
   permissions: '0600'
   encoding: b64
   content: %s
 `, targetFile, encodedString)
 	}
-	return filesSection
+	return section
 }
 
-func psWriteCerts(sourceFolder, targetFolder string) (filesSection string) {
+func createWindowsCertsSection(sourceFolder, targetFolder string) (section string) {
 	files := []string{"ca-cert.pem", "server-cert.pem", "server-key.pem"}
-	filesSection = `mkdir "C:\Program Files\lite-engine"
-`
+	section = fmt.Sprintf(`
+mkdir "C:\Program Files\lite-engine"
+mkdir "%s"
+	 `, targetFolder)
 	for file := range files {
 		sourceFile := filepath.Join(sourceFolder, files[file])
 		targetFile := filepath.Join(targetFolder, files[file])
@@ -160,11 +165,11 @@ func psWriteCerts(sourceFolder, targetFolder string) (filesSection string) {
 		if err != nil {
 			fmt.Println(err)
 		}
-		filesSection += fmt.Sprintf(
+		section += fmt.Sprintf(
 			`$object%d = "%s"
 $Object = [System.Convert]::FromBase64String($object%d)
 [system.io.file]::WriteAllBytes("%s",$object)
 `, file, encodedString, file, targetFile)
 	}
-	return filesSection
+	return section
 }
