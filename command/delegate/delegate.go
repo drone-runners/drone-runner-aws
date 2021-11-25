@@ -334,26 +334,19 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 		}
 
 		fmt.Printf("\n\nExecuting step: %v\n", reqData)
-		stepID := reqData.StepID
 		instanceIP := reqData.IP
 
-		stepInstance := &api.StartStepRequest{
-			ID:    stepID,
-			Kind:  api.Run,
-			Image: reqData.Image,
-			Volumes: []*spec.VolumeMount{
-				{
-					Name: "_workspace",
-					Path: "/tmp/",
-				},
-			},
-			WorkingDir: "/tmp/",
-		}
+		/*
+			code provided as an example:
 
-		stepInstance.Run.Command = []string{fmt.Sprintf("set -xe; pwd; %s", reqData.Run.Command)}
-		stepInstance.Run.Entrypoint = []string{"sh", "-c"}
+			reqData.Kind = api.Run
+			reqData.Volumes = []*spec.VolumeMount{{Name: "_workspace", Path: "/tmp/"}}
+			reqData.WorkingDir = "/tmp/"
+			reqData.StartStepRequest.Run.Command = []string{fmt.Sprintf("set -xe; pwd; %s", reqData.Run.Command)}
+			reqData.StartStepRequest.Run.Entrypoint = []string{"sh", "-c"}
+		*/
 
-		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", stepID)
+		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", reqData.ID)
 		client, err := lehttp.NewHTTPClient(
 			fmt.Sprintf("https://%s:9079/", instanceIP),
 			runnerName, fmt.Sprintf("%s/ca-cert.pem", certFolder), fmt.Sprintf("%s/server-cert.pem", certFolder), fmt.Sprintf("%s/server-key.pem", certFolder))
@@ -363,20 +356,20 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 			return
 		}
 
-		stepResponse, stepErr := client.StartStep(r.Context(), stepInstance)
+		stepResponse, stepErr := client.StartStep(r.Context(), &reqData.StartStepRequest)
 		if stepErr != nil {
 			logrus.WithError(stepErr).Errorln("start step1 call failed")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		logrus.Infof("step response: %v\nPolling step", stepResponse)
-		pollResponse, stepErr := client.PollStep(r.Context(), &api.PollStepRequest{ID: stepID})
+		pollResponse, stepErr := client.PollStep(r.Context(), &api.PollStepRequest{ID: reqData.ID})
 		if stepErr != nil {
 			logrus.WithError(stepErr).Errorln("poll step1 call failed")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
-		fmt.Fprintf(os.Stdout, "--- step=%s end --- ^^^ ---\n", stepID)
+		fmt.Fprintf(os.Stdout, "--- step=%s end --- ^^^ ---\n", reqData.ID)
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
