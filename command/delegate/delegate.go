@@ -350,7 +350,7 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 			WorkingDir: "/tmp/",
 		}
 
-		stepInstance.Run.Command = []string{fmt.Sprintf("set -xe; pwd; %s", reqData.Command)}
+		stepInstance.Run.Command = []string{fmt.Sprintf("set -xe; pwd; %s", reqData.Run.Command)}
 		stepInstance.Run.Entrypoint = []string{"sh", "-c"}
 
 		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", stepID)
