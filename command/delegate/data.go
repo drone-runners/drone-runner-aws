@@ -67,6 +67,6 @@ func GetExecStepRequest(r io.Reader) (*ExecStepRequest, error) {
 }
 
 type ExecStepRequest struct {
-	IP string
-	api.StartStepRequest
+	IPAddress            string `json:"ip_address"`
+	api.StartStepRequest `json:"start_step_request"`
 }

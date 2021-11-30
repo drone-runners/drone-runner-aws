@@ -118,7 +118,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 			Errorln("delegate: cannot connect to cloud provider")
 		return err
 	}
-
 	// lets remove any old instances.
 	if !config.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx)
@@ -143,25 +142,18 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 
 	var g errgroup.Group
 	runnerServer := server.Server{
-		Addr:    ":3000", // config.Server.Port,
+		Addr:    config.Server.Port,
 		Handler: c.delegateListener(poolManager),
 	}
 
-	logrus.WithField("addr", ":3000" /*config.Server.Port*/).
+	logrus.WithField("addr", runnerServer.Addr).
+		WithField("capacity", config.Runner.Capacity).
+		WithField("kind", resource.Kind).
+		WithField("type", resource.Type).
 		Infoln("starting the server")
 
 	g.Go(func() error {
 		return runnerServer.ListenAndServe(ctx)
-	})
-
-	g.Go(func() error {
-		logrus.WithField("capacity", config.Runner.Capacity).
-			WithField("kind", resource.Kind).
-			WithField("type", resource.Type).
-			WithField("os", "linux" /*config.Platform.OS*/).
-			WithField("arch", "amd64" /*config.Platform.Arch*/).
-			Infoln("polling the remote server")
-		return nil
 	})
 
 	waitErr := g.Wait()
@@ -215,28 +207,29 @@ func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
 
 func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerFunc { //nolint:funlen
 	return func(w http.ResponseWriter, r *http.Request) {
+		// check our input
 		if r.Method != http.MethodPost {
-			fmt.Println("handleSetup: failed to read setup post request")
+			logrus.Error("handleSetup: failed to read setup post request")
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-
 		reqData, err := GetSetupRequest(r.Body)
 		if err != nil {
-			fmt.Println("handleSetup: failed to read setup request")
+			logrus.Error("handleSetup: failed to read setup request")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-
 		pool := poolManager.Get(reqData.Pool)
 		if pool == nil {
-			fmt.Println("handleSetup: failed to find pool")
+			logrus.Error("handleSetup: failed to find pool")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-
-		fmt.Printf("handleSetup: Executing setup: %v\n", reqData)
 		// get an instance
+		logrus.
+			WithField("ami", pool.GetInstanceType()).
+			WithField("pool", pool.GetName()).
+			Debug("handleSetup: starting setup")
 		instance, tryPoolErr := pool.TryPool(r.Context())
 		if tryPoolErr != nil {
 			logrus.WithError(tryPoolErr).
@@ -269,27 +262,42 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 				return
 			}
 		}
-
+		// create client to lite-engine
 		client, err := lehttp.NewHTTPClient(
 			fmt.Sprintf("https://%s:9079/", instance.IP),
 			c.runnerName, c.awsSettings.CaCertFile, c.awsSettings.CertFile, c.awsSettings.KeyFile)
 		if err != nil {
 			logrus.WithError(err).
-				Errorln("failed to create client")
+				Errorln("handleSetup: failed to create client")
 			return
 		}
-
-		healthResponse, healthErr := client.Health(r.Context())
+		// try the healthcheck api on the lite-engine until it responds ok
+		logrus.
+			WithField("ami", pool.GetInstanceType()).
+			WithField("pool", pool.GetName()).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
+			Debug("handleSetup: running healthcheck and waiting for an ok response")
+		healthResponse, healthErr := client.RetryHealth(r.Context())
 		if healthErr != nil {
-			logrus.WithError(healthErr).Errorln("poll health call failed")
+			logrus.
+				WithField("ami", pool.GetInstanceType()).
+				WithField("pool", pool.GetName()).
+				WithField("ip", instance.IP).
+				WithField("id", instance.ID).
+				WithError(healthErr).
+				Errorln("handleSetup: RetryHealth call failed")
 			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-		if !healthResponse.OK { // TODO: repeat until ready or dead
-			logrus.Errorln("poll health call failed")
-		}
-
-		logrus.Infof("setup health check response: %v", healthResponse)
-
+		logrus.
+			WithField("ami", pool.GetInstanceType()).
+			WithField("pool", pool.GetName()).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
+			WithField("response", *healthResponse).
+			Info("handleSetup: health check complete")
+		// now setup the instance
 		setupRequest := &api.SetupRequest{
 			Network: spec.Network{
 				ID: "drone",
@@ -302,12 +310,17 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 				WithField("pool", pool.GetName()).
 				WithField("ip", instance.IP).
 				WithField("id", instance.ID).
-				Errorln("setup failed ")
+				Errorln("handleSetup: setup call failed")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logrus.Infof("setup response: %v", setupResponse)
-
+		logrus.
+			WithField("ami", pool.GetInstanceType()).
+			WithField("pool", pool.GetName()).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
+			WithField("response", *setupResponse).
+			Info("handleSetup: setup complete")
 		w.WriteHeader(http.StatusOK)
 		// we have successfully setup the environment lets replace the lost pool member
 		// poolCount, countPoolErr := pool.PoolCountFree(r.Context())
@@ -329,64 +342,69 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 
 func (c *delegateCommand) handleStep() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// check input
 		if r.Method != http.MethodPost {
-			fmt.Println("failed to read setup step request")
+			logrus.Error("handleStep: failed to read setup step request")
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-
 		reqData, err := GetExecStepRequest(r.Body)
 		if err != nil {
-			fmt.Println("failed to read step request")
+			logrus.Error("handleStep: failed to read step request")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-
-		fmt.Printf("\n\nExecuting step: %v\n", reqData)
-		instanceIP := reqData.IP
-
-		/*
-			code provided as an example:
-
-			reqData.Kind = api.Run
-			reqData.Volumes = []*spec.VolumeMount{{Name: "_workspace", Path: "/tmp/"}}
-			reqData.WorkingDir = "/tmp/"
-			reqData.StartStepRequest.Run.Command = []string{fmt.Sprintf("set -xe; pwd; %s", reqData.Run.Command)}
-			reqData.StartStepRequest.Run.Entrypoint = []string{"sh", "-c"}
-		*/
-
-		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", reqData.ID)
+		instanceIP := reqData.IPAddress
+		if instanceIP == "" {
+			logrus.Error("handleStep: failed to read instance ip")
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
 		client, err := lehttp.NewHTTPClient(
 			fmt.Sprintf("https://%s:9079/", instanceIP),
 			c.runnerName, c.awsSettings.CaCertFile, c.awsSettings.CertFile, c.awsSettings.KeyFile)
 		if err != nil {
 			logrus.WithError(err).
-				Errorln("failed to create client")
+				Errorln("handleStep: failed to create client")
 			return
 		}
-
-		stepResponse, stepErr := client.StartStep(r.Context(), &reqData.StartStepRequest)
+		logrus.
+			WithField("ip", instanceIP).
+			WithField("step_id", reqData.StartStepRequest.ID).
+			Debug("handleStep: running StartStep")
+		startStepResponse, stepErr := client.StartStep(r.Context(), &reqData.StartStepRequest)
 		if stepErr != nil {
-			logrus.WithError(stepErr).Errorln("start step1 call failed")
+			logrus.WithError(stepErr).
+				WithField("ip", instanceIP).
+				WithField("step_id", reqData.StartStepRequest.ID).
+				Errorln("handleStep: StartStep call failed")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logrus.Infof("step response: %v\nPolling step", stepResponse)
-		pollResponse, stepErr := client.PollStep(r.Context(), &api.PollStepRequest{ID: reqData.ID})
+		logrus.
+			WithField("startStepResponse", startStepResponse).
+			Debug("handleStep: StartStep complete")
+
+		pollResponse, stepErr := client.RetryPollStep(r.Context(), &api.PollStepRequest{ID: reqData.StartStepRequest.ID})
 		if stepErr != nil {
-			logrus.WithError(stepErr).Errorln("poll step1 call failed")
+			logrus.WithError(stepErr).
+				WithField("ip", instanceIP).
+				WithField("step_id", reqData.StartStepRequest.ID).
+				Errorln("handleStep: RetryPollStep call failed")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
+		logrus.
+			WithField("pollResponse", pollResponse).
+			Debug("handleStep: RetryPollStep complete")
 
-		fmt.Fprintf(os.Stdout, "--- step=%s end --- ^^^ ---\n", reqData.ID)
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		} else {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-
-			_ = json.NewEncoder(w).Encode(pollResponse)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		encodeError := json.NewEncoder(w).Encode(pollResponse)
+		if encodeError != nil {
+			logrus.WithError(encodeError).
+				WithField("ip", instanceIP).
+				WithField("step_id", reqData.StartStepRequest.ID).
+				Errorln("handleStep: failed to encode poll response")
 		}
 	}
 }

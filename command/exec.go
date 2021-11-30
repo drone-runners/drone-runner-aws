@@ -233,6 +233,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo
 	err = runtime.NewExecer(
 		pipeline.NopReporter(),
 		console.New(c.Pretty),
+		pipeline.NopUploader(),
 		engineInstance,
 		c.Procs,
 	).Exec(ctx, spec, state)
