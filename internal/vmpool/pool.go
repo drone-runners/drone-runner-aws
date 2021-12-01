@@ -2,13 +2,19 @@ package vmpool
 
 import (
 	"context"
+	"sync"
 )
 
+const RunnerName = "drone-runner-aws"
+
 type Pool interface {
+	sync.Locker
+
+	GetProviderName() string
+
 	GetName() string
 	GetInstanceType() string // TODO: returns AMI, used for logging... probably rename to GetImage
 	GetOS() string
-
 	GetUser() string
 	GetPrivateKey() string
 	GetRootDir() string
@@ -17,18 +23,12 @@ type Pool interface {
 	GetMaxSize() int
 	GetMinSize() int
 
-	Provision(ctx context.Context, addBuildingTag bool) (instance *Instance, err error)
-
-	// Destroy removes the instance
-	Destroy(ctx context.Context, instance *Instance) error
-
-	// TagInstance tags a VM instance with a tag given by key parameter and value parameter as its value.
-	TagInstance(ctx context.Context, instanceID, key, value string) error
-
-	CleanPools(ctx context.Context) error
-	PoolCountFree(ctx context.Context) (free int, err error)
-	TryPool(ctx context.Context) (instance *Instance, err error)
 	Ping(ctx context.Context) error
+	Provision(ctx context.Context, tagAsInUse bool) (instance *Instance, err error)
+	List(ctx context.Context) (busy, free []Instance, err error)
+	Tag(ctx context.Context, instanceID, key, value string) (err error)
+	TagAsInUse(ctx context.Context, instanceID string) (err error)
+	Destroy(ctx context.Context, instanceIDs ...string) (err error)
 }
 
 // Instance represents a provisioned server instance.

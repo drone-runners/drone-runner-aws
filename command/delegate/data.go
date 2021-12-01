@@ -43,7 +43,7 @@ func GetDestroyRequest(r io.Reader) (*DestroyRequest, error) {
 type DestroyRequest struct {
 	CorrelationID string `json:"correlation_id"`
 	PoolID        string `json:"pool_id"`
-	ID            string `json:"id"`
+	InstanceID    string `json:"instance_id"`
 }
 
 func GetExecStepRequest(r io.Reader) (*ExecStepRequest, error) {

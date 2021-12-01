@@ -3,6 +3,7 @@ package cloudaws
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -15,11 +16,20 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-// awsMutex is a global mutex for synchronizing API calls to AWS EC2
-var awsMutex = &sync.Mutex{}
+const (
+	provider = "aws"
+
+	tagRunner      = "runner-name"
+	tagCreator     = "runner-creator"
+	tagPool        = "runner-pool"
+	tagStatus      = "runner-status"
+	tagStatusValue = "in-use"
+)
 
 // awsPool is a struct that implements vmpool.Pool interface
 type awsPool struct {
+	mutex sync.Mutex
+
 	name        string
 	runnerName  string
 	credentials Credentials
@@ -48,15 +58,19 @@ type awsPool struct {
 	// pool size data
 	sizeMin int
 	sizeMax int
-
-	// awsMutex is used to synchronize calls to AWS EC2 API
-	awsMutex *sync.Mutex
 }
 
-const (
-	poolString   = "pool"
-	statusString = "status"
-)
+func (p *awsPool) Lock() {
+	p.mutex.Lock()
+}
+
+func (p *awsPool) Unlock() {
+	p.mutex.Unlock()
+}
+
+func (p *awsPool) GetProviderName() string {
+	return provider
+}
 
 func (p *awsPool) GetName() string {
 	return p.name
@@ -90,226 +104,6 @@ func (p *awsPool) GetMaxSize() int {
 	return p.sizeMax
 }
 
-// Destroy destroys the server instance.
-func (p *awsPool) Destroy(ctx context.Context, instance *vmpool.Instance) error {
-	client := p.credentials.getClient()
-
-	logr := logger.FromContext(ctx).
-		WithField("id", instance.ID).
-		WithField("provider", "aws")
-
-	logr.Debugln("terminate instance")
-
-	input := &ec2.TerminateInstancesInput{
-		InstanceIds: []*string{
-			aws.String(instance.ID),
-		},
-	}
-	_, err := client.TerminateInstances(input)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("cannot terminate instance")
-		return err
-	}
-
-	logr.Debugln("terminated")
-	return nil
-}
-
-func (p *awsPool) getPools(ctx context.Context) (awspools *ec2.DescribeInstancesOutput, err error) {
-	client := p.credentials.getClient()
-	params := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{
-				Name: aws.String("instance-state-name"),
-				Values: []*string{
-					aws.String("running"),
-				},
-			},
-		},
-	}
-	return client.DescribeInstancesWithContext(ctx, params)
-}
-
-func (p *awsPool) TagInstance(ctx context.Context, instanceID, key, value string) (err error) {
-	client := p.credentials.getClient()
-	input := &ec2.CreateTagsInput{
-		Resources: []*string{
-			aws.String(instanceID),
-		},
-		Tags: []*ec2.Tag{{Key: aws.String(key), Value: aws.String(value)}},
-	}
-
-	_, tagErr := client.CreateTagsWithContext(ctx, input)
-	if tagErr != nil {
-		return tagErr
-	}
-	return nil
-}
-
-func (p *awsPool) CleanPools(ctx context.Context) (err error) {
-	logr := logger.FromContext(ctx).
-		WithField("provider", "aws")
-	logr.Debugln("clean pools")
-
-	resp, err := p.getPools(ctx)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("cannot get pools from aws")
-		return err
-	}
-
-	poolFullyCleaned := true
-
-	// does any of the machines have the tags we want
-	for idx := range resp.Reservations {
-		for _, inst := range resp.Reservations[idx].Instances {
-			droneTagFound := false
-			runnerNameTagFound := false
-			for _, keys := range inst.Tags {
-				if *keys.Key == "drone" {
-					if *keys.Value == "drone-runner-aws" {
-						droneTagFound = true
-					}
-				}
-				if *keys.Key == "creator" {
-					if *keys.Value == p.runnerName {
-						runnerNameTagFound = true
-					}
-				}
-			}
-			if droneTagFound && runnerNameTagFound {
-				destInstance := vmpool.Instance{
-					ID: *inst.InstanceId,
-					IP: *inst.PublicIpAddress,
-				}
-				destErr := p.Destroy(ctx, &destInstance)
-				if destErr != nil {
-					poolFullyCleaned = false
-					logr.WithError(err).
-						WithField("ID", inst.InstanceId).
-						Errorln("unable to terminate instance")
-				}
-			}
-		}
-	}
-	if poolFullyCleaned {
-		return nil
-	}
-	return fmt.Errorf("unable to fully clean the pool, check the logs")
-}
-
-func (p *awsPool) PoolCountFree(ctx context.Context) (free int, err error) {
-	poolName := p.name
-
-	logr := logger.FromContext(ctx).
-		WithField("provider", "aws").
-		WithField("pool", poolName)
-
-	logr.Debugln("check pool")
-
-	p.awsMutex.Lock()
-	defer p.awsMutex.Unlock()
-
-	resp, err := p.getPools(ctx)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("cannot get pools from aws")
-		return 0, err
-	}
-
-	// does any of the machines have the tags we want
-	for idx := range resp.Reservations {
-		for _, inst := range resp.Reservations[idx].Instances {
-			poolFound := false
-			instanceFree := true
-			for _, keys := range inst.Tags {
-				if *keys.Key == poolString {
-					if *keys.Value == poolName {
-						poolFound = true
-					}
-				}
-				if *keys.Key == statusString {
-					instanceFree = false
-				}
-			}
-			if poolFound && instanceFree {
-				free++
-			}
-		}
-	}
-
-	return free, nil
-}
-
-// TryPool will look for an instance in the pool, returning its is and ip. otherwise it return an error
-//nolint:nakedret
-func (p *awsPool) TryPool(ctx context.Context) (instance *vmpool.Instance, err error) {
-	poolName := p.name
-
-	logr := logger.FromContext(ctx).
-		WithField("provider", "aws").
-		WithField("pool", poolName)
-
-	logr.Debugln("try pool")
-
-	p.awsMutex.Lock()
-	defer p.awsMutex.Unlock()
-
-	resp, err := p.getPools(ctx)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("cannot get pools from aws")
-		return
-	}
-
-	// do any of the machines have the tags we want
-	for idx := range resp.Reservations {
-		for _, inst := range resp.Reservations[idx].Instances {
-			poolFound := false
-			instanceFree := true
-			for _, keys := range inst.Tags {
-				if *keys.Key == poolString {
-					if *keys.Value == poolName {
-						poolFound = true
-					}
-				}
-				if *keys.Key == statusString {
-					instanceFree = false
-				}
-			}
-			if poolFound && instanceFree {
-				instance = &vmpool.Instance{
-					ID: *inst.InstanceId,
-					IP: *inst.PublicIpAddress,
-				}
-				break
-			}
-		}
-		if instance != nil {
-			break
-		}
-	}
-
-	if instance == nil {
-		logr.Debugln("no free instances")
-		return
-	}
-
-	logr.Debugln("found an instance")
-
-	err = p.TagInstance(ctx, instance.ID, "status", "build in progress")
-	if err != nil {
-		logr.WithError(err).
-			WithField("instance", instance.ID).
-			Errorln("cannot tag instance")
-		instance = nil
-		return
-	}
-
-	return
-}
-
 // Ping checks that we can log into EC2, and the regions respond
 func (p *awsPool) Ping(ctx context.Context) error {
 	client := p.credentials.getClient()
@@ -323,29 +117,45 @@ func (p *awsPool) Ping(ctx context.Context) error {
 	return err
 }
 
-// Provision creates an aws instance for the pool, it will not perform build specific setup.
-func (p *awsPool) Provision(ctx context.Context, addBuildingTag bool) (instance *vmpool.Instance, err error) { //nolint:funlen
-	// add some tags
-	awsTags := createCopy(p.defaultTags)
-	awsTags["drone"] = "drone-runner-aws"
-	awsTags["creator"] = p.runnerName
-	if addBuildingTag {
-		awsTags["status"] = "build in progress"
-	} else {
-		awsTags["pool"] = p.name
-		delete(awsTags, "status")
+func (p *awsPool) getIP(amazonInstance *ec2.Instance) string {
+	if p.allocPublicIP {
+		if amazonInstance.PublicIpAddress == nil {
+			return ""
+		}
+		return *amazonInstance.PublicIpAddress
 	}
-	p.defaultTags = awsTags
+
+	if amazonInstance.PrivateIpAddress == nil {
+		return ""
+	}
+	return *amazonInstance.PrivateIpAddress
+}
+
+// Provision creates an AWS instance for the pool, it will not perform build specific setup.
+func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmpool.Instance, err error) {
+	client := p.credentials.getClient()
+
+	logr := logger.FromContext(ctx).
+		WithField("provider", provider).
+		WithField("ami", p.GetInstanceType()).
+		WithField("pool", p.name).
+		WithField("region", p.region).
+		WithField("image", p.image).
+		WithField("size", p.instanceType)
+
+	tags := createCopy(p.defaultTags)
+	tags[tagRunner] = p.runnerName
+	tags[tagPool] = p.name
+	tags[tagCreator] = vmpool.RunnerName
+	if tagAsInUse {
+		tags[tagStatus] = tagStatusValue
+	}
 
 	// create the instance
-	startTime := time.Now()
-	logger.FromContext(ctx).
-		WithField("ami", p.GetInstanceType()).
-		WithField("pool", awsTags["pool"]).
-		WithField("adhoc", addBuildingTag).
-		Debug("provision: creating instance")
 
-	client := p.credentials.getClient()
+	startTime := time.Now()
+
+	logr.Traceln("provisioning VM")
 
 	var iamProfile *ec2.IamInstanceProfileSpecification
 	if p.iamProfileArn != "" {
@@ -354,8 +164,6 @@ func (p *awsPool) Provision(ctx context.Context, addBuildingTag bool) (instance 
 		}
 	}
 
-	tags := createCopy(p.defaultTags)
-	tags["name"] = p.name
 	in := &ec2.RunInstancesInput{
 		ImageId:            aws.String(p.image),
 		InstanceType:       aws.String(p.instanceType),
@@ -399,56 +207,69 @@ func (p *awsPool) Provision(ctx context.Context, addBuildingTag bool) (instance 
 		}
 	}
 
-	logr := logger.FromContext(ctx).
-		WithField("region", p.region).
-		WithField("image", p.image).
-		WithField("size", p.instanceType).
-		WithField("provider", "aws")
-	logr.Debug("provision: instance create")
-
-	results, err := client.RunInstances(in)
+	runResult, err := client.RunInstancesWithContext(ctx, in)
 	if err != nil {
 		logr.WithError(err).
-			Error("provision: instance create failed")
-		return nil, err
+			Errorln("failed to list VMs")
+		return
 	}
 
-	amazonInstance := results.Instances[0]
-
-	instance = &vmpool.Instance{
-		ID: *amazonInstance.InstanceId,
+	if len(runResult.Instances) == 0 {
+		err = fmt.Errorf("failed to create an AWS EC2 instance")
+		return
 	}
 
-	logr.WithField("id", instance.ID).
-		Infoln("provision: instance create success")
+	awsInstanceID := runResult.Instances[0].InstanceId
+
+	logr = logr.WithField("id", *awsInstanceID)
+	logr.Debugln("provision: created instance")
 
 	// poll the amazon endpoint for server updates
 	// and exit when a network address is allocated.
-	interval := time.Duration(0)
-poller:
+
+	attempt := 0
+	intervals := []time.Duration{0, 15 * time.Second, 30 * time.Second, 45 * time.Second, time.Minute}
+
 	for {
+		var interval time.Duration
+		if attempt >= len(intervals) {
+			interval = intervals[len(intervals)-1]
+		} else {
+			interval = intervals[attempt]
+		}
+
+		const attemptCount = 20
+		attempt++
+
+		if attempt == attemptCount {
+			logr.Errorln("provision: failed to obtain IP; terminating it")
+
+			input := &ec2.TerminateInstancesInput{
+				InstanceIds: []*string{awsInstanceID},
+			}
+			_, _ = client.TerminateInstancesWithContext(ctx, input)
+
+			err = errors.New("failed to obtain IP address")
+			return
+		}
+
 		select {
 		case <-ctx.Done():
-			logr.WithField("name", instance.ID).
-				Debugln("provision: instance network deadline exceeded")
+			logr.Warnln("provision: instance network deadline exceeded")
 
-			return instance, ctx.Err()
+			err = ctx.Err()
+			return
+
 		case <-time.After(interval):
-			interval = time.Minute
+			logr.Debugln("provision: check instance network")
 
-			logr.WithField("name", instance.ID).
-				Debugln("provision: check instance network")
-
-			desc, err := client.DescribeInstances(
+			desc, descrErr := client.DescribeInstancesWithContext(ctx,
 				&ec2.DescribeInstancesInput{
-					InstanceIds: []*string{
-						amazonInstance.InstanceId,
-					},
+					InstanceIds: []*string{awsInstanceID},
 				},
 			)
-			if err != nil {
-				logr.WithError(err).
-					Warnln("provision: instance details failed")
+			if descrErr != nil {
+				logr.WithError(err).Warnln("provision: instance details failed")
 				continue
 			}
 
@@ -456,34 +277,171 @@ poller:
 				logr.Warnln("provision: empty reservations in details")
 				continue
 			}
+
 			if len(desc.Reservations[0].Instances) == 0 {
 				logr.Warnln("provision: empty instances in reservations")
 				continue
 			}
 
-			amazonInstance = desc.Reservations[0].Instances[0]
+			amazonInstance := desc.Reservations[0].Instances[0]
+			instanceID := *amazonInstance.InstanceId
+			instanceIP := p.getIP(amazonInstance)
 
-			if !p.allocPublicIP {
-				if amazonInstance.PrivateIpAddress != nil {
-					instance.IP = *amazonInstance.PrivateIpAddress
-					break poller
-				}
+			if instanceIP == "" {
+				logr.Warnln("provision: instance has no IP")
+				continue
 			}
 
-			if amazonInstance.PublicIpAddress != nil {
-				instance.IP = *amazonInstance.PublicIpAddress
-				break poller
+			instance = &vmpool.Instance{
+				ID: instanceID,
+				IP: instanceIP,
+			}
+
+			logr.
+				WithField("ip", instanceIP).
+				WithField("time(seconds)", (time.Since(startTime)).Seconds()).
+				Infoln("provision: complete")
+
+			return
+		}
+	}
+}
+
+func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err error) {
+	client := p.credentials.getClient()
+
+	logr := logger.FromContext(ctx).
+		WithField("provider", provider).
+		WithField("pool", p.name)
+
+	params := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("instance-state-name"),
+				Values: []*string{aws.String("pending"), aws.String("running")},
+			},
+			{
+				Name:   aws.String("tag:" + tagCreator),
+				Values: []*string{aws.String(vmpool.RunnerName)},
+			},
+			{
+				Name:   aws.String("tag:" + tagPool),
+				Values: []*string{aws.String(p.name)},
+			},
+		},
+	}
+
+	logr.Traceln("list VMs")
+
+	describeRes, err := client.DescribeInstancesWithContext(ctx, params)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("failed to list VMs")
+		return
+	}
+
+	for _, awsReservation := range describeRes.Reservations {
+		for _, awsInstance := range awsReservation.Instances {
+			id := *awsInstance.InstanceId
+			ip := p.getIP(awsInstance)
+			inst := vmpool.Instance{
+				ID: id,
+				IP: ip,
+			}
+
+			var isBusy bool
+			for _, keys := range awsInstance.Tags {
+				if *keys.Key == tagStatus {
+					isBusy = *keys.Value == tagStatusValue
+					break
+				}
+			}
+			if isBusy {
+				busy = append(busy, inst)
+			} else {
+				free = append(free, inst)
 			}
 		}
 	}
 
-	logger.FromContext(ctx).
-		WithField("ami", p.GetInstanceType()).
-		WithField("pool", awsTags["pool"]).
-		WithField("adhoc", addBuildingTag).
-		WithField("id", instance.ID).
-		WithField("ip", instance.IP).
-		WithField("time(seconds)", (time.Since(startTime)).Seconds()).
-		Info("provision: complete")
-	return instance, nil
+	logr.
+		WithField("free", len(free)).
+		WithField("busy", len(busy)).
+		Debugln("list VMs")
+
+	for k, inst := range free {
+		logr.
+			WithField("idx", k).
+			WithField("id", inst.ID).
+			WithField("ip", inst.IP).
+			Debugln("found free instance")
+	}
+	for k, inst := range busy {
+		logr.
+			WithField("idx", k).
+			WithField("id", inst.ID).
+			WithField("ip", inst.IP).
+			Debugln("found busy instance")
+	}
+
+	return
+}
+
+func (p *awsPool) Tag(ctx context.Context, instanceID, key, value string) (err error) {
+	client := p.credentials.getClient()
+
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceID).
+		WithField("provider", provider)
+
+	logr.Traceln("tag VM")
+
+	input := &ec2.CreateTagsInput{
+		Resources: []*string{aws.String(instanceID)},
+		Tags:      []*ec2.Tag{{Key: aws.String(key), Value: aws.String(value)}},
+	}
+
+	_, err = client.CreateTagsWithContext(ctx, input)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("failed to tag VM")
+		return
+	}
+
+	logr.Infoln("VM tagged")
+	return
+}
+
+func (p *awsPool) TagAsInUse(ctx context.Context, instanceID string) error {
+	return p.Tag(ctx, instanceID, tagStatus, tagStatusValue)
+}
+
+// Destroy destroys the server AWS EC2 instances.
+func (p *awsPool) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+	if len(instanceIDs) == 0 {
+		return
+	}
+
+	client := p.credentials.getClient()
+
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceIDs).
+		WithField("provider", provider)
+
+	logr.Traceln("terminate VMs")
+
+	awsIDs := make([]*string, len(instanceIDs))
+	for i, instanceID := range instanceIDs {
+		awsIDs[i] = aws.String(instanceID)
+	}
+
+	_, err = client.TerminateInstances(&ec2.TerminateInstancesInput{InstanceIds: awsIDs})
+	if err != nil {
+		logr.WithError(err).
+			Errorln("failed to terminate VMs")
+		return
+	}
+
+	logr.Infoln("VMs terminated")
+	return
 }

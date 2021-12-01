@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-
-	"github.com/sirupsen/logrus"
 )
 
 // Params defines parameters used to create userdata files.
@@ -66,7 +64,6 @@ runcmd:
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
 `, params.PublicKey, createLinuxCertsSection(params.CaCertFile, params.CertFile, params.KeyFile, "/tmp/certs/"), params.LiteEnginePath)
 	}
-	logrus.Infof("cloudinit:\n%s\n", payload)
 	return payload
 }
 
@@ -122,7 +119,6 @@ nssm.exe start lite-engine
 		certs := createWindowsCertsSection(params.CaCertFile, params.CertFile, params.KeyFile, "/tmp/certs")
 		payload = gitKeysInstall + adminAccessSSHRestart + certs + installLE
 	}
-	logrus.Infof("cloudinit:\n%s\n", payload)
 	return payload
 }
 

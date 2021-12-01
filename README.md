@@ -47,5 +47,5 @@ curl -d '{"ip_address":<IP OF INSTANCE>, "start_step_request":{"id":"step4", "im
 + destroy an instance:
 
 ```BASH
-curl -d '{"correlation_id":"this-is-unique", "pool_id":"ubuntu", "id":"<ID OF AWS INSTANCE>" }' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy
+curl -d '{"correlation_id":"this-is-unique", "pool_id":"ubuntu", "instance_id":"<ID OF AWS INSTANCE>" }' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy
 ```

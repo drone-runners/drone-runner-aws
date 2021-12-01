@@ -36,7 +36,7 @@ type delegateCommand struct {
 	awsSettings cloudaws.AccessSettings
 }
 
-func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, gocyclo
+func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	envError := godotenv.Load(c.envfile)
 	if envError != nil {
@@ -119,7 +119,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	}
 	// lets remove any old instances.
 	if !config.Settings.ReusePool {
-		cleanErr := poolManager.CleanPools(ctx)
+		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("delegate: unable to clean pools")
@@ -127,7 +127,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 			logrus.Infoln("delegate: pools cleaned")
 		}
 	}
-	// seed a pool
+
+	// seed pools
 	err = poolManager.BuildPools(ctx)
 	if err != nil {
 		logrus.WithError(err).
@@ -204,7 +205,7 @@ func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
 	}
 }
 
-func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerFunc { //nolint:funlen
+func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// check our input
 		if r.Method != http.MethodPost {
@@ -224,42 +225,14 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-		// get an instance
-		logrus.
-			WithField("ami", pool.GetInstanceType()).
-			WithField("pool", pool.GetName()).
-			Debug("handleSetup: starting setup")
-		instance, tryPoolErr := pool.TryPool(r.Context())
-		if tryPoolErr != nil {
-			logrus.WithError(tryPoolErr).
+		instance, err := poolManager.Provision(r.Context(), reqData.PoolID)
+		if err != nil {
+			logrus.WithError(err).
 				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", pool.GetName()).
-				Errorf("handleSetup: failed trying pool")
-		}
-		if instance != nil {
-			// using the pool, use the provided keys
-			logrus.
-				WithField("ami", pool.GetInstanceType()).
-				WithField("pool", pool.GetName()).
-				WithField("ip", instance.IP).
-				WithField("id", instance.ID).
-				Debug("handleSetup: got a pool instance")
-		} else {
-			logrus.
-				WithField("ami", pool.GetInstanceType()).
-				WithField("pool", pool.GetName()).
-				Debug("handleSetup: pool empty, creating an adhoc instance")
-
-			var provisionErr error
-			instance, provisionErr = pool.Provision(r.Context(), true)
-			if provisionErr != nil {
-				logrus.WithError(provisionErr).
-					WithField("ami", pool.GetInstanceType()).
-					WithField("pool", pool.GetName()).
-					Errorf("handleSetup: failed provisioning")
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				return
-			}
+				Errorf("handleSetup: failed provisioning")
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
 		}
 		// create client to lite-engine
 		client, err := lehttp.NewHTTPClient(
@@ -416,14 +389,8 @@ func (c *delegateCommand) handleDestroy(poolManager *vmpool.Manager) http.Handle
 		}
 
 		fmt.Printf("\n\nExecuting cleanup: %v\n", reqData)
-
-		pool := poolManager.Get(reqData.PoolID)
-		instance := &vmpool.Instance{
-			ID: reqData.ID,
-			IP: "", // TODO remove this
-		}
-		destroyErr := pool.Destroy(r.Context(), instance)
-		if destroyErr != nil {
+		err = poolManager.Destroy(r.Context(), reqData.PoolID, reqData.InstanceID)
+		if err != nil {
 			logrus.WithError(err).
 				Errorln("cannot destroy the instance")
 			w.WriteHeader(http.StatusInternalServerError)

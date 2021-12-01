@@ -78,8 +78,8 @@ github.com/google/go-cmp v0.5.2/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/
 github.com/gorilla/mux v1.7.4/go.mod h1:DVbg23sWSpFRCP0SfiEN6jmj59UnW/n46BH5rLB71So=
 github.com/gosimple/slug v1.9.0 h1:r5vDcYrFz9BmfIAMC829un9hq7hKM4cHUrsv36LbEqs=
 github.com/gosimple/slug v1.9.0/go.mod h1:AMZ+sOVe65uByN3kgEyf9WEBKBCSS+dJjMX9x4vDJbg=
-github.com/harness/lite-engine v0.0.0-20211202144429-37341d464187 h1:GEcf3Kle5CPfRTG4+tlA/MQWBI95kJLbkNewPrN0koQ=
-github.com/harness/lite-engine v0.0.0-20211202144429-37341d464187/go.mod h1:OEqIEuNhB6Ax+7DPX6uqR1iAoucItLGPd/Vc9xX+BNs=
+github.com/harness/lite-engine v0.0.0-20211201111309-4889708bde4d h1:BuNoxeaozma+P46JTyyIP/kk54+Yc1ZeGxdGQsaRwIY=
+github.com/harness/lite-engine v0.0.0-20211201111309-4889708bde4d/go.mod h1:OEqIEuNhB6Ax+7DPX6uqR1iAoucItLGPd/Vc9xX+BNs=
 github.com/harness/lite-engine v0.0.0-20211202150444-b53cdc620e42 h1:vRO2KPZC7LygVW13gPZt0eRo/krIERlj5jlOQtjosmY=
 github.com/harness/lite-engine v0.0.0-20211202150444-b53cdc620e42/go.mod h1:OEqIEuNhB6Ax+7DPX6uqR1iAoucItLGPd/Vc9xX+BNs=
 github.com/hashicorp/errwrap v1.0.0 h1:hLrqtEDnRye3+sgx6z4qVLNuviH3MR5aQ0ykNJa/UYA=

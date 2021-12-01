@@ -42,7 +42,7 @@ type Compiler struct {
 }
 
 // Compile compiles the configuration file.
-func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:funlen,gocritic,gocyclo // its complex but standard
+func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	spec := &engine.Spec{}
 

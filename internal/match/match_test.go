@@ -10,7 +10,7 @@ import (
 	"github.com/drone/drone-go/drone"
 )
 
-func TestFunc(t *testing.T) { //nolint:funlen // unit test
+func TestFunc(t *testing.T) {
 	tests := []struct {
 		repo    string
 		event   string
