@@ -9,15 +9,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"

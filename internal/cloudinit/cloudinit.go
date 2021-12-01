@@ -9,7 +9,6 @@ package cloudinit
 import (
 	"encoding/base64"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -18,13 +17,15 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	PublicKey               string
-	LiteEnginePath          string
-	SourceCertificateFolder string
+	PublicKey      string
+	LiteEnginePath string
+	CaCertFile     string
+	CertFile       string
+	KeyFile        string
 }
 
 // Linux creates a userdata file for the Linux operating system.
-func Linux(params Params) (payload string) {
+func Linux(params *Params) (payload string) {
 	if params.LiteEnginePath == "" {
 		payload = fmt.Sprintf(`#cloud-config
 system_info:
@@ -61,13 +62,13 @@ runcmd:
 - 'wget "%s/lite-engine" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 - 'touch /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`, params.PublicKey, createLinuxCertsSection(params.SourceCertificateFolder, "/tmp/certs/"), params.LiteEnginePath)
+- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`, params.PublicKey, createLinuxCertsSection(params.CaCertFile, params.CertFile, params.KeyFile, "/tmp/certs/"), params.LiteEnginePath)
 	}
 	logrus.Infof("cloudinit:\n%s\n", payload)
 	return payload
 }
 
-func Windows(params Params) (payload string) {
+func Windows(params *Params) (payload string) {
 	if params.LiteEnginePath == "" {
 		chunk1 := fmt.Sprintf(`<powershell>
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')) 
@@ -116,60 +117,62 @@ New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profi
 nssm.exe install lite-engine "C:\Program Files\lite-engine\lite-engine.exe" server --env-file="""""""C:\Program Files\lite-engine\.env"""""""
 nssm.exe start lite-engine 
 </powershell>`, params.LiteEnginePath)
-		certs := createWindowsCertsSection(params.SourceCertificateFolder, "/tmp/certs")
+		certs := createWindowsCertsSection(params.CaCertFile, params.CertFile, params.KeyFile, "/tmp/certs")
 		payload = gitKeysInstall + adminAccessSSHRestart + certs + installLE
 	}
 	logrus.Infof("cloudinit:\n%s\n", payload)
 	return payload
 }
 
-func readFileEncode(path string) (encodedString string, encodingErr error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	encodedString = base64.StdEncoding.EncodeToString(content)
-	return encodedString, err
-}
-
-func createLinuxCertsSection(sourceFolder, targetFolder string) (section string) {
-	files := []string{"ca-cert.pem", "server-cert.pem", "server-key.pem"}
+func createLinuxCertsSection(caCertFile, certFile, keyFile, targetFolder string) (section string) {
 	section = "write_files:\n"
-	for file := range files {
-		sourceFile := filepath.Join(sourceFolder, files[file])
-		targetFile := filepath.Join(targetFolder, files[file])
-		encodedString, err := readFileEncode(sourceFile)
-		if err != nil {
-			fmt.Println(err)
-		}
-		section += fmt.Sprintf(
-			`- path: %s
-  permissions: '0600'
-  encoding: b64
-  content: %s
-`, targetFile, encodedString)
-	}
+
+	section += fmt.Sprintf(
+		`- path: %s
+permissions: '0600'
+encoding: b64
+content: %s
+`, filepath.Join(targetFolder, "ca-cert.pem"), base64.StdEncoding.EncodeToString([]byte(caCertFile)))
+
+	section += fmt.Sprintf(
+		`- path: %s
+permissions: '0600'
+encoding: b64
+content: %s
+`, filepath.Join(targetFolder, "server-cert.pem"), base64.StdEncoding.EncodeToString([]byte(certFile)))
+
+	section += fmt.Sprintf(
+		`- path: %s
+permissions: '0600'
+encoding: b64
+content: %s
+`, filepath.Join(targetFolder, "server-key.pem"), base64.StdEncoding.EncodeToString([]byte(keyFile)))
 	return section
 }
 
-func createWindowsCertsSection(sourceFolder, targetFolder string) (section string) {
-	files := []string{"ca-cert.pem", "server-cert.pem", "server-key.pem"}
+func createWindowsCertsSection(caCertFile, certFile, keyFile, targetFolder string) (section string) {
 	section = fmt.Sprintf(`
 mkdir "C:\Program Files\lite-engine"
 mkdir "%s"
 	 `, targetFolder)
-	for file := range files {
-		sourceFile := filepath.Join(sourceFolder, files[file])
-		targetFile := filepath.Join(targetFolder, files[file])
-		encodedString, err := readFileEncode(sourceFile)
-		if err != nil {
-			fmt.Println(err)
-		}
-		section += fmt.Sprintf(
-			`$object%d = "%s"
-$Object = [System.Convert]::FromBase64String($object%d)
+
+	section += fmt.Sprintf(
+		`$object0 = "%s"
+$Object = [System.Convert]::FromBase64String($object0)
 [system.io.file]::WriteAllBytes("%s",$object)
-`, file, encodedString, file, targetFile)
-	}
+`, base64.StdEncoding.EncodeToString([]byte(caCertFile)), filepath.Join(targetFolder, "ca-cert.pem"))
+
+	section += fmt.Sprintf(
+		`$object1 = "%s"
+$Object = [System.Convert]::FromBase64String($object1)
+[system.io.file]::WriteAllBytes("%s",$object)
+`, base64.StdEncoding.EncodeToString([]byte(certFile)), filepath.Join(targetFolder, "server-cert.pem"))
+
+	section += fmt.Sprintf(
+		`$object2 = "%s"
+$Object = [System.Convert]::FromBase64String($object2)
+[system.io.file]::WriteAllBytes("%s",$object)
+`, base64.StdEncoding.EncodeToString([]byte(keyFile)), filepath.Join(targetFolder, "server-key.pem"))
+
 	return section
 }

@@ -12,7 +12,6 @@ import (
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
-	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
@@ -23,6 +22,7 @@ import (
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 	"github.com/harness/lite-engine/engine/spec"
+
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -31,11 +31,11 @@ import (
 )
 
 type delegateCommand struct {
-	envfile  string
-	poolfile string
+	envfile     string
+	poolfile    string
+	runnerName  string
+	awsSettings cloudaws.AccessSettings
 }
-
-var delegateEngineOpts engine.Opts
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, gocyclo
 	// load environment variables from file.
@@ -56,6 +56,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	if err != nil {
 		return err
 	}
+	// set runner name
+	c.runnerName = config.Runner.Name
 	// setup the global logrus logger.
 	daemon.SetupLogger(&config)
 
@@ -71,22 +73,32 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 		logrus.Fatalln("delegate: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
 
-	awsAccessSettings := cloudaws.AccessSettings{
-		AccessKey:         config.Settings.AwsAccessKeyID,
-		AccessSecret:      config.Settings.AwsAccessKeySecret,
-		Region:            config.Settings.AwsRegion,
-		PrivateKeyFile:    config.Settings.PrivateKeyFile,
-		PublicKeyFile:     config.Settings.PublicKeyFile,
-		LiteEnginePath:    config.Settings.LiteEnginePath,
-		CertificateFolder: config.Settings.CertificateFolder,
-	}
-
 	certGenerationErr := le.GenerateLECerts(config.Runner.Name, config.Settings.CertificateFolder)
 	if certGenerationErr != nil {
 		logrus.WithError(processEnvErr).
 			Errorln("failed to generate certificates")
 	}
 
+	ce, err := le.ReadLECerts(config.Settings.CertificateFolder)
+	if err != nil {
+		return nil
+	}
+
+	awsAccessSettings := cloudaws.AccessSettings{
+		AccessKey:      config.Settings.AwsAccessKeyID,
+		AccessSecret:   config.Settings.AwsAccessKeySecret,
+		Region:         config.Settings.AwsRegion,
+		PrivateKeyFile: config.Settings.PrivateKeyFile,
+		PublicKeyFile:  config.Settings.PublicKeyFile,
+		LiteEnginePath: config.Settings.LiteEnginePath,
+		CaCertFile:     ce.CaCertFile,
+		CertFile:       ce.CertFile,
+		KeyFile:        ce.KeyFile,
+	}
+
+	c.awsSettings = awsAccessSettings
+
+	// read cert files into memory
 	pools, poolFileErr := cloudaws.ProcessPoolFile(c.poolfile, &awsAccessSettings, config.Runner.Name)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
@@ -107,9 +119,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 		return err
 	}
 
-	delegateEngineOpts = engine.Opts{
-		PoolManager: poolManager,
-	}
 	// lets remove any old instances.
 	if !config.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx)
@@ -135,7 +144,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	var g errgroup.Group
 	runnerServer := server.Server{
 		Addr:    ":3000", // config.Server.Port,
-		Handler: delegateListener(poolManager, config.Runner.Name, config.Settings.CertificateFolder),
+		Handler: c.delegateListener(poolManager),
 	}
 
 	logrus.WithField("addr", ":3000" /*config.Server.Port*/).
@@ -163,11 +172,11 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error { // nolint: funlen, 
 	return waitErr
 }
 
-func delegateListener(poolManager *vmpool.Manager, runnerName, certFolder string) http.Handler {
+func (c *delegateCommand) delegateListener(poolManager *vmpool.Manager) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/setup", handleSetup(poolManager, runnerName, certFolder))
-	mux.HandleFunc("/destroy", handleDestroy(poolManager))
-	mux.HandleFunc("/step", handleStep(runnerName, certFolder))
+	mux.HandleFunc("/setup", c.handleSetup(poolManager))
+	mux.HandleFunc("/destroy", c.handleDestroy(poolManager))
+	mux.HandleFunc("/step", c.handleStep())
 	mux.HandleFunc("/pool_owner", handlePoolOwner(poolManager))
 	return mux
 }
@@ -204,7 +213,7 @@ func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
 	}
 }
 
-func handleSetup(poolManager *vmpool.Manager, runnerName, certFolder string) http.HandlerFunc { //nolint:funlen
+func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerFunc { //nolint:funlen
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			fmt.Println("handleSetup: failed to read setup post request")
@@ -263,7 +272,7 @@ func handleSetup(poolManager *vmpool.Manager, runnerName, certFolder string) htt
 
 		client, err := lehttp.NewHTTPClient(
 			fmt.Sprintf("https://%s:9079/", instance.IP),
-			runnerName, fmt.Sprintf("%s/ca-cert.pem", certFolder), fmt.Sprintf("%s/server-cert.pem", certFolder), fmt.Sprintf("%s/server-key.pem", certFolder))
+			c.runnerName, c.awsSettings.CaCertFile, c.awsSettings.CertFile, c.awsSettings.KeyFile)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("failed to create client")
@@ -318,7 +327,7 @@ func handleSetup(poolManager *vmpool.Manager, runnerName, certFolder string) htt
 	}
 }
 
-func handleStep(runnerName, certFolder string) http.HandlerFunc {
+func (c *delegateCommand) handleStep() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			fmt.Println("failed to read setup step request")
@@ -349,7 +358,7 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 		fmt.Fprintf(os.Stdout, "--- step=%s end --- vvv ---\n", reqData.ID)
 		client, err := lehttp.NewHTTPClient(
 			fmt.Sprintf("https://%s:9079/", instanceIP),
-			runnerName, fmt.Sprintf("%s/ca-cert.pem", certFolder), fmt.Sprintf("%s/server-cert.pem", certFolder), fmt.Sprintf("%s/server-key.pem", certFolder))
+			c.runnerName, c.awsSettings.CaCertFile, c.awsSettings.CertFile, c.awsSettings.KeyFile)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("failed to create client")
@@ -382,7 +391,7 @@ func handleStep(runnerName, certFolder string) http.HandlerFunc {
 	}
 }
 
-func handleDestroy(poolManager *vmpool.Manager) http.HandlerFunc {
+func (c *delegateCommand) handleDestroy(poolManager *vmpool.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)

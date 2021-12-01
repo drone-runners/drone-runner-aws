@@ -5,12 +5,19 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/harness/lite-engine/cli/certs"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const certPermissions = os.FileMode(0600)
+
+type CertList struct {
+	CaCertFile string
+	CertFile   string
+	KeyFile    string
+}
 
 func GenerateLECerts(serverName, relPath string) error {
 	// lets see if the certificates exist
@@ -53,4 +60,20 @@ func GenerateLECerts(serverName, relPath string) error {
 		return errors.Wrap(err, "failed to write server key file")
 	}
 	return nil
+}
+
+func ReadLECerts(certFolder string) (*CertList, error) {
+	caCertFile, err := os.ReadFile(fmt.Sprintf("%s/ca-cert.pem", certFolder))
+	if err != nil {
+		return nil, err
+	}
+	certFile, err := os.ReadFile(fmt.Sprintf("%s/server-cert.pem", certFolder))
+	if err != nil {
+		return nil, err
+	}
+	keyFile, err := os.ReadFile(fmt.Sprintf("%s/server-key.pem", certFolder))
+	if err != nil {
+		return nil, err
+	}
+	return &CertList{CaCertFile: string(caCertFile), CertFile: string(certFile), KeyFile: string(keyFile)}, nil
 }
