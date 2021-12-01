@@ -32,6 +32,20 @@ This runner was initially designed in the following [proposal](https://github.co
 + add the ngrok url to the env file `DRONE_SETTINGS_LITE_ENGINE_PATH=https://c6bf-80-7-0-64.ngrok.io`
 + make sure to add port 9079 to your incoming network aws security group.
 + Run the delegate command, wait for the pool creation to complete.
-+ setup an instance `curl -d '{"stage_id":"this-is-unique", "pool":"ubuntu"}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/setup`
-+ Run a step `curl -d '{"stage_id":"this-is-unique", "step_id":"step1", "ip":"<IP OF AWS INSTANCE>", "command":"ps"}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/step`
-+ Run destroy `curl -d '{"stage_id":"this-is-unique", "pool":"ubuntu", "id":"<ID OF AWS INSTANCE>" }' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy`
++ setup an instance:
+
+```BASH
+curl -d '{"stage_id":"this-is-unique", "pool":"ubuntu"}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/setup
+```
+
++ run a step on the instance:
+
+```BASH
+curl -d '{"ip_address":<IP OF INSTANCE>, "start_step_request":{"id":"step4", "image": "alpine:3.11", "working_dir":"/tmp", "run":{"commands":["sleep 30"], "entrypoint":["sh", "-c"]}}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/step
+```
+
++ destroy an instance:
+
+```BASH
+curl -d '{"stage_id":"this-is-unique", "pool":"ubuntu", "id":"<ID OF AWS INSTANCE>" }' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy
+```
