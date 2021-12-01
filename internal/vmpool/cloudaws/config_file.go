@@ -18,13 +18,15 @@ import (
 
 // AccessSettings defines settings for access
 type AccessSettings struct {
-	AccessKey         string
-	AccessSecret      string
-	Region            string
-	PrivateKeyFile    string
-	PublicKeyFile     string
-	LiteEnginePath    string // TODO: Location from where to download LE. Move this to be a global variable
-	CertificateFolder string // TODO: physical location of the certificates
+	AccessKey      string
+	AccessSecret   string
+	Region         string
+	PrivateKeyFile string
+	PublicKeyFile  string
+	LiteEnginePath string // TODO: Location from where to download LE. Move this to be a global variable
+	CaCertFile     string
+	CertFile       string
+	KeyFile        string
 }
 
 type (
@@ -225,17 +227,21 @@ func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerNa
 	// generate the cloudinit file
 	var userDataWithSSH string
 	if rawPool.Platform.OS == oshelp.WindowsString {
-		userDataWithSSH = cloudinit.Windows(cloudinit.Params{
-			PublicKey:               rawPool.Instance.PublicKey,
-			LiteEnginePath:          settings.LiteEnginePath,    // TODO this should be a global, not set in the poolfile
-			SourceCertificateFolder: settings.CertificateFolder, // TODO this should be a global, not set in the poolfile
+		userDataWithSSH = cloudinit.Windows(&cloudinit.Params{
+			PublicKey:      rawPool.Instance.PublicKey,
+			LiteEnginePath: settings.LiteEnginePath, // TODO this should be a global, not set in the poolfile
+			CaCertFile:     settings.CaCertFile,
+			CertFile:       settings.CertFile,
+			KeyFile:        settings.KeyFile,
 		})
 	} else {
 		// try using cloud init.
-		userDataWithSSH = cloudinit.Linux(cloudinit.Params{
-			PublicKey:               rawPool.Instance.PublicKey,
-			LiteEnginePath:          settings.LiteEnginePath,    // TODO this should be a global, not set in the poolfile
-			SourceCertificateFolder: settings.CertificateFolder, // TODO this should be a global, not set in the poolfile
+		userDataWithSSH = cloudinit.Linux(&cloudinit.Params{
+			PublicKey:      rawPool.Instance.PublicKey,
+			LiteEnginePath: settings.LiteEnginePath, // TODO this should be a global, not set in the poolfile
+			CaCertFile:     settings.CaCertFile,
+			CertFile:       settings.CertFile,
+			KeyFile:        settings.KeyFile,
 		})
 	}
 	rawPool.Instance.UserData = userDataWithSSH

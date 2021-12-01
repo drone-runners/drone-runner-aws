@@ -59,6 +59,10 @@ func (m *Manager) BuildPools(ctx context.Context) error {
 			return err
 		}
 
+		if pool.GetMaxSize() == 0 {
+			logrus.Warnf("Max pool size is set to zero %s", pool.GetName())
+		}
+
 		for instanceCount < pool.GetMaxSize() {
 			instance, setupErr := pool.Provision(ctx, false)
 			if setupErr != nil {

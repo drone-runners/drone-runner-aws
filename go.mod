@@ -14,9 +14,9 @@ require (
 	github.com/drone/runner-go v1.9.0
 	github.com/drone/signal v1.0.0
 	github.com/ghodss/yaml v1.0.0
-	github.com/google/go-cmp v0.3.0
+	github.com/google/go-cmp v0.5.2
 	github.com/gosimple/slug v1.9.0
-	github.com/harness/lite-engine v0.0.0-20211122121913-882c4552ef5b
+	github.com/harness/lite-engine v0.0.0-20211130071210-3663cd061d2e
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-isatty v0.0.14
@@ -44,7 +44,8 @@ require (
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/natessilva/dag v0.0.0-20180124060714-7194b8dcc5c4 // indirect
 	github.com/rainycape/unidecode v0.0.0-20150907023854-cb7f23ec59be // indirect
-	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
+	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d // indirect
+	golang.org/x/sys v0.0.0-20211124211545-fe61309f8881 // indirect
 	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 )
