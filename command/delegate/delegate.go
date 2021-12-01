@@ -299,6 +299,9 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			Info("handleSetup: health check complete")
 		// now setup the instance
 		setupRequest := &api.SetupRequest{
+			Platform: spec.Platform{
+				OS: pool.GetOS(),
+			},
 			Network: spec.Network{
 				ID: "drone",
 			},
