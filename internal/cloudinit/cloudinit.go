@@ -43,7 +43,8 @@ apt:
       source: deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable
       keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 packages:
-- docker-ce`, params.PublicKey)
+- docker-ce
+`, params.PublicKey)
 	} else {
 		payload = fmt.Sprintf(`#cloud-config
 system_info:
@@ -62,7 +63,8 @@ runcmd:
 - 'wget "%s/lite-engine" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 - 'touch /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`, params.PublicKey, createLinuxCertsSection(params.CaCertFile, params.CertFile, params.KeyFile, "/tmp/certs/"), params.LiteEnginePath)
+- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
+`, params.PublicKey, createLinuxCertsSection(params.CaCertFile, params.CertFile, params.KeyFile, "/tmp/certs/"), params.LiteEnginePath)
 	}
 	logrus.Infof("cloudinit:\n%s\n", payload)
 	return payload
@@ -125,27 +127,24 @@ nssm.exe start lite-engine
 }
 
 func createLinuxCertsSection(caCertFile, certFile, keyFile, targetFolder string) (section string) {
-	section = "write_files:\n"
-
-	section += fmt.Sprintf(
-		`- path: %s
-permissions: '0600'
-encoding: b64
-content: %s
+	section = "write_files:"
+	section += fmt.Sprintf(`
+- path: %s
+  permissions: '0600'
+  encoding: b64
+  content: %s
 `, filepath.Join(targetFolder, "ca-cert.pem"), base64.StdEncoding.EncodeToString([]byte(caCertFile)))
-
-	section += fmt.Sprintf(
-		`- path: %s
-permissions: '0600'
-encoding: b64
-content: %s
+	section += fmt.Sprintf(`
+- path: %s
+  permissions: '0600'
+  encoding: b64
+  content: %s
 `, filepath.Join(targetFolder, "server-cert.pem"), base64.StdEncoding.EncodeToString([]byte(certFile)))
-
-	section += fmt.Sprintf(
-		`- path: %s
-permissions: '0600'
-encoding: b64
-content: %s
+	section += fmt.Sprintf(`
+- path: %s
+  permissions: '0600'
+  encoding: b64
+  content: %s
 `, filepath.Join(targetFolder, "server-key.pem"), base64.StdEncoding.EncodeToString([]byte(keyFile)))
 	return section
 }

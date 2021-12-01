@@ -9,14 +9,14 @@ require (
 	github.com/buildkite/yaml v2.1.0+incompatible
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
-	github.com/drone/drone-go v1.6.0
+	github.com/drone/drone-go v1.7.1
 	github.com/drone/envsubst v1.0.3
-	github.com/drone/runner-go v1.9.0
+	github.com/drone/runner-go v1.12.0
 	github.com/drone/signal v1.0.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.2
 	github.com/gosimple/slug v1.9.0
-	github.com/harness/lite-engine v0.0.0-20211130071210-3663cd061d2e
+	github.com/harness/lite-engine v0.0.0-20211201111309-4889708bde4d
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-isatty v0.0.14
@@ -37,6 +37,7 @@ require (
 	github.com/bmatcuk/doublestar v1.1.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect

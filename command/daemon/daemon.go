@@ -22,6 +22,7 @@ import (
 	"github.com/drone/runner-go/handler/router"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
+	"github.com/drone/runner-go/pipeline"
 	"github.com/drone/runner-go/pipeline/reporter/history"
 	"github.com/drone/runner-go/pipeline/reporter/remote"
 	"github.com/drone/runner-go/pipeline/runtime"
@@ -171,6 +172,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 		Exec: runtime.NewExecer(
 			tracer,
 			remoteInstance,
+			pipeline.NopUploader(),
 			engInstance,
 			config.Runner.Procs,
 		).Exec,
