@@ -45,7 +45,7 @@ type daemonCommand struct {
 	Poolfile string
 }
 
-func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
+func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	envErr := godotenv.Load(c.envfile)
 	if envErr != nil {
@@ -238,7 +238,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 
 	// if there is no keyfiles lets remove any old instances.
 	if !config.Settings.ReusePool {
-		cleanErr := poolManager.CleanPools(ctx)
+		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("daemon: unable to clean pools")
@@ -258,7 +258,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyc
 	g.Go(func() error {
 		<-ctx.Done()
 		// clean up pool on termination
-		cleanErr := poolManager.CleanPools(ctx)
+		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("daemon: unable to clean pools")

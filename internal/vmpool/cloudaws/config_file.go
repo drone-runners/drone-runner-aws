@@ -33,6 +33,7 @@ type (
 	poolDefinition struct {
 		Name        string   `json:"name,omitempty"`
 		Root        string   `json:"root,omitempty"` // TODO: Remove this, the runner should not care about LE's root dir
+		MinPoolSize int      `json:"min_pool_size,omitempty" yaml:"min_pool_size"`
 		MaxPoolSize int      `json:"max_pool_size,omitempty" yaml:"max_pool_size"`
 		Platform    platform `json:"platform,omitempty"`
 		Account     account  `json:"account,omitempty"`
@@ -131,11 +132,10 @@ func DummyPool(name, runnerName string) vmpool.Pool {
 		runnerName: runnerName,
 		sizeMin:    0,
 		sizeMax:    1,
-		awsMutex:   awsMutex,
 	}
 }
 
-func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerName string) (*awsPool, error) { //nolint:funlen,gocyclo // its complex but standard
+func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerName string) (*awsPool, error) {
 	pipelineOS := rawPool.Platform.OS
 
 	creds := Credentials{
@@ -268,8 +268,7 @@ func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerNa
 		volumeSize:    rawPool.Instance.Disk.Size,
 		volumeIops:    rawPool.Instance.Disk.Iops,
 		defaultTags:   rawPool.Instance.Tags,
-		sizeMin:       0,
+		sizeMin:       rawPool.MinPoolSize,
 		sizeMax:       rawPool.MaxPoolSize,
-		awsMutex:      awsMutex,
 	}, nil
 }

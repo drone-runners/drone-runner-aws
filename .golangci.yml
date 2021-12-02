@@ -2,8 +2,8 @@ linters-settings:
   dupl:
     threshold: 100
   funlen:
-    lines: 100
-    statements: 50
+    lines: 400
+    statements: 100
   gci:
     local-prefixes: github.com/golangci/golangci-lint
   goconst:
@@ -23,7 +23,7 @@ linters-settings:
       - whyNoLint
       - wrapperFunc
   gocyclo:
-    min-complexity: 15
+    min-complexity: 25
   goimports:
     local-prefixes: github.com/golangci/golangci-lint
   gomnd:
@@ -51,6 +51,8 @@ linters-settings:
     allow-unused: false # report any unused nolint directives
     require-explanation: false # don't require an explanation for nolint directives
     require-specific: false # don't require nolint directives to be specific about which linter is being skipped
+  nakedret:
+    max-func-lines: 100
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.

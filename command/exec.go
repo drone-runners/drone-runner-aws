@@ -54,7 +54,7 @@ type execCommand struct {
 	Dump      bool
 }
 
-func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:funlen,gocyclo // its complex but not too bad.
+func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its complex but not too bad.
 	const runnerName = "exec"
 
 	rawsource, err := io.ReadAll(c.Source)

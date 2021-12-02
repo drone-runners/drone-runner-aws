@@ -41,7 +41,7 @@ func New(opts Opts) (*Engine, error) {
 }
 
 // Setup the pipeline environment.
-func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //nolint:funlen,gocyclo // its complex but standard
+func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 	if spec.CloudInstance.PoolName == "" {
 		return errors.New("setup: pool name is nil")
@@ -53,39 +53,19 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error { //noli
 	}
 
 	// lets see if there is anything in the pool
-	instance, poolErr := pool.TryPool(ctx)
-	if poolErr != nil {
+	instance, err := eng.opts.PoolManager.Provision(ctx, spec.CloudInstance.PoolName)
+	if err != nil {
 		logger.FromContext(ctx).
-			WithError(poolErr).
-			WithField("ami", pool.GetInstanceType()).
+			WithError(err).
 			WithField("pool", spec.CloudInstance.PoolName).
-			Errorf("setup: failed to use pool")
+			Errorf("setup: failed to provision an instance")
+		return err
 	}
-	if instance != nil {
-		// using the pool, use the provided keys
-		logger.FromContext(ctx).
-			WithField("ami", pool.GetInstanceType()).
-			WithField("pool", spec.CloudInstance.PoolName).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			Debug("setup: using pool instance")
-		spec.CloudInstance.ID = instance.ID
-		spec.CloudInstance.IP = instance.IP
-	} else {
-		logger.FromContext(ctx).
-			WithField("ami", pool.GetInstanceType()).
-			WithField("pool", spec.CloudInstance.PoolName).
-			Debug("setup: pool empty, creating an adhoc instance")
 
-		var provisionErr error
-		instance, provisionErr = pool.Provision(ctx, true)
-		if provisionErr != nil {
-			return provisionErr
-		}
+	// now we have an instance, put the information in the spec
+	spec.CloudInstance.ID = instance.ID
+	spec.CloudInstance.IP = instance.IP
 
-		spec.CloudInstance.ID = instance.ID
-		spec.CloudInstance.IP = instance.IP
-	}
 	// we are about to use the instance, this section contains pipeline specific info
 	client, sshErr := ssh.Dial(
 		spec.CloudInstance.IP,
@@ -248,18 +228,10 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		WithField("id", spec.CloudInstance.ID).
 		Debug("destroy: start")
 
-	pool := eng.opts.PoolManager.Get(spec.CloudInstance.PoolName)
-
-	// create creds
-	instance := &vmpool.Instance{
-		ID: spec.CloudInstance.ID,
-		IP: spec.CloudInstance.IP,
-	}
-	err := pool.Destroy(ctx, instance)
+	err := eng.opts.PoolManager.Destroy(ctx, spec.CloudInstance.PoolName, spec.CloudInstance.ID)
 	if err != nil {
 		logger.FromContext(ctx).
 			WithError(err).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -267,39 +239,7 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 
-	// repopulate the build pool, if needed. This is in destroy, because if in Run, it will slow the build.
-	// NB if we are destroying an adhoc instance from a pool (from an empty pool), this code will not be triggered because we overwrote spec.instance.
-	// preventing too many instances being created for a pool
-	if eng.opts.Repopulate {
-		poolCount, countPoolErr := pool.PoolCountFree(ctx)
-		if countPoolErr != nil {
-			logger.FromContext(ctx).
-				WithError(countPoolErr).
-				WithField("ami", pool.GetInstanceType()).
-				WithField("pool", spec.CloudInstance.PoolName).
-				Errorf("destroy: failed to checking pool")
-		}
-		if poolCount < pool.GetMaxSize() {
-			var provisionErr error
-			instance, provisionErr = pool.Provision(ctx, false)
-			if provisionErr != nil {
-				logger.FromContext(ctx).
-					WithError(provisionErr).
-					WithField("ami", pool.GetInstanceType()).
-					WithField("pool", spec.CloudInstance.PoolName).
-					Errorf("destroy: failed to add back to the pool")
-			} else {
-				logger.FromContext(ctx).
-					WithField("ami", pool.GetInstanceType()).
-					WithField("ip", instance.IP).
-					WithField("id", instance.ID).
-					WithField("pool", spec.CloudInstance.PoolName).
-					Debug("destroy: add back to the pool")
-			}
-		}
-	}
 	logger.FromContext(ctx).
-		WithField("ami", pool.GetInstanceType()).
 		WithField("pool", spec.CloudInstance.PoolName).
 		WithField("ip", spec.CloudInstance.IP).
 		WithField("id", spec.CloudInstance.ID).
@@ -308,7 +248,7 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 }
 
 // Run runs the pipeline step.
-func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step, output io.Writer) (*runtime.State, error) { //nolint:funlen // its complex but standard
+func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step, output io.Writer) (*runtime.State, error) {
 	spec := specv.(*Spec)
 	step := stepv.(*Step)
 
