@@ -21,7 +21,6 @@ import (
 	"github.com/drone/signal"
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
-	"github.com/harness/lite-engine/engine/spec"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -219,7 +218,7 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-		pool := poolManager.Get(reqData.Pool)
+		pool := poolManager.Get(reqData.PoolID)
 		if pool == nil {
 			logrus.Error("handleSetup: failed to find pool")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -297,16 +296,7 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			WithField("id", instance.ID).
 			WithField("response", *healthResponse).
 			Info("handleSetup: health check complete")
-		// now setup the instance
-		setupRequest := &api.SetupRequest{
-			Platform: spec.Platform{
-				OS: pool.GetOS(),
-			},
-			Network: spec.Network{
-				ID: "drone",
-			},
-		}
-		setupResponse, setupErr := client.Setup(r.Context(), setupRequest)
+		setupResponse, setupErr := client.Setup(r.Context(), &reqData.SetupRequest)
 		if setupErr != nil {
 			logrus.WithError(setupErr).
 				WithField("ami", pool.GetInstanceType()).
@@ -317,6 +307,7 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		JSON(w, api.SetupResponse{IPAddress: instance.IP, InstanceID: instance.ID}, http.StatusOK)
 		logrus.
 			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", pool.GetName()).
@@ -324,7 +315,6 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			WithField("id", instance.ID).
 			WithField("response", *setupResponse).
 			Info("handleSetup: setup complete")
-		w.WriteHeader(http.StatusOK)
 		// we have successfully setup the environment lets replace the lost pool member
 		// poolCount, countPoolErr := pool.PoolCountFree(r.Context())
 		// if countPoolErr != nil {
@@ -427,7 +417,7 @@ func (c *delegateCommand) handleDestroy(poolManager *vmpool.Manager) http.Handle
 
 		fmt.Printf("\n\nExecuting cleanup: %v\n", reqData)
 
-		pool := poolManager.Get(reqData.Pool)
+		pool := poolManager.Get(reqData.PoolID)
 		instance := &vmpool.Instance{
 			ID: reqData.ID,
 			IP: "", // TODO remove this
@@ -449,11 +439,20 @@ func RegisterDelegate(app *kingpin.Application) {
 
 	cmd := app.Command("delegate", "starts the delegate").
 		Action(c.run)
-
-	cmd.Arg("envfile", "load the environment variable file").
+	cmd.Flag("envfile", "load the environment variable file").
 		Default("").
 		StringVar(&c.envfile)
-	cmd.Arg("poolfile", "file to seed the aws pool").
+	cmd.Flag("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
 		StringVar(&c.poolfile)
+}
+
+func JSON(w http.ResponseWriter, v interface{}, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	enc := json.NewEncoder(w)
+	err := enc.Encode(v)
+	if err != nil {
+		return
+	}
 }

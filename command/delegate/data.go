@@ -26,20 +26,9 @@ func GetSetupRequest(r io.Reader) (*SetupRequest, error) {
 }
 
 type SetupRequest struct {
-	Pool  string     `json:"pool"`
-	Files []FileInfo `json:"files"`
-	api.SetupRequest
-}
-
-type FileInfo struct {
-	File File `json:"file"`
-}
-
-type File struct {
-	Path  string `json:"path"`
-	Mode  uint32 `json:"mode"`
-	Data  string `json:"data"`
-	IsDir bool   `json:"is_dir"`
+	CorrelationID    string `json:"correlation_id"`
+	PoolID           string `json:"pool_id"`
+	api.SetupRequest `json:"setup_request"`
 }
 
 func GetDestroyRequest(r io.Reader) (*DestroyRequest, error) {
@@ -52,9 +41,9 @@ func GetDestroyRequest(r io.Reader) (*DestroyRequest, error) {
 }
 
 type DestroyRequest struct {
-	StageID string `json:"stage_id"`
-	Pool    string `json:"pool"`
-	ID      string `json:"id"`
+	CorrelationID string `json:"correlation_id"`
+	PoolID        string `json:"pool_id"`
+	ID            string `json:"id"`
 }
 
 func GetExecStepRequest(r io.Reader) (*ExecStepRequest, error) {
