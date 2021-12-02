@@ -18,12 +18,6 @@ For more information about creating a build pipeline look at the [pipeline docum
 
 This runner was initially designed in the following [proposal](https://github.com/drone/proposal/blob/master/design/01-aws-runner.md).
 
-## Future Improvements
-
-+ tmate integration
-+ cli sub command to print ec2 instances information
-+ cli sub command to terminate all runner ec2 instances
-
 ## developer setup for testing / using the lite engine
 
 + build the lite-engine
