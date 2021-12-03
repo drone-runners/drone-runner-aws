@@ -9,12 +9,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
+
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
@@ -116,6 +118,18 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 			Errorln("delegate: cannot connect to cloud provider")
 		return err
 	}
+
+	// TODO: Move the durations to config
+	const busyMaxAge = time.Hour
+	const freeMaxAge = time.Hour * 12
+
+	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: failed to start instance purger")
+		return err
+	}
+
 	// lets remove any old instances.
 	if !config.DefaultPoolSettings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
@@ -159,6 +173,18 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		logrus.WithError(waitErr).
 			Errorln("shutting down the server")
 	}
+
+	// lets remove any old instances.
+	if !config.DefaultPoolSettings.ReusePool {
+		cleanErr := poolManager.CleanPools(context.Background(), true, true)
+		if cleanErr != nil {
+			logrus.WithError(cleanErr).
+				Errorln("delegate: unable to clean pools")
+		} else {
+			logrus.Infoln("delegate: pools cleaned")
+		}
+	}
+
 	return waitErr
 }
 
@@ -187,8 +213,8 @@ func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
 		}
 
 		// Query()["key"] will return an array of items, we only want the single item.
-		pool := keys[0]
-		fmt.Println("pool: ", pool)
+		poolName := keys[0]
+		fmt.Println("pool: ", poolName)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
@@ -197,8 +223,9 @@ func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
 		}
 
 		response := Response{
-			Owner: poolManager.Get(pool) != nil,
+			Owner: poolManager.Exists(poolName),
 		}
+
 		_ = json.NewEncoder(w).Encode(response)
 	}
 }
@@ -217,17 +244,18 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-		pool := poolManager.Get(reqData.PoolID)
-		if pool == nil {
+
+		poolName := reqData.PoolID
+		if !poolManager.Exists(poolName) {
 			logrus.Error("handleSetup: failed to find pool")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-		instance, err := poolManager.Provision(r.Context(), reqData.PoolID)
+
+		instance, err := poolManager.Provision(r.Context(), poolName)
 		if err != nil {
 			logrus.WithError(err).
-				WithField("ami", pool.GetInstanceType()).
-				WithField("pool", pool.GetName()).
+				WithField("pool", poolName).
 				Errorf("handleSetup: failed provisioning")
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -243,16 +271,14 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 		}
 		// try the healthcheck api on the lite-engine until it responds ok
 		logrus.
-			WithField("ami", pool.GetInstanceType()).
-			WithField("pool", pool.GetName()).
+			WithField("pool", poolName).
 			WithField("ip", instance.IP).
 			WithField("id", instance.ID).
 			Debug("handleSetup: running healthcheck and waiting for an ok response")
 		healthResponse, healthErr := client.RetryHealth(r.Context())
 		if healthErr != nil {
 			logrus.
-				WithField("ami", pool.GetInstanceType()).
-				WithField("pool", pool.GetName()).
+				WithField("pool", poolName).
 				WithField("ip", instance.IP).
 				WithField("id", instance.ID).
 				WithError(healthErr).
@@ -261,8 +287,7 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			return
 		}
 		logrus.
-			WithField("ami", pool.GetInstanceType()).
-			WithField("pool", pool.GetName()).
+			WithField("pool", poolName).
 			WithField("ip", instance.IP).
 			WithField("id", instance.ID).
 			WithField("response", *healthResponse).
@@ -270,8 +295,7 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 		setupResponse, setupErr := client.Setup(r.Context(), &reqData.SetupRequest)
 		if setupErr != nil {
 			logrus.WithError(setupErr).
-				WithField("ami", pool.GetInstanceType()).
-				WithField("pool", pool.GetName()).
+				WithField("pool", poolName).
 				WithField("ip", instance.IP).
 				WithField("id", instance.ID).
 				Errorln("handleSetup: setup call failed")
@@ -280,8 +304,7 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 		}
 		JSON(w, api.SetupResponse{IPAddress: instance.IP, InstanceID: instance.ID}, http.StatusOK)
 		logrus.
-			WithField("ami", pool.GetInstanceType()).
-			WithField("pool", pool.GetName()).
+			WithField("pool", poolName).
 			WithField("ip", instance.IP).
 			WithField("id", instance.ID).
 			WithField("response", *setupResponse).

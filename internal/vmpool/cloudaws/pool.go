@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
@@ -28,8 +27,6 @@ const (
 
 // awsPool is a struct that implements vmpool.Pool interface
 type awsPool struct {
-	mutex sync.Mutex
-
 	name        string
 	runnerName  string
 	credentials Credentials
@@ -58,14 +55,6 @@ type awsPool struct {
 	// pool size data
 	sizeMin int
 	sizeMax int
-}
-
-func (p *awsPool) Lock() {
-	p.mutex.Lock()
-}
-
-func (p *awsPool) Unlock() {
-	p.mutex.Unlock()
 }
 
 func (p *awsPool) GetProviderName() string {
@@ -129,6 +118,31 @@ func (p *awsPool) getIP(amazonInstance *ec2.Instance) string {
 		return ""
 	}
 	return *amazonInstance.PrivateIpAddress
+}
+
+func (p *awsPool) getLaunchTime(amazonInstance *ec2.Instance) time.Time {
+	if amazonInstance.LaunchTime == nil {
+		return time.Now()
+	}
+	return *amazonInstance.LaunchTime
+}
+
+func (p *awsPool) getTags(amazonInstance *ec2.Instance) map[string]string {
+	if len(amazonInstance.Tags) == 0 {
+		return nil
+	}
+
+	tags := make(map[string]string, len(amazonInstance.Tags))
+
+	for _, awsTag := range amazonInstance.Tags {
+		if awsTag == nil || awsTag.Key == nil || awsTag.Value == nil {
+			continue
+		}
+
+		tags[*awsTag.Key] = *awsTag.Value
+	}
+
+	return tags
 }
 
 // Provision creates an AWS instance for the pool, it will not perform build specific setup.
@@ -286,6 +300,8 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 			amazonInstance := desc.Reservations[0].Instances[0]
 			instanceID := *amazonInstance.InstanceId
 			instanceIP := p.getIP(amazonInstance)
+			instanceTags := p.getTags(amazonInstance)
+			launchTime := p.getLaunchTime(amazonInstance)
 
 			if instanceIP == "" {
 				logr.Warnln("provision: instance has no IP")
@@ -293,13 +309,15 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 			}
 
 			instance = &vmpool.Instance{
-				ID: instanceID,
-				IP: instanceIP,
+				ID:        instanceID,
+				IP:        instanceIP,
+				Tags:      instanceTags,
+				StartedAt: launchTime,
 			}
 
 			logr.
 				WithField("ip", instanceIP).
-				WithField("time(seconds)", (time.Since(startTime)).Seconds()).
+				WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 				Infoln("provision: complete")
 
 			return
@@ -344,9 +362,14 @@ func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err e
 		for _, awsInstance := range awsReservation.Instances {
 			id := *awsInstance.InstanceId
 			ip := p.getIP(awsInstance)
+			tags := p.getTags(awsInstance)
+			launchTime := p.getLaunchTime(awsInstance)
+
 			inst := vmpool.Instance{
-				ID: id,
-				IP: ip,
+				ID:        id,
+				IP:        ip,
+				Tags:      tags,
+				StartedAt: launchTime,
 			}
 
 			var isBusy bool
@@ -369,25 +392,28 @@ func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err e
 		WithField("busy", len(busy)).
 		Debugln("list VMs")
 
+	// TODO: Listing of each found instance is probably too verbose. Remove this code.
 	for k, inst := range free {
 		logr.
 			WithField("idx", k).
 			WithField("id", inst.ID).
 			WithField("ip", inst.IP).
-			Debugln("found free instance")
+			WithField("launchedAt", inst.StartedAt.Format(time.RFC3339)).
+			Traceln("found free instance")
 	}
 	for k, inst := range busy {
 		logr.
 			WithField("idx", k).
 			WithField("id", inst.ID).
 			WithField("ip", inst.IP).
-			Debugln("found busy instance")
+			WithField("launchedAt", inst.StartedAt.Format(time.RFC3339)).
+			Traceln("found busy instance")
 	}
 
 	return
 }
 
-func (p *awsPool) Tag(ctx context.Context, instanceID, key, value string) (err error) {
+func (p *awsPool) Tag(ctx context.Context, instanceID string, tags map[string]string) (err error) {
 	client := p.credentials.getClient()
 
 	logr := logger.FromContext(ctx).
@@ -396,9 +422,17 @@ func (p *awsPool) Tag(ctx context.Context, instanceID, key, value string) (err e
 
 	logr.Traceln("tag VM")
 
+	awsTags := make([]*ec2.Tag, 0, len(tags))
+	for key, value := range tags {
+		awsTags = append(awsTags, &ec2.Tag{
+			Key:   aws.String(key),
+			Value: aws.String(value),
+		})
+	}
+
 	input := &ec2.CreateTagsInput{
 		Resources: []*string{aws.String(instanceID)},
-		Tags:      []*ec2.Tag{{Key: aws.String(key), Value: aws.String(value)}},
+		Tags:      awsTags,
 	}
 
 	_, err = client.CreateTagsWithContext(ctx, input)
@@ -413,7 +447,7 @@ func (p *awsPool) Tag(ctx context.Context, instanceID, key, value string) (err e
 }
 
 func (p *awsPool) TagAsInUse(ctx context.Context, instanceID string) error {
-	return p.Tag(ctx, instanceID, tagStatus, tagStatusValue)
+	return p.Tag(ctx, instanceID, map[string]string{tagStatus: tagStatusValue})
 }
 
 // Destroy destroys the server AWS EC2 instances.

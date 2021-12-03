@@ -50,15 +50,14 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 
 func checkPools(pipeline *resource.Pipeline, poolManager *vmpool.Manager) error {
 	if poolManager.Count() == 0 {
-		return fmt.Errorf("linter: there are no pools in the pool file")
+		return fmt.Errorf("linter: there are no pools defined")
 	}
 	if pipeline.Pool.Use == "" {
 		return fmt.Errorf("linter: you must specify a 'pool' to 'use'")
 	}
 	// if we dont match lets exit
-	pool := poolManager.Get(pipeline.Pool.Use)
-	if pool == nil {
-		errMsg := fmt.Sprintf("linter: unable to find pool '%s' in pool file.", pipeline.Pool.Use)
+	if !poolManager.Exists(pipeline.Pool.Use) {
+		errMsg := fmt.Sprintf("linter: unable to find definition of pool %q.", pipeline.Pool.Use)
 		return errors.New(errMsg)
 	}
 	return nil
