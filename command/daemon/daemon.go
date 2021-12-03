@@ -51,7 +51,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	if envErr != nil {
 		return envErr
 	}
-
 	// load the configuration from the environment
 	config, err := FromEnviron()
 	if err != nil {
@@ -87,19 +86,24 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 
-	if (config.Settings.PrivateKeyFile != "" && config.Settings.PublicKeyFile == "") || (config.Settings.PrivateKeyFile == "" && config.Settings.PublicKeyFile != "") {
+	if (config.DefaultPoolSettings.PrivateKeyFile != "" && config.DefaultPoolSettings.PublicKeyFile == "") ||
+		(config.DefaultPoolSettings.PrivateKeyFile == "" && config.DefaultPoolSettings.PublicKeyFile != "") {
 		logrus.Fatalln("daemon: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
-
-	awsAccessSettings := &cloudaws.AccessSettings{
-		AccessKey:      config.Settings.AwsAccessKeyID,
-		AccessSecret:   config.Settings.AwsAccessKeySecret,
-		Region:         config.Settings.AwsRegion,
-		PrivateKeyFile: config.Settings.PrivateKeyFile,
-		PublicKeyFile:  config.Settings.PublicKeyFile,
+	// we have enough information for default pool settings
+	defaultPoolSettings := vmpool.DefaultSettings{
+		RunnerName:         config.Runner.Name,
+		PrivateKeyFile:     config.DefaultPoolSettings.PrivateKeyFile,
+		PublicKeyFile:      config.DefaultPoolSettings.PublicKeyFile,
+		AwsAccessKeyID:     config.DefaultPoolSettings.AwsAccessKeyID,
+		AwsAccessKeySecret: config.DefaultPoolSettings.AwsAccessKeySecret,
+		AwsRegion:          config.DefaultPoolSettings.AwsRegion,
+		LiteEnginePath:     config.DefaultPoolSettings.LiteEnginePath,
+		CaCertFile:         config.DefaultPoolSettings.CaCertFile,
+		CertFile:           config.DefaultPoolSettings.CertFile,
+		KeyFile:            config.DefaultPoolSettings.KeyFile,
 	}
-
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, awsAccessSettings, config.Runner.Name)
+	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
 	if poolFileErr != nil {
 		logrus.WithError(poolFileErr).
 			Errorln("daemon: unable to parse pool file")
@@ -237,7 +241,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	})
 
 	// if there is no keyfiles lets remove any old instances.
-	if !config.Settings.ReusePool {
+	if !config.DefaultPoolSettings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).

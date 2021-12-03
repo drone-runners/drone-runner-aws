@@ -13,12 +13,6 @@ import (
 
 const certPermissions = os.FileMode(0600)
 
-type CertList struct {
-	CaCertFile string
-	CertFile   string
-	KeyFile    string
-}
-
 func GenerateLECerts(serverName, relPath string) error {
 	// lets see if the certificates exist
 	_, existsErr := os.Stat(relPath)
@@ -62,18 +56,21 @@ func GenerateLECerts(serverName, relPath string) error {
 	return nil
 }
 
-func ReadLECerts(certFolder string) (*CertList, error) {
-	caCertFile, err := os.ReadFile(fmt.Sprintf("%s/ca-cert.pem", certFolder))
+func ReadLECerts(certFolder string) (caCertFile, certFile, keyFile string, err error) {
+	contents, err := os.ReadFile(fmt.Sprintf("%s/ca-cert.pem", certFolder))
 	if err != nil {
-		return nil, err
+		return "", "", "", err
 	}
-	certFile, err := os.ReadFile(fmt.Sprintf("%s/server-cert.pem", certFolder))
+	caCertFile = string(contents)
+	contents, err = os.ReadFile(fmt.Sprintf("%s/server-cert.pem", certFolder))
 	if err != nil {
-		return nil, err
+		return caCertFile, "", "", err
 	}
-	keyFile, err := os.ReadFile(fmt.Sprintf("%s/server-key.pem", certFolder))
+	certFile = string(contents)
+	contents, err = os.ReadFile(fmt.Sprintf("%s/server-key.pem", certFolder))
 	if err != nil {
-		return nil, err
+		return caCertFile, certFile, "", err
 	}
-	return &CertList{CaCertFile: string(caCertFile), CertFile: string(certFile), KeyFile: string(keyFile)}, nil
+	keyFile = string(contents)
+	return caCertFile, certFile, keyFile, nil
 }

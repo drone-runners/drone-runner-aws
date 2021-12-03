@@ -22,12 +22,11 @@ const (
 // Pipeline is a pipeline resource that executes pipelines
 // on the host machine without any virtualization.
 type Pipeline struct {
-	Version   string   `json:"version,omitempty"`
-	Kind      string   `json:"kind,omitempty"`
-	Type      string   `json:"type,omitempty"`
-	Name      string   `json:"name,omitempty"`
-	PoolCount int      `json:"pool_count,omitempty" yaml:"pool_count"`
-	Deps      []string `json:"depends_on,omitempty"`
+	Version string   `json:"version,omitempty"`
+	Kind    string   `json:"kind,omitempty"`
+	Type    string   `json:"type,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	Deps    []string `json:"depends_on,omitempty"`
 
 	Clone       manifest.Clone       `json:"clone,omitempty"`
 	Concurrency manifest.Concurrency `json:"concurrency,omitempty"`
@@ -35,7 +34,6 @@ type Pipeline struct {
 	Platform    manifest.Platform    `json:"platform,omitempty"`
 	Trigger     manifest.Conditions  `json:"conditions,omitempty"`
 
-	Account     Account           `json:"account,omitempty"`
 	Pool        Pool              `json:"pool,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 	Services    []*Step           `json:"services,omitempty"`
@@ -102,13 +100,6 @@ type (
 	// Workspace represents the pipeline workspace configuration.
 	Workspace struct {
 		Path string `json:"path,omitempty"`
-	}
-
-	// Account provides account settings
-	Account struct {
-		AccessKeyID     manifest.Variable `json:"access_key_id,omitempty"     yaml:"access_key_id"`
-		AccessKeySecret manifest.Variable `json:"secret_access_key,omitempty" yaml:"secret_access_key"`
-		Region          string            `json:"region,omitempty"`
 	}
 
 	Pool struct {

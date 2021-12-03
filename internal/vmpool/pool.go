@@ -44,3 +44,16 @@ type Platform struct {
 	Variant string `json:"variant,omitempty"`
 	Version string `json:"version,omitempty"`
 }
+
+type DefaultSettings struct {
+	RunnerName         string
+	AwsAccessKeyID     string
+	AwsAccessKeySecret string
+	AwsRegion          string
+	PrivateKeyFile     string
+	PublicKeyFile      string
+	LiteEnginePath     string
+	CaCertFile         string
+	CertFile           string
+	KeyFile            string
+}
