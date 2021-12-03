@@ -7,7 +7,6 @@ replace github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.2
 require (
 	github.com/aws/aws-sdk-go v1.42.10
 	github.com/buildkite/yaml v2.1.0+incompatible
-	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
 	github.com/drone/drone-go v1.7.1
 	github.com/drone/envsubst v1.0.3
