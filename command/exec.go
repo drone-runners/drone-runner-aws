@@ -40,18 +40,17 @@ import (
 
 type execCommand struct {
 	*internal.Flags
-	Source    *os.File
-	Poolfile  string
-	Include   []string
-	Exclude   []string
-	Environ   map[string]string
-	Secrets   map[string]string
-	AWSAccess cloudaws.AccessSettings
-	Pretty    bool
-	Procs     int64
-	Debug     bool
-	Trace     bool
-	Dump      bool
+	Source   *os.File
+	Poolfile string
+	Include  []string
+	Exclude  []string
+	Environ  map[string]string
+	Secrets  map[string]string
+	Pretty   bool
+	Procs    int64
+	Debug    bool
+	Trace    bool
+	Dump     bool
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its complex but not too bad.
@@ -102,9 +101,12 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	if err != nil {
 		return err
 	}
-
+	// we have enough information for default pool settings
+	defaultPoolSettings := vmpool.DefaultSettings{
+		RunnerName: runnerName,
+	}
 	// read the pool file
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &c.AWSAccess, runnerName)
+	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
 	if poolFileErr != nil {
 		return poolFileErr
 	}

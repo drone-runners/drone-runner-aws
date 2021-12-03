@@ -16,19 +16,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// AccessSettings defines settings for access
-type AccessSettings struct {
-	AccessKey      string
-	AccessSecret   string
-	Region         string
-	PrivateKeyFile string
-	PublicKeyFile  string
-	LiteEnginePath string // TODO: Location from where to download LE. Move this to be a global variable
-	CaCertFile     string
-	CertFile       string
-	KeyFile        string
-}
-
 type (
 	poolDefinition struct {
 		Name        string   `json:"name,omitempty"`
@@ -93,7 +80,7 @@ type (
 	}
 )
 
-func ProcessPoolFile(rawFile string, settings *AccessSettings, runnerName string) ([]vmpool.Pool, error) {
+func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings) ([]vmpool.Pool, error) {
 	rawPool, err := os.ReadFile(rawFile)
 	if err != nil {
 		err = fmt.Errorf("unable to read file %s: %w", rawFile, err)
@@ -115,7 +102,7 @@ func ProcessPoolFile(rawFile string, settings *AccessSettings, runnerName string
 			return nil, err
 		}
 
-		pool, err := compilePoolFile(poolDef, settings, runnerName)
+		pool, err := compilePoolFile(poolDef, defaultPoolSettings)
 		if err != nil {
 			return nil, err
 		}
@@ -135,13 +122,13 @@ func DummyPool(name, runnerName string) vmpool.Pool {
 	}
 }
 
-func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerName string) (*awsPool, error) {
+func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.DefaultSettings) (*awsPool, error) {
 	pipelineOS := rawPool.Platform.OS
 
 	creds := Credentials{
-		Client: settings.AccessKey,
-		Secret: settings.AccessSecret,
-		Region: settings.Region,
+		Client: defaultPoolSettings.AwsAccessKeyID,
+		Secret: defaultPoolSettings.AwsAccessKeySecret,
+		Region: defaultPoolSettings.AwsRegion,
 	}
 
 	// override access key-ID, secret and region defaults with the values from config file
@@ -200,7 +187,7 @@ func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerNa
 	case rawPool.Instance.User == "":
 		rawPool.Instance.User = "root"
 	}
-	_, statErr := os.Stat(settings.PrivateKeyFile)
+	_, statErr := os.Stat(defaultPoolSettings.PrivateKeyFile)
 	if os.IsNotExist(statErr) {
 		// there are no key files
 		publickey, privatekey, generateKeyErr := sshkey.GeneratePair()
@@ -211,13 +198,13 @@ func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerNa
 		rawPool.Instance.PrivateKey = privatekey
 		rawPool.Instance.PublicKey = publickey
 	} else {
-		body, privateKeyErr := os.ReadFile(settings.PrivateKeyFile)
+		body, privateKeyErr := os.ReadFile(defaultPoolSettings.PrivateKeyFile)
 		if privateKeyErr != nil {
 			log.Fatalf("unable to read file ``: %v", privateKeyErr)
 		}
 		rawPool.Instance.PrivateKey = string(body)
 
-		body, publicKeyErr := os.ReadFile(settings.PublicKeyFile)
+		body, publicKeyErr := os.ReadFile(defaultPoolSettings.PublicKeyFile)
 		if publicKeyErr != nil {
 			log.Fatalf("unable to read file: %v", publicKeyErr)
 		}
@@ -229,19 +216,19 @@ func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerNa
 	if rawPool.Platform.OS == oshelp.WindowsString {
 		userDataWithSSH = cloudinit.Windows(&cloudinit.Params{
 			PublicKey:      rawPool.Instance.PublicKey,
-			LiteEnginePath: settings.LiteEnginePath, // TODO this should be a global, not set in the poolfile
-			CaCertFile:     settings.CaCertFile,
-			CertFile:       settings.CertFile,
-			KeyFile:        settings.KeyFile,
+			LiteEnginePath: defaultPoolSettings.LiteEnginePath,
+			CaCertFile:     defaultPoolSettings.CaCertFile,
+			CertFile:       defaultPoolSettings.CertFile,
+			KeyFile:        defaultPoolSettings.KeyFile,
 		})
 	} else {
 		// try using cloud init.
 		userDataWithSSH = cloudinit.Linux(&cloudinit.Params{
 			PublicKey:      rawPool.Instance.PublicKey,
-			LiteEnginePath: settings.LiteEnginePath, // TODO this should be a global, not set in the poolfile
-			CaCertFile:     settings.CaCertFile,
-			CertFile:       settings.CertFile,
-			KeyFile:        settings.KeyFile,
+			LiteEnginePath: defaultPoolSettings.LiteEnginePath,
+			CaCertFile:     defaultPoolSettings.CaCertFile,
+			CertFile:       defaultPoolSettings.CertFile,
+			KeyFile:        defaultPoolSettings.KeyFile,
 		})
 	}
 	rawPool.Instance.UserData = userDataWithSSH
@@ -250,7 +237,7 @@ func compilePoolFile(rawPool *poolDefinition, settings *AccessSettings, runnerNa
 
 	return &awsPool{
 		name:          rawPool.Name,
-		runnerName:    runnerName,
+		runnerName:    defaultPoolSettings.RunnerName,
 		credentials:   creds,
 		privateKey:    rawPool.Instance.PrivateKey,
 		iamProfileArn: rawPool.Instance.IAMProfileARN,

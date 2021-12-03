@@ -29,6 +29,11 @@ import (
 
 var nocontext = context.Background()
 
+var defaultPoolSettings = vmpool.DefaultSettings{
+	RunnerName:     "runner",
+	AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+}
+
 // dummy function that returns a non-random string for testing.
 // it is used in place of the random function.
 func notRandom() string {
@@ -97,11 +102,8 @@ func TestCompile_RunFailure(t *testing.T) {
 // at compile time.
 func TestCompile_Secrets(t *testing.T) {
 	mnfst, _ := manifest.ParseFile("testdata/secret.yml")
-	compilerSettings := cloudaws.AccessSettings{
-		AccessKey: "AKIAIOSFODNN7EXAMPLE",
-	}
 
-	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings, "runner")
+	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &defaultPoolSettings)
 	if err != nil {
 		t.Error(err)
 		return
@@ -174,11 +176,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	compilerSettings := cloudaws.AccessSettings{
-		AccessKey: "AKIAIOSFODNN7EXAMPLE",
-	}
-
-	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &compilerSettings, "runner")
+	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &defaultPoolSettings)
 	if err != nil {
 		t.Error(err)
 		return nil

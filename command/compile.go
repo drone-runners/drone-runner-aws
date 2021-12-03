@@ -30,11 +30,10 @@ import (
 
 type compileCommand struct {
 	*internal.Flags
-	Source    *os.File
-	Poolfile  string
-	Environ   map[string]string
-	Secrets   map[string]string
-	AWSAccess cloudaws.AccessSettings
+	Source   *os.File
+	Poolfile string
+	Environ  map[string]string
+	Secrets  map[string]string
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
@@ -77,9 +76,12 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
-
+	// we have enough information for default pool settings
+	defaultPoolSettings := vmpool.DefaultSettings{
+		RunnerName: runnerName,
+	}
 	// read the poolfile
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &c.AWSAccess, runnerName)
+	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
 	if poolFileErr != nil {
 		return poolFileErr
 	}
