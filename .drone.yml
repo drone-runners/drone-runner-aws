@@ -52,3 +52,25 @@ steps:
         - refs/tags/*
     depends_on:
       - compiler checks
+
+---
+kind: pipeline
+type: docker
+name: manifest
+
+steps:
+- name: manifest
+  image: plugins/manifest
+  settings:
+    spec: docker/manifest.tmpl
+    auto_tag: true
+    ignore_missing: true
+    password:
+      from_secret: docker_password
+    username:
+      from_secret: docker_username
+
+trigger:
+  ref:
+  - refs/heads/master
+  - refs/tags/*
