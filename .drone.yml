@@ -8,27 +8,36 @@ platform:
 
 steps:
   - name: go vet and unit tests
-    image: golang:1.16
+    image: golang:1
     commands:
       - go vet ./...
       - go test -cover ./...
+    volumes:
+      - name: cache
+        path: /go
     depends_on:
       - clone
   - name: golangci-lint
     image: golangci/golangci-lint
     commands:
       - golangci-lint run --timeout 300s
+    volumes:
+      - name: cache
+        path: /go
     depends_on:
       - clone
   - name: build
-    image: golang:1.16
+    image: golang:1
     commands:
       - sh scripts/build.sh
+    volumes:
+      - name: cache
+        path: /go
     depends_on:
       - go vet and unit tests
       - golangci-lint
   - name: compiler checks
-    image: golang:1.16
+    image: golang:1
     commands:
       - release/linux/amd64/drone-runner-aws compile --source='./test_files/drone_ubuntu.yml' test_files/drone_pool.yml
       - release/linux/amd64/drone-runner-aws compile --source='./test_files/drone_windows.yml' test_files/drone_pool.yml
@@ -52,7 +61,11 @@ steps:
         - refs/tags/*
     depends_on:
       - compiler checks
-
+      
+  volumes:
+  - name: cache
+    temp: {}
+    
 ---
 kind: pipeline
 type: docker
