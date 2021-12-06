@@ -37,6 +37,7 @@ require (
 	github.com/bmatcuk/doublestar v1.1.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/go-chi/chi v1.5.4 // indirect
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.0.0 // indirect

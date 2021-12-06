@@ -18,10 +18,10 @@ import (
 const (
 	provider = "aws"
 
-	tagRunner      = "runner-name"
-	tagCreator     = "runner-creator"
-	tagPool        = "runner-pool"
-	tagStatus      = "runner-status"
+	tagRunner      = vmpool.TagPrefix + "name"
+	tagCreator     = vmpool.TagPrefix + "creator"
+	tagPool        = vmpool.TagPrefix + "pool"
+	tagStatus      = vmpool.TagPrefix + "status"
 	tagStatusValue = "in-use"
 )
 
@@ -275,7 +275,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 			return
 
 		case <-time.After(interval):
-			logr.Debugln("provision: check instance network")
+			logr.Traceln("provision: check instance network")
 
 			desc, descrErr := client.DescribeInstancesWithContext(ctx,
 				&ec2.DescribeInstancesInput{
@@ -304,7 +304,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 			launchTime := p.getLaunchTime(amazonInstance)
 
 			if instanceIP == "" {
-				logr.Warnln("provision: instance has no IP")
+				logr.Traceln("provision: instance has no IP")
 				continue
 			}
 
@@ -318,7 +318,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 			logr.
 				WithField("ip", instanceIP).
 				WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
-				Infoln("provision: complete")
+				Traceln("provision: complete")
 
 			return
 		}
@@ -390,25 +390,78 @@ func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err e
 	logr.
 		WithField("free", len(free)).
 		WithField("busy", len(busy)).
-		Debugln("list VMs")
+		Traceln("list VMs")
 
-	// TODO: Listing of each found instance is probably too verbose. Remove this code.
-	for k, inst := range free {
-		logr.
-			WithField("idx", k).
-			WithField("id", inst.ID).
-			WithField("ip", inst.IP).
-			WithField("launchedAt", inst.StartedAt.Format(time.RFC3339)).
-			Traceln("found free instance")
+	return
+}
+
+func (p *awsPool) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *vmpool.Instance, err error) {
+	client := p.credentials.getClient()
+
+	logr := logger.FromContext(ctx).
+		WithField("provider", provider).
+		WithField("pool", p.name).
+		WithField("tag", tag).
+		WithField("tag-value", value)
+
+	params := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("instance-state-name"),
+				Values: []*string{aws.String("running")},
+			},
+			{
+				Name:   aws.String("tag:" + tagCreator),
+				Values: []*string{aws.String(vmpool.RunnerName)},
+			},
+			{
+				Name:   aws.String("tag:" + tagPool),
+				Values: []*string{aws.String(p.name)},
+			},
+			{
+				Name:   aws.String("tag:" + tagStatus),
+				Values: []*string{aws.String(tagStatusValue)},
+			},
+			{
+				Name:   aws.String("tag:" + tag),
+				Values: []*string{aws.String(value)},
+			},
+		},
 	}
-	for k, inst := range busy {
-		logr.
-			WithField("idx", k).
-			WithField("id", inst.ID).
-			WithField("ip", inst.IP).
-			WithField("launchedAt", inst.StartedAt.Format(time.RFC3339)).
-			Traceln("found busy instance")
+
+	logr.Traceln("get VM by tag")
+
+	describeRes, err := client.DescribeInstancesWithContext(ctx, params)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("failed to get VM by tag")
+		return
 	}
+
+	for _, awsReservation := range describeRes.Reservations {
+		for _, awsInstance := range awsReservation.Instances {
+			id := *awsInstance.InstanceId
+			ip := p.getIP(awsInstance)
+			tags := p.getTags(awsInstance)
+			launchTime := p.getLaunchTime(awsInstance)
+
+			inst = &vmpool.Instance{
+				ID:        id,
+				IP:        ip,
+				Tags:      tags,
+				StartedAt: launchTime,
+			}
+
+			logr.
+				WithField("id", inst.ID).
+				WithField("ip", inst.IP).
+				Traceln("didn't found VM by tag")
+
+			return
+		}
+	}
+
+	logr.Traceln("didn't found VM by tag")
 
 	return
 }
@@ -442,7 +495,7 @@ func (p *awsPool) Tag(ctx context.Context, instanceID string, tags map[string]st
 		return
 	}
 
-	logr.Infoln("VM tagged")
+	logr.Traceln("VM tagged")
 	return
 }
 
@@ -476,6 +529,6 @@ func (p *awsPool) Destroy(ctx context.Context, instanceIDs ...string) (err error
 		return
 	}
 
-	logr.Infoln("VMs terminated")
+	logr.Traceln("VMs terminated")
 	return
 }

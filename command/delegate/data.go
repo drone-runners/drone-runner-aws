@@ -2,6 +2,7 @@ package delegate
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 
 	"github.com/harness/lite-engine/api"
@@ -26,8 +27,9 @@ func GetSetupRequest(r io.Reader) (*SetupRequest, error) {
 }
 
 type SetupRequest struct {
-	CorrelationID    string `json:"correlation_id"`
-	PoolID           string `json:"pool_id"`
+	CorrelationID    string            `json:"correlation_id"`
+	PoolID           string            `json:"pool_id"`
+	Tags             map[string]string `json:"tags"`
 	api.SetupRequest `json:"setup_request"`
 }
 
@@ -35,6 +37,14 @@ func GetDestroyRequest(r io.Reader) (*DestroyRequest, error) {
 	d := &DestroyRequest{}
 	if err := getJSONDataFromReader(r, d); err != nil {
 		return nil, err
+	}
+
+	if d.PoolID == "" {
+		return nil, errors.New("missing pool ID")
+	}
+
+	if d.InstanceID == "" && d.CorrelationID == "" {
+		return nil, errors.New("requires either instance ID or correlation ID")
 	}
 
 	return d, nil
@@ -56,6 +66,9 @@ func GetExecStepRequest(r io.Reader) (*ExecStepRequest, error) {
 }
 
 type ExecStepRequest struct {
+	CorrelationID        string `json:"correlation_id"`
+	PoolID               string `json:"pool_id"`
+	InstanceID           string `json:"instance_id"`
 	IPAddress            string `json:"ip_address"`
 	api.StartStepRequest `json:"start_step_request"`
 }
