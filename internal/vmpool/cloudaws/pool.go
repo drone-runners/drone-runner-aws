@@ -18,10 +18,10 @@ import (
 const (
 	provider = "aws"
 
-	tagRunner      = "runner-name"
-	tagCreator     = "runner-creator"
-	tagPool        = "runner-pool"
-	tagStatus      = "runner-status"
+	tagRunner      = vmpool.TagPrefix + "name"
+	tagCreator     = vmpool.TagPrefix + "creator"
+	tagPool        = vmpool.TagPrefix + "pool"
+	tagStatus      = vmpool.TagPrefix + "status"
 	tagStatusValue = "in-use"
 )
 

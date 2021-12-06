@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
@@ -23,6 +24,8 @@ import (
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -189,220 +192,230 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 }
 
 func (c *delegateCommand) delegateListener() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/setup", c.handleSetup())
-	mux.HandleFunc("/destroy", c.handleDestroy())
-	mux.HandleFunc("/step", c.handleStep())
-	mux.HandleFunc("/pool_owner", c.handlePoolOwner())
+	mux := chi.NewMux()
+
+	mux.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			wrap := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+			reqStart := time.Now()
+			next.ServeHTTP(wrap, r)
+
+			status := wrap.Status()
+			dur := time.Since(reqStart).Milliseconds()
+
+			logr := logrus.WithContext(r.Context()).
+				WithField("time", time.Now().UTC().Format(time.RFC3339)).
+				WithField("status", status).
+				WithField("dur[ms]", dur)
+			logLine := "HTTP: " + r.Method + " " + r.URL.RequestURI()
+			if status >= http.StatusInternalServerError {
+				logr.Errorln(logLine)
+			} else {
+				logr.Infoln(logLine)
+			}
+		})
+	})
+
+	mux.Post("/setup", c.handleSetup())
+	mux.Post("/destroy", c.handleDestroy())
+	mux.Post("/step", c.handleStep())
+	mux.Post("/pool_owner", c.handlePoolOwner())
+
 	return mux
 }
 
 func (c *delegateCommand) handlePoolOwner() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			fmt.Println("failed to read setup get request")
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
 		keys, ok := r.URL.Query()["pool"]
-
 		if !ok || len(keys[0]) < 1 {
 			fmt.Println("Url Param 'pool' is missing")
 			http.Error(w, "Url Param 'pool' is missing", http.StatusBadRequest)
 			return
 		}
 
-		// Query()["key"] will return an array of items, we only want the single item.
-		poolName := keys[0]
-		fmt.Println("pool: ", poolName)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		poolName := keys[0] // Query()["key"] will return an array of items, we only want the single item.
 
-		type Response struct {
+		JSON(w, struct {
 			Owner bool `json:"owner"`
-		}
-
-		response := Response{
+		}{
 			Owner: c.poolManager.Exists(poolName),
-		}
-
-		_ = json.NewEncoder(w).Encode(response)
+		}, http.StatusOK)
 	}
 }
 
 func (c *delegateCommand) handleSetup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// check our input
-		if r.Method != http.MethodPost {
-			logrus.Error("handleSetup: failed to read setup post request")
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
 		reqData, err := GetSetupRequest(r.Body)
 		if err != nil {
-			logrus.Error("handleSetup: failed to read setup request")
+			logrus.Debugln("handleSetup: failed to read setup request")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
 		poolName := reqData.PoolID
 		if !c.poolManager.Exists(poolName) {
-			logrus.Error("handleSetup: failed to find pool")
+			logrus.Debugln("handleSetup: failed to find pool")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		instance, err := c.poolManager.Provision(r.Context(), poolName)
+		ctx := r.Context()
+
+		instance, err := c.poolManager.Provision(ctx, poolName)
 		if err != nil {
 			logrus.WithError(err).
 				WithField("pool", poolName).
-				Errorf("handleSetup: failed provisioning")
+				Errorln("handleSetup: failed provisioning")
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
-		// create client to lite-engine
-		client, err := lehttp.NewHTTPClient(
-			fmt.Sprintf("https://%s:9079/", instance.IP),
-			c.defaultPoolSettings.RunnerName, c.defaultPoolSettings.CaCertFile, c.defaultPoolSettings.CertFile, c.defaultPoolSettings.KeyFile)
+		logr := logrus.
+			WithField("pool", poolName).
+			WithField("ip", instance.IP).
+			WithField("id", instance.ID).
+			WithField("correlation_id", reqData.CorrelationID)
+
+		cleanUpFn := func() {
+			errCleanUp := c.poolManager.Destroy(context.Background(), poolName, instance.ID)
+			if errCleanUp != nil {
+				logr.WithError(errCleanUp).Errorln("handleSetup: failed to delete failed instance client")
+			}
+		}
+
+		tags := map[string]string{
+			"correlation_id": reqData.CorrelationID,
+		}
+		for k, v := range reqData.Tags {
+			if strings.HasPrefix(k, vmpool.TagPrefix) {
+				continue
+			}
+			tags[k] = v
+		}
+
+		err = c.poolManager.Tag(ctx, poolName, instance.ID, tags)
 		if err != nil {
-			logrus.WithError(err).
-				Errorln("handleSetup: failed to create client")
+			logr.WithError(err).Errorln("handleSetup: failed to tag")
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			go cleanUpFn()
 			return
 		}
+
+		client, err := c.getLEClient(instance.IP)
+		if err != nil {
+			logr.WithError(err).Errorln("handleStep: failed to create client")
+			w.WriteHeader(http.StatusInternalServerError)
+			go cleanUpFn()
+			return
+		}
+
 		// try the healthcheck api on the lite-engine until it responds ok
-		logrus.
-			WithField("pool", poolName).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			Debug("handleSetup: running healthcheck and waiting for an ok response")
-		healthResponse, healthErr := client.RetryHealth(r.Context())
-		if healthErr != nil {
-			logrus.
-				WithField("pool", poolName).
-				WithField("ip", instance.IP).
-				WithField("id", instance.ID).
-				WithError(healthErr).
-				Errorln("handleSetup: RetryHealth call failed")
+		logr.Debugln("handleSetup: running healthcheck and waiting for an ok response")
+		healthResponse, err := client.RetryHealth(ctx)
+		if err != nil {
+			logr.WithError(err).Errorln("handleSetup: RetryHealth call failed")
 			w.WriteHeader(http.StatusInternalServerError)
+			go cleanUpFn()
 			return
 		}
-		logrus.
-			WithField("pool", poolName).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			WithField("response", *healthResponse).
-			Info("handleSetup: health check complete")
-		setupResponse, setupErr := client.Setup(r.Context(), &reqData.SetupRequest)
-		if setupErr != nil {
-			logrus.WithError(setupErr).
-				WithField("pool", poolName).
-				WithField("ip", instance.IP).
-				WithField("id", instance.ID).
-				Errorln("handleSetup: setup call failed")
+
+		logr.WithField("response", *healthResponse).Infoln("handleSetup: health check complete")
+		setupResponse, err := client.Setup(ctx, &reqData.SetupRequest)
+		if err != nil {
+			logr.WithError(err).Errorln("handleSetup: setup call failed")
 			w.WriteHeader(http.StatusInternalServerError)
+			go cleanUpFn()
 			return
 		}
-		JSON(w, api.SetupResponse{IPAddress: instance.IP, InstanceID: instance.ID}, http.StatusOK)
-		logrus.
-			WithField("pool", poolName).
-			WithField("ip", instance.IP).
-			WithField("id", instance.ID).
-			WithField("response", *setupResponse).
-			Info("handleSetup: setup complete")
+
+		logr.WithField("response", *setupResponse).Infoln("handleSetup: setup complete")
+
+		JSON(w, struct {
+			InstanceID string `json:"instance_id,omitempty"`
+			IPAddress  string `json:"ip_address,omitempty"`
+		}{
+			IPAddress:  instance.IP,
+			InstanceID: instance.ID,
+		}, http.StatusOK)
 	}
 }
 
 func (c *delegateCommand) handleStep() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// check input
-		if r.Method != http.MethodPost {
-			logrus.Error("handleStep: failed to read setup step request")
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
 		reqData, err := GetExecStepRequest(r.Body)
 		if err != nil {
 			logrus.Error("handleStep: failed to read step request")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
+
 		instanceIP := reqData.IPAddress
+		// TODO: Rather than returning an error if IP address is missing use correlation ID to find the instance (from instance's tags).
 		if instanceIP == "" {
 			logrus.Error("handleStep: failed to read instance ip")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-		client, err := lehttp.NewHTTPClient(
-			fmt.Sprintf("https://%s:9079/", instanceIP),
-			c.defaultPoolSettings.RunnerName, c.defaultPoolSettings.CaCertFile, c.defaultPoolSettings.CertFile, c.defaultPoolSettings.KeyFile)
-		if err != nil {
-			logrus.WithError(err).
-				Errorln("handleStep: failed to create client")
-			return
-		}
-		logrus.
+
+		ctx := r.Context()
+
+		logr := logrus.
 			WithField("ip", instanceIP).
 			WithField("step_id", reqData.StartStepRequest.ID).
-			Debug("handleStep: running StartStep")
-		startStepResponse, stepErr := client.StartStep(r.Context(), &reqData.StartStepRequest)
-		if stepErr != nil {
-			logrus.WithError(stepErr).
-				WithField("ip", instanceIP).
-				WithField("step_id", reqData.StartStepRequest.ID).
-				Errorln("handleStep: StartStep call failed")
+			WithField("correlation_id", reqData.ID)
+
+		client, err := c.getLEClient(instanceIP)
+		if err != nil {
+			logr.WithError(err).Errorln("handleStep: failed to create client")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logrus.
-			WithField("startStepResponse", startStepResponse).
-			Debug("handleStep: StartStep complete")
 
-		pollResponse, stepErr := client.RetryPollStep(r.Context(), &api.PollStepRequest{ID: reqData.StartStepRequest.ID})
+		logr.Debugln("handleStep: running StartStep")
+
+		startStepResponse, stepErr := client.StartStep(ctx, &reqData.StartStepRequest)
 		if stepErr != nil {
-			logrus.WithError(stepErr).
-				WithField("ip", instanceIP).
-				WithField("step_id", reqData.StartStepRequest.ID).
-				Errorln("handleStep: RetryPollStep call failed")
+			logrus.WithError(stepErr).Errorln("handleStep: StartStep call failed")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		logr.WithField("startStepResponse", startStepResponse).
+			Debugln("handleStep: StartStep complete")
+
+		pollResponse, stepErr := client.RetryPollStep(ctx, &api.PollStepRequest{ID: reqData.StartStepRequest.ID})
+		if stepErr != nil {
+			logr.WithError(stepErr).Errorln("handleStep: RetryPollStep call failed")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-		logrus.
-			WithField("pollResponse", pollResponse).
-			Debug("handleStep: RetryPollStep complete")
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		encodeError := json.NewEncoder(w).Encode(pollResponse)
-		if encodeError != nil {
-			logrus.WithError(encodeError).
-				WithField("ip", instanceIP).
-				WithField("step_id", reqData.StartStepRequest.ID).
-				Errorln("handleStep: failed to encode poll response")
-		}
+		logr.WithField("pollResponse", pollResponse).Debugln("handleStep: RetryPollStep complete")
+
+		JSON(w, pollResponse, http.StatusOK)
 	}
 }
 
 func (c *delegateCommand) handleDestroy() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
 		reqData, err := GetDestroyRequest(r.Body)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		fmt.Printf("\n\nExecuting cleanup: %v\n", reqData)
+		logr := logrus.
+			WithField("id", reqData.InstanceID).
+			WithField("correlation_id", reqData.CorrelationID)
+
 		err = c.poolManager.Destroy(r.Context(), reqData.PoolID, reqData.InstanceID)
 		if err != nil {
-			logrus.WithError(err).
-				Errorln("cannot destroy the instance")
+			logr.WithError(err).Errorln("cannot destroy the instance")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		logr.Debugln("handleDestroy: destroyed instance")
 
 		w.WriteHeader(http.StatusOK)
 	}
@@ -431,4 +444,12 @@ func JSON(w http.ResponseWriter, v interface{}, status int) {
 	if err != nil {
 		return
 	}
+}
+
+func (c *delegateCommand) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:9079/", instanceIP)
+
+	return lehttp.NewHTTPClient(leURL,
+		c.defaultPoolSettings.RunnerName, c.defaultPoolSettings.CaCertFile,
+		c.defaultPoolSettings.CertFile, c.defaultPoolSettings.KeyFile)
 }

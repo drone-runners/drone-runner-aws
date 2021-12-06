@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+const TagPrefix = "runner-"
 const RunnerName = "drone-runner-aws"
 
 type Pool interface {

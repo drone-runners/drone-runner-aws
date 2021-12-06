@@ -28,6 +28,7 @@ func GetSetupRequest(r io.Reader) (*SetupRequest, error) {
 type SetupRequest struct {
 	CorrelationID    string `json:"correlation_id"`
 	PoolID           string `json:"pool_id"`
+	Tags             map[string]string
 	api.SetupRequest `json:"setup_request"`
 }
 
