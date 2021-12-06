@@ -37,10 +37,6 @@ type (
 		defaultPoolSettings vmpool.DefaultSettings
 		poolManager         *vmpool.Manager
 	}
-	setupResponse struct {
-		InstanceID string `json:"instance_id,omitempty"`
-		IPAddress  string `json:"ip_address,omitempty"`
-	}
 )
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
@@ -309,7 +305,13 @@ func (c *delegateCommand) handleSetup() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		JSON(w, setupResponse{IPAddress: instance.IP, InstanceID: instance.ID}, http.StatusOK)
+		JSON(w, struct {
+			InstanceID string `json:"instance_id,omitempty"`
+			IPAddress  string `json:"ip_address,omitempty"`
+		}{
+			IPAddress:  instance.IP,
+			InstanceID: instance.ID,
+		}, http.StatusOK)
 		logrus.
 			WithField("pool", poolName).
 			WithField("ip", instance.IP).
