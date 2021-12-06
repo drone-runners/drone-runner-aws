@@ -2,18 +2,16 @@ package vmpool
 
 import (
 	"context"
-	"sync"
+	"time"
 )
 
 const RunnerName = "drone-runner-aws"
 
 type Pool interface {
-	sync.Locker
-
+	// GetProviderName returns VM provider name. It should be a fixed string for each implementation. The value is used for logging.
 	GetProviderName() string
 
 	GetName() string
-	GetInstanceType() string // TODO: returns AMI, used for logging... probably rename to GetImage
 	GetOS() string
 	GetUser() string
 	GetPrivateKey() string
@@ -26,15 +24,17 @@ type Pool interface {
 	Ping(ctx context.Context) error
 	Provision(ctx context.Context, tagAsInUse bool) (instance *Instance, err error)
 	List(ctx context.Context) (busy, free []Instance, err error)
-	Tag(ctx context.Context, instanceID, key, value string) (err error)
+	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
 	TagAsInUse(ctx context.Context, instanceID string) (err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
 }
 
 // Instance represents a provisioned server instance.
 type Instance struct {
-	ID string
-	IP string
+	ID        string
+	IP        string
+	Tags      map[string]string
+	StartedAt time.Time
 }
 
 // Platform defines the target platform.

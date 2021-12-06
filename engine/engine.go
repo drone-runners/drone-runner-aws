@@ -75,7 +75,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	if sshErr != nil {
 		logger.FromContext(ctx).
 			WithError(sshErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -89,7 +88,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	if dockerErr != nil {
 		logger.FromContext(ctx).
 			WithError(dockerErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -100,7 +98,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	if clientErr != nil {
 		logger.FromContext(ctx).
 			WithError(clientErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -113,7 +110,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	if mkRootDirErr != nil {
 		logger.FromContext(ctx).
 			WithError(mkRootDirErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", instance.IP).
 			WithField("id", instance.ID).
@@ -126,7 +122,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	if sessionErr != nil {
 		logger.FromContext(ctx).
 			WithError(sessionErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", instance.IP).
 			WithField("id", instance.ID).
@@ -143,7 +138,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	if dockerNetworkErr != nil {
 		logger.FromContext(ctx).
 			WithError(dockerNetworkErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", instance.IP).
 			WithField("id", instance.ID).
@@ -160,7 +154,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		if mkdirErr != nil {
 			logger.FromContext(ctx).
 				WithError(mkdirErr).
-				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", spec.CloudInstance.PoolName).
 				WithField("ip", spec.CloudInstance.IP).
 				WithField("id", spec.CloudInstance.ID).
@@ -178,7 +171,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		if uploadErr != nil {
 			logger.FromContext(ctx).
 				WithError(uploadErr).
-				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", spec.CloudInstance.PoolName).
 				WithField("ip", spec.CloudInstance.IP).
 				WithField("id", spec.CloudInstance.ID).
@@ -193,7 +185,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			if mkdirErr != nil {
 				logger.FromContext(ctx).
 					WithError(mkdirErr).
-					WithField("ami", pool.GetInstanceType()).
 					WithField("pool", spec.CloudInstance.PoolName).
 					WithField("ip", spec.CloudInstance.IP).
 					WithField("id", spec.CloudInstance.ID).
@@ -204,7 +195,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		}
 	}
 	logger.FromContext(ctx).
-		WithField("ami", pool.GetInstanceType()).
 		WithField("pool", spec.CloudInstance.PoolName).
 		WithField("ip", spec.CloudInstance.IP).
 		WithField("id", spec.CloudInstance.ID).
@@ -262,7 +252,6 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	if clientErr != nil {
 		logger.FromContext(ctx).
 			WithError(clientErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -276,7 +265,6 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	if dockerErr != nil {
 		logger.FromContext(ctx).
 			WithError(dockerErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -287,7 +275,6 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	if ftpErr != nil {
 		logger.FromContext(ctx).
 			WithError(ftpErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -310,7 +297,6 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		if uploadErr != nil {
 			logger.FromContext(ctx).
 				WithError(uploadErr).
-				WithField("ami", pool.GetInstanceType()).
 				WithField("pool", spec.CloudInstance.PoolName).
 				WithField("ip", spec.CloudInstance.IP).
 				WithField("id", spec.CloudInstance.ID).
@@ -324,7 +310,6 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	if sessionErr != nil {
 		logger.FromContext(ctx).
 			WithError(sessionErr).
-			WithField("ami", pool.GetInstanceType()).
 			WithField("pool", spec.CloudInstance.PoolName).
 			WithField("ip", spec.CloudInstance.IP).
 			WithField("id", spec.CloudInstance.ID).
@@ -374,7 +359,6 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	}
 
 	log.WithField("ssh.exit", state.ExitCode).
-		WithField("ami", pool.GetInstanceType()).
 		WithField("pool", spec.CloudInstance.PoolName).
 		WithField("ip", spec.CloudInstance.IP).
 		WithField("id", spec.CloudInstance.ID).
