@@ -34,6 +34,7 @@ type delegateCommand struct {
 	envfile             string
 	awsPoolfile         string
 	defaultPoolSettings vmpool.DefaultSettings
+	poolManager         *vmpool.Manager
 }
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
@@ -106,13 +107,12 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return poolFileErr
 	}
 
-	poolManager := &vmpool.Manager{}
-	err = poolManager.Add(pools...)
+	err = c.poolManager.Add(pools...)
 	if err != nil {
 		return err
 	}
 
-	err = poolManager.Ping(ctx)
+	err = c.poolManager.Ping(ctx)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: cannot connect to cloud provider")
@@ -123,7 +123,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	const busyMaxAge = time.Hour
 	const freeMaxAge = time.Hour * 12
 
-	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
+	err = c.poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: failed to start instance purger")
@@ -132,7 +132,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 
 	// lets remove any old instances.
 	if !config.DefaultPoolSettings.ReusePool {
-		cleanErr := poolManager.CleanPools(ctx, true, true)
+		cleanErr := c.poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("delegate: unable to clean pools")
@@ -141,7 +141,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		}
 	}
 	// seed pools
-	buildPoolErr := poolManager.BuildPools(ctx)
+	buildPoolErr := c.poolManager.BuildPools(ctx)
 	if buildPoolErr != nil {
 		logrus.WithError(buildPoolErr).
 			Errorln("delegate: unable to build pool")
@@ -155,7 +155,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	var g errgroup.Group
 	runnerServer := server.Server{
 		Addr:    config.Server.Port,
-		Handler: c.delegateListener(poolManager),
+		Handler: c.delegateListener(),
 	}
 
 	logrus.WithField("addr", runnerServer.Addr).
@@ -176,7 +176,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 
 	// lets remove any old instances.
 	if !config.DefaultPoolSettings.ReusePool {
-		cleanErr := poolManager.CleanPools(context.Background(), true, true)
+		cleanErr := c.poolManager.CleanPools(context.Background(), true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
 				Errorln("delegate: unable to clean pools")
@@ -188,16 +188,16 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	return waitErr
 }
 
-func (c *delegateCommand) delegateListener(poolManager *vmpool.Manager) http.Handler {
+func (c *delegateCommand) delegateListener() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/setup", c.handleSetup(poolManager))
-	mux.HandleFunc("/destroy", c.handleDestroy(poolManager))
+	mux.HandleFunc("/setup", c.handleSetup())
+	mux.HandleFunc("/destroy", c.handleDestroy())
 	mux.HandleFunc("/step", c.handleStep())
-	mux.HandleFunc("/pool_owner", handlePoolOwner(poolManager))
+	mux.HandleFunc("/pool_owner", c.handlePoolOwner())
 	return mux
 }
 
-func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
+func (c *delegateCommand) handlePoolOwner() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			fmt.Println("failed to read setup get request")
@@ -223,14 +223,14 @@ func handlePoolOwner(poolManager *vmpool.Manager) http.HandlerFunc {
 		}
 
 		response := Response{
-			Owner: poolManager.Exists(poolName),
+			Owner: c.poolManager.Exists(poolName),
 		}
 
 		_ = json.NewEncoder(w).Encode(response)
 	}
 }
 
-func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerFunc {
+func (c *delegateCommand) handleSetup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// check our input
 		if r.Method != http.MethodPost {
@@ -246,13 +246,13 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 		}
 
 		poolName := reqData.PoolID
-		if !poolManager.Exists(poolName) {
+		if !c.poolManager.Exists(poolName) {
 			logrus.Error("handleSetup: failed to find pool")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		instance, err := poolManager.Provision(r.Context(), poolName)
+		instance, err := c.poolManager.Provision(r.Context(), poolName)
 		if err != nil {
 			logrus.WithError(err).
 				WithField("pool", poolName).
@@ -260,6 +260,7 @@ func (c *delegateCommand) handleSetup(poolManager *vmpool.Manager) http.HandlerF
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
+
 		// create client to lite-engine
 		client, err := lehttp.NewHTTPClient(
 			fmt.Sprintf("https://%s:9079/", instance.IP),
@@ -381,7 +382,7 @@ func (c *delegateCommand) handleStep() http.HandlerFunc {
 	}
 }
 
-func (c *delegateCommand) handleDestroy(poolManager *vmpool.Manager) http.HandlerFunc {
+func (c *delegateCommand) handleDestroy() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -395,7 +396,7 @@ func (c *delegateCommand) handleDestroy(poolManager *vmpool.Manager) http.Handle
 		}
 
 		fmt.Printf("\n\nExecuting cleanup: %v\n", reqData)
-		err = poolManager.Destroy(r.Context(), reqData.PoolID, reqData.InstanceID)
+		err = c.poolManager.Destroy(r.Context(), reqData.PoolID, reqData.InstanceID)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("cannot destroy the instance")
@@ -409,6 +410,8 @@ func (c *delegateCommand) handleDestroy(poolManager *vmpool.Manager) http.Handle
 
 func RegisterDelegate(app *kingpin.Application) {
 	c := new(delegateCommand)
+
+	c.poolManager = &vmpool.Manager{}
 
 	cmd := app.Command("delegate", "starts the delegate").
 		Action(c.run)
