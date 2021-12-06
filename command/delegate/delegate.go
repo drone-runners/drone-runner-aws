@@ -40,6 +40,8 @@ type delegateCommand struct {
 	poolManager         *vmpool.Manager
 }
 
+const TagCorrelationID = "correlation-id"
+
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	envError := godotenv.Load(c.envfile)
@@ -123,7 +125,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// TODO: Move the durations to config
-	const busyMaxAge = time.Hour
+	const busyMaxAge = time.Hour * 2 // includes time required to setup an instance
 	const freeMaxAge = time.Hour * 12
 
 	err = c.poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
@@ -284,15 +286,14 @@ func (c *delegateCommand) handleSetup() http.HandlerFunc {
 			}
 		}
 
-		tags := map[string]string{
-			"correlation_id": reqData.CorrelationID,
-		}
+		tags := map[string]string{}
 		for k, v := range reqData.Tags {
 			if strings.HasPrefix(k, vmpool.TagPrefix) {
 				continue
 			}
 			tags[k] = v
 		}
+		tags[TagCorrelationID] = reqData.CorrelationID
 
 		err = c.poolManager.Tag(ctx, poolName, instance.ID, tags)
 		if err != nil {
@@ -350,22 +351,40 @@ func (c *delegateCommand) handleStep() http.HandlerFunc {
 			return
 		}
 
-		instanceIP := reqData.IPAddress
-		// TODO: Rather than returning an error if IP address is missing use correlation ID to find the instance (from instance's tags).
-		if instanceIP == "" {
-			logrus.Error("handleStep: failed to read instance ip")
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		ctx := r.Context()
+
+		var ipAddress string
+
+		if reqData.IPAddress != "" {
+			ipAddress = reqData.IPAddress
+		} else if reqData.CorrelationID != "" && reqData.PoolID != "" {
+			var inst *vmpool.Instance
+			inst, err = c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagCorrelationID, reqData.CorrelationID)
+			if err != nil {
+				logrus.WithError(err).Errorln("handleStep: cannot get the instance by tag")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if inst == nil {
+				logrus.Debugln("handleStep: instance with provided correlation ID not found")
+				http.Error(w, "instance not found", http.StatusNotFound)
+				return
+			}
+
+			ipAddress = inst.IP
+		} else {
+			logrus.Debugln("handleStep: missing instance IP or correlation ID and pool ID")
+			http.Error(w, "missing instance IP or correlation ID and pool ID", http.StatusBadRequest)
 			return
 		}
 
-		ctx := r.Context()
-
 		logr := logrus.
-			WithField("ip", instanceIP).
+			WithField("ip", ipAddress).
 			WithField("step_id", reqData.StartStepRequest.ID).
-			WithField("correlation_id", reqData.ID)
+			WithField("pool", reqData.PoolID).
+			WithField("correlation_id", reqData.CorrelationID)
 
-		client, err := c.getLEClient(instanceIP)
+		client, err := c.getLEClient(ipAddress)
 		if err != nil {
 			logr.WithError(err).Errorln("handleStep: failed to create client")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -404,11 +423,38 @@ func (c *delegateCommand) handleDestroy() http.HandlerFunc {
 			return
 		}
 
+		ctx := r.Context()
+
 		logr := logrus.
 			WithField("id", reqData.InstanceID).
 			WithField("correlation_id", reqData.CorrelationID)
 
-		err = c.poolManager.Destroy(r.Context(), reqData.PoolID, reqData.InstanceID)
+		var instanceID string
+
+		if reqData.InstanceID != "" {
+			instanceID = reqData.InstanceID
+		} else if reqData.CorrelationID != "" && reqData.PoolID != "" {
+			var inst *vmpool.Instance
+			inst, err = c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagCorrelationID, reqData.CorrelationID)
+			if err != nil {
+				logr.WithError(err).Errorln("handleDestroy: cannot get the instance by tag")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if inst == nil {
+				logrus.Debugln("handleDestroy: instance with provided correlation ID not found")
+				http.Error(w, "instance not found", http.StatusNotFound)
+				return
+			}
+
+			instanceID = inst.ID
+		} else {
+			logr.Debugln("handleDestroy: missing instance ID or correlation ID")
+			http.Error(w, "missing instance ID or correlation ID", http.StatusBadRequest)
+			return
+		}
+
+		err = c.poolManager.Destroy(ctx, reqData.PoolID, instanceID)
 		if err != nil {
 			logr.WithError(err).Errorln("cannot destroy the instance")
 			w.WriteHeader(http.StatusInternalServerError)

@@ -305,6 +305,15 @@ func (m *Manager) Tag(ctx context.Context, poolName, instanceID string, tags map
 	return pool.Tag(ctx, instanceID, tags)
 }
 
+func (m *Manager) GetUsedInstanceByTag(ctx context.Context, poolName, tag, value string) (*Instance, error) {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return nil, fmt.Errorf("get by tag: pool name %q not found", poolName)
+	}
+
+	return pool.GetUsedInstanceByTag(ctx, tag, value)
+}
+
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	for _, pool := range m.poolMap {
 		busy, free, err := pool.List(ctx)

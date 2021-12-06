@@ -25,6 +25,7 @@ type Pool interface {
 	Ping(ctx context.Context) error
 	Provision(ctx context.Context, tagAsInUse bool) (instance *Instance, err error)
 	List(ctx context.Context) (busy, free []Instance, err error)
+	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *Instance, err error)
 	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
 	TagAsInUse(ctx context.Context, instanceID string) (err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
