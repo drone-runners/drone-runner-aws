@@ -30,12 +30,18 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-type delegateCommand struct {
-	envfile             string
-	awsPoolfile         string
-	defaultPoolSettings vmpool.DefaultSettings
-	poolManager         *vmpool.Manager
-}
+type (
+	delegateCommand struct {
+		envfile             string
+		awsPoolfile         string
+		defaultPoolSettings vmpool.DefaultSettings
+		poolManager         *vmpool.Manager
+	}
+	setupResponse struct {
+		InstanceID string `json:"instance_id,omitempty"`
+		IPAddress  string `json:"ip_address,omitempty"`
+	}
+)
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
@@ -293,7 +299,7 @@ func (c *delegateCommand) handleSetup() http.HandlerFunc {
 			WithField("id", instance.ID).
 			WithField("response", *healthResponse).
 			Info("handleSetup: health check complete")
-		setupResponse, setupErr := client.Setup(r.Context(), &reqData.SetupRequest)
+		liteEngineSetupResponse, setupErr := client.Setup(r.Context(), &reqData.SetupRequest)
 		if setupErr != nil {
 			logrus.WithError(setupErr).
 				WithField("pool", poolName).
@@ -303,12 +309,12 @@ func (c *delegateCommand) handleSetup() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		JSON(w, api.SetupResponse{IPAddress: instance.IP, InstanceID: instance.ID}, http.StatusOK)
+		JSON(w, setupResponse{IPAddress: instance.IP, InstanceID: instance.ID}, http.StatusOK)
 		logrus.
 			WithField("pool", poolName).
 			WithField("ip", instance.IP).
 			WithField("id", instance.ID).
-			WithField("response", *setupResponse).
+			WithField("response", *liteEngineSetupResponse).
 			Info("handleSetup: setup complete")
 	}
 }
