@@ -169,7 +169,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 
 	startTime := time.Now()
 
-	logr.Traceln("provisioning VM")
+	logr.Traceln("aws: provisioning VM")
 
 	var iamProfile *ec2.IamInstanceProfileSpecification
 	if p.iamProfileArn != "" {
@@ -224,7 +224,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 	runResult, err := client.RunInstancesWithContext(ctx, in)
 	if err != nil {
 		logr.WithError(err).
-			Errorln("failed to list VMs")
+			Errorln("aws: [provision] failed to list VMs")
 		return
 	}
 
@@ -235,8 +235,10 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 
 	awsInstanceID := runResult.Instances[0].InstanceId
 
-	logr = logr.WithField("id", *awsInstanceID)
-	logr.Debugln("provision: created instance")
+	logr = logr.
+		WithField("id", *awsInstanceID)
+
+	logr.Debugln("aws: [provision] created instance")
 
 	// poll the amazon endpoint for server updates
 	// and exit when a network address is allocated.
@@ -256,7 +258,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 		attempt++
 
 		if attempt == attemptCount {
-			logr.Errorln("provision: failed to obtain IP; terminating it")
+			logr.Errorln("aws: [provision] failed to obtain IP; terminating it")
 
 			input := &ec2.TerminateInstancesInput{
 				InstanceIds: []*string{awsInstanceID},
@@ -269,13 +271,13 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 
 		select {
 		case <-ctx.Done():
-			logr.Warnln("provision: instance network deadline exceeded")
+			logr.Warnln("aws: [provision] instance network deadline exceeded")
 
 			err = ctx.Err()
 			return
 
 		case <-time.After(interval):
-			logr.Traceln("provision: check instance network")
+			logr.Traceln("aws: [provision] check instance network")
 
 			desc, descrErr := client.DescribeInstancesWithContext(ctx,
 				&ec2.DescribeInstancesInput{
@@ -283,17 +285,17 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 				},
 			)
 			if descrErr != nil {
-				logr.WithError(err).Warnln("provision: instance details failed")
+				logr.WithError(err).Warnln("aws: [provision] instance details failed")
 				continue
 			}
 
 			if len(desc.Reservations) == 0 {
-				logr.Warnln("provision: empty reservations in details")
+				logr.Warnln("aws: [provision] empty reservations in details")
 				continue
 			}
 
 			if len(desc.Reservations[0].Instances) == 0 {
-				logr.Warnln("provision: empty instances in reservations")
+				logr.Warnln("aws: [provision] empty instances in reservations")
 				continue
 			}
 
@@ -304,7 +306,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 			launchTime := p.getLaunchTime(amazonInstance)
 
 			if instanceIP == "" {
-				logr.Traceln("provision: instance has no IP")
+				logr.Traceln("aws: [provision] instance has no IP yet")
 				continue
 			}
 
@@ -318,7 +320,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 			logr.
 				WithField("ip", instanceIP).
 				WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
-				Traceln("provision: complete")
+				Debugln("aws: [provision] complete")
 
 			return
 		}
@@ -349,12 +351,10 @@ func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err e
 		},
 	}
 
-	logr.Traceln("list VMs")
-
 	describeRes, err := client.DescribeInstancesWithContext(ctx, params)
 	if err != nil {
 		logr.WithError(err).
-			Errorln("failed to list VMs")
+			Errorln("aws: failed to list VMs")
 		return
 	}
 
@@ -390,7 +390,7 @@ func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err e
 	logr.
 		WithField("free", len(free)).
 		WithField("busy", len(busy)).
-		Traceln("list VMs")
+		Traceln("aws: list VMs")
 
 	return
 }
@@ -429,12 +429,10 @@ func (p *awsPool) GetUsedInstanceByTag(ctx context.Context, tag, value string) (
 		},
 	}
 
-	logr.Traceln("get VM by tag")
-
 	describeRes, err := client.DescribeInstancesWithContext(ctx, params)
 	if err != nil {
 		logr.WithError(err).
-			Errorln("failed to get VM by tag")
+			Errorln("aws: failed to get VM by tag")
 		return
 	}
 
@@ -455,13 +453,13 @@ func (p *awsPool) GetUsedInstanceByTag(ctx context.Context, tag, value string) (
 			logr.
 				WithField("id", inst.ID).
 				WithField("ip", inst.IP).
-				Traceln("didn't found VM by tag")
+				Traceln("aws: found VM by tag")
 
 			return
 		}
 	}
 
-	logr.Traceln("didn't found VM by tag")
+	logr.Traceln("aws: didn't found VM by tag")
 
 	return
 }
@@ -472,8 +470,6 @@ func (p *awsPool) Tag(ctx context.Context, instanceID string, tags map[string]st
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
 		WithField("provider", provider)
-
-	logr.Traceln("tag VM")
 
 	awsTags := make([]*ec2.Tag, 0, len(tags))
 	for key, value := range tags {
@@ -491,11 +487,11 @@ func (p *awsPool) Tag(ctx context.Context, instanceID string, tags map[string]st
 	_, err = client.CreateTagsWithContext(ctx, input)
 	if err != nil {
 		logr.WithError(err).
-			Errorln("failed to tag VM")
+			Errorln("aws: failed to tag VM")
 		return
 	}
 
-	logr.Traceln("VM tagged")
+	logr.Traceln("aws: VM tagged")
 	return
 }
 
@@ -515,8 +511,6 @@ func (p *awsPool) Destroy(ctx context.Context, instanceIDs ...string) (err error
 		WithField("id", instanceIDs).
 		WithField("provider", provider)
 
-	logr.Traceln("terminate VMs")
-
 	awsIDs := make([]*string, len(instanceIDs))
 	for i, instanceID := range instanceIDs {
 		awsIDs[i] = aws.String(instanceID)
@@ -525,10 +519,10 @@ func (p *awsPool) Destroy(ctx context.Context, instanceIDs ...string) (err error
 	_, err = client.TerminateInstances(&ec2.TerminateInstancesInput{InstanceIds: awsIDs})
 	if err != nil {
 		logr.WithError(err).
-			Errorln("failed to terminate VMs")
+			Errorln("aws: failed to terminate VMs")
 		return
 	}
 
-	logr.Traceln("VMs terminated")
+	logr.Traceln("aws: VMs terminated")
 	return
 }
