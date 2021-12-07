@@ -29,17 +29,23 @@ This runner was initially designed in the following [proposal](https://github.co
 + setup an instance:
 
 ```BASH
-curl -d '{"correlation_id":"this-is-unique", "pool_id":"ubuntu", "setup_request": {"network": {"id":"drone"}, "platform": { "os":"ubuntu" }}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/setup
+curl -d '{"id": "unique-stage-id","correlation_id":"abc1","pool_id":"ubuntu", "setup_request": {"network": {"id":"drone"}, "platform": { "os":"ubuntu" }}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/setup
 ```
 
 + run a step on the instance:
 
 ```BASH
-curl -d '{"ip_address":<IP OF INSTANCE>, "start_step_request":{"id":"step4", "image": "alpine:3.11", "working_dir":"/tmp", "run":{"commands":["sleep 30"], "entrypoint":["sh", "-c"]}}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/step
+curl -d '{"id":"unique-stage-id","pool_id":"ubuntu","correlation_id":"xyz2", "start_step_request":{"id":"step4", "image": "alpine:3.11", "working_dir":"/tmp", "run":{"commands":["sleep 30"], "entrypoint":["sh", "-c"]}}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/step
+```
+
+or, directly by IP address returned by the setup API call: 
+
+```BASH
+curl -d '{"ip_address":"<IP OF INSTANCE>","pool_id":"ubuntu","correlation_id":"xyz2", "start_step_request":{"id":"step4", "image": "alpine:3.11", "working_dir":"/tmp", "run":{"commands":["sleep 30"], "entrypoint":["sh", "-c"]}}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/step
 ```
 
 + destroy an instance:
 
 ```BASH
-curl -d '{"correlation_id":"this-is-unique", "pool_id":"ubuntu", "instance_id":"<ID OF AWS INSTANCE>" }' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy
+curl -d '{"id":"unique-stage-id","pool_id":"ubuntu","correlation_id":"uvw3"}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy
 ```
