@@ -26,8 +26,8 @@ import (
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -231,7 +231,7 @@ func (c *delegateCommand) delegateListener() http.Handler {
 func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request) {
 	poolName := r.URL.Query().Get("pool")
 	if poolName == "" {
-		httprender.BadRequest(w, "mandatory URL parameter 'pool' is missing")
+		httprender.BadRequest(w, "mandatory URL parameter 'pool' is missing", nil)
 		return
 	}
 
@@ -252,17 +252,17 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}{}
 
 	if err := getJSONDataFromReader(r.Body, reqData); err != nil {
-		httprender.BadRequest(w, err.Error())
+		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 
 	if reqData.ID == "" {
-		httprender.BadRequest(w, "mandatory field 'id' in the request body is empty")
+		httprender.BadRequest(w, "mandatory field 'id' in the request body is empty", nil)
 		return
 	}
 
 	if reqData.PoolID == "" {
-		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty")
+		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty", nil)
 		return
 	}
 
@@ -273,9 +273,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	poolName := reqData.PoolID
 	if !c.poolManager.Exists(poolName) {
-		message := "pool not defined"
-		logr.Debugln(message)
-		httprender.BadRequest(w, message)
+		httprender.BadRequest(w, "pool not defined", logr)
 		return
 	}
 
@@ -283,8 +281,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	instance, err := c.poolManager.Provision(ctx, poolName)
 	if err != nil {
-		logrus.WithError(err).Errorln("failed provisioning")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed provisioning", err, logr)
 		return
 	}
 
@@ -311,43 +308,41 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	err = c.poolManager.Tag(ctx, poolName, instance.ID, tags)
 	if err != nil {
-		logr.WithError(err).Errorln("failed to tag")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed to tag", err, logr)
 		go cleanUpFn()
 		return
 	}
 
 	client, err := c.getLEClient(instance.IP)
 	if err != nil {
-		logr.WithError(err).Errorln("failed to create client")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed to create LE client", err, logr)
 		go cleanUpFn()
 		return
 	}
 
+	const timeoutSetup = 20 * time.Minute // TODO: Move to configuration
+
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
-	healthResponse, err := client.RetryHealth(ctx)
+	healthResponse, err := client.RetryHealth(ctx, timeoutSetup)
 	if err != nil {
-		logr.WithError(err).Errorln("RetryHealth call failed")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed to call LE.RetryHealth", err, logr)
 		go cleanUpFn()
 		return
 	}
 
 	logr.WithField("response", fmt.Sprintf("%+v", healthResponse)).
-		Traceln("health check complete")
+		Traceln("LE.RetryHealth check complete")
 
 	setupResponse, err := client.Setup(ctx, &reqData.SetupRequest)
 	if err != nil {
-		logr.WithError(err).Errorln("setup call failed")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed to call LE.Setup", err, logr)
 		go cleanUpFn()
 		return
 	}
 
 	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).
-		Traceln("setup complete")
+		Traceln("LE.Setup complete")
 
 	httprender.OK(w, struct {
 		InstanceID string `json:"instance_id,omitempty"`
@@ -368,17 +363,17 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	}{}
 
 	if err := getJSONDataFromReader(r.Body, reqData); err != nil {
-		httprender.BadRequest(w, err.Error())
+		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 
 	if reqData.ID == "" && reqData.IPAddress == "" {
-		httprender.BadRequest(w, "either parameter 'id' or 'ip_address' must be provided")
+		httprender.BadRequest(w, "either parameter 'id' or 'ip_address' must be provided", nil)
 		return
 	}
 
 	if reqData.PoolID == "" {
-		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty")
+		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty", nil)
 		return
 	}
 
@@ -397,14 +392,11 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	} else {
 		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
 		if err != nil {
-			logr.WithError(err).Errorln("cannot get the instance by tag")
-			httprender.InternalError(w)
+			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return
 		}
 		if inst == nil || inst.IP == "" {
-			message := "instance with provided ID not found"
-			logr.Debugln(message)
-			httprender.NotFound(w, message)
+			httprender.NotFound(w, "instance with provided ID not found", logr)
 			return
 		}
 
@@ -416,8 +408,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 
 	client, err := c.getLEClient(ipAddress)
 	if err != nil {
-		logr.WithError(err).Errorln("failed to create client")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed to create client", err, logr)
 		return
 	}
 
@@ -425,22 +416,22 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 
 	startStepResponse, err := client.StartStep(ctx, &reqData.StartStepRequest)
 	if err != nil {
-		logrus.WithError(err).Errorln("StartStep call failed")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed to call LE.StartStep", err, logr)
 		return
 	}
 
 	logr.WithField("startStepResponse", startStepResponse).
-		Traceln("StartStep complete")
+		Traceln("LE.StartStep complete")
 
-	pollResponse, err := client.RetryPollStep(ctx, &api.PollStepRequest{ID: reqData.StartStepRequest.ID})
+	const timeoutStep = 4 * time.Hour // TODO: Move to configuration
+
+	pollResponse, err := client.RetryPollStep(ctx, &api.PollStepRequest{ID: reqData.StartStepRequest.ID}, timeoutStep)
 	if err != nil {
-		logr.WithError(err).Errorln("RetryPollStep call failed")
-		httprender.InternalError(w)
+		httprender.InternalError(w, "failed to call LE.RetryPollStep", err, logr)
 	}
 
 	logr.WithField("pollResponse", pollResponse).
-		Traceln("RetryPollStep complete")
+		Traceln("LE.RetryPollStep complete")
 
 	httprender.OK(w, pollResponse)
 }
@@ -454,17 +445,17 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	}{}
 
 	if err := getJSONDataFromReader(r.Body, reqData); err != nil {
-		httprender.BadRequest(w, err.Error())
+		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 
 	if reqData.ID == "" && reqData.InstanceID == "" {
-		httprender.BadRequest(w, "either parameter 'id' or 'instance_id' must be provided")
+		httprender.BadRequest(w, "either parameter 'id' or 'instance_id' must be provided", nil)
 		return
 	}
 
 	if reqData.PoolID == "" {
-		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty")
+		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty", nil)
 		return
 	}
 
@@ -483,14 +474,11 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	} else {
 		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
 		if err != nil {
-			logr.WithError(err).Errorln("cannot get the instance by tag")
-			httprender.InternalError(w)
+			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return
 		}
 		if inst == nil {
-			message := "instance with provided ID not found"
-			logrus.Debugln(message)
-			httprender.NotFound(w, message)
+			httprender.NotFound(w, "instance with provided ID not found", logr)
 			return
 		}
 
@@ -501,8 +489,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		WithField("instance_id", instanceID)
 
 	if err := c.poolManager.Destroy(ctx, reqData.PoolID, instanceID); err != nil {
-		logr.WithError(err).Errorln("cannot destroy the instance")
-		w.WriteHeader(http.StatusInternalServerError)
+		httprender.InternalError(w, "cannot destroy the instance", err, logr)
 		return
 	}
 
