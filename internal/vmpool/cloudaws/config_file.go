@@ -19,7 +19,6 @@ import (
 type (
 	poolDefinition struct {
 		Name        string   `json:"name,omitempty"`
-		Root        string   `json:"root,omitempty"` // TODO: Remove this, the runner should not care about LE's root dir
 		MinPoolSize int      `json:"min_pool_size,omitempty" yaml:"min_pool_size"`
 		MaxPoolSize int      `json:"max_pool_size,omitempty" yaml:"max_pool_size"`
 		Platform    platform `json:"platform,omitempty"`
@@ -130,7 +129,6 @@ func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.Defaul
 		Secret: defaultPoolSettings.AwsAccessKeySecret,
 		Region: defaultPoolSettings.AwsRegion,
 	}
-
 	// override access key-ID, secret and region defaults with the values from config file
 	if rawPool.Account.AccessKeyID != "" {
 		creds.Client = rawPool.Account.AccessKeyID
@@ -141,7 +139,6 @@ func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.Defaul
 	if rawPool.Account.Region != "" {
 		creds.Region = rawPool.Account.Region
 	}
-
 	// we need Access, error if its still empty
 	if creds.Client == "" || creds.Secret == "" {
 		return nil, errors.New("missing AWS access key or AWS secret. Add to .env file or pool file")
@@ -210,7 +207,6 @@ func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.Defaul
 		}
 		rawPool.Instance.PublicKey = string(body)
 	}
-
 	// generate the cloudinit file
 	var userDataWithSSH string
 	if rawPool.Platform.OS == oshelp.WindowsString {
@@ -232,9 +228,6 @@ func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.Defaul
 		})
 	}
 	rawPool.Instance.UserData = userDataWithSSH
-	// create the root directory
-	rawPool.Root = tempdir(pipelineOS)
-
 	return &awsPool{
 		name:          rawPool.Name,
 		runnerName:    defaultPoolSettings.RunnerName,
@@ -242,7 +235,7 @@ func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.Defaul
 		privateKey:    rawPool.Instance.PrivateKey,
 		iamProfileArn: rawPool.Instance.IAMProfileARN,
 		os:            pipelineOS,
-		rootDir:       rawPool.Root,
+		rootDir:       tempdir(pipelineOS),
 		image:         rawPool.Instance.AMI,
 		instanceType:  rawPool.Instance.Type,
 		user:          rawPool.Instance.User,
