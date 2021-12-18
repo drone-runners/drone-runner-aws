@@ -52,6 +52,7 @@ type DefaultSettings struct {
 	AwsAccessKeyID     string
 	AwsAccessKeySecret string
 	AwsRegion          string
+	AwsKeyPairName     string
 	PrivateKeyFile     string
 	PublicKeyFile      string
 	LiteEnginePath     string

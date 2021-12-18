@@ -113,8 +113,7 @@ restart-service sshd`
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 Invoke-WebRequest -Uri "%s/lite-engine.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
-nssm.exe install lite-engine "C:\Program Files\lite-engine\lite-engine.exe" server --env-file="""""""C:\Program Files\lite-engine\.env"""""""
-nssm.exe start lite-engine 
+Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=`+"`"+`"C:\Program Files\lite-engine\.env`+"`"+`"" -RedirectStandardOutput "C:\Program Files\lite-engine\log.out" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 </powershell>`, params.LiteEnginePath)
 		certs := createWindowsCertsSection(params.CaCertFile, params.CertFile, params.KeyFile, "/tmp/certs")
 		payload = gitKeysInstall + adminAccessSSHRestart + certs + installLE

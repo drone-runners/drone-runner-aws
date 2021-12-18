@@ -98,6 +98,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		AwsAccessKeyID:     config.DefaultPoolSettings.AwsAccessKeyID,
 		AwsAccessKeySecret: config.DefaultPoolSettings.AwsAccessKeySecret,
 		AwsRegion:          config.DefaultPoolSettings.AwsRegion,
+		AwsKeyPairName:     config.DefaultPoolSettings.AwsKeyPairName,
 		LiteEnginePath:     config.DefaultPoolSettings.LiteEnginePath,
 		CaCertFile:         config.DefaultPoolSettings.CaCertFile,
 		CertFile:           config.DefaultPoolSettings.CertFile,
