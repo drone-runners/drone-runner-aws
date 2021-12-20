@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone/runner-go/logger"
+
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
@@ -44,6 +46,23 @@ type delegateCommand struct {
 
 const TagStageID = vmpool.TagPrefix + "stage-id"
 
+// helper function configures the global logger from
+// the loaded configuration.
+func setupLogger(config *daemon.Config) {
+	logger.Default = logger.Logrus(
+		logrus.NewEntry(
+			logrus.StandardLogger(),
+		),
+	)
+
+	if config.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+	if config.Trace {
+		logrus.SetLevel(logrus.TraceLevel)
+	}
+}
+
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	envError := godotenv.Load(c.envfile)
@@ -64,7 +83,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// setup the global logrus logger.
-	daemon.SetupLogger(&config)
+	setupLogger(&config)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -202,14 +221,14 @@ func (c *delegateCommand) delegateListener() http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			wrap := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-			reqStart := time.Now()
+			reqStart := time.Now().UTC()
 			next.ServeHTTP(wrap, r)
 
 			status := wrap.Status()
 			dur := time.Since(reqStart).Milliseconds()
 
 			logr := logrus.WithContext(r.Context()).
-				WithField("time", time.Now().UTC().Format(time.RFC3339)).
+				WithField("t", reqStart.Format(time.RFC3339)).
 				WithField("status", status).
 				WithField("dur[ms]", dur)
 			logLine := "HTTP: " + r.Method + " " + r.URL.RequestURI()
@@ -429,6 +448,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	pollResponse, err := client.RetryPollStep(ctx, &api.PollStepRequest{ID: reqData.StartStepRequest.ID}, timeoutStep)
 	if err != nil {
 		httprender.InternalError(w, "failed to call LE.RetryPollStep", err, logr)
+		return
 	}
 
 	logr.WithField("pollResponse", pollResponse).

@@ -7,11 +7,11 @@ package compiler
 import (
 	"context"
 	"fmt"
-
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
 	"github.com/drone/runner-go/clone"
@@ -20,6 +20,8 @@ import (
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/secret"
+	leapi "github.com/harness/lite-engine/api"
+	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/dchest/uniuri"
 	"github.com/gosimple/slug"
@@ -46,44 +48,60 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	spec := &engine.Spec{}
 
+	spec.Name = pipeline.Name
+
 	targetPool := pipeline.Pool.Use
 	pool := c.PoolManager.Get(targetPool)
 
+	pipelineOS := pool.GetOS()
+	pipelineRoot := pool.GetRootDir()
+
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
 	spec.CloudInstance.PoolName = targetPool
-	spec.Root = pool.GetRootDir()
 
-	pipelineOS := pool.GetOS()
 	// creates a home directory in the root.
 	// note: mkdirall fails on windows so we need to create all directories in the tree.
-	homedir := oshelp.JoinPaths(pipelineOS, spec.Root, "home", "drone")
-	spec.Files = append(spec.Files, &engine.File{
-		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "home"),
-		Mode:  0700,
-		IsDir: true,
-	}, &engine.File{
-		Path:  homedir,
-		Mode:  0700,
-		IsDir: true,
+	homedir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "home", "drone")
+	spec.Files = append(spec.Files, leapi.FileInfo{
+		File: leapi.File{
+			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "home"),
+			Mode:  0700,
+			IsDir: true,
+		},
+	}, leapi.FileInfo{
+		File: leapi.File{
+			Path:  homedir,
+			Mode:  0700,
+			IsDir: true,
+		},
 	})
 
 	// creates a source directory in the root.
 	// note: mkdirall fails on windows so we need to create all
 	// directories in the tree.
-	sourcedir := oshelp.JoinPaths(pipelineOS, spec.Root, "drone", "src")
-	spec.Files = append(spec.Files, &engine.File{
-		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "drone"),
-		Mode:  0700,
-		IsDir: true,
-	}, &engine.File{
-		Path:  sourcedir,
-		Mode:  0700,
-		IsDir: true,
-	}, &engine.File{
-		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "opt"),
-		Mode:  0700,
-		IsDir: true,
-	})
+	sourcedir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone", "src")
+	spec.Files = append(spec.Files,
+		leapi.FileInfo{
+			File: leapi.File{
+				Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone"),
+				Mode:  0700,
+				IsDir: true,
+			},
+		},
+		leapi.FileInfo{
+			File: leapi.File{
+				Path:  sourcedir,
+				Mode:  0700,
+				IsDir: true,
+			},
+		},
+		leapi.FileInfo{
+			File: leapi.File{
+				Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt"),
+				Mode:  0700,
+				IsDir: true,
+			},
+		})
 
 	// creates the netrc file
 	if args.Netrc != nil && args.Netrc.Password != "" {
@@ -95,10 +113,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			args.Netrc.Login,
 			args.Netrc.Password,
 		)
-		spec.Files = append(spec.Files, &engine.File{
-			Path: netrcpath,
-			Mode: 0600,
-			Data: []byte(netrcdata),
+		spec.Files = append(spec.Files, leapi.FileInfo{
+			File: leapi.File{
+				Path: netrcpath,
+				Mode: 0600,
+				Data: netrcdata,
+			},
 		})
 	}
 
@@ -152,7 +172,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// create the clone step, maybe
 	if !pipeline.Clone.Disable {
-		clonepath := oshelp.JoinPaths(pipelineOS, spec.Root, "opt", oshelp.GetExt(pipelineOS, "clone"))
+		clonepath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, "clone"))
 		clonefile := oshelp.GenScript(pipelineOS,
 			clone.Commands(
 				clone.Args{
@@ -163,22 +183,35 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				},
 			),
 		)
+
+		// TODO: Remove when lespec.Step is with Files slice
+		_ = clonepath
+		_ = clonefile
+
 		cmd, args := oshelp.GetCommand(pipelineOS, clonepath)
 		spec.Steps = append(spec.Steps, &engine.Step{
-			Name:      "clone",
-			Args:      args,
-			Command:   cmd,
-			Envs:      envs,
-			RunPolicy: runtime.RunAlways,
-			Files: []*engine.File{
-				{
-					Path: clonepath,
-					Mode: 0700,
-					Data: []byte(clonefile),
-				},
+			Step: lespec.Step{
+				ID:   random(),
+				Name: "clone",
+				// TODO: Check if it's OK to generate a command by simple joining the program and its arguments.
+				Command:    []string{cmd + " " + strings.Join(args, " ")},
+				Envs:       envs,
+				Secrets:    []*lespec.Secret{},
+				WorkingDir: sourcedir,
+				// TODO: Need to extend lespec.Step with Files slice.
+				//	Files: []leapi.FileInfo{
+				//		File: leapi.File{
+				//			Path: clonepath,
+				//			Mode: 0700,
+				//			Data: clonefile,
+				//		},
+				//	},
 			},
-			Secrets:    []*engine.Secret{},
-			WorkingDir: sourcedir,
+			Cmd:       cmd,
+			Args:      args,
+			DependsOn: nil,
+			ErrPolicy: runtime.ErrFail,
+			RunPolicy: runtime.RunAlways,
 		})
 	}
 
@@ -187,10 +220,10 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	for _, v := range pipeline.Volumes {
 		path := ""
 		if v.EmptyDir != nil {
-			path = oshelp.JoinPaths(pipelineOS, spec.Root, random())
+			path = oshelp.JoinPaths(pipelineOS, pipelineRoot, random())
 			// we only need to pass temporary volumes through to engine, to have the folders created
-			src := new(engine.Volume)
-			src.EmptyDir = &engine.VolumeEmptyDir{
+			src := new(lespec.Volume)
+			src.EmptyDir = &lespec.VolumeEmptyDir{
 				ID:   path,
 				Name: v.Name,
 			}
@@ -212,7 +245,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// create steps
 	for _, src := range combinedSteps {
 		buildslug := slug.Make(src.Name)
-		buildpath := oshelp.JoinPaths(pipelineOS, spec.Root, "opt", oshelp.GetExt(pipelineOS, buildslug))
+		buildpath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, buildslug))
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
 		// if there is an image associated with the step build a docker cli
 		var buildfile string
@@ -222,24 +255,35 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			buildfile = oshelp.GenerateDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
 		}
 
+		// TODO: Remove when lespec.Step is with Files slice
+		_ = buildpath
+		_ = buildfile
+
 		cmd, args := oshelp.GetCommand(pipelineOS, buildpath)
 		dst := &engine.Step{
-			Name:      src.Name,
-			Args:      args,
-			Command:   cmd,
-			Detach:    src.Detach,
-			DependsOn: src.DependsOn,
-			Envs:      stepEnv,
-			RunPolicy: runtime.RunOnSuccess,
-			Files: []*engine.File{
-				{
-					Path: buildpath,
-					Mode: 0700,
-					Data: []byte(buildfile),
-				},
+			Step: lespec.Step{
+				ID:   random(),
+				Name: src.Name,
+				// TODO: Check if it's OK to generate a command by simple joining the program and its arguments.
+				Command: []string{cmd + " " + strings.Join(args, " ")},
+				Detach:  src.Detach,
+				Envs:    stepEnv,
+				// TODO: Need to extend lespec.Step with Files slice.
+				//	Files: []leapi.FileInfo{
+				//		File: leapi.File{
+				//			Path: buildpath,
+				//			Mode: 0700,
+				//			Data: buildfile,
+				//		},
+				//	},
+				Image:      src.Image,
+				Secrets:    convertSecretEnv(src.Environment),
+				WorkingDir: sourcedir,
 			},
-			Secrets:    convertSecretEnv(src.Environment),
-			WorkingDir: sourcedir,
+			Cmd:       cmd,
+			Args:      args,
+			DependsOn: src.DependsOn,
+			RunPolicy: runtime.RunOnSuccess,
 		}
 		spec.Steps = append(spec.Steps, dst)
 

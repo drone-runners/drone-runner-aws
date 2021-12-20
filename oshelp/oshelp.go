@@ -21,7 +21,7 @@ import (
 
 const WindowsString = "windows"
 
-// helper function joins the file paths.
+// JoinPaths helper function joins the file paths.
 func JoinPaths(os string, paths ...string) string {
 	switch os {
 	case WindowsString:
@@ -31,7 +31,7 @@ func JoinPaths(os string, paths ...string) string {
 	}
 }
 
-// helper function returns the shell extension based on the
+// GetExt helper function returns the shell extension based on the
 // target platform.
 func GetExt(os, file string) (s string) {
 	switch os {
@@ -42,7 +42,7 @@ func GetExt(os, file string) (s string) {
 	}
 }
 
-// helper function returns the shell command and arguments
+// GetCommand helper function returns the shell command and arguments
 // based on the target platform to invoke the script
 func GetCommand(os, script string) (cmd string, args []string) {
 	cmd, args = bash.Command()
@@ -52,7 +52,7 @@ func GetCommand(os, script string) (cmd string, args []string) {
 	return cmd, append(args, script)
 }
 
-// helper function returns the netrc file name based on the target platform.
+// GetNetrc helper function returns the netrc file name based on the target platform.
 func GetNetrc(os string) string {
 	switch os {
 	case WindowsString:
@@ -62,7 +62,7 @@ func GetNetrc(os string) string {
 	}
 }
 
-// helper function generates and returns a shell script to
+// GenScript helper function generates and returns a shell script to
 // execute the provided shell commands. The shell scripting
 // language (bash vs powershell) is determined by the operating
 // system.
@@ -126,7 +126,7 @@ func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resourc
 	return volumeString
 }
 
-func convertStepNametoContainerString(stepName string) (containerName string) {
+func convertStepNameToContainerString(stepName string) (containerName string) {
 	// name of the container
 	reg := regexp.MustCompile("[^a-zA-Z0-9_.-]+")
 	safeName := reg.ReplaceAllString(stepName, "")
@@ -161,9 +161,9 @@ func GenerateDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step
 		interactiveDeamonString = "--detach"
 	}
 	// container name
-	containerName := convertStepNametoContainerString(step.Name)
+	containerName := convertStepNameToContainerString(step.Name)
 	// networking
-	networkString := `--network='myNetwork'`
+	networkString := `--network='drone'`
 	// if we are executing commands (plural), build docker command lines
 	entryPoint := convertCommandsToEntryPointString(pipelineOS, step.Commands)
 	commandBase := ""

@@ -239,8 +239,8 @@ func Test_convertStepNametoContainerString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.stepName, func(t *testing.T) {
-			if gotContainerName := convertStepNametoContainerString(tt.stepName); gotContainerName != tt.wantContainerName {
-				t.Errorf("convertStepNametoContainerString() = #%v#, want #%v#", gotContainerName, tt.wantContainerName)
+			if gotContainerName := convertStepNameToContainerString(tt.stepName); gotContainerName != tt.wantContainerName {
+				t.Errorf("convertStepNameToContainerString() = #%v#, want #%v#", gotContainerName, tt.wantContainerName)
 			}
 		})
 	}
