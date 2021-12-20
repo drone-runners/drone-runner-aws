@@ -239,6 +239,7 @@ func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.Defaul
 		name:          rawPool.Name,
 		runnerName:    defaultPoolSettings.RunnerName,
 		credentials:   creds,
+		keyPairName:   defaultPoolSettings.AwsKeyPairName,
 		privateKey:    rawPool.Instance.PrivateKey,
 		iamProfileArn: rawPool.Instance.IAMProfileARN,
 		os:            pipelineOS,

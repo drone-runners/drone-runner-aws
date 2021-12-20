@@ -15,7 +15,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.2
 	github.com/gosimple/slug v1.9.0
-	github.com/harness/lite-engine v0.0.2-0.20211208111525-06599b16e8e0
+	github.com/harness/lite-engine v0.0.2-0.20211217080853-2b4a787dbd83
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-isatty v0.0.14

@@ -82,6 +82,8 @@ github.com/harness/lite-engine v0.0.0-20211202150444-b53cdc620e42 h1:vRO2KPZC7Ly
 github.com/harness/lite-engine v0.0.0-20211202150444-b53cdc620e42/go.mod h1:OEqIEuNhB6Ax+7DPX6uqR1iAoucItLGPd/Vc9xX+BNs=
 github.com/harness/lite-engine v0.0.2-0.20211208111525-06599b16e8e0 h1:iUMipAP8tMUVV77LZpTkd05J4fDGnnaKrIwQMHTqBp8=
 github.com/harness/lite-engine v0.0.2-0.20211208111525-06599b16e8e0/go.mod h1:OEqIEuNhB6Ax+7DPX6uqR1iAoucItLGPd/Vc9xX+BNs=
+github.com/harness/lite-engine v0.0.2-0.20211217080853-2b4a787dbd83 h1:QFleOqcA4oJUJd+QJjCTfnme1CifJ7e5swhNeT9giz0=
+github.com/harness/lite-engine v0.0.2-0.20211217080853-2b4a787dbd83/go.mod h1:OEqIEuNhB6Ax+7DPX6uqR1iAoucItLGPd/Vc9xX+BNs=
 github.com/hashicorp/errwrap v1.0.0 h1:hLrqtEDnRye3+sgx6z4qVLNuviH3MR5aQ0ykNJa/UYA=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
 github.com/hashicorp/go-multierror v1.0.0 h1:iVjPR7a6H0tWELX5NxNe7bYopibicUzc7uPribsnS6o=

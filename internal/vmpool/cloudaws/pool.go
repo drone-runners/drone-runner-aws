@@ -30,6 +30,7 @@ type awsPool struct {
 	name        string
 	runnerName  string
 	credentials Credentials
+	keyPairName string
 
 	privateKey    string
 	iamProfileArn string
@@ -213,6 +214,9 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 				},
 			},
 		},
+	}
+	if p.keyPairName != "" {
+		in.KeyName = aws.String(p.keyPairName)
 	}
 
 	if p.volumeType == "io1" {
