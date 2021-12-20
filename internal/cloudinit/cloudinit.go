@@ -98,7 +98,7 @@ restart-service sshd
 	} else {
 		gitKeysInstall := fmt.Sprintf(`<powershell>
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-choco install git.install nssm -r -y
+choco install -y git
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 Set-Service -Name sshd -StartupType ‘Automatic’
 Start-Service sshd
