@@ -78,7 +78,9 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	}
 	// we have enough information for default pool settings
 	defaultPoolSettings := vmpool.DefaultSettings{
-		RunnerName: runnerName,
+		RunnerName:         runnerName,
+		AwsAccessKeyID:     c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_ID"],
+		AwsAccessKeySecret: c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"],
 	}
 	// read the poolfile
 	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
