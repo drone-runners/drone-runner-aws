@@ -147,7 +147,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 			Labels:  nil,
 			Options: nil,
 		},
-		Platform:  lespec.Platform{}, // not needed, LE should use the values provided by the runtime
 		Volumes:   spec.Volumes,
 		Secrets:   nil,               // no global secrets, secrets are passed to each step individually
 		LogConfig: leapi.LogConfig{}, // unused... I guess
