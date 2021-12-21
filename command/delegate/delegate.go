@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -25,6 +26,8 @@ import (
 	"github.com/drone/signal"
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
+	lelivelog "github.com/harness/lite-engine/livelog"
+	lestream "github.com/harness/lite-engine/logstream/remote"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -249,8 +252,38 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		PoolID           string            `json:"pool_id"`
 		Tags             map[string]string `json:"tags"`
 		CorrelationID    string            `json:"correlation_id"`
+		LogKey           string            `json:"log_key"`
 		api.SetupRequest `json:"setup_request"`
 	}{}
+
+	// Sets up logger to stream the logs in case log config is set
+	log := logrus.New()
+	var logr *logrus.Entry
+	if reqData.SetupRequest.LogConfig.URL == "" {
+		log.Out = os.Stdout
+		logr = log.WithField("api", "delegate:setup").
+			WithField("pool", reqData.PoolID).
+			WithField("correlationID", reqData.CorrelationID)
+	} else {
+		client := lestream.NewHTTPClient(reqData.SetupRequest.LogConfig.URL, reqData.SetupRequest.LogConfig.AccountID,
+			reqData.SetupRequest.LogConfig.Token, reqData.SetupRequest.LogConfig.IndirectUpload, false)
+		wc := lelivelog.New(client, reqData.LogKey, reqData.CorrelationID, nil)
+		go func() {
+			if err := wc.Open(); err != nil {
+				logrus.WithError(err).Debugln("failed to open log stream")
+			}
+		}()
+		defer func() {
+			if err := wc.Close(); err != nil {
+				logrus.WithError(err).Debugln("failed to close log stream")
+			}
+		}()
+
+		log.Out = wc
+		log.SetLevel(logrus.TraceLevel)
+
+		logr = log.WithContext(r.Context()).WithField("pool", reqData.PoolID)
+	}
 
 	if err := getJSONDataFromReader(r.Body, reqData); err != nil {
 		httprender.BadRequest(w, err.Error(), nil)
@@ -266,11 +299,6 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty", nil)
 		return
 	}
-
-	logr := logrus.
-		WithField("api", "delegate:setup").
-		WithField("pool", reqData.PoolID).
-		WithField("correlation_id", reqData.CorrelationID)
 
 	poolName := reqData.PoolID
 	if !c.poolManager.Exists(poolName) {
@@ -325,15 +353,13 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
-	healthResponse, err := client.RetryHealth(ctx, timeoutSetup)
-	if err != nil {
+	if _, err := client.RetryHealth(ctx, timeoutSetup); err != nil {
 		httprender.InternalError(w, "failed to call LE.RetryHealth", err, logr)
 		go cleanUpFn()
 		return
 	}
 
-	logr.WithField("response", fmt.Sprintf("%+v", healthResponse)).
-		Traceln("LE.RetryHealth check complete")
+	logr.Traceln("LE.RetryHealth check complete")
 
 	setupResponse, err := client.Setup(ctx, &reqData.SetupRequest)
 	if err != nil {
@@ -530,3 +556,27 @@ func getJSONDataFromReader(r io.Reader, data interface{}) error {
 
 	return nil
 }
+
+// func getStreamLogger(cfg api.LogConfig, logKey, poolID, correlationID string) *logrus.Entry {
+// 	log := logrus.New()
+
+// 	if cfg.URL == "" {
+// 		log.Out = os.Stdout
+// 		return log.WithField("api", "delegate:setup").
+// 			WithField("pool", poolID).
+// 			WithField("correlationID", correlationID)
+// 	} else {
+// 		client := lestream.NewHTTPClient(cfg.URL, cfg.AccountID,
+// 			cfg.Token, cfg.IndirectUpload, false)
+// 		wc := lelivelog.New(client, logKey, correlationID, nil)
+// 		go func() {
+// 			if err := wc.Open(); err != nil {
+// 				logrus.WithError(err).Debugln("failed to open log stream")
+// 			}
+// 		}()
+// 		log.Out = wc
+// 		log.SetLevel(logrus.TraceLevel)
+
+// 		return log.WithField("pool", poolID)
+// 	}
+// }
