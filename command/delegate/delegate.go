@@ -21,6 +21,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
+	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
@@ -271,6 +272,8 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
 	var logr *logrus.Entry
@@ -289,8 +292,9 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
+		logr = log.WithField("pool", reqData.PoolID)
 
-		logr = log.WithContext(r.Context()).WithField("pool", reqData.PoolID)
+		ctx = logger.WithContext(r.Context(), logger.Logrus(logr))
 	}
 
 	poolName := reqData.PoolID
@@ -298,8 +302,6 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		httprender.BadRequest(w, "pool not defined", logr)
 		return
 	}
-
-	ctx := r.Context()
 
 	instance, err := c.poolManager.Provision(ctx, poolName)
 	if err != nil {
@@ -347,22 +349,22 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
 	if _, err := client.RetryHealth(ctx, timeoutSetup); err != nil {
-		httprender.InternalError(w, "failed to call LE.RetryHealth", err, logr)
+		httprender.InternalError(w, "failed to call lite-engine retry health", err, logr)
 		go cleanUpFn()
 		return
 	}
 
-	logr.Traceln("LE.RetryHealth check complete")
+	logr.Traceln("retry health check complete")
 
 	setupResponse, err := client.Setup(ctx, &reqData.SetupRequest)
 	if err != nil {
-		httprender.InternalError(w, "failed to call LE.Setup", err, logr)
+		httprender.InternalError(w, "failed to call setup lite-engine", err, logr)
 		go cleanUpFn()
 		return
 	}
 
 	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).
-		Traceln("LE.Setup complete")
+		Traceln("VM setup is complete")
 
 	httprender.OK(w, struct {
 		InstanceID string `json:"instance_id,omitempty"`
