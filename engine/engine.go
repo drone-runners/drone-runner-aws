@@ -229,7 +229,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		Detach:     step.Detach,
 		Envs:       step.Envs,
 		Name:       step.Name,
-		LogKey:     "",
+		LogKey:     step.ID,
 		Secrets:    secrets, // TODO: Why is Secrets in LE StartStepRequest defined as []string, and in LE Step as []*Secret?
 		WorkingDir: step.WorkingDir,
 		Kind:       leapi.Run,
@@ -263,6 +263,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		ShmSize:      step.ShmSize,
 		User:         step.User,
 		Volumes:      step.Volumes,
+		Files:        step.Files,
 	}
 
 	startStepResponse, err := client.StartStep(ctx, req)

@@ -7,7 +7,6 @@ package compiler
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
@@ -20,7 +19,6 @@ import (
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/secret"
-	leapi "github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/dchest/uniuri"
@@ -62,45 +60,36 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// creates a home directory in the root.
 	// note: mkdirall fails on windows so we need to create all directories in the tree.
 	homedir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "home", "drone")
-	spec.Files = append(spec.Files, leapi.FileInfo{
-		File: leapi.File{
+	spec.Files = append(spec.Files,
+		&lespec.File{
 			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "home"),
 			Mode:  0700,
 			IsDir: true,
-		},
-	}, leapi.FileInfo{
-		File: leapi.File{
+		}, &lespec.File{
 			Path:  homedir,
 			Mode:  0700,
 			IsDir: true,
-		},
-	})
+		})
 
 	// creates a source directory in the root.
 	// note: mkdirall fails on windows so we need to create all
 	// directories in the tree.
 	sourcedir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone", "src")
 	spec.Files = append(spec.Files,
-		leapi.FileInfo{
-			File: leapi.File{
-				Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone"),
-				Mode:  0700,
-				IsDir: true,
-			},
+		&lespec.File{
+			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone"),
+			Mode:  0700,
+			IsDir: true,
 		},
-		leapi.FileInfo{
-			File: leapi.File{
-				Path:  sourcedir,
-				Mode:  0700,
-				IsDir: true,
-			},
+		&lespec.File{
+			Path:  sourcedir,
+			Mode:  0700,
+			IsDir: true,
 		},
-		leapi.FileInfo{
-			File: leapi.File{
-				Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt"),
-				Mode:  0700,
-				IsDir: true,
-			},
+		&lespec.File{
+			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt"),
+			Mode:  0700,
+			IsDir: true,
 		})
 
 	// creates the netrc file
@@ -113,13 +102,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			args.Netrc.Login,
 			args.Netrc.Password,
 		)
-		spec.Files = append(spec.Files, leapi.FileInfo{
-			File: leapi.File{
+		spec.Files = append(spec.Files,
+			&lespec.File{
 				Path: netrcpath,
 				Mode: 0600,
 				Data: netrcdata,
-			},
-		})
+			})
 	}
 
 	// list the global environment variables
@@ -184,31 +172,24 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			),
 		)
 
-		// TODO: Remove when lespec.Step is with Files slice
-		_ = clonepath
-		_ = clonefile
-
 		cmd, args := oshelp.GetCommand(pipelineOS, clonepath)
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Step: lespec.Step{
-				ID:   random(),
-				Name: "clone",
-				// TODO: Check if it's OK to generate a command by simple joining the program and its arguments.
-				Command:    []string{cmd + " " + strings.Join(args, " ")},
+				ID:         random(),
+				Name:       "clone",
+				Entrypoint: append([]string{cmd}, args...),
+				Command:    nil,
 				Envs:       envs,
 				Secrets:    []*lespec.Secret{},
 				WorkingDir: sourcedir,
-				// TODO: Need to extend lespec.Step with Files slice.
-				//	Files: []leapi.FileInfo{
-				//		File: leapi.File{
-				//			Path: clonepath,
-				//			Mode: 0700,
-				//			Data: clonefile,
-				//		},
-				//	},
+				Files: []*lespec.File{
+					{
+						Path: clonepath,
+						Mode: 0700,
+						Data: clonefile,
+					},
+				},
 			},
-			Cmd:       cmd,
-			Args:      args,
 			DependsOn: nil,
 			ErrPolicy: runtime.ErrFail,
 			RunPolicy: runtime.RunAlways,
@@ -244,44 +225,49 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	combinedSteps := append(pipeline.Services, pipeline.Steps...) //nolint:gocritic // creating a new slice is ok
 	// create steps
 	for _, src := range combinedSteps {
-		buildslug := slug.Make(src.Name)
-		buildpath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, buildslug))
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
-		// if there is an image associated with the step build a docker cli
-		var buildfile string
-		if src.Image == "" {
-			buildfile = oshelp.GenScript(pipelineOS, src.Commands)
+
+		var files []*lespec.File
+		var volumes []*lespec.VolumeMount
+		var command []string
+		var entrypoint []string
+
+		if src.Image != "" {
+			cmd, args := oshelp.GetCommand(pipelineOS, "")
+			entrypoint = append([]string{cmd}, args[:len(args)-1]...)
+		} else if len(src.Commands) > 0 {
+			buildslug := slug.Make(src.Name)
+			buildpath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, buildslug))
+			buildfile := oshelp.GenScript(pipelineOS, src.Commands)
+
+			files = []*lespec.File{
+				{
+					Path: buildpath,
+					Mode: 0700,
+					Data: buildfile,
+				},
+			}
+
+			cmd, args := oshelp.GetCommand(pipelineOS, buildpath)
+			entrypoint = append([]string{cmd}, args...)
 		} else {
-			buildfile = oshelp.GenerateDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
+			continue // no image and no commands
 		}
 
-		// TODO: Remove when lespec.Step is with Files slice
-		_ = buildpath
-		_ = buildfile
-
-		cmd, args := oshelp.GetCommand(pipelineOS, buildpath)
 		dst := &engine.Step{
 			Step: lespec.Step{
-				ID:   random(),
-				Name: src.Name,
-				// TODO: Check if it's OK to generate a command by simple joining the program and its arguments.
-				Command: []string{cmd + " " + strings.Join(args, " ")},
-				Detach:  src.Detach,
-				Envs:    stepEnv,
-				// TODO: Need to extend lespec.Step with Files slice.
-				//	Files: []leapi.FileInfo{
-				//		File: leapi.File{
-				//			Path: buildpath,
-				//			Mode: 0700,
-				//			Data: buildfile,
-				//		},
-				//	},
+				ID:         random(),
+				Name:       src.Name,
+				Command:    command,
+				Detach:     src.Detach,
+				Envs:       stepEnv,
+				Entrypoint: entrypoint,
+				Files:      files,
 				Image:      src.Image,
 				Secrets:    convertSecretEnv(src.Environment),
 				WorkingDir: sourcedir,
+				Volumes:    volumes,
 			},
-			Cmd:       cmd,
-			Args:      args,
 			DependsOn: src.DependsOn,
 			RunPolicy: runtime.RunOnSuccess,
 		}

@@ -16,7 +16,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/google/go-cmp v0.5.2
 	github.com/gosimple/slug v1.9.0
-	github.com/harness/lite-engine v0.0.2-0.20211221064205-6ee223b52775
+	github.com/harness/lite-engine v0.0.2-0.20211222115743-315af0f1773e
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-isatty v0.0.14

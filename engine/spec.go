@@ -8,7 +8,6 @@ import (
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/pipeline/runtime"
 
-	leapi "github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 )
 
@@ -19,7 +18,7 @@ type (
 	Spec struct {
 		Name          string           `json:"name,omitempty"`
 		CloudInstance CloudInstance    `json:"cloud_instance"`
-		Files         []leapi.FileInfo `json:"files,omitempty"`
+		Files         []*lespec.File   `json:"files,omitempty"`
 		Steps         []*Step          `json:"steps,omitempty"`
 		Volumes       []*lespec.Volume `json:"volumes,omitempty"`
 	}
@@ -33,8 +32,6 @@ type (
 
 	Step struct {
 		lespec.Step
-		Cmd       string
-		Args      []string
 		DependsOn []string          `json:"depends_on,omitempty"`
 		ErrPolicy runtime.ErrPolicy `json:"err_policy,omitempty"`
 		RunPolicy runtime.RunPolicy `json:"run_policy,omitempty"`
