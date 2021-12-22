@@ -348,7 +348,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
-	if _, err := client.RetryHealth(ctx, timeoutSetup); err != nil {
+	if _, err = client.RetryHealth(ctx, timeoutSetup); err != nil {
 		httprender.InternalError(w, "failed to call lite-engine retry health", err, logr)
 		go cleanUpFn()
 		return
