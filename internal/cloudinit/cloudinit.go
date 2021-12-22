@@ -98,7 +98,7 @@ restart-service sshd
 	} else {
 		gitKeysInstall := fmt.Sprintf(`<powershell>
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-choco install git.install nssm -r -y
+choco install -y git
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 Set-Service -Name sshd -StartupType ‘Automatic’
 Start-Service sshd
@@ -116,6 +116,46 @@ $acl.SetAccessRule($administratorsRule)
 New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
 restart-service sshd`
 		installLE := fmt.Sprintf(`
+# create powershell profile
+
+if (test-path($profile) -eq "false")
+{
+	new-item -path $env:windir\System32\WindowsPowerShell\v1.0\profile.ps1 -itemtype file -force
+}
+# Updated profile content to explicitly import Choco
+$ChocoProfileValue = @'
+$ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+if (Test-Path($ChocolateyProfile)) {
+	Import-Module "$ChocolateyProfile"
+}
+'@
+
+# Write it to the $profile location
+Set-Content -Path "$profile" -Value $ChocoProfileValue -Force
+
+# Source it
+. $profile
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
+
+# install choco
+$ChocoInstallPath = "$env:SystemDrive\ProgramData\Chocolatey\bin"
+
+if (!(Test-Path($ChocoInstallPath))) {
+	Set-ExecutionPolicy Bypass -Scope LocalMachine; iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))
+}
+
+# Refresh the PSEnviroment
+refreshenv
+
+# Stop getting prompted
+choco feature enable -n=allowGlobalConfirmation
+
+# Remember Arguments when upgrading programs
+choco feature enable -n=useRememberedArgumentsForUpgrades
+
+choco install -y git
+
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 Invoke-WebRequest -Uri "%s/lite-engine.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
