@@ -19,12 +19,13 @@ import (
 	json "github.com/ghodss/yaml"
 )
 
-const WindowsString = "windows"
+const OSWindows = "windows"
+const OSLinux = "linux"
 
 // JoinPaths helper function joins the file paths.
 func JoinPaths(os string, paths ...string) string {
 	switch os {
-	case WindowsString:
+	case OSWindows:
 		return strings.Join(paths, "\\")
 	default:
 		return strings.Join(paths, "/")
@@ -35,7 +36,7 @@ func JoinPaths(os string, paths ...string) string {
 // target platform.
 func GetExt(os, file string) (s string) {
 	switch os {
-	case WindowsString:
+	case OSWindows:
 		return file + ".ps1"
 	default:
 		return file
@@ -46,7 +47,7 @@ func GetExt(os, file string) (s string) {
 // based on the target platform to invoke the script
 func GetCommand(os, script string) (cmd string, args []string) {
 	cmd, args = bash.Command()
-	if os == WindowsString {
+	if os == OSWindows {
 		cmd, args = powershell.Command()
 	}
 	return cmd, append(args, script)
@@ -55,7 +56,7 @@ func GetCommand(os, script string) (cmd string, args []string) {
 // GetNetrc helper function returns the netrc file name based on the target platform.
 func GetNetrc(os string) string {
 	switch os {
-	case WindowsString:
+	case OSWindows:
 		return "_netrc"
 	default:
 		return ".netrc"
@@ -68,7 +69,7 @@ func GetNetrc(os string) string {
 // system.
 func GenScript(os string, commands []string) string {
 	switch os {
-	case WindowsString:
+	case OSWindows:
 		return powershell.Script(commands)
 	default:
 		return bash.Script(commands)
@@ -108,7 +109,7 @@ func convertSettingsToString(settings map[string]*manifest.Parameter) (envString
 }
 
 func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resource.VolumeMount, pipeLineVolumeMap map[string]string) (volumeString string) {
-	if pipelineOS == WindowsString {
+	if pipelineOS == OSWindows {
 		volumeString = fmt.Sprintf("-v `%s`:c:/drone/src", sourcedir)
 	} else {
 		volumeString = fmt.Sprintf(`-v '%s':/drone/src`, sourcedir)
@@ -117,7 +118,7 @@ func convertVolumesToString(pipelineOS, sourcedir string, stepVolumes []*resourc
 		path, match := pipeLineVolumeMap[volume.Name]
 		if match {
 			v := fmt.Sprintf(` -v '%s':%s`, path, volume.MountPath)
-			if pipelineOS == WindowsString {
+			if pipelineOS == OSWindows {
 				v = fmt.Sprintf(" -v `%s`:%s", path, volume.MountPath)
 			}
 			volumeString += v
@@ -139,7 +140,7 @@ func convertCommandsToEntryPointString(pipelineOS string, commands []string) (en
 		for i := range commands {
 			entryPoint = fmt.Sprintf(`%s %s;`, entryPoint, commands[i])
 		}
-		if pipelineOS == WindowsString {
+		if pipelineOS == OSWindows {
 			entryPoint = fmt.Sprintf(`powershell '%s'`, entryPoint)
 		} else {
 			entryPoint = fmt.Sprintf(`/bin/bash -c %q`, entryPoint)
@@ -168,7 +169,7 @@ func GenerateDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step
 	entryPoint := convertCommandsToEntryPointString(pipelineOS, step.Commands)
 	commandBase := ""
 	switch pipelineOS {
-	case WindowsString:
+	case OSWindows:
 		commandBase = fmt.Sprintf("docker run %s -w='c:/drone/src' %s %s %s %s %s %s", interactiveDeamonString, containerName, networkString, volumeString, envString, step.Image, entryPoint)
 	default:
 		// -w set working dir, relies on the sourcedir being mounted
@@ -177,7 +178,7 @@ func GenerateDockerCommandLine(pipelineOS, sourcedir string, step *resource.Step
 	var returnVal string
 	array := append([]string{}, commandBase)
 	switch pipelineOS {
-	case WindowsString:
+	case OSWindows:
 		returnVal = powershell.SilentScript(array)
 	default:
 		returnVal = bash.SilentScript(array)
