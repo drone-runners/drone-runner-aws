@@ -37,7 +37,7 @@ func tempdir(inputOS string) string {
 	const dir = "aws"
 
 	switch inputOS {
-	case oshelp.WindowsString:
+	case oshelp.OSWindows:
 		return oshelp.JoinPaths(inputOS, "C:\\Windows\\Temp", dir)
 	default:
 		return oshelp.JoinPaths(inputOS, "/tmp", dir)
