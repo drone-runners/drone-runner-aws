@@ -9,6 +9,7 @@ package cloudinit
 
 import (
 	"encoding/base64"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -31,6 +32,41 @@ var funcs = map[string]interface{}{
 }
 
 const certsDir = "/tmp/certs/"
+
+// Custom creates a custom userdata file.
+func Custom(templateText string, params *Params) (payload string, err error) {
+	t, err := template.New("custom-template").Funcs(funcs).Parse(templateText)
+	if err != nil {
+		err = fmt.Errorf("failed to parse template data: %w", err)
+		return
+	}
+
+	sb := &strings.Builder{}
+
+	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
+	certPath := filepath.Join(certsDir, "server-cert.pem")
+	keyPath := filepath.Join(certsDir, "server-key.pem")
+
+	err = t.Execute(sb, struct {
+		Params
+		CaCertPath string
+		CertPath   string
+		KeyPath    string
+	}{
+		Params:     *params,
+		CaCertPath: caCertPath,
+		CertPath:   certPath,
+		KeyPath:    keyPath,
+	})
+	if err != nil {
+		err = fmt.Errorf("failed to execute template to get init script: %w", err)
+		return
+	}
+
+	payload = sb.String()
+
+	return
+}
 
 const linuxScriptNoLE = `
 #cloud-config

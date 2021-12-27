@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
+
+	"github.com/drone/runner-go/logger"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/sshkey"
@@ -21,6 +22,7 @@ type (
 		Name        string   `json:"name,omitempty"`
 		MinPoolSize int      `json:"min_pool_size,omitempty" yaml:"min_pool_size"`
 		MaxPoolSize int      `json:"max_pool_size,omitempty" yaml:"max_pool_size"`
+		InitScript  string   `json:"init_script,omitempty" yaml:"init_script"`
 		Platform    platform `json:"platform,omitempty"`
 		Account     account  `json:"account,omitempty"`
 		Instance    instance `json:"instance,omitempty"`
@@ -86,6 +88,12 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 		return nil, err
 	}
 
+	defaultPrivateKey, defaultPublicKey, err := defaultPoolSettings.LoadKeys()
+	if err != nil {
+		err = fmt.Errorf("failed to load keys: %w", err)
+		return nil, err
+	}
+
 	buf := bytes.NewBuffer(rawPool)
 	dec := yaml.NewDecoder(buf)
 
@@ -101,10 +109,68 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			return nil, err
 		}
 
-		pool, err := compilePoolFile(poolDef, defaultPoolSettings)
+		poolDef.applyDefaults(defaultPoolSettings)
+
+		// we need Access, error if its still empty
+		if poolDef.Account.AccessKeyID == "" {
+			return nil, errors.New("missing AWS access key. Add to .env file or pool file")
+		}
+		// TODO: Remove the comment
+		// if poolDef.Account.AccessKeySecret == "" {
+		// 	return nil, errors.New("missing AWS secret. Add to .env file or pool file")
+		// }
+
+		err = poolDef.applyKeys(defaultPrivateKey, defaultPublicKey)
 		if err != nil {
 			return nil, err
 		}
+
+		err = poolDef.applyInitScript(defaultPoolSettings)
+		if err != nil {
+			return nil, err
+		}
+
+		pool := &awsPool{
+			name:       poolDef.Name,
+			runnerName: defaultPoolSettings.RunnerName,
+			credentials: Credentials{
+				Client: poolDef.Account.AccessKeyID,
+				Secret: poolDef.Account.AccessKeySecret,
+				Region: poolDef.Account.Region,
+			},
+			keyPairName:   defaultPoolSettings.AwsKeyPairName,
+			privateKey:    poolDef.Instance.PrivateKey,
+			iamProfileArn: poolDef.Instance.IAMProfileARN,
+			os:            poolDef.Platform.OS,
+			rootDir:       tempdir(poolDef.Platform.OS),
+			image:         poolDef.Instance.AMI,
+			instanceType:  poolDef.Instance.Type,
+			user:          poolDef.Instance.User,
+			userData:      poolDef.Instance.UserData,
+			subnet:        poolDef.Instance.Network.SubnetID,
+			groups:        poolDef.Instance.Network.SecurityGroups,
+			allocPublicIP: !poolDef.Instance.Network.PrivateIP,
+			device:        poolDef.Instance.Device.Name,
+			volumeType:    poolDef.Instance.Disk.Type,
+			volumeSize:    poolDef.Instance.Disk.Size,
+			volumeIops:    poolDef.Instance.Disk.Iops,
+			defaultTags:   poolDef.Instance.Tags,
+			sizeMin:       poolDef.MinPoolSize,
+			sizeMax:       poolDef.MaxPoolSize,
+		}
+
+		logr := logger.Default.WithField("name", poolDef.Name)
+		if defaultPrivateKey != "" {
+			logr = logr.WithField("private-key", defaultPoolSettings.PrivateKeyFile)
+		}
+		if defaultPublicKey != "" {
+			logr = logr.WithField("public-key", defaultPoolSettings.PublicKeyFile)
+		}
+		if poolDef.InitScript != "" {
+			logr = logr.WithField("cloud-init", poolDef.InitScript)
+		}
+
+		logr.Info("parsed pool file")
 
 		pools = append(pools, pool)
 	}
@@ -121,135 +187,127 @@ func DummyPool(name, runnerName string) vmpool.Pool {
 	}
 }
 
-func compilePoolFile(rawPool *poolDefinition, defaultPoolSettings *vmpool.DefaultSettings) (*awsPool, error) {
-	pipelineOS := rawPool.Platform.OS
+func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.DefaultSettings) {
+	if poolDef.MinPoolSize < 0 {
+		poolDef.MinPoolSize = 0
+	}
+	if poolDef.MaxPoolSize <= 0 {
+		poolDef.MaxPoolSize = 1
+	}
+	if poolDef.MinPoolSize > poolDef.MaxPoolSize {
+		poolDef.MinPoolSize = 0
+		poolDef.MaxPoolSize = 1
+	}
 
-	creds := Credentials{
-		Client: defaultPoolSettings.AwsAccessKeyID,
-		Secret: defaultPoolSettings.AwsAccessKeySecret,
-		Region: defaultPoolSettings.AwsRegion,
+	// apply defaults to Account
+
+	if poolDef.Account.AccessKeyID == "" {
+		poolDef.Account.AccessKeyID = defaultPoolSettings.AwsAccessKeyID
 	}
-	// override access key-ID, secret and region defaults with the values from config file
-	if rawPool.Account.AccessKeyID != "" {
-		creds.Client = rawPool.Account.AccessKeyID
+	if poolDef.Account.AccessKeySecret == "" {
+		poolDef.Account.AccessKeySecret = defaultPoolSettings.AwsAccessKeySecret
 	}
-	if rawPool.Account.AccessKeySecret != "" {
-		creds.Secret = rawPool.Account.AccessKeySecret
+	if poolDef.Account.Region == "" {
+		if defaultPoolSettings.AwsRegion == "" {
+			poolDef.Account.Region = "us-east-1"
+		} else {
+			poolDef.Account.Region = defaultPoolSettings.AwsRegion
+		}
 	}
-	if rawPool.Account.Region != "" {
-		creds.Region = rawPool.Account.Region
+
+	// apply defaults to Platform
+
+	if poolDef.Platform.OS == "" {
+		poolDef.Platform.OS = oshelp.OSLinux
 	}
-	// we need Access, error if its still empty
-	if creds.Client == "" || creds.Secret == "" {
-		return nil, errors.New("missing AWS access key or AWS secret. Add to .env file or pool file")
+	if poolDef.Platform.Arch == "" {
+		poolDef.Platform.Arch = "arm64"
 	}
-	// set the default region if not provided
-	if creds.Region == "" {
-		creds.Region = "us-east-1"
-	}
+
+	// apply defaults to Instance
 
 	// set default instance type if not provided
-	if rawPool.Instance.Type == "" {
-		rawPool.Instance.Type = "t3.nano"
-		if rawPool.Platform.Arch == "arm64" {
-			rawPool.Instance.Type = "a1.medium"
+	if poolDef.Instance.Type == "" {
+		if poolDef.Platform.Arch == "arm64" {
+			poolDef.Instance.Type = "a1.medium"
+		} else {
+			poolDef.Instance.Type = "t3.nano"
 		}
 	}
-
 	// put something into tags even if empty
-	if rawPool.Instance.Tags == nil {
-		rawPool.Instance.Tags = make(map[string]string)
+	if poolDef.Instance.Tags == nil {
+		poolDef.Instance.Tags = make(map[string]string)
 	}
 	// set the default disk size if not provided
-	if rawPool.Instance.Disk.Size == 0 {
-		rawPool.Instance.Disk.Size = 32
+	if poolDef.Instance.Disk.Size == 0 {
+		poolDef.Instance.Disk.Size = 32
 	}
 	// set the default disk type if not provided
-	if rawPool.Instance.Disk.Type == "" {
-		rawPool.Instance.Disk.Type = "gp2"
+	if poolDef.Instance.Disk.Type == "" {
+		poolDef.Instance.Disk.Type = "gp2"
 	}
 	// set the default iops
-	if rawPool.Instance.Disk.Type == "io1" && rawPool.Instance.Disk.Iops == 0 {
-		rawPool.Instance.Disk.Iops = 100
+	if poolDef.Instance.Disk.Type == "io1" && poolDef.Instance.Disk.Iops == 0 {
+		poolDef.Instance.Disk.Iops = 100
 	}
 	// set the default device
-	if rawPool.Instance.Device.Name == "" {
-		rawPool.Instance.Device.Name = "/dev/sda1"
+	if poolDef.Instance.Device.Name == "" {
+		poolDef.Instance.Device.Name = "/dev/sda1"
 	}
-
 	// set the default ssh user. this user account is responsible for executing the pipeline script.
-	switch {
-	case rawPool.Instance.User == "" && rawPool.Platform.OS == oshelp.WindowsString:
-		rawPool.Instance.User = "Administrator"
-	case rawPool.Instance.User == "":
-		rawPool.Instance.User = "root"
+	if poolDef.Instance.User == "" {
+		if poolDef.Platform.OS == oshelp.OSWindows {
+			poolDef.Instance.User = "Administrator"
+		} else {
+			poolDef.Instance.User = "root"
+		}
 	}
-	_, statErr := os.Stat(defaultPoolSettings.PrivateKeyFile)
-	if os.IsNotExist(statErr) {
-		// there are no key files
-		publickey, privatekey, generateKeyErr := sshkey.GeneratePair()
-		if generateKeyErr != nil {
-			publickey = ""
-			privatekey = ""
-		}
-		rawPool.Instance.PrivateKey = privatekey
-		rawPool.Instance.PublicKey = publickey
-	} else {
-		body, privateKeyErr := os.ReadFile(defaultPoolSettings.PrivateKeyFile)
-		if privateKeyErr != nil {
-			log.Fatalf("unable to read file ``: %v", privateKeyErr)
-		}
-		rawPool.Instance.PrivateKey = string(body)
+}
 
-		body, publicKeyErr := os.ReadFile(defaultPoolSettings.PublicKeyFile)
-		if publicKeyErr != nil {
-			log.Fatalf("unable to read file: %v", publicKeyErr)
+func (poolDef *poolDefinition) applyKeys(defaultPrivateKey, defaultPublicKey string) (err error) {
+	if defaultPrivateKey == "" || defaultPublicKey == "" {
+		var publicKey, privateKey string
+
+		publicKey, privateKey, err = sshkey.GeneratePair()
+		if err != nil {
+			err = fmt.Errorf("failed to generate ssh key pair: %w", err)
+			return
 		}
-		rawPool.Instance.PublicKey = string(body)
-	}
-	// generate the cloudinit file
-	var userDataWithSSH string
-	if rawPool.Platform.OS == oshelp.WindowsString {
-		userDataWithSSH = cloudinit.Windows(&cloudinit.Params{
-			PublicKey:      rawPool.Instance.PublicKey,
-			LiteEnginePath: defaultPoolSettings.LiteEnginePath,
-			CaCertFile:     defaultPoolSettings.CaCertFile,
-			CertFile:       defaultPoolSettings.CertFile,
-			KeyFile:        defaultPoolSettings.KeyFile,
-		})
+
+		poolDef.Instance.PrivateKey, poolDef.Instance.PublicKey = privateKey, publicKey
 	} else {
-		// try using cloud init.
-		userDataWithSSH = cloudinit.Linux(&cloudinit.Params{
-			PublicKey:      rawPool.Instance.PublicKey,
-			LiteEnginePath: defaultPoolSettings.LiteEnginePath,
-			CaCertFile:     defaultPoolSettings.CaCertFile,
-			CertFile:       defaultPoolSettings.CertFile,
-			KeyFile:        defaultPoolSettings.KeyFile,
-		})
+		poolDef.Instance.PrivateKey, poolDef.Instance.PublicKey = defaultPrivateKey, defaultPublicKey
 	}
-	rawPool.Instance.UserData = userDataWithSSH
-	return &awsPool{
-		name:          rawPool.Name,
-		runnerName:    defaultPoolSettings.RunnerName,
-		credentials:   creds,
-		keyPairName:   defaultPoolSettings.AwsKeyPairName,
-		privateKey:    rawPool.Instance.PrivateKey,
-		iamProfileArn: rawPool.Instance.IAMProfileARN,
-		os:            pipelineOS,
-		rootDir:       tempdir(pipelineOS),
-		image:         rawPool.Instance.AMI,
-		instanceType:  rawPool.Instance.Type,
-		user:          rawPool.Instance.User,
-		userData:      rawPool.Instance.UserData,
-		subnet:        rawPool.Instance.Network.SubnetID,
-		groups:        rawPool.Instance.Network.SecurityGroups,
-		allocPublicIP: !rawPool.Instance.Network.PrivateIP,
-		device:        rawPool.Instance.Device.Name,
-		volumeType:    rawPool.Instance.Disk.Type,
-		volumeSize:    rawPool.Instance.Disk.Size,
-		volumeIops:    rawPool.Instance.Disk.Iops,
-		defaultTags:   rawPool.Instance.Tags,
-		sizeMin:       rawPool.MinPoolSize,
-		sizeMax:       rawPool.MaxPoolSize,
-	}, nil
+
+	return
+}
+
+func (poolDef *poolDefinition) applyInitScript(defaultPoolSettings *vmpool.DefaultSettings) (err error) {
+	cloudInitParams := &cloudinit.Params{
+		PublicKey:      poolDef.Instance.PublicKey,
+		LiteEnginePath: defaultPoolSettings.LiteEnginePath,
+		CaCertFile:     defaultPoolSettings.CaCertFile,
+		CertFile:       defaultPoolSettings.CertFile,
+		KeyFile:        defaultPoolSettings.KeyFile,
+	}
+
+	if poolDef.InitScript == "" {
+		if poolDef.Platform.OS == oshelp.OSWindows {
+			poolDef.Instance.UserData = cloudinit.Windows(cloudInitParams)
+		} else {
+			poolDef.Instance.UserData = cloudinit.Linux(cloudInitParams)
+		}
+
+		return
+	}
+
+	data, err := os.ReadFile(poolDef.InitScript)
+	if err != nil {
+		err = fmt.Errorf("failed to load cloud init script template: %w", err)
+		return
+	}
+
+	poolDef.Instance.UserData, err = cloudinit.Custom(string(data), cloudInitParams)
+
+	return
 }
