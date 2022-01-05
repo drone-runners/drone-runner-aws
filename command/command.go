@@ -15,7 +15,7 @@ import (
 )
 
 // program version
-var version = "0.0.0"
+var version = "v1.0.0-rc.1"
 
 // empty context
 var nocontext = context.Background()
