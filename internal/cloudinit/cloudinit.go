@@ -204,7 +204,7 @@ restart-service sshd
 # certificates
 
 mkdir "C:\Program Files\lite-engine"
-mkdir "{{ .CertDir }}
+mkdir "{{ .CertDir }}"
 
 $object0 = "{{ .CaCertFile | base64 }}"
 $Object = [System.Convert]::FromBase64String($object0)
