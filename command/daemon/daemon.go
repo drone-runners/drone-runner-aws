@@ -6,6 +6,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -55,6 +56,15 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	config, err := FromEnviron()
 	if err != nil {
 		return err
+	}
+
+	// TODO: These can be set in the config struct as `required: "true"` instead
+	// once we have separate configs for the daemon and the delegate
+	if config.Client.Host == "" {
+		return errors.New("missing DRONE_RPC_HOST")
+	}
+	if config.Client.Secret == "" {
+		return errors.New("missing DRONE_RPC_SECRET")
 	}
 
 	// setup the global logrus logger.
