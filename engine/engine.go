@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
@@ -169,6 +170,11 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 
 // Destroy the pipeline environment.
 func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
+	// HACK: this timeout delays deleting the instance to ensure
+	// there is enough time to stream the logs.
+	const destroyTimeout = time.Second * 5
+	time.Sleep(destroyTimeout)
+
 	spec := specv.(*Spec)
 
 	poolName := spec.CloudInstance.PoolName
@@ -230,6 +236,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		Envs:       step.Envs,
 		Name:       step.Name,
 		LogKey:     step.ID,
+		LogDrone:   true,    // must be true for the logging to work
 		Secrets:    secrets, // TODO: Why is Secrets in LE StartStepRequest defined as []string, and in LE Step as []*Secret?
 		WorkingDir: step.WorkingDir,
 		Kind:       leapi.Run,
@@ -266,6 +273,25 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		Files:        step.Files,
 	}
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	go func(ctx context.Context) {
+		var totalWritten counterWriter
+		w := io.MultiWriter(output, &totalWritten)
+
+		defer func() {
+			wg.Done()
+			logr.WithField("len", int(totalWritten)).Traceln("finished streaming step output")
+		}()
+		logr.Traceln("streaming step output")
+
+		streamErr := client.GetStepLogOutput(ctx, &leapi.StreamOutputRequest{ID: req.ID, Offset: 0}, w)
+		if streamErr != nil {
+			logr.WithError(streamErr).Errorln("failed to stream step output")
+		}
+	}(context.Background())
+
 	startStepResponse, err := client.StartStep(ctx, req)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to call LE.StartStep")
@@ -284,8 +310,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	logr.WithField("pollResponse", pollResponse).
 		Traceln("LE.RetryPollStep complete")
 
-	// TODO: Use output to stream logs
-	_ = output
+	wg.Wait()
 
 	state := &runtime.State{
 		ExitCode:  0,
@@ -294,4 +319,11 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	}
 
 	return state, nil
+}
+
+type counterWriter int
+
+func (q *counterWriter) Write(data []byte) (int, error) {
+	*q += counterWriter(len(data))
+	return len(data), nil
 }
