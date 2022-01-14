@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-rc.2](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.2) (2022-01-14)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.1...v1.0.0-rc.2)
+
+**Merged pull requests:**
+
+- Mark DRONE\_RPC\_HOST and DRONE\_RPC\_SECRET as optional in delegate mode [\#64](https://github.com/drone-runners/drone-runner-aws/pull/64) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
 ## [v1.0.0-rc.1](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.1) (2022-01-05)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-alpha.1...v1.0.0-rc.1)
@@ -40,6 +48,7 @@
 
 **Merged pull requests:**
 
+- \(maint\) release prep for rc.1 [\#63](https://github.com/drone-runners/drone-runner-aws/pull/63) ([tphoney](https://github.com/tphoney))
 - \(maint\) remove livelog [\#46](https://github.com/drone-runners/drone-runner-aws/pull/46) ([tphoney](https://github.com/tphoney))
 - \(maint\) add docker manifest file [\#45](https://github.com/drone-runners/drone-runner-aws/pull/45) ([tphoney](https://github.com/tphoney))
 - \(maint\) setup default pool settings [\#44](https://github.com/drone-runners/drone-runner-aws/pull/44) ([tphoney](https://github.com/tphoney))
