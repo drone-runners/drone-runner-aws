@@ -290,7 +290,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		if streamErr != nil {
 			logr.WithError(streamErr).Errorln("failed to stream step output")
 		}
-	}(context.Background())
+	}(ctx)
 
 	startStepResponse, err := client.StartStep(ctx, req)
 	if err != nil {
