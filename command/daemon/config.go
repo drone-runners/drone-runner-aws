@@ -20,8 +20,8 @@ type Config struct {
 	Client struct {
 		Address    string `ignored:"true"`
 		Proto      string `envconfig:"DRONE_RPC_PROTO"  default:"http"`
-		Host       string `envconfig:"DRONE_RPC_HOST"   required:"true"`
-		Secret     string `envconfig:"DRONE_RPC_SECRET" required:"true"`
+		Host       string `envconfig:"DRONE_RPC_HOST"`
+		Secret     string `envconfig:"DRONE_RPC_SECRET"`
 		SkipVerify bool   `envconfig:"DRONE_RPC_SKIP_VERIFY"`
 		Dump       bool   `envconfig:"DRONE_RPC_DUMP_HTTP"`
 		DumpBody   bool   `envconfig:"DRONE_RPC_DUMP_HTTP_BODY"`
@@ -66,6 +66,8 @@ type Config struct {
 		PublicKeyFile      string `envconfig:"DRONE_SETTINGS_PUBLIC_KEY_FILE"`
 		LiteEnginePath     string `envconfig:"DRONE_SETTINGS_LITE_ENGINE_PATH"`
 		CertificateFolder  string `envconfig:"DRONE_SETTINGS_CERTIFICATE_FOLDER" default:"/tmp/certs"`
+		BusyMaxAge         int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"2"`
+		FreeMaxAge         int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"12"`
 		CaCertFile         string `envconfig:"DRONE_SETTINGS_CA_CERT_FILE"`
 		CertFile           string `envconfig:"DRONE_SETTINGS_CERT_FILE"`
 		KeyFile            string `envconfig:"DRONE_SETTINGS_KEY_FILE"`

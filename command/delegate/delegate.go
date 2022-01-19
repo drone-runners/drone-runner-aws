@@ -148,10 +148,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	// TODO: Move the durations to config
-	const busyMaxAge = time.Hour * 2 // includes time required to setup an instance
-	const freeMaxAge = time.Hour * 12
-
+	// setup lifetimes of instances
+	busyMaxAge := time.Hour * time.Duration(config.DefaultPoolSettings.BusyMaxAge) // includes time required to setup an instance
+	freeMaxAge := time.Hour * time.Duration(config.DefaultPoolSettings.FreeMaxAge)
 	err = c.poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
 	if err != nil {
 		logrus.WithError(err).
