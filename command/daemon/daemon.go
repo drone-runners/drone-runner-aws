@@ -48,7 +48,7 @@ type daemonCommand struct {
 	poolFile string
 }
 
-func (c *daemonCommand) run(*kingpin.ParseContext) error {
+func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
 	// load environment variables from file.
 	err := godotenv.Load(c.envFile)
 	if err != nil {
