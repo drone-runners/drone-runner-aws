@@ -192,11 +192,11 @@ func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.Default
 		poolDef.MinPoolSize = 0
 	}
 	if poolDef.MaxPoolSize <= 0 {
-		poolDef.MaxPoolSize = 1
+		poolDef.MaxPoolSize = 100
 	}
+
 	if poolDef.MinPoolSize > poolDef.MaxPoolSize {
-		poolDef.MinPoolSize = 0
-		poolDef.MaxPoolSize = 1
+		poolDef.MinPoolSize = poolDef.MaxPoolSize
 	}
 
 	// apply defaults to Account
