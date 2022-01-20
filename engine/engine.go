@@ -14,6 +14,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 
+	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
 
@@ -223,21 +224,20 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 
 	const timeoutStep = 4 * time.Hour // TODO: Move to configuration
 
-	// TODO: Unsure how secrets are working. This part probably needs a change.
-	var secrets []string
+	secretEnvs := make(map[string]string, len(step.Secrets))
 	for _, secret := range step.Secrets {
-		secrets = append(secrets, secret.Env)
+		secretEnvs[secret.Env] = string(secret.Data)
 	}
 
 	// TODO: This code repacks the step data. This is unfortunate implementation in LE. Step should be embedded in StartStepRequest. Should be improved.
 	req := &leapi.StartStepRequest{
 		ID:         step.ID,
 		Detach:     step.Detach,
-		Envs:       step.Envs,
+		Envs:       environ.Combine(step.Envs, secretEnvs),
 		Name:       step.Name,
 		LogKey:     step.ID,
-		LogDrone:   true,    // must be true for the logging to work
-		Secrets:    secrets, // TODO: Why is Secrets in LE StartStepRequest defined as []string, and in LE Step as []*Secret?
+		LogDrone:   true, // must be true for the logging to work
+		Secrets:    nil,  // not used by Drone
 		WorkingDir: step.WorkingDir,
 		Kind:       leapi.Run,
 		Run: leapi.RunConfig{
