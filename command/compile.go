@@ -115,6 +115,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		Repo:     c.Repo,
 		Stage:    c.Stage,
 		System:   c.System,
+		Secret:   secret.StaticVars(c.Secrets),
 	}
 	spec := comp.Compile(nocontext, args)
 	// encode the pipeline in json format and print to the console for inspection.

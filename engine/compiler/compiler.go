@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/drone/runner-go/labels"
+
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
@@ -48,6 +50,14 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	spec.Name = pipeline.Name
 
+	// create system labels
+	systemLabels := labels.Combine(
+		labels.FromRepo(args.Repo),
+		labels.FromBuild(args.Build),
+		labels.FromStage(args.Stage),
+		labels.FromSystem(args.System),
+		labels.WithTimeout(args.Repo),
+	)
 	targetPool := pipeline.Pool.Use
 	pool := c.PoolManager.Get(targetPool)
 
@@ -197,24 +207,31 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	}
 
 	// create volumes map, name of volume and real life path
-	var pipeLineVolumeMap = make(map[string]string, len(pipeline.Volumes))
 	for _, v := range pipeline.Volumes {
+		id := random()
 		path := ""
+
+		src := new(lespec.Volume)
 		if v.EmptyDir != nil {
-			path = oshelp.JoinPaths(pipelineOS, pipelineRoot, random())
-			// we only need to pass temporary volumes through to engine, to have the folders created
-			src := new(lespec.Volume)
+			path = oshelp.JoinPaths(pipelineOS, pipelineRoot, id)
 			src.EmptyDir = &lespec.VolumeEmptyDir{
-				ID:   path,
-				Name: v.Name,
+				ID:     id,
+				Name:   v.Name,
+				Labels: systemLabels,
 			}
-			spec.Volumes = append(spec.Volumes, src)
 		} else if v.HostPath != nil {
 			path = v.HostPath.Path
+			src.HostPath = &lespec.VolumeHostPath{
+				ID:     id,
+				Name:   v.Name,
+				Path:   path,
+				Labels: systemLabels,
+			}
 		} else {
 			continue
 		}
-		pipeLineVolumeMap[v.Name] = path
+
+		spec.Volumes = append(spec.Volumes, src)
 	}
 
 	// services are the same as steps, but are executed first and are detached.
