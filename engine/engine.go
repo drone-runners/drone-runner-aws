@@ -288,7 +288,11 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 
 		streamErr := client.GetStepLogOutput(ctx, &leapi.StreamOutputRequest{ID: req.ID, Offset: 0}, w)
 		if streamErr != nil {
-			logr.WithError(streamErr).Errorln("failed to stream step output")
+			if totalWritten == 0 {
+				logr.WithError(streamErr).Errorln("failed to stream step output")
+			} else {
+				logr.WithError(streamErr).Warnln("failed to finish step output streaming")
+			}
 		}
 	}(ctx)
 

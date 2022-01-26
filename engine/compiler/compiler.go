@@ -274,6 +274,13 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			}
 		}
 
+		for _, v := range src.Volumes {
+			volumes = append(volumes, &lespec.VolumeMount{
+				Name: v.Name,
+				Path: v.MountPath,
+			})
+		}
+
 		dst := &engine.Step{
 			Step: lespec.Step{
 				ID:         stepID,
