@@ -317,9 +317,9 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	wg.Wait()
 
 	state := &runtime.State{
-		ExitCode:  0,
-		Exited:    true,
-		OOMKilled: false,
+		ExitCode:  pollResponse.ExitCode,
+		Exited:    pollResponse.Exited,
+		OOMKilled: pollResponse.OOMKilled,
 	}
 
 	return state, nil
