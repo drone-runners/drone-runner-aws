@@ -83,7 +83,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// creates a source directory in the root.
 	// note: mkdirall fails on windows so we need to create all
 	// directories in the tree.
-	sourcedir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone", "src")
+	sourceDir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone", "src")
+	scriptDir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt")
 	spec.Files = append(spec.Files,
 		&lespec.File{
 			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone"),
@@ -91,12 +92,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			IsDir: true,
 		},
 		&lespec.File{
-			Path:  sourcedir,
+			Path:  sourceDir,
 			Mode:  0700,
 			IsDir: true,
 		},
 		&lespec.File{
-			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt"),
+			Path:  scriptDir,
 			Mode:  0700,
 			IsDir: true,
 		})
@@ -150,8 +151,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			"HOME":                homedir,
 			"HOMEPATH":            homedir, // for windows
 			"USERPROFILE":         homedir, // for windows
-			"DRONE_HOME":          sourcedir,
-			"DRONE_WORKSPACE":     sourcedir,
+			"DRONE_HOME":          sourceDir,
+			"DRONE_WORKSPACE":     sourceDir,
 			"GIT_TERMINAL_PROMPT": "0",
 		},
 	)
@@ -194,7 +195,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				Command:    []string{clonefile},
 				Envs:       envs,
 				Secrets:    []*lespec.Secret{},
-				WorkingDir: sourcedir,
+				WorkingDir: sourceDir,
 				Files: []*lespec.File{
 					{
 						Path: clonepath,
@@ -208,7 +209,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			RunPolicy: runtime.RunAlways,
 		})
 	}
-
 	// create volumes map, name of volume and real life path
 	for _, v := range pipeline.Volumes {
 		id := random()
@@ -216,7 +216,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 		src := new(lespec.Volume)
 		if v.EmptyDir != nil {
-			path = oshelp.JoinPaths(pipelineOS, pipelineRoot, id)
 			src.EmptyDir = &lespec.VolumeEmptyDir{
 				ID:     id,
 				Name:   v.Name,
@@ -236,7 +235,24 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 		spec.Volumes = append(spec.Volumes, src)
 	}
-
+	// now we need to create a source volume, used by every container step
+	SourceVolume := lespec.VolumeHostPath{
+		ID:   fmt.Sprintf("source_dir_%s", random()),
+		Name: "source_dir",
+		Path: sourceDir,
+	}
+	spec.Volumes = append(spec.Volumes, &lespec.Volume{
+		HostPath: &SourceVolume,
+	})
+	// now we need to create a script volume, used by every container step
+	ScriptVolume := lespec.VolumeHostPath{
+		ID:   fmt.Sprintf("script_dir_%s", random()),
+		Name: "script_dir",
+		Path: scriptDir,
+	}
+	spec.Volumes = append(spec.Volumes, &lespec.Volume{
+		HostPath: &ScriptVolume,
+	})
 	// services are the same as steps, but are executed first and are detached.
 	for _, src := range pipeline.Services {
 		src.Detach = true
@@ -264,7 +280,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			})
 			command = append(command, scriptPath)
 		}
-
 		// set entrypoint if running on the host or if the container has commands
 		if src.Image == "" || (src.Image != "" && len(src.Commands) > 0) {
 			if pipelineOS == "windows" {
@@ -273,14 +288,35 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				entrypoint = []string{"sh", "-c"}
 			}
 		}
-
+		// add the volumes
 		for _, v := range src.Volumes {
 			volumes = append(volumes, &lespec.VolumeMount{
 				Name: v.Name,
 				Path: v.MountPath,
 			})
 		}
-
+		// finally mount the source directory in the container
+		var containerSourcePath string
+		if pipelineOS == "windows" {
+			containerSourcePath = "c:/drone/src"
+		} else {
+			containerSourcePath = "/drone/src"
+		}
+		// container change working dir and add source volume, otherwise use sourcedir
+		workingDir := sourceDir
+		if src.Image != "" {
+			volumes = append(volumes, &lespec.VolumeMount{
+				Name: "source_dir",
+				Path: containerSourcePath,
+			})
+			workingDir = containerSourcePath
+			// now add the script volume
+			volumes = append(volumes, &lespec.VolumeMount{
+				Name: "script_dir",
+				Path: scriptDir,
+			})
+		}
+		// create the step
 		dst := &engine.Step{
 			Step: lespec.Step{
 				ID:         stepID,
@@ -292,8 +328,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				Files:      files,
 				Image:      src.Image,
 				Secrets:    convertSecretEnv(src.Environment),
-				WorkingDir: sourcedir,
+				WorkingDir: workingDir,
 				Volumes:    volumes,
+				Privileged: true,
 			},
 			DependsOn: src.DependsOn,
 			RunPolicy: runtime.RunOnSuccess,
