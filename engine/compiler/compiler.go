@@ -7,17 +7,18 @@ package compiler
 import (
 	"context"
 	"fmt"
-
-	"github.com/drone/runner-go/labels"
+	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/encoder"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
+	"github.com/drone/runner-go/labels"
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/secret"
@@ -43,7 +44,7 @@ type Compiler struct {
 }
 
 // Compile compiles the configuration file.
-func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic
+func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic,gocyclo
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	spec := &engine.Spec{}
 
@@ -182,7 +183,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			),
 		)
 		var cloneEntrypoint []string
-		if pipelineOS == "windows" {
+		if pipelineOS == oshelp.OSWindows {
 			cloneEntrypoint = []string{"powershell"}
 		} else {
 			cloneEntrypoint = []string{"sh", "-c"}
@@ -282,7 +283,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		}
 		// set entrypoint if running on the host or if the container has commands
 		if src.Image == "" || (src.Image != "" && len(src.Commands) > 0) {
-			if pipelineOS == "windows" {
+			if pipelineOS == oshelp.OSWindows {
 				entrypoint = []string{"powershell"}
 			} else {
 				entrypoint = []string{"sh", "-c"}
@@ -297,7 +298,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		}
 		// finally mount the source directory in the container
 		var containerSourcePath string
-		if pipelineOS == "windows" {
+		if pipelineOS == oshelp.OSWindows {
 			containerSourcePath = "c:/drone/src"
 		} else {
 			containerSourcePath = "/drone/src"
@@ -335,6 +336,34 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			DependsOn: src.DependsOn,
 			RunPolicy: runtime.RunOnSuccess,
 		}
+
+		// appends the settings variables to the
+		// container definition.
+		for key, value := range src.Settings {
+			if value == nil {
+				continue
+			}
+
+			// all settings are passed to the plugin env
+			// variables, prefixed with PLUGIN_
+			key = "PLUGIN_" + strings.ToUpper(key)
+
+			// if the setting parameter is sources from the
+			// secret we create a secret environment variable.
+			if value.Secret != "" {
+				dst.Secrets = append(dst.Secrets, &lespec.Secret{
+					Name: value.Secret,
+					Mask: true,
+					Env:  key,
+				})
+			} else {
+				// else if the setting parameter is opaque
+				// we inject as a string-encoded environment
+				// variable.
+				dst.Envs[key] = encoder.Encode(value.Value)
+			}
+		}
+
 		spec.Steps = append(spec.Steps, dst)
 
 		// set the pipeline step run policy. steps run on success by default, but may be optionally configured to run on failure.
