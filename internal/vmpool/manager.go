@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"sort"
 	"sync"
 	"time"
 
@@ -255,6 +256,8 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 
 		return inst, nil
 	}
+
+	sort.Slice(free, func(i, j int) bool { return free[i].StartedAt.Before(free[j].StartedAt) })
 
 	inst := &free[0]
 

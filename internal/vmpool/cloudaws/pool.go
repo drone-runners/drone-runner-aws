@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
@@ -391,8 +390,6 @@ func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err e
 			}
 		}
 	}
-
-	sort.Slice(free, func(i, j int) bool { return free[i].StartedAt.Before(free[j].StartedAt) })
 
 	logr.
 		WithField("free", len(free)).
