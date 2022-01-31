@@ -22,6 +22,8 @@ type Params struct {
 	CaCertFile     string
 	CertFile       string
 	KeyFile        string
+	Platform       string
+	Architecture   string
 }
 
 var funcs = map[string]interface{}{
@@ -82,7 +84,7 @@ users:
 apt:
   sources:
     docker.list:
-      source: deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable
+      source: deb [arch={{ .Architecture }}] https://download.docker.com/linux/ubuntu $RELEASE stable
       keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 packages:
 - docker-ce`
@@ -103,7 +105,7 @@ users:
 apt:
   sources:
     docker.list:
-      source: deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable
+      source: deb [arch={{ .Architecture }}] https://download.docker.com/linux/ubuntu $RELEASE stable
       keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 packages:
 - wget
@@ -122,7 +124,7 @@ write_files:
   encoding: b64
   content: {{ .KeyFile | base64 }}
 runcmd:
-- 'wget "{{ .LiteEnginePath }}/lite-engine" -O /usr/bin/lite-engine'
+- 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 - 'touch /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
@@ -259,7 +261,7 @@ choco feature enable -n=useRememberedArgumentsForUpgrades
 choco install -y git
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
-Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
+Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "C:\Program Files\lite-engine\log.out" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 </powershell>`

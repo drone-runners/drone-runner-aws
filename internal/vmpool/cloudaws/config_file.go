@@ -289,6 +289,8 @@ func (poolDef *poolDefinition) applyInitScript(defaultPoolSettings *vmpool.Defau
 		CaCertFile:     defaultPoolSettings.CaCertFile,
 		CertFile:       defaultPoolSettings.CertFile,
 		KeyFile:        defaultPoolSettings.KeyFile,
+		Platform:       poolDef.Platform.OS,
+		Architecture:   poolDef.Platform.Arch,
 	}
 
 	if poolDef.InitScript == "" {
