@@ -16,8 +16,9 @@ import (
 
 type (
 	Manager struct {
-		poolMap      map[string]*poolEntry
-		cleanupTimer *time.Ticker
+		poolMap          map[string]*poolEntry
+		poolSizeStrategy Strategy
+		cleanupTimer     *time.Ticker
 	}
 
 	poolEntry struct {
@@ -25,6 +26,8 @@ type (
 		Pool
 	}
 )
+
+var ErrorNoInstanceAvailable = errors.New("no free instances available")
 
 func (m *Manager) Add(pools ...Pool) error {
 	if len(pools) == 0 {
@@ -176,30 +179,45 @@ func (m *Manager) Count() int {
 }
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
-// This method and Provision method contain logic for maintaining pool size.
-// The current implementation simply guaranties that there are always GetMinSize instances available for jobs
-// and will not terminate any instances if there are more available than it's necessary.
 func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
-	_, freeIDs, err := pool.List(ctx)
+	instBusy, instFree, err := pool.List(ctx)
 	if err != nil {
 		return err
 	}
 
-	instanceCount := len(freeIDs)
-	needToCreate := pool.GetMinSize() - instanceCount
+	strategy := m.poolSizeStrategy
+	if strategy == nil {
+		strategy = Greedy{}
+	}
 
-	if needToCreate <= 0 {
+	logr := logger.FromContext(ctx).
+		WithField("provider", pool.GetProviderName()).
+		WithField("pool", pool.GetName())
+
+	shouldCreate, shouldRemove := strategy.CountCreateRemove(
+		pool.GetMinSize(), pool.GetMaxSize(),
+		len(instBusy), len(instFree))
+
+	if shouldRemove > 0 {
+		ids := make([]string, shouldRemove)
+		for i := 0; i < shouldRemove; i++ {
+			ids[i] = instFree[i].ID
+		}
+
+		err := pool.Destroy(ctx, ids...)
+		if err != nil {
+			logr.WithError(err).Errorln("build pool: failed to destroy excess instances")
+		}
+	}
+
+	if shouldCreate <= 0 {
 		return nil
 	}
 
 	wg := &sync.WaitGroup{}
-	wg.Add(needToCreate)
+	wg.Add(shouldCreate)
 
-	for i := 0; i < needToCreate; i++ {
-		logr := logger.FromContext(ctx).
-			WithField("provider", pool.GetProviderName()).
-			WithField("pool", pool.GetName())
-
+	for shouldCreate > 0 {
 		go func(ctx context.Context, logr logger.Logger) {
 			defer wg.Done()
 
@@ -215,7 +233,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				Infoln("build pool: created new instance")
 		}(context.Background(), logr)
 
-		instanceCount++
+		shouldCreate--
 	}
 
 	wg.Wait()
@@ -241,12 +259,21 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 	pool.Lock()
 	defer pool.Unlock()
 
-	_, free, err := pool.List(ctx)
+	strategy := m.poolSizeStrategy
+	if strategy == nil {
+		strategy = Greedy{}
+	}
+
+	busy, free, err := pool.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
 	if len(free) == 0 {
+		if canCreate := strategy.CanCreate(pool.GetMinSize(), pool.GetMaxSize(), len(busy), len(free)); !canCreate {
+			return nil, ErrorNoInstanceAvailable
+		}
+
 		var inst *Instance
 
 		inst, err = pool.Provision(ctx, true)

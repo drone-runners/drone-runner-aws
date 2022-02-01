@@ -159,9 +159,9 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 		WithField("size", p.instanceType)
 
 	tags := createCopy(p.defaultTags)
-	tags[tagRunner] = p.runnerName
+	tags[tagRunner] = vmpool.RunnerName
 	tags[tagPool] = p.name
-	tags[tagCreator] = vmpool.RunnerName
+	tags[tagCreator] = p.runnerName
 	if tagAsInUse {
 		tags[tagStatus] = tagStatusValue
 	}
@@ -346,6 +346,10 @@ func (p *awsPool) List(ctx context.Context) (busy, free []vmpool.Instance, err e
 			},
 			{
 				Name:   aws.String("tag:" + tagCreator),
+				Values: []*string{aws.String(p.runnerName)},
+			},
+			{
+				Name:   aws.String("tag:" + tagRunner),
 				Values: []*string{aws.String(vmpool.RunnerName)},
 			},
 			{
@@ -416,6 +420,10 @@ func (p *awsPool) GetUsedInstanceByTag(ctx context.Context, tag, value string) (
 			},
 			{
 				Name:   aws.String("tag:" + tagCreator),
+				Values: []*string{aws.String(p.runnerName)},
+			},
+			{
+				Name:   aws.String("tag:" + tagRunner),
 				Values: []*string{aws.String(vmpool.RunnerName)},
 			},
 			{

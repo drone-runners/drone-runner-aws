@@ -25,7 +25,7 @@ import (
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
-	"github.com/harness/lite-engine/api"
+	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 	lelivelog "github.com/harness/lite-engine/livelog"
 	lestream "github.com/harness/lite-engine/logstream/remote"
@@ -48,6 +48,23 @@ type delegateCommand struct {
 
 const TagStageID = vmpool.TagPrefix + "stage-id"
 
+// helper function configures the global logger from
+// the loaded configuration.
+func setupLogger(config *daemon.Config) {
+	logger.Default = logger.Logrus(
+		logrus.NewEntry(
+			logrus.StandardLogger(),
+		),
+	)
+
+	if config.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+	if config.Trace {
+		logrus.SetLevel(logrus.TraceLevel)
+	}
+}
+
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	envError := godotenv.Load(c.envfile)
@@ -68,7 +85,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// setup the global logrus logger.
-	daemon.SetupLogger(&config)
+	setupLogger(&config)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -205,14 +222,14 @@ func (c *delegateCommand) delegateListener() http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			wrap := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-			reqStart := time.Now()
+			reqStart := time.Now().UTC()
 			next.ServeHTTP(wrap, r)
 
 			status := wrap.Status()
 			dur := time.Since(reqStart).Milliseconds()
 
 			logr := logrus.WithContext(r.Context()).
-				WithField("time", time.Now().UTC().Format(time.RFC3339)).
+				WithField("t", reqStart.Format(time.RFC3339)).
 				WithField("status", status).
 				WithField("dur[ms]", dur)
 			logLine := "HTTP: " + r.Method + " " + r.URL.RequestURI()
@@ -248,12 +265,12 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 
 func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	reqData := &struct {
-		ID               string            `json:"id"`
-		PoolID           string            `json:"pool_id"`
-		Tags             map[string]string `json:"tags"`
-		CorrelationID    string            `json:"correlation_id"`
-		LogKey           string            `json:"log_key"`
-		api.SetupRequest `json:"setup_request"`
+		ID                 string            `json:"id"`
+		PoolID             string            `json:"pool_id"`
+		Tags               map[string]string `json:"tags"`
+		CorrelationID      string            `json:"correlation_id"`
+		LogKey             string            `json:"log_key"`
+		leapi.SetupRequest `json:"setup_request"`
 	}{}
 
 	if err := getJSONDataFromReader(r.Body, reqData); err != nil {
@@ -376,11 +393,11 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	reqData := &struct {
-		ID                   string `json:"id"`
-		IPAddress            string `json:"ip_address"`
-		PoolID               string `json:"pool_id"`
-		CorrelationID        string `json:"correlation_id"`
-		api.StartStepRequest `json:"start_step_request"`
+		ID                     string `json:"id"`
+		IPAddress              string `json:"ip_address"`
+		PoolID                 string `json:"pool_id"`
+		CorrelationID          string `json:"correlation_id"`
+		leapi.StartStepRequest `json:"start_step_request"`
 	}{}
 
 	if err := getJSONDataFromReader(r.Body, reqData); err != nil {
@@ -446,9 +463,10 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 
 	const timeoutStep = 4 * time.Hour // TODO: Move to configuration
 
-	pollResponse, err := client.RetryPollStep(ctx, &api.PollStepRequest{ID: reqData.StartStepRequest.ID}, timeoutStep)
+	pollResponse, err := client.RetryPollStep(ctx, &leapi.PollStepRequest{ID: reqData.StartStepRequest.ID}, timeoutStep)
 	if err != nil {
 		httprender.InternalError(w, "failed to call LE.RetryPollStep", err, logr)
+		return
 	}
 
 	logr.WithField("pollResponse", pollResponse).
@@ -551,7 +569,7 @@ func getJSONDataFromReader(r io.Reader, data interface{}) error {
 	return nil
 }
 
-func getStreamLogger(cfg api.LogConfig, logKey, correlationID string) *lelivelog.Writer {
+func getStreamLogger(cfg leapi.LogConfig, logKey, correlationID string) *lelivelog.Writer {
 	client := lestream.NewHTTPClient(cfg.URL, cfg.AccountID,
 		cfg.Token, cfg.IndirectUpload, false)
 	wc := lelivelog.New(client, logKey, correlationID, nil)
