@@ -159,7 +159,11 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			sizeMax:       poolDef.MaxPoolSize,
 		}
 
-		logr := logger.Default.WithField("name", poolDef.Name)
+		logr := logger.Default.
+			WithField("name", poolDef.Name).
+			WithField("os", poolDef.Platform.OS).
+			WithField("arch", poolDef.Platform.Arch)
+
 		if defaultPrivateKey != "" {
 			logr = logr.WithField("private-key", defaultPoolSettings.PrivateKeyFile)
 		}
@@ -289,6 +293,8 @@ func (poolDef *poolDefinition) applyInitScript(defaultPoolSettings *vmpool.Defau
 		CaCertFile:     defaultPoolSettings.CaCertFile,
 		CertFile:       defaultPoolSettings.CertFile,
 		KeyFile:        defaultPoolSettings.KeyFile,
+		Platform:       poolDef.Platform.OS,
+		Architecture:   poolDef.Platform.Arch,
 	}
 
 	if poolDef.InitScript == "" {
