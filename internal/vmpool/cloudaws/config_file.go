@@ -225,7 +225,7 @@ func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.Default
 		poolDef.Platform.OS = oshelp.OSLinux
 	}
 	if poolDef.Platform.Arch == "" {
-		poolDef.Platform.Arch = "arm64"
+		poolDef.Platform.Arch = "amd64"
 	}
 
 	// apply defaults to Instance
