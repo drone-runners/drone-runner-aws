@@ -1,0 +1,20 @@
+kind: pipeline
+type: aws
+name: ubuntu
+min_pool_size: 1
+max_pool_size: 1
+
+account:
+  region: us-east-2
+
+platform:
+  os: linux
+  arch: amd64
+
+instance:
+# ubuntu 18.04 ohio
+  ami: ami-051197ce9cbb023ea
+  type: t2.nano
+  network:
+    security_groups:
+      - sg-0f5aaeb48d35162a4
