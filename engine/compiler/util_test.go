@@ -7,6 +7,8 @@ package compiler
 import (
 	"testing"
 
+	lespec "github.com/harness/lite-engine/engine/spec"
+
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone/runner-go/manifest"
@@ -70,16 +72,16 @@ func Test_isGraph(t *testing.T) {
 func Test_configureSerial(t *testing.T) {
 	before := new(engine.Spec)
 	before.Steps = []*engine.Step{
-		{Name: "build"},
-		{Name: "test"},
-		{Name: "deploy"},
+		{Step: lespec.Step{Name: "build"}},
+		{Step: lespec.Step{Name: "test"}},
+		{Step: lespec.Step{Name: "deploy"}},
 	}
 
 	after := new(engine.Spec)
 	after.Steps = []*engine.Step{
-		{Name: "build"},
-		{Name: "test", DependsOn: []string{"build"}},
-		{Name: "deploy", DependsOn: []string{"test"}},
+		{Step: lespec.Step{Name: "build"}},
+		{Step: lespec.Step{Name: "test"}, DependsOn: []string{"build"}},
+		{Step: lespec.Step{Name: "deploy"}, DependsOn: []string{"test"}},
 	}
 	configureSerial(before)
 
@@ -109,7 +111,7 @@ func Test_convertSecretEnv(t *testing.T) {
 		"PASSWORD": {Secret: "password"},
 	}
 	envs := convertSecretEnv(vars)
-	want := []*engine.Secret{
+	want := []*lespec.Secret{
 		{
 			Name: "password",
 			Env:  "PASSWORD",
@@ -125,22 +127,18 @@ func Test_convertSecretEnv(t *testing.T) {
 func Test_configureCloneDeps(t *testing.T) {
 	before := new(engine.Spec)
 	before.Steps = []*engine.Step{
-		{Name: "clone"},
-		{Name: "backend"},
-		{Name: "frontend"},
-		{Name: "deploy", DependsOn: []string{
-			"backend", "frontend",
-		}},
+		{Step: lespec.Step{Name: "clone"}},
+		{Step: lespec.Step{Name: "backend"}},
+		{Step: lespec.Step{Name: "frontend"}},
+		{Step: lespec.Step{Name: "deploy"}, DependsOn: []string{"backend", "frontend"}},
 	}
 
 	after := new(engine.Spec)
 	after.Steps = []*engine.Step{
-		{Name: "clone"},
-		{Name: "backend", DependsOn: []string{"clone"}},
-		{Name: "frontend", DependsOn: []string{"clone"}},
-		{Name: "deploy", DependsOn: []string{
-			"backend", "frontend",
-		}},
+		{Step: lespec.Step{Name: "clone"}},
+		{Step: lespec.Step{Name: "backend"}, DependsOn: []string{"clone"}},
+		{Step: lespec.Step{Name: "frontend"}, DependsOn: []string{"clone"}},
+		{Step: lespec.Step{Name: "deploy"}, DependsOn: []string{"backend", "frontend"}},
 	}
 	configureCloneDeps(before)
 
@@ -154,20 +152,16 @@ func Test_configureCloneDeps(t *testing.T) {
 func Test_removeCloneDeps(t *testing.T) {
 	before := new(engine.Spec)
 	before.Steps = []*engine.Step{
-		{Name: "backend", DependsOn: []string{"clone"}},
-		{Name: "frontend", DependsOn: []string{"clone"}},
-		{Name: "deploy", DependsOn: []string{
-			"backend", "frontend",
-		}},
+		{Step: lespec.Step{Name: "backend"}, DependsOn: []string{"clone"}},
+		{Step: lespec.Step{Name: "frontend"}, DependsOn: []string{"clone"}},
+		{Step: lespec.Step{Name: "deploy"}, DependsOn: []string{"backend", "frontend"}},
 	}
 
 	after := new(engine.Spec)
 	after.Steps = []*engine.Step{
-		{Name: "backend", DependsOn: []string{}},
-		{Name: "frontend", DependsOn: []string{}},
-		{Name: "deploy", DependsOn: []string{
-			"backend", "frontend",
-		}},
+		{Step: lespec.Step{Name: "backend"}, DependsOn: []string{}},
+		{Step: lespec.Step{Name: "frontend"}, DependsOn: []string{}},
+		{Step: lespec.Step{Name: "deploy"}, DependsOn: []string{"backend", "frontend"}},
 	}
 	removeCloneDeps(before)
 
@@ -181,14 +175,14 @@ func Test_removeCloneDeps(t *testing.T) {
 func Test_removeCloneDeps_CloneEnabled(t *testing.T) {
 	before := new(engine.Spec)
 	before.Steps = []*engine.Step{
-		{Name: "clone"},
-		{Name: "test", DependsOn: []string{"clone"}},
+		{Step: lespec.Step{Name: "clone"}},
+		{Step: lespec.Step{Name: "test"}, DependsOn: []string{"clone"}},
 	}
 
 	after := new(engine.Spec)
 	after.Steps = []*engine.Step{
-		{Name: "clone"},
-		{Name: "test", DependsOn: []string{"clone"}},
+		{Step: lespec.Step{Name: "clone"}},
+		{Step: lespec.Step{Name: "test"}, DependsOn: []string{"clone"}},
 	}
 	removeCloneDeps(before)
 

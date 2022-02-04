@@ -7,22 +7,24 @@ package compiler
 import (
 	"context"
 	"fmt"
-
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/encoder"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
+	"github.com/drone/runner-go/labels"
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/secret"
+	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/dchest/uniuri"
-	"github.com/gosimple/slug"
 )
 
 // random generator function
@@ -42,48 +44,64 @@ type Compiler struct {
 }
 
 // Compile compiles the configuration file.
-func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic
+func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic,gocyclo
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	spec := &engine.Spec{}
 
+	spec.Name = pipeline.Name
+
+	// create system labels
+	systemLabels := labels.Combine(
+		labels.FromRepo(args.Repo),
+		labels.FromBuild(args.Build),
+		labels.FromStage(args.Stage),
+		labels.FromSystem(args.System),
+		labels.WithTimeout(args.Repo),
+	)
 	targetPool := pipeline.Pool.Use
 	pool := c.PoolManager.Get(targetPool)
 
+	pipelineOS := pool.GetOS()
+	pipelineRoot := pool.GetRootDir()
+
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
 	spec.CloudInstance.PoolName = targetPool
-	spec.Root = pool.GetRootDir()
 
-	pipelineOS := pool.GetOS()
 	// creates a home directory in the root.
 	// note: mkdirall fails on windows so we need to create all directories in the tree.
-	homedir := oshelp.JoinPaths(pipelineOS, spec.Root, "home", "drone")
-	spec.Files = append(spec.Files, &engine.File{
-		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "home"),
-		Mode:  0700,
-		IsDir: true,
-	}, &engine.File{
-		Path:  homedir,
-		Mode:  0700,
-		IsDir: true,
-	})
+	homedir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "home", "drone")
+	spec.Files = append(spec.Files,
+		&lespec.File{
+			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "home"),
+			Mode:  0700,
+			IsDir: true,
+		}, &lespec.File{
+			Path:  homedir,
+			Mode:  0700,
+			IsDir: true,
+		})
 
 	// creates a source directory in the root.
 	// note: mkdirall fails on windows so we need to create all
 	// directories in the tree.
-	sourcedir := oshelp.JoinPaths(pipelineOS, spec.Root, "drone", "src")
-	spec.Files = append(spec.Files, &engine.File{
-		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "drone"),
-		Mode:  0700,
-		IsDir: true,
-	}, &engine.File{
-		Path:  sourcedir,
-		Mode:  0700,
-		IsDir: true,
-	}, &engine.File{
-		Path:  oshelp.JoinPaths(pipelineOS, spec.Root, "opt"),
-		Mode:  0700,
-		IsDir: true,
-	})
+	sourceDir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone", "src")
+	scriptDir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt")
+	spec.Files = append(spec.Files,
+		&lespec.File{
+			Path:  oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone"),
+			Mode:  0700,
+			IsDir: true,
+		},
+		&lespec.File{
+			Path:  sourceDir,
+			Mode:  0700,
+			IsDir: true,
+		},
+		&lespec.File{
+			Path:  scriptDir,
+			Mode:  0700,
+			IsDir: true,
+		})
 
 	// creates the netrc file
 	if args.Netrc != nil && args.Netrc.Password != "" {
@@ -95,11 +113,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			args.Netrc.Login,
 			args.Netrc.Password,
 		)
-		spec.Files = append(spec.Files, &engine.File{
-			Path: netrcpath,
-			Mode: 0600,
-			Data: []byte(netrcdata),
-		})
+		spec.Files = append(spec.Files,
+			&lespec.File{
+				Path: netrcpath,
+				Mode: 0600,
+				Data: netrcdata,
+			})
 	}
 
 	// list the global environment variables
@@ -133,8 +152,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			"HOME":                homedir,
 			"HOMEPATH":            homedir, // for windows
 			"USERPROFILE":         homedir, // for windows
-			"DRONE_HOME":          sourcedir,
-			"DRONE_WORKSPACE":     sourcedir,
+			"DRONE_HOME":          sourceDir,
+			"DRONE_WORKSPACE":     sourceDir,
 			"GIT_TERMINAL_PROMPT": "0",
 		},
 	)
@@ -152,7 +171,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// create the clone step, maybe
 	if !pipeline.Clone.Disable {
-		clonepath := oshelp.JoinPaths(pipelineOS, spec.Root, "opt", oshelp.GetExt(pipelineOS, "clone"))
+		clonepath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, "clone"))
 		clonefile := oshelp.GenScript(pipelineOS,
 			clone.Commands(
 				clone.Args{
@@ -163,46 +182,78 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				},
 			),
 		)
-		cmd, args := oshelp.GetCommand(pipelineOS, clonepath)
+		var cloneEntrypoint []string
+		if pipelineOS == oshelp.OSWindows {
+			cloneEntrypoint = []string{"powershell"}
+		} else {
+			cloneEntrypoint = []string{"sh", "-c"}
+		}
 		spec.Steps = append(spec.Steps, &engine.Step{
-			Name:      "clone",
-			Args:      args,
-			Command:   cmd,
-			Envs:      envs,
-			RunPolicy: runtime.RunAlways,
-			Files: []*engine.File{
-				{
-					Path: clonepath,
-					Mode: 0700,
-					Data: []byte(clonefile),
+			Step: lespec.Step{
+				ID:         random(),
+				Name:       "clone",
+				Entrypoint: cloneEntrypoint,
+				Command:    []string{clonefile},
+				Envs:       envs,
+				Secrets:    []*lespec.Secret{},
+				WorkingDir: sourceDir,
+				Files: []*lespec.File{
+					{
+						Path: clonepath,
+						Mode: 0700,
+						Data: clonefile,
+					},
 				},
 			},
-			Secrets:    []*engine.Secret{},
-			WorkingDir: sourcedir,
+			DependsOn: nil,
+			ErrPolicy: runtime.ErrFail,
+			RunPolicy: runtime.RunAlways,
 		})
 	}
-
 	// create volumes map, name of volume and real life path
-	var pipeLineVolumeMap = make(map[string]string, len(pipeline.Volumes))
 	for _, v := range pipeline.Volumes {
+		id := random()
 		path := ""
+
+		src := new(lespec.Volume)
 		if v.EmptyDir != nil {
-			path = oshelp.JoinPaths(pipelineOS, spec.Root, random())
-			// we only need to pass temporary volumes through to engine, to have the folders created
-			src := new(engine.Volume)
-			src.EmptyDir = &engine.VolumeEmptyDir{
-				ID:   path,
-				Name: v.Name,
+			src.EmptyDir = &lespec.VolumeEmptyDir{
+				ID:     id,
+				Name:   v.Name,
+				Labels: systemLabels,
 			}
-			spec.Volumes = append(spec.Volumes, src)
 		} else if v.HostPath != nil {
 			path = v.HostPath.Path
+			src.HostPath = &lespec.VolumeHostPath{
+				ID:     id,
+				Name:   v.Name,
+				Path:   path,
+				Labels: systemLabels,
+			}
 		} else {
 			continue
 		}
-		pipeLineVolumeMap[v.Name] = path
-	}
 
+		spec.Volumes = append(spec.Volumes, src)
+	}
+	// now we need to create a source volume, used by every container step
+	SourceVolume := lespec.VolumeHostPath{
+		ID:   fmt.Sprintf("source_dir_%s", random()),
+		Name: "source_dir",
+		Path: sourceDir,
+	}
+	spec.Volumes = append(spec.Volumes, &lespec.Volume{
+		HostPath: &SourceVolume,
+	})
+	// now we need to create a script volume, used by every container step
+	ScriptVolume := lespec.VolumeHostPath{
+		ID:   fmt.Sprintf("script_dir_%s", random()),
+		Name: "script_dir",
+		Path: scriptDir,
+	}
+	spec.Volumes = append(spec.Volumes, &lespec.Volume{
+		HostPath: &ScriptVolume,
+	})
 	// services are the same as steps, but are executed first and are detached.
 	for _, src := range pipeline.Services {
 		src.Detach = true
@@ -211,36 +262,108 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	combinedSteps := append(pipeline.Services, pipeline.Steps...) //nolint:gocritic // creating a new slice is ok
 	// create steps
 	for _, src := range combinedSteps {
-		buildslug := slug.Make(src.Name)
-		buildpath := oshelp.JoinPaths(pipelineOS, spec.Root, "opt", oshelp.GetExt(pipelineOS, buildslug))
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
-		// if there is an image associated with the step build a docker cli
-		var buildfile string
-		if src.Image == "" {
-			buildfile = oshelp.GenScript(pipelineOS, src.Commands)
+
+		var files []*lespec.File
+		var volumes []*lespec.VolumeMount
+		var command []string
+		var entrypoint []string
+		stepID := random()
+
+		if len(src.Commands) > 0 {
+			// build the script of commands we will execute
+			scriptToExecute := oshelp.GenScript(pipelineOS, src.Commands)
+			scriptPath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, stepID))
+			files = append(files, &lespec.File{
+				Path: scriptPath,
+				Mode: 0700,
+				Data: scriptToExecute,
+			})
+			command = append(command, scriptPath)
+		}
+		// set entrypoint if running on the host or if the container has commands
+		if src.Image == "" || (src.Image != "" && len(src.Commands) > 0) {
+			if pipelineOS == oshelp.OSWindows {
+				entrypoint = []string{"powershell"}
+			} else {
+				entrypoint = []string{"sh", "-c"}
+			}
+		}
+		// add the volumes
+		for _, v := range src.Volumes {
+			volumes = append(volumes, &lespec.VolumeMount{
+				Name: v.Name,
+				Path: v.MountPath,
+			})
+		}
+		// finally mount the source directory in the container
+		var containerSourcePath string
+		if pipelineOS == oshelp.OSWindows {
+			containerSourcePath = "c:/drone/src"
 		} else {
-			buildfile = oshelp.GenerateDockerCommandLine(pipelineOS, sourcedir, src, stepEnv, pipeLineVolumeMap)
+			containerSourcePath = "/drone/src"
+		}
+		// container change working dir and add source volume, otherwise use sourcedir
+		workingDir := sourceDir
+		if src.Image != "" {
+			volumes = append(volumes, &lespec.VolumeMount{
+				Name: "source_dir",
+				Path: containerSourcePath,
+			})
+			workingDir = containerSourcePath
+			// now add the script volume
+			volumes = append(volumes, &lespec.VolumeMount{
+				Name: "script_dir",
+				Path: scriptDir,
+			})
+		}
+		// create the step
+		dst := &engine.Step{
+			Step: lespec.Step{
+				ID:         stepID,
+				Name:       src.Name,
+				Command:    command,
+				Detach:     src.Detach,
+				Envs:       stepEnv,
+				Entrypoint: entrypoint,
+				Files:      files,
+				Image:      src.Image,
+				Secrets:    convertSecretEnv(src.Environment),
+				WorkingDir: workingDir,
+				Volumes:    volumes,
+				Privileged: true,
+			},
+			DependsOn: src.DependsOn,
+			RunPolicy: runtime.RunOnSuccess,
 		}
 
-		cmd, args := oshelp.GetCommand(pipelineOS, buildpath)
-		dst := &engine.Step{
-			Name:      src.Name,
-			Args:      args,
-			Command:   cmd,
-			Detach:    src.Detach,
-			DependsOn: src.DependsOn,
-			Envs:      stepEnv,
-			RunPolicy: runtime.RunOnSuccess,
-			Files: []*engine.File{
-				{
-					Path: buildpath,
-					Mode: 0700,
-					Data: []byte(buildfile),
-				},
-			},
-			Secrets:    convertSecretEnv(src.Environment),
-			WorkingDir: sourcedir,
+		// appends the settings variables to the
+		// container definition.
+		for key, value := range src.Settings {
+			if value == nil {
+				continue
+			}
+
+			// all settings are passed to the plugin env
+			// variables, prefixed with PLUGIN_
+			key = "PLUGIN_" + strings.ToUpper(key)
+
+			// if the setting parameter is sources from the
+			// secret we create a secret environment variable.
+			if value.Secret != "" {
+				dst.Secrets = append(dst.Secrets, &lespec.Secret{
+					Name: value.Secret,
+					Mask: true,
+					Env:  key,
+				})
+			} else {
+				// else if the setting parameter is opaque
+				// we inject as a string-encoded environment
+				// variable.
+				dst.Envs[key] = encoder.Encode(value.Value)
+			}
 		}
+
 		spec.Steps = append(spec.Steps, dst)
 
 		// set the pipeline step run policy. steps run on success by default, but may be optionally configured to run on failure.

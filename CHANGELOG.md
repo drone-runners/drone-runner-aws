@@ -1,11 +1,27 @@
 # Changelog
 
+## [v1.0.0-rc.3](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.3) (2022-02-01)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.2...v1.0.0-rc.3)
+
+**Implemented enhancements:**
+
+- improved cert gen func [\#67](https://github.com/drone-runners/drone-runner-aws/pull/67) ([marko-gacesa](https://github.com/marko-gacesa))
+
+**Merged pull requests:**
+
+- Pick vm with oldest creation time during instance provisioning [\#69](https://github.com/drone-runners/drone-runner-aws/pull/69) ([shubham149](https://github.com/shubham149))
+- extend multi architecture support [\#68](https://github.com/drone-runners/drone-runner-aws/pull/68) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- fix for no max pool size issue [\#66](https://github.com/drone-runners/drone-runner-aws/pull/66) ([marko-gacesa](https://github.com/marko-gacesa))
+- daemon: run commands through LE [\#55](https://github.com/drone-runners/drone-runner-aws/pull/55) ([marko-gacesa](https://github.com/marko-gacesa))
+
 ## [v1.0.0-rc.2](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.2) (2022-01-14)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.1...v1.0.0-rc.2)
 
 **Merged pull requests:**
 
+- release-prep-for-1.0.0-rc.2 [\#65](https://github.com/drone-runners/drone-runner-aws/pull/65) ([marko-gacesa](https://github.com/marko-gacesa))
 - Mark DRONE\_RPC\_HOST and DRONE\_RPC\_SECRET as optional in delegate mode [\#64](https://github.com/drone-runners/drone-runner-aws/pull/64) ([vistaarjuneja](https://github.com/vistaarjuneja))
 
 ## [v1.0.0-rc.1](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.1) (2022-01-05)

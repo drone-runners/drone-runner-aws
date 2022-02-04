@@ -1,6 +1,7 @@
 package cloudinit_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -13,6 +14,8 @@ const (
 	caCertFile     = "qwerty123"
 	certFile       = "abcdef456"
 	keyFile        = "xyzuvw789"
+	platform       = "spectrum"
+	arch           = "z80"
 )
 
 func TestLinux(t *testing.T) {
@@ -22,10 +25,13 @@ func TestLinux(t *testing.T) {
 		CaCertFile:     caCertFile + "\n",
 		CertFile:       certFile + "\n",
 		KeyFile:        keyFile + "\n",
+		Platform:       platform,
+		Architecture:   arch,
 	}
 
 	s := cloudinit.Linux(params)
-	if !strings.Contains(s, publicKey) || !strings.Contains(s, `"`+liteEnginePath+`/lite-engine"`) {
+	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s"`, params.LiteEnginePath, params.Platform, params.Architecture)
+	if !strings.Contains(s, publicKey) || !strings.Contains(s, lePath) {
 		t.Error("linux init script does not contain public key or LE path")
 	}
 }
@@ -40,7 +46,8 @@ func TestWindows(t *testing.T) {
 	}
 
 	s := cloudinit.Windows(params)
-	if !strings.Contains(s, `"`+publicKey+`"`) || !strings.Contains(s, `"`+liteEnginePath+`/lite-engine.exe"`) {
+	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s.exe"`, params.LiteEnginePath, params.Platform, params.Architecture)
+	if !strings.Contains(s, `"`+publicKey+`"`) || !strings.Contains(s, lePath) {
 		t.Error("windows init script does not contain public key or LE path")
 	}
 }

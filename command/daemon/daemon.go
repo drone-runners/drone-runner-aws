@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/le"
+
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
@@ -42,16 +44,17 @@ import (
 var nocontext = context.Background()
 
 type daemonCommand struct {
-	envfile  string
-	Poolfile string
+	envFile  string
+	poolFile string
 }
 
-func (c *daemonCommand) run(*kingpin.ParseContext) error {
+func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
 	// load environment variables from file.
-	envErr := godotenv.Load(c.envfile)
-	if envErr != nil {
-		return envErr
+	err := godotenv.Load(c.envFile)
+	if err != nil {
+		return err
 	}
+
 	// load the configuration from the environment
 	config, err := FromEnviron()
 	if err != nil {
@@ -100,6 +103,21 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		(config.DefaultPoolSettings.PrivateKeyFile == "" && config.DefaultPoolSettings.PublicKeyFile != "") {
 		logrus.Fatalln("daemon: specify a private key file and public key file or leave both settings empty to generate keys")
 	}
+	// generate cert files if needed
+	err = le.GenerateLECerts(config.Runner.Name, config.DefaultPoolSettings.CertificateFolder)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: failed to generate certificates")
+		return err
+	}
+	// read cert files into memory
+	config.DefaultPoolSettings.CaCertFile, config.DefaultPoolSettings.CertFile, config.DefaultPoolSettings.KeyFile, err = le.ReadLECerts(config.DefaultPoolSettings.CertificateFolder)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: failed to read certificates")
+		return err
+	}
+
 	// we have enough information for default pool settings
 	defaultPoolSettings := vmpool.DefaultSettings{
 		RunnerName:         config.Runner.Name,
@@ -114,9 +132,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		CertFile:           config.DefaultPoolSettings.CertFile,
 		KeyFile:            config.DefaultPoolSettings.KeyFile,
 	}
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
-	if poolFileErr != nil {
-		logrus.WithError(poolFileErr).
+	pools, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
+	if err != nil {
+		logrus.WithError(err).
 			Errorln("daemon: unable to parse pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
@@ -135,11 +153,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	opts := engine.Opts{
-		PoolManager: poolManager,
-		Repopulate:  true,
+		Repopulate: true,
 	}
 
-	engInstance, engineErr := engine.New(opts)
+	engInstance, engineErr := engine.New(opts, poolManager, &defaultPoolSettings)
 	if engineErr != nil {
 		logrus.WithError(engineErr).
 			Fatalln("daemon: cannot load the engine")
@@ -270,18 +287,20 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 	logrus.Infoln("daemon: pool created")
 
-	g.Go(func() error {
-		<-ctx.Done()
-		// clean up pool on termination
-		cleanErr := poolManager.CleanPools(ctx, true, true)
-		if cleanErr != nil {
-			logrus.WithError(cleanErr).
-				Errorln("daemon: unable to clean pools")
-		} else {
-			logrus.Infoln("daemon: pools cleaned")
-		}
-		return cleanErr
-	})
+	if !config.DefaultPoolSettings.ReusePool {
+		g.Go(func() error {
+			<-ctx.Done()
+			// clean up pool on termination
+			cleanErr := poolManager.CleanPools(context.Background(), true, true)
+			if cleanErr != nil {
+				logrus.WithError(cleanErr).
+					Errorln("daemon: unable to clean pools")
+			} else {
+				logrus.Infoln("daemon: pools cleaned")
+			}
+			return cleanErr
+		})
+	}
 
 	err = g.Wait()
 	if err != nil {
@@ -314,10 +333,10 @@ func Register(app *kingpin.Application) {
 	cmd := app.Command("daemon", "starts the runner daemon").
 		Default().
 		Action(c.run)
-	cmd.Arg("envfile", "load the environment variable file").
+	cmd.Flag("envfile", "load the environment variable file").
 		Default("").
-		StringVar(&c.envfile)
-	cmd.Arg("poolfile", "file to seed the aws pool").
+		StringVar(&c.envFile)
+	cmd.Flag("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
-		StringVar(&c.Poolfile)
+		StringVar(&c.poolFile)
 }

@@ -159,7 +159,11 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			sizeMax:       poolDef.MaxPoolSize,
 		}
 
-		logr := logger.Default.WithField("name", poolDef.Name)
+		logr := logger.Default.
+			WithField("name", poolDef.Name).
+			WithField("os", poolDef.Platform.OS).
+			WithField("arch", poolDef.Platform.Arch)
+
 		if defaultPrivateKey != "" {
 			logr = logr.WithField("private-key", defaultPoolSettings.PrivateKeyFile)
 		}
@@ -221,7 +225,7 @@ func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.Default
 		poolDef.Platform.OS = oshelp.OSLinux
 	}
 	if poolDef.Platform.Arch == "" {
-		poolDef.Platform.Arch = "arm64"
+		poolDef.Platform.Arch = "amd64"
 	}
 
 	// apply defaults to Instance

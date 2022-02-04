@@ -1,42 +1,50 @@
 {
-  "root": "/tmp/aws",
   "name": "default",
   "cloud_instance": {
-    "pool_name": "ubuntu",
-    "cloud": "",
-    "id": "",
-    "ip": ""
+    "pool_name": "ubuntu"
   },
   "files": [
     {
-      "path": "/tmp/aws/home",
-      "mode": 448,
-      "is_dir": true
+      "file": {
+        "path": "/tmp/aws/home",
+        "mode": 448,
+        "is_dir": true
+      }
     },
     {
-      "path": "/tmp/aws/home/drone",
-      "mode": 448,
-      "is_dir": true
+      "file": {
+        "path": "/tmp/aws/home/drone",
+        "mode": 448,
+        "is_dir": true
+      }
     },
     {
-      "path": "/tmp/aws/drone",
-      "mode": 448,
-      "is_dir": true
+      "file": {
+        "path": "/tmp/aws/drone",
+        "mode": 448,
+        "is_dir": true
+      }
     },
     {
-      "path": "/tmp/aws/drone/src",
-      "mode": 448,
-      "is_dir": true
+      "file": {
+        "path": "/tmp/aws/drone/src",
+        "mode": 448,
+        "is_dir": true
+      }
     },
     {
-      "path": "/tmp/aws/opt",
-      "mode": 448,
-      "is_dir": true
+      "file": {
+        "path": "/tmp/aws/opt",
+        "mode": 448,
+        "is_dir": true
+      }
     },
     {
-      "path": "/tmp/aws/home/drone/.netrc",
-      "mode": 384,
-      "data": "bWFjaGluZSBnaXRodWIuY29tIGxvZ2luIG9jdG9jYXQgcGFzc3dvcmQgY29ycmVjdC1ob3JzZS1iYXR0ZXJ5LXN0YXBsZQ=="
+      "file": {
+        "path": "/tmp/aws/home/drone/.netrc",
+        "mode": 384,
+        "data": "bWFjaGluZSBnaXRodWIuY29tIGxvZ2luIG9jdG9jYXQgcGFzc3dvcmQgY29ycmVjdC1ob3JzZS1iYXR0ZXJ5LXN0YXBsZQ=="
+      }
     }
   ],
   "steps": [

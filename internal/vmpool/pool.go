@@ -8,8 +8,11 @@ import (
 	"time"
 )
 
-const TagPrefix = "runner-"
-const RunnerName = "drone-runner-aws"
+const (
+	RunnerName = "drone-runner-aws"
+	TagPrefix  = "runner-"
+	TagStageID = TagPrefix + "stage-id"
+)
 
 type Pool interface {
 	// GetProviderName returns VM provider name. It should be a fixed string for each implementation. The value is used for logging.
