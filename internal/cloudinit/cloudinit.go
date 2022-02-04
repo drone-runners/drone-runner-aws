@@ -70,38 +70,8 @@ func Custom(templateText string, params *Params) (payload string, err error) {
 	return
 }
 
-const linuxScriptNoLE = `
-#cloud-config
-system_info:
-  default_user: ~
-users:
-- default
-- name: root
-  sudo: ALL=(ALL) NOPASSWD:ALL
-  groups: sudo
-  ssh-authorized-keys:
-  - {{ .PublicKey | trim }}
-apt:
-  sources:
-    docker.list:
-      source: deb [arch={{ .Architecture }}] https://download.docker.com/linux/ubuntu $RELEASE stable
-      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
-packages:
-- docker-ce`
-
-var linuxTemplateNoLE = template.Must(template.New("linux-no-le").Funcs(funcs).Parse(linuxScriptNoLE))
-
 const linuxScript = `
 #cloud-config
-system_info:
-  default_user: ~
-users:
-- default
-- name: root
-  sudo: ALL=(ALL) NOPASSWD:ALL
-  groups: sudo
-  ssh-authorized-keys:
-  - {{ .PublicKey | trim }}
 apt:
   sources:
     docker.list:
@@ -134,74 +104,33 @@ var linuxTemplate = template.Must(template.New("linux").Funcs(funcs).Parse(linux
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string) {
 	sb := &strings.Builder{}
-	if params.LiteEnginePath == "" {
-		_ = linuxTemplateNoLE.Execute(sb, params)
-	} else {
-		caCertPath := filepath.Join(certsDir, "ca-cert.pem")
-		certPath := filepath.Join(certsDir, "server-cert.pem")
-		keyPath := filepath.Join(certsDir, "server-key.pem")
 
-		err := linuxTemplate.Execute(sb, struct {
-			Params
-			CaCertPath string
-			CertPath   string
-			KeyPath    string
-		}{
-			Params:     *params,
-			CaCertPath: caCertPath,
-			CertPath:   certPath,
-			KeyPath:    keyPath,
-		})
-		if err != nil {
-			panic(err)
-		}
+	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
+	certPath := filepath.Join(certsDir, "server-cert.pem")
+	keyPath := filepath.Join(certsDir, "server-key.pem")
+
+	err := linuxTemplate.Execute(sb, struct {
+		Params
+		CaCertPath string
+		CertPath   string
+		KeyPath    string
+	}{
+		Params:     *params,
+		CaCertPath: caCertPath,
+		CertPath:   certPath,
+		KeyPath:    keyPath,
+	})
+	if err != nil {
+		panic(err)
 	}
 
 	return sb.String()
 }
 
-const windowsScriptNoLE = `
-<powershell>
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')) 
-choco install git.install -y
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-Set-Service -Name sshd -StartupType ‘Automatic’
-Start-Service sshd
-$key = "{{ .PublicKey | trim }}"
-$key | Set-Content C:\ProgramData\ssh\administrators_authorized_keys
-$acl = Get-Acl C:\ProgramData\ssh\administrators_authorized_keys
-$acl.SetAccessRuleProtection($true, $false)
-$acl.Access | %{$acl.RemoveAccessRule($_)} # strip everything
-$administratorRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrator","FullControl","Allow")
-$acl.SetAccessRule($administratorRule)
-$administratorsRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrators","FullControl","Allow")
-$acl.SetAccessRule($administratorsRule)
-(Get-Item 'C:\ProgramData\ssh\administrators_authorized_keys').SetAccessControl($acl)
-New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
-restart-service sshd
-</powershell>`
-
-var windowsTemplateNoLE = template.Must(template.New("windows-no-le").Funcs(funcs).Parse(windowsScriptNoLE))
-
 const windowsScript = `
 <powershell>
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 choco install -y git
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-Set-Service -Name sshd -StartupType ‘Automatic’
-Start-Service sshd
-$key = "{{ .PublicKey | trim }}"
-$key | Set-Content C:\ProgramData\ssh\administrators_authorized_keys
-$acl = Get-Acl C:\ProgramData\ssh\administrators_authorized_keys
-$acl.SetAccessRuleProtection($true, $false)
-$acl.Access | %{$acl.RemoveAccessRule($_)} # strip everything
-$administratorRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrator","FullControl","Allow")
-$acl.SetAccessRule($administratorRule)
-$administratorsRule = New-Object system.security.accesscontrol.filesystemaccessrule("Administrators","FullControl","Allow")
-$acl.SetAccessRule($administratorsRule)
-(Get-Item 'C:\ProgramData\ssh\administrators_authorized_keys').SetAccessControl($acl)
-New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
-restart-service sshd
 
 # certificates
 
@@ -271,27 +200,24 @@ var windowsTemplate = template.Must(template.New("windows").Funcs(funcs).Parse(w
 // Windows creates a userdata file for the Windows operating system.
 func Windows(params *Params) (payload string) {
 	sb := &strings.Builder{}
-	if params.LiteEnginePath == "" {
-		_ = windowsTemplateNoLE.Execute(sb, params)
-	} else {
-		caCertPath := filepath.Join(certsDir, "ca-cert.pem")
-		certPath := filepath.Join(certsDir, "server-cert.pem")
-		keyPath := filepath.Join(certsDir, "server-key.pem")
 
-		_ = windowsTemplate.Execute(sb, struct {
-			Params
-			CertDir    string
-			CaCertPath string
-			CertPath   string
-			KeyPath    string
-		}{
-			Params:     *params,
-			CertDir:    certsDir,
-			CaCertPath: caCertPath,
-			CertPath:   certPath,
-			KeyPath:    keyPath,
-		})
-	}
+	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
+	certPath := filepath.Join(certsDir, "server-cert.pem")
+	keyPath := filepath.Join(certsDir, "server-key.pem")
+
+	_ = windowsTemplate.Execute(sb, struct {
+		Params
+		CertDir    string
+		CaCertPath string
+		CertPath   string
+		KeyPath    string
+	}{
+		Params:     *params,
+		CertDir:    certsDir,
+		CaCertPath: caCertPath,
+		CertPath:   certPath,
+		KeyPath:    keyPath,
+	})
 
 	return sb.String()
 }

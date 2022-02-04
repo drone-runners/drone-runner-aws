@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/internal/sshkey"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
@@ -120,11 +119,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 		// 	return nil, errors.New("missing AWS secret. Add to .env file or pool file")
 		// }
 
-		err = poolDef.applyKeys(defaultPrivateKey, defaultPublicKey)
-		if err != nil {
-			return nil, err
-		}
-
 		err = poolDef.applyInitScript(defaultPoolSettings)
 		if err != nil {
 			return nil, err
@@ -139,7 +133,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 				Region: poolDef.Account.Region,
 			},
 			keyPairName:   defaultPoolSettings.AwsKeyPairName,
-			privateKey:    poolDef.Instance.PrivateKey,
 			iamProfileArn: poolDef.Instance.IAMProfileARN,
 			os:            poolDef.Platform.OS,
 			rootDir:       tempdir(poolDef.Platform.OS),
@@ -266,24 +259,6 @@ func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.Default
 			poolDef.Instance.User = "root"
 		}
 	}
-}
-
-func (poolDef *poolDefinition) applyKeys(defaultPrivateKey, defaultPublicKey string) (err error) {
-	if defaultPrivateKey == "" || defaultPublicKey == "" {
-		var publicKey, privateKey string
-
-		publicKey, privateKey, err = sshkey.GeneratePair()
-		if err != nil {
-			err = fmt.Errorf("failed to generate ssh key pair: %w", err)
-			return
-		}
-
-		poolDef.Instance.PrivateKey, poolDef.Instance.PublicKey = privateKey, publicKey
-	} else {
-		poolDef.Instance.PrivateKey, poolDef.Instance.PublicKey = defaultPrivateKey, defaultPublicKey
-	}
-
-	return
 }
 
 func (poolDef *poolDefinition) applyInitScript(defaultPoolSettings *vmpool.DefaultSettings) (err error) {
