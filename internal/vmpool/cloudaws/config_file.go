@@ -2,12 +2,12 @@ package cloudaws
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/drone/runner-go/logger"
+	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/sshkey"
@@ -113,7 +113,7 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 
 		// we need Access, error if its still empty
 		if poolDef.Account.AccessKeyID == "" {
-			return nil, errors.New("missing AWS access key. Add to .env file or pool file")
+			logrus.Infof("AWS access key is not provided (falling back to ec2 instance profile)")
 		}
 		// TODO: Remove the comment
 		// if poolDef.Account.AccessKeySecret == "" {
