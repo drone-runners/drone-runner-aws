@@ -87,12 +87,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 		return nil, err
 	}
 
-	defaultPrivateKey, defaultPublicKey, err := defaultPoolSettings.LoadKeys()
-	if err != nil {
-		err = fmt.Errorf("failed to load keys: %w", err)
-		return nil, err
-	}
-
 	buf := bytes.NewBuffer(rawPool)
 	dec := yaml.NewDecoder(buf)
 
@@ -157,12 +151,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			WithField("os", poolDef.Platform.OS).
 			WithField("arch", poolDef.Platform.Arch)
 
-		if defaultPrivateKey != "" {
-			logr = logr.WithField("private-key", defaultPoolSettings.PrivateKeyFile)
-		}
-		if defaultPublicKey != "" {
-			logr = logr.WithField("public-key", defaultPoolSettings.PublicKeyFile)
-		}
 		if poolDef.InitScript != "" {
 			logr = logr.WithField("cloud-init", poolDef.InitScript)
 		}

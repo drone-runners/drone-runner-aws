@@ -2,9 +2,6 @@ package vmpool
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
 	"time"
 )
 
@@ -59,47 +56,8 @@ type DefaultSettings struct {
 	AwsAccessKeySecret string
 	AwsRegion          string
 	AwsKeyPairName     string
-	PrivateKeyFile     string
-	PublicKeyFile      string
 	LiteEnginePath     string
 	CaCertFile         string
 	CertFile           string
 	KeyFile            string
-}
-
-func (def *DefaultSettings) LoadKeys() (privateKey, publicKey string, err error) {
-	if def.PrivateKeyFile == "" && def.PublicKeyFile == "" {
-		return
-	}
-
-	if def.PrivateKeyFile == "" && def.PublicKeyFile != "" || def.PrivateKeyFile != "" && def.PublicKeyFile == "" {
-		err = errors.New("both keys, private and public, must be provided")
-		return
-	}
-
-	if _, statErr := os.Stat(def.PrivateKeyFile); statErr != nil && !os.IsNotExist(statErr) {
-		return
-	}
-	if _, statErr := os.Stat(def.PublicKeyFile); statErr != nil && !os.IsNotExist(statErr) {
-		return
-	}
-
-	var body []byte
-
-	body, err = os.ReadFile(def.PrivateKeyFile)
-	if err != nil {
-		err = fmt.Errorf("unable to read private key file: %w", err)
-		return
-	}
-
-	privateKey = string(body)
-
-	body, err = os.ReadFile(def.PublicKeyFile)
-	if err != nil {
-		err = fmt.Errorf("unable to read public key file: %w", err)
-	}
-
-	publicKey = string(body)
-
-	return
 }

@@ -94,11 +94,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		println("received signal, terminating process")
 		cancel()
 	})
-
-	if (config.DefaultPoolSettings.PrivateKeyFile != "" && config.DefaultPoolSettings.PublicKeyFile == "") ||
-		(config.DefaultPoolSettings.PrivateKeyFile == "" && config.DefaultPoolSettings.PublicKeyFile != "") {
-		logrus.Fatalln("delegate: specify a private key file and public key file or leave both settings empty to generate keys")
-	}
 	// generate cert files if needed
 	certGenerationErr := le.GenerateLECerts(config.Runner.Name, config.DefaultPoolSettings.CertificateFolder)
 	if certGenerationErr != nil {
@@ -117,8 +112,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// we have enough information for default pool settings
 	c.defaultPoolSettings = vmpool.DefaultSettings{
 		RunnerName:         config.Runner.Name,
-		PrivateKeyFile:     config.DefaultPoolSettings.PrivateKeyFile,
-		PublicKeyFile:      config.DefaultPoolSettings.PublicKeyFile,
 		AwsAccessKeyID:     config.DefaultPoolSettings.AwsAccessKeyID,
 		AwsAccessKeySecret: config.DefaultPoolSettings.AwsAccessKeySecret,
 		AwsRegion:          config.DefaultPoolSettings.AwsRegion,

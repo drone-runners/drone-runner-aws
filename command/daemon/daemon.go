@@ -48,7 +48,7 @@ type daemonCommand struct {
 	poolFile string
 }
 
-func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
+func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	err := godotenv.Load(c.envFile)
 	if err != nil {
@@ -98,12 +98,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
 			logrus.StandardLogger(),
 		),
 	)
-
-	if (config.DefaultPoolSettings.PrivateKeyFile != "" && config.DefaultPoolSettings.PublicKeyFile == "") ||
-		(config.DefaultPoolSettings.PrivateKeyFile == "" && config.DefaultPoolSettings.PublicKeyFile != "") {
-		logrus.Fatalln("daemon: specify a private key file and public key file or leave both settings empty to generate keys")
-	}
-	// generate cert files if needed
+	// generate le cert files if needed
 	err = le.GenerateLECerts(config.Runner.Name, config.DefaultPoolSettings.CertificateFolder)
 	if err != nil {
 		logrus.WithError(err).
@@ -117,12 +112,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
 			Errorln("daemon: failed to read certificates")
 		return err
 	}
-
 	// we have enough information for default pool settings
 	defaultPoolSettings := vmpool.DefaultSettings{
 		RunnerName:         config.Runner.Name,
-		PrivateKeyFile:     config.DefaultPoolSettings.PrivateKeyFile,
-		PublicKeyFile:      config.DefaultPoolSettings.PublicKeyFile,
 		AwsAccessKeyID:     config.DefaultPoolSettings.AwsAccessKeyID,
 		AwsAccessKeySecret: config.DefaultPoolSettings.AwsAccessKeySecret,
 		AwsRegion:          config.DefaultPoolSettings.AwsRegion,
