@@ -32,12 +32,12 @@ type awsPool struct {
 	credentials Credentials
 	keyPairName string
 
-	privateKey    string
 	iamProfileArn string
 
-	region  string
-	os      string
-	rootDir string
+	region           string
+	availabilityZone string
+	os               string
+	rootDir          string
 
 	// vm instance data
 	image         string
@@ -76,10 +76,6 @@ func (p *awsPool) GetOS() string {
 
 func (p *awsPool) GetUser() string {
 	return p.user
-}
-
-func (p *awsPool) GetPrivateKey() string {
-	return p.privateKey
 }
 
 func (p *awsPool) GetRootDir() string {
@@ -182,6 +178,7 @@ func (p *awsPool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmp
 	in := &ec2.RunInstancesInput{
 		ImageId:            aws.String(p.image),
 		InstanceType:       aws.String(p.instanceType),
+		Placement:          &ec2.Placement{AvailabilityZone: aws.String(p.availabilityZone)},
 		MinCount:           aws.Int64(1),
 		MaxCount:           aws.Int64(1),
 		IamInstanceProfile: iamProfile,
