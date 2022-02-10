@@ -30,8 +30,6 @@ You can generate a token by logging into your GitHub account and going to Settin
 
 Next we tag the PR's with the fixes or enhancements labels. If the PR does not fufil the requirements, do not add a label.
 
-**Before moving on make sure to update the version file `version/version.go && version/version_test.go`.**
-
 Run the changelog generator again with the future version according to semver.
 
 ```BASH
@@ -40,13 +38,15 @@ docker run -it --rm -v "$(pwd)":/usr/local/src/your-app githubchangeloggenerator
 
 Create your pull request for the release. Get it merged then tag the release.
 
-## developer setup for testing / using the lite engine
+## Testing against a custom lite engine
 
 + build the lite-engine
 + host the lite-engine binary `python3 -m http.server`
 + run ngrok to expose the webserver `ngrok http 8000`
 + add the ngrok url to the env file `DRONE_SETTINGS_LITE_ENGINE_PATH=https://c6bf-80-7-0-64.ngrok.io`
-+ make sure to add port 9079 to your incoming network aws security group.
+
+## Testing the delegate command
+
 + Run the delegate command, wait for the pool creation to complete.
 + setup an instance:
 
@@ -60,7 +60,7 @@ curl -d '{"id": "unique-stage-id","correlation_id":"abc1","pool_id":"ubuntu", "s
 curl -d '{"id":"unique-stage-id","pool_id":"ubuntu","correlation_id":"xyz2", "start_step_request":{"id":"step4", "image": "alpine:3.11", "working_dir":"/tmp", "run":{"commands":["sleep 30"], "entrypoint":["sh", "-c"]}}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/step
 ```
 
-or, directly by IP address returned by the setup API call: 
+or, directly by IP address returned by the setup API call:
 
 ```BASH
 curl -d '{"ip_address":"<IP OF INSTANCE>","pool_id":"ubuntu","correlation_id":"xyz2", "start_step_request":{"id":"step4", "image": "alpine:3.11", "working_dir":"/tmp", "run":{"commands":["sleep 30"], "entrypoint":["sh", "-c"]}}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/step

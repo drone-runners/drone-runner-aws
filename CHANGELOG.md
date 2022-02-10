@@ -1,19 +1,33 @@
 # Changelog
 
+## [v1.0.0-rc.4](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.4) (2022-02-10)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.3...v1.0.0-rc.4)
+
+**Implemented enhancements:**
+
+- Update lite-engine version for port binding support [\#73](https://github.com/drone-runners/drone-runner-aws/pull/73) ([shubham149](https://github.com/shubham149))
+- Use AWS IAM role to create VMs [\#70](https://github.com/drone-runners/drone-runner-aws/pull/70) ([shubham149](https://github.com/shubham149))
+
+**Fixed bugs:**
+
+- \(dron-217\) Remove SSH [\#72](https://github.com/drone-runners/drone-runner-aws/pull/72) ([marko-gacesa](https://github.com/marko-gacesa))
+- \(fix\) default to amd64 if no arch is given [\#71](https://github.com/drone-runners/drone-runner-aws/pull/71) ([tphoney](https://github.com/tphoney))
+
 ## [v1.0.0-rc.3](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.3) (2022-02-01)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.2...v1.0.0-rc.3)
 
 **Implemented enhancements:**
 
-- improved cert gen func [\#67](https://github.com/drone-runners/drone-runner-aws/pull/67) ([marko-gacesa](https://github.com/marko-gacesa))
-
-**Merged pull requests:**
-
 - Pick vm with oldest creation time during instance provisioning [\#69](https://github.com/drone-runners/drone-runner-aws/pull/69) ([shubham149](https://github.com/shubham149))
 - extend multi architecture support [\#68](https://github.com/drone-runners/drone-runner-aws/pull/68) ([eoinmcafee00](https://github.com/eoinmcafee00))
-- fix for no max pool size issue [\#66](https://github.com/drone-runners/drone-runner-aws/pull/66) ([marko-gacesa](https://github.com/marko-gacesa))
+- improved cert gen func [\#67](https://github.com/drone-runners/drone-runner-aws/pull/67) ([marko-gacesa](https://github.com/marko-gacesa))
 - daemon: run commands through LE [\#55](https://github.com/drone-runners/drone-runner-aws/pull/55) ([marko-gacesa](https://github.com/marko-gacesa))
+
+**Fixed bugs:**
+
+- fix for no max pool size issue [\#66](https://github.com/drone-runners/drone-runner-aws/pull/66) ([marko-gacesa](https://github.com/marko-gacesa))
 
 ## [v1.0.0-rc.2](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.2) (2022-01-14)
 
