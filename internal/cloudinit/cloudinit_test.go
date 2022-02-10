@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	publicKey      = "dmawlfelcuak"
 	liteEnginePath = "/lite/engine/goes/here"
 	caCertFile     = "qwerty123"
 	certFile       = "abcdef456"
@@ -20,7 +19,6 @@ const (
 
 func TestLinux(t *testing.T) {
 	params := &cloudinit.Params{
-		PublicKey:      publicKey + "\n",
 		LiteEnginePath: liteEnginePath,
 		CaCertFile:     caCertFile + "\n",
 		CertFile:       certFile + "\n",
@@ -31,14 +29,13 @@ func TestLinux(t *testing.T) {
 
 	s := cloudinit.Linux(params)
 	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s"`, params.LiteEnginePath, params.Platform, params.Architecture)
-	if !strings.Contains(s, publicKey) || !strings.Contains(s, lePath) {
-		t.Error("linux init script does not contain public key or LE path")
+	if !strings.Contains(s, lePath) {
+		t.Error("linux init script does not contain LE path")
 	}
 }
 
 func TestWindows(t *testing.T) {
 	params := &cloudinit.Params{
-		PublicKey:      publicKey + "\n",
 		LiteEnginePath: liteEnginePath,
 		CaCertFile:     caCertFile + "\n",
 		CertFile:       certFile + "\n",
@@ -47,7 +44,7 @@ func TestWindows(t *testing.T) {
 
 	s := cloudinit.Windows(params)
 	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s.exe"`, params.LiteEnginePath, params.Platform, params.Architecture)
-	if !strings.Contains(s, `"`+publicKey+`"`) || !strings.Contains(s, lePath) {
-		t.Error("windows init script does not contain public key or LE path")
+	if !strings.Contains(s, lePath) {
+		t.Error("windows init script does not contain LE path")
 	}
 }
