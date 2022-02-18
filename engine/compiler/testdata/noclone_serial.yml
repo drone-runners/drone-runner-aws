@@ -4,12 +4,12 @@ name: default
 
 pool:
   use: ubuntu
-  
+
 clone:
   disable: true
 
 steps:
-- name: build
-  commands:
-  - go build
-  - go test
+  - name: build
+    commands:
+      - go build
+      - go test

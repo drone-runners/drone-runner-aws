@@ -1,0 +1,23 @@
+kind: pipeline
+type: aws
+name: default
+
+pool:
+  use: ubuntu
+
+clone:
+  disable: true
+
+steps:
+  - name: build
+    commands:
+      - go build
+      - go test
+  - name: deploy
+    image: deploy-project:latest
+    settings:
+      location: production
+      password:
+        from_secret: password
+      username:
+        from_secret: my_username

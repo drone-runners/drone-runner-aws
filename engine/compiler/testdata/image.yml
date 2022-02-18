@@ -5,12 +5,13 @@ name: default
 pool:
   use: ubuntu
 
-clone:
-  disable: true
-
 steps:
   - name: build
+    image: golang:latest
     commands:
+      - go test
       - go build
-    when:
-      status: [ failure ]
+
+services:
+  - name: redis
+    image: redis

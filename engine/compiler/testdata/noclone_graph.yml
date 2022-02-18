@@ -4,16 +4,16 @@ name: default
 
 pool:
   use: ubuntu
-  
+
 clone:
   disable: true
 
 steps:
-- name: build
-  commands:
-  - go build
+  - name: build
+    commands:
+      - go build
 
-- name: test
-  commands:
-  - go test
-  depends_on: [ build ]
+  - name: test
+    commands:
+      - go test
+    depends_on: [ build ]
