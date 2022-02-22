@@ -4,12 +4,12 @@ name: default
 
 pool:
   use: ubuntu
-  
-steps:
-- name: build
-  commands:
-  - go build
 
-- name: test
-  commands:
-  - go test
+steps:
+  - name: build
+    commands:
+      - go build
+
+  - name: test
+    commands:
+      - go test

@@ -1,0 +1,32 @@
+kind: pipeline
+type: aws
+name: default
+
+pool:
+  use: ubuntu
+
+steps:
+  - name: test
+    image: golang:latest
+    commands:
+      - go test
+    volumes:
+      - name: gomodcache
+        path: /go/pkg/mod
+  - name: build
+    image: golang:latest
+    commands:
+      - go build -o project.exe
+      - cp project.exe /output
+    volumes:
+      - name: gomodcache
+        path: /go/pkg/mod
+      - name: output
+        path: /output
+
+volumes:
+  - name: output
+    host:
+      path: /root
+  - name: gomodcache
+    temp: {}

@@ -1,11 +1,7 @@
 {
-  "root": "/tmp/aws",
   "name": "default",
   "cloud_instance": {
-    "pool_name": "ubuntu",
-    "cloud": "",
-    "id": "",
-    "ip": ""
+    "pool_name": "ubuntu"
   },
   "files": [
     {
@@ -41,40 +37,34 @@
   ],
   "steps": [
     {
-      "args": [
-        "-e",
-        "/tmp/aws/opt/build"
-      ],
-      "command": "/bin/sh",
-      "environment": {},
+      "id": "random",
+      "name": "build",
+      "entrypoint": ["sh", "-c"],
+      "args": ["/tmp/aws/opt/random"],
       "files": [
         {
-          "path": "/tmp/aws/opt/build",
+          "path": "/tmp/aws/opt/random",
           "mode": 448,
           "data": "CnNldCAtZQoKZWNobyArICJnbyBidWlsZCIKZ28gYnVpbGQK"
         }
       ],
-      "name": "build",
       "working_dir": "/tmp/aws/drone/src"
     },
     {
-      "args": [
-        "-e",
-        "/tmp/aws/opt/test"
-      ],
-      "command": "/bin/sh",
+      "id": "random",
+      "name": "test",
+      "entrypoint": ["sh", "-c"],
+      "args": ["/tmp/aws/opt/random"],
       "depends_on": [
         "build"
       ],
-      "environment": {},
       "files": [
         {
-          "path": "/tmp/aws/opt/test",
+          "path": "/tmp/aws/opt/random",
           "mode": 448,
           "data": "CnNldCAtZQoKZWNobyArICJnbyB0ZXN0IgpnbyB0ZXN0Cg=="
         }
       ],
-      "name": "test",
       "working_dir": "/tmp/aws/drone/src"
     }
   ]

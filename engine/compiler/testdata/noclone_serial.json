@@ -1,11 +1,7 @@
 {
-  "root": "/tmp/aws",
   "name": "default",
   "cloud_instance": {
-    "pool_name": "ubuntu",
-    "cloud": "",
-    "id": "",
-    "ip": ""
+    "pool_name": "ubuntu"
   },
   "files": [
     {
@@ -41,20 +37,17 @@
   ],
   "steps": [
     {
-      "args": [
-        "-e",
-        "/tmp/aws/opt/build"
-      ],
-      "command": "/bin/sh",
-      "environment": {},
+      "id": "random",
+      "name": "build",
+      "entrypoint": ["sh", "-c"],
+      "args": ["/tmp/aws/opt/random"],
       "files": [
         {
-          "path": "/tmp/aws/opt/build",
+          "path": "/tmp/aws/opt/random",
           "mode": 448,
           "data": "CnNldCAtZQoKZWNobyArICJnbyBidWlsZCIKZ28gYnVpbGQKCmVjaG8gKyAiZ28gdGVzdCIKZ28gdGVzdAo="
         }
       ],
-      "name": "build",
       "working_dir": "/tmp/aws/drone/src"
     }
   ]
