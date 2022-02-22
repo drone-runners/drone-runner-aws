@@ -29,9 +29,10 @@ type (
 
 	// account provides account settings
 	account struct {
-		AccessKeyID     string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
-		AccessKeySecret string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
-		Region          string `json:"region,omitempty"`
+		AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
+		AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
+		Region           string `json:"region,omitempty"`
+		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone"`
 	}
 
 	platform struct {
@@ -122,9 +123,10 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			name:       poolDef.Name,
 			runnerName: defaultPoolSettings.RunnerName,
 			credentials: Credentials{
-				Client: poolDef.Account.AccessKeyID,
-				Secret: poolDef.Account.AccessKeySecret,
-				Region: poolDef.Account.Region,
+				Client:           poolDef.Account.AccessKeyID,
+				Secret:           poolDef.Account.AccessKeySecret,
+				Region:           poolDef.Account.Region,
+				AvailabilityZone: poolDef.Account.AvailabilityZone,
 			},
 			keyPairName:   defaultPoolSettings.AwsKeyPairName,
 			iamProfileArn: poolDef.Instance.IAMProfileARN,
@@ -183,9 +185,7 @@ func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.Default
 	if poolDef.MinPoolSize > poolDef.MaxPoolSize {
 		poolDef.MinPoolSize = poolDef.MaxPoolSize
 	}
-
 	// apply defaults to Account
-
 	if poolDef.Account.AccessKeyID == "" {
 		poolDef.Account.AccessKeyID = defaultPoolSettings.AwsAccessKeyID
 	}
@@ -199,9 +199,10 @@ func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.Default
 			poolDef.Account.Region = defaultPoolSettings.AwsRegion
 		}
 	}
-
+	if poolDef.Account.AvailabilityZone == "" {
+		poolDef.Account.AvailabilityZone = defaultPoolSettings.AwsAvailabilityZone
+	}
 	// apply defaults to Platform
-
 	if poolDef.Platform.OS == "" {
 		poolDef.Platform.OS = oshelp.OSLinux
 	}

@@ -4,13 +4,13 @@ name: default
 
 pool:
   use: ubuntu
-  
+
 clone:
   disable: true
 
 steps:
-- name: build
-  commands:
-  - go build
-  when:
-    status: [ success, failure ]
+  - name: build
+    commands:
+      - go build
+    when:
+      status: [ success, failure ]

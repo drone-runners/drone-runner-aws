@@ -9,9 +9,10 @@ import (
 )
 
 type Credentials struct {
-	Client string
-	Secret string
-	Region string
+	Client           string
+	Secret           string
+	Region           string
+	AvailabilityZone string
 }
 
 func (prov *Credentials) getClient() *ec2.EC2 {

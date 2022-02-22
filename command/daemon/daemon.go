@@ -116,15 +116,16 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 	// we have enough information for default pool settings
 	defaultPoolSettings := vmpool.DefaultSettings{
-		RunnerName:         config.Runner.Name,
-		AwsAccessKeyID:     config.DefaultPoolSettings.AwsAccessKeyID,
-		AwsAccessKeySecret: config.DefaultPoolSettings.AwsAccessKeySecret,
-		AwsRegion:          config.DefaultPoolSettings.AwsRegion,
-		AwsKeyPairName:     config.DefaultPoolSettings.AwsKeyPairName,
-		LiteEnginePath:     config.DefaultPoolSettings.LiteEnginePath,
-		CaCertFile:         config.DefaultPoolSettings.CaCertFile,
-		CertFile:           config.DefaultPoolSettings.CertFile,
-		KeyFile:            config.DefaultPoolSettings.KeyFile,
+		RunnerName:          config.Runner.Name,
+		AwsAccessKeyID:      config.DefaultPoolSettings.AwsAccessKeyID,
+		AwsAccessKeySecret:  config.DefaultPoolSettings.AwsAccessKeySecret,
+		AwsRegion:           config.DefaultPoolSettings.AwsRegion,
+		AwsAvailabilityZone: config.DefaultPoolSettings.AwsAvailabilityZone,
+		AwsKeyPairName:      config.DefaultPoolSettings.AwsKeyPairName,
+		LiteEnginePath:      config.DefaultPoolSettings.LiteEnginePath,
+		CaCertFile:          config.DefaultPoolSettings.CaCertFile,
+		CertFile:            config.DefaultPoolSettings.CertFile,
+		KeyFile:             config.DefaultPoolSettings.KeyFile,
 	}
 	//pools, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
 	//if err != nil {

@@ -4,19 +4,19 @@ name: default
 
 pool:
   use: ubuntu
-  
+
 clone:
   disable: true
 
 steps:
-- name: build
-  commands:
-  - go build
-  when:
-    branch: [ master ]
+  - name: build
+    commands:
+      - go build
+    when:
+      branch: [ master ]
 
-- name: test
-  commands:
-  - go test
-  when:
-    branch: [ develop ]
+  - name: test
+    commands:
+      - go test
+    when:
+      branch: [ develop ]

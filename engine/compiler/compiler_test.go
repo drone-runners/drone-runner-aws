@@ -6,22 +6,23 @@ package compiler
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"os"
+	"sort"
 	"testing"
-
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/secret"
+	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -97,48 +98,49 @@ func TestCompile_RunFailure(t *testing.T) {
 	}
 }
 
+// This test verifies the pipelines with container images and services.
+func TestCompile_Image(t *testing.T) {
+	testCompile(t, "testdata/image.yml", "testdata/image.json")
+}
+
+// This test verifies the pipelines with container images that use volumes.
+func TestCompile_Plugin(t *testing.T) {
+	ir := testCompile(t, "testdata/plugins.yml", "testdata/plugins.json")
+	if ir.Steps[1].Envs["PLUGIN_LOCATION"] != "production" {
+		t.Error("incorrect or missing 'location' setting from the step environment")
+	}
+	if ir.Steps[1].Envs["PLUGIN_LOCATION"] != "production" {
+		t.Error("incorrect or missing 'location' setting from the step environment")
+	}
+	var username, password string
+	for _, s := range ir.Steps[1].Secrets {
+		if s.Env == "PLUGIN_USERNAME" {
+			username = string(s.Data)
+		} else if s.Env == "PLUGIN_PASSWORD" {
+			password = string(s.Data)
+		}
+	}
+	if username != "octocat" {
+		t.Error("incorrect or missing 'username' setting from the step secrets")
+	}
+	if password != "password" {
+		t.Error("incorrect or missing 'password' setting from the step secrets")
+	}
+}
+
+// This test verifies the pipelines with container images that use volumes.
+func TestCompile_Image_Volumes(t *testing.T) {
+	testCompile(t, "testdata/volumes.yml", "testdata/volumes.json")
+}
+
 // This test verifies that secrets defined in the yaml are
 // requested and stored in the intermediate representation
 // at compile time.
 func TestCompile_Secrets(t *testing.T) {
-	mnfst, _ := manifest.ParseFile("testdata/secret.yml")
+	ir := testCompile(t, "testdata/secret.yml", "testdata/secret.json")
 
-	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &defaultPoolSettings)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	poolManager := &vmpool.Manager{}
-	err = poolManager.Add(pools...)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	compiler := &Compiler{
-		Environ: provider.Static(nil),
-		Secret: secret.StaticVars(map[string]string{
-			"token":       "3DA541559918A808C2402BBA5012F6C60B27661C",
-			"password":    "password",
-			"my_username": "octocat",
-		}),
-		PoolManager: poolManager,
-	}
-	args := runtime.CompilerArgs{
-		Repo:     &drone.Repo{},
-		Build:    &drone.Build{},
-		Stage:    &drone.Stage{},
-		System:   &drone.System{},
-		Netrc:    &drone.Netrc{},
-		Manifest: mnfst,
-		Pipeline: mnfst.Resources[0].(*resource.Pipeline),
-		Secret:   secret.Static(nil),
-	}
-
-	ir := compiler.Compile(nocontext, args).(*engine.Spec)
 	got := ir.Steps[0].Secrets
-	want := []*engine.Secret{
+	want := []*lespec.Secret{
 		{
 			Name: "my_password",
 			Env:  "PASSWORD",
@@ -152,10 +154,16 @@ func TestCompile_Secrets(t *testing.T) {
 			Mask: true,
 		},
 	}
+
+	sort.Slice(got, func(i, j int) bool {
+		return got[i].Name < got[j].Name
+	})
+	sort.Slice(want, func(i, j int) bool {
+		return want[i].Name < want[j].Name
+	})
+
 	if diff := cmp.Diff(got, want); diff != "" {
-		// BUG(bradrydzewski) ordering is not guaranteed. this
-		// unit tests needs to be adjusted accordingly.
-		t.Skipf(diff)
+		t.Errorf(diff)
 	}
 }
 
@@ -220,11 +228,27 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 	err = json.Unmarshal(raw, want)
 	if err != nil {
 		t.Error(err)
+		return want
+	}
+
+	// convert file data to base64 for easier comparison
+	for _, f := range got.(*engine.Spec).Files {
+		if !f.IsDir {
+			f.Data = base64.StdEncoding.EncodeToString([]byte(f.Data))
+		}
+	}
+	for _, step := range got.(*engine.Spec).Steps {
+		for _, f := range step.Files {
+			if !f.IsDir {
+				f.Data = base64.StdEncoding.EncodeToString([]byte(f.Data))
+			}
+		}
 	}
 
 	opts := cmp.Options{
-		cmpopts.IgnoreUnexported(engine.Spec{}),
 		cmpopts.IgnoreFields(engine.Step{}, "Envs", "Secrets"),
+		cmpopts.IgnoreFields(lespec.VolumeHostPath{}, "Labels"),
+		cmpopts.IgnoreFields(lespec.VolumeEmptyDir{}, "Labels"),
 	}
 	if diff := cmp.Diff(got, want, opts...); diff != "" {
 		t.Errorf("%s\n%v", t.Name(), diff)

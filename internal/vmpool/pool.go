@@ -20,7 +20,6 @@ type Pool interface {
 	GetName() string
 	GetOS() string
 	GetUser() string
-	GetPrivateKey() string
 	GetRootDir() string
 
 	// GetMaxSize and GetMinSize should be used for managing pool size: Number of VM instances available in the pool.
@@ -53,13 +52,14 @@ type Platform struct {
 }
 
 type DefaultSettings struct {
-	RunnerName         string
-	AwsAccessKeyID     string
-	AwsAccessKeySecret string
-	AwsRegion          string
-	AwsKeyPairName     string
-	LiteEnginePath     string
-	CaCertFile         string
-	CertFile           string
-	KeyFile            string
+	RunnerName          string
+	AwsAccessKeyID      string
+	AwsAccessKeySecret  string
+	AwsRegion           string
+	AwsAvailabilityZone string
+	AwsKeyPairName      string
+	LiteEnginePath      string
+	CaCertFile          string
+	CertFile            string
+	KeyFile             string
 }

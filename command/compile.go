@@ -81,6 +81,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		RunnerName:         runnerName,
 		AwsAccessKeyID:     c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_ID"],
 		AwsAccessKeySecret: c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"],
+		AwsKeyPairName:     c.Environ["DRONE_SETTINGS_AWS_KEY_PAIR_NAME"],
 	}
 	// read the poolfile
 	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)

@@ -4,13 +4,13 @@ name: default
 
 pool:
   use: ubuntu
-  
-steps:
-- name: build
-  commands:
-  - go build
 
-- name: test
-  commands:
-  - go test
-  depends_on: [ build ]
+steps:
+  - name: build
+    commands:
+      - go build
+
+  - name: test
+    commands:
+      - go test
+    depends_on: [ build ]
