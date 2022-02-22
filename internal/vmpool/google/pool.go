@@ -203,11 +203,6 @@ func (p *googlePool) Tag(ctx context.Context, instanceID string, tags map[string
 		logr.WithError(err).Errorln("gcp: failed to get VM")
 	}
 
-	for k, v := range vm.Labels {
-		logr.Traceln("gcp: original label", k, v)
-	}
-	logr.Traceln("gcp: fingerprint", vm.LabelFingerprint)
-
 	for k, v := range tags {
 		vm.Labels[k] = v
 		logr.Traceln("gcp: adding tag", k, v)
