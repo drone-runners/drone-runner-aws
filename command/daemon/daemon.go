@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
+
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 
 	"github.com/drone-runners/drone-runner-aws/engine"
@@ -18,7 +20,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
@@ -44,11 +45,12 @@ import (
 var nocontext = context.Background()
 
 type daemonCommand struct {
-	envFile  string
-	poolFile string
+	envFile        string
+	poolFile       string
+	googlePoolFile string
 }
 
-func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
+func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	err := godotenv.Load(c.envFile)
 	if err != nil {
@@ -98,12 +100,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
 			logrus.StandardLogger(),
 		),
 	)
-
-	if (config.DefaultPoolSettings.PrivateKeyFile != "" && config.DefaultPoolSettings.PublicKeyFile == "") ||
-		(config.DefaultPoolSettings.PrivateKeyFile == "" && config.DefaultPoolSettings.PublicKeyFile != "") {
-		logrus.Fatalln("daemon: specify a private key file and public key file or leave both settings empty to generate keys")
-	}
-	// generate cert files if needed
+	// generate le cert files if needed
 	err = le.GenerateLECerts(config.Runner.Name, config.DefaultPoolSettings.CertificateFolder)
 	if err != nil {
 		logrus.WithError(err).
@@ -117,12 +114,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
 			Errorln("daemon: failed to read certificates")
 		return err
 	}
-
 	// we have enough information for default pool settings
 	defaultPoolSettings := vmpool.DefaultSettings{
 		RunnerName:         config.Runner.Name,
-		PrivateKeyFile:     config.DefaultPoolSettings.PrivateKeyFile,
-		PublicKeyFile:      config.DefaultPoolSettings.PublicKeyFile,
 		AwsAccessKeyID:     config.DefaultPoolSettings.AwsAccessKeyID,
 		AwsAccessKeySecret: config.DefaultPoolSettings.AwsAccessKeySecret,
 		AwsRegion:          config.DefaultPoolSettings.AwsRegion,
@@ -132,7 +126,13 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo
 		CertFile:           config.DefaultPoolSettings.CertFile,
 		KeyFile:            config.DefaultPoolSettings.KeyFile,
 	}
-	pools, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
+	//pools, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
+	//if err != nil {
+	//	logrus.WithError(err).
+	//		Errorln("daemon: unable to parse pool file")
+	//	os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	//}
+	pools, err := google.ProcessPoolFile(c.googlePoolFile, &defaultPoolSettings)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: unable to parse pool file")
@@ -339,4 +339,7 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
 		StringVar(&c.poolFile)
+	cmd.Flag("pool_file_google", "file to seed the google pool").
+		Default(".drone_pool_google.yml").
+		StringVar(&c.googlePoolFile)
 }

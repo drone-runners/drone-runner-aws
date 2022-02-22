@@ -2,15 +2,14 @@ package cloudaws
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/drone/runner-go/logger"
+	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/internal/sshkey"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
@@ -88,12 +87,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 		return nil, err
 	}
 
-	defaultPrivateKey, defaultPublicKey, err := defaultPoolSettings.LoadKeys()
-	if err != nil {
-		err = fmt.Errorf("failed to load keys: %w", err)
-		return nil, err
-	}
-
 	buf := bytes.NewBuffer(rawPool)
 	dec := yaml.NewDecoder(buf)
 
@@ -113,17 +106,12 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 
 		// we need Access, error if its still empty
 		if poolDef.Account.AccessKeyID == "" {
-			return nil, errors.New("missing AWS access key. Add to .env file or pool file")
+			logrus.Infof("AWS access key is not provided (falling back to ec2 instance profile)")
 		}
 		// TODO: Remove the comment
 		// if poolDef.Account.AccessKeySecret == "" {
 		// 	return nil, errors.New("missing AWS secret. Add to .env file or pool file")
 		// }
-
-		err = poolDef.applyKeys(defaultPrivateKey, defaultPublicKey)
-		if err != nil {
-			return nil, err
-		}
 
 		err = poolDef.applyInitScript(defaultPoolSettings)
 		if err != nil {
@@ -139,7 +127,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 				Region: poolDef.Account.Region,
 			},
 			keyPairName:   defaultPoolSettings.AwsKeyPairName,
-			privateKey:    poolDef.Instance.PrivateKey,
 			iamProfileArn: poolDef.Instance.IAMProfileARN,
 			os:            poolDef.Platform.OS,
 			rootDir:       tempdir(poolDef.Platform.OS),
@@ -164,12 +151,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			WithField("os", poolDef.Platform.OS).
 			WithField("arch", poolDef.Platform.Arch)
 
-		if defaultPrivateKey != "" {
-			logr = logr.WithField("private-key", defaultPoolSettings.PrivateKeyFile)
-		}
-		if defaultPublicKey != "" {
-			logr = logr.WithField("public-key", defaultPoolSettings.PublicKeyFile)
-		}
 		if poolDef.InitScript != "" {
 			logr = logr.WithField("cloud-init", poolDef.InitScript)
 		}
@@ -266,24 +247,6 @@ func (poolDef *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.Default
 			poolDef.Instance.User = "root"
 		}
 	}
-}
-
-func (poolDef *poolDefinition) applyKeys(defaultPrivateKey, defaultPublicKey string) (err error) {
-	if defaultPrivateKey == "" || defaultPublicKey == "" {
-		var publicKey, privateKey string
-
-		publicKey, privateKey, err = sshkey.GeneratePair()
-		if err != nil {
-			err = fmt.Errorf("failed to generate ssh key pair: %w", err)
-			return
-		}
-
-		poolDef.Instance.PrivateKey, poolDef.Instance.PublicKey = privateKey, publicKey
-	} else {
-		poolDef.Instance.PrivateKey, poolDef.Instance.PublicKey = defaultPrivateKey, defaultPublicKey
-	}
-
-	return
 }
 
 func (poolDef *poolDefinition) applyInitScript(defaultPoolSettings *vmpool.DefaultSettings) (err error) {

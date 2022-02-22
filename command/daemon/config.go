@@ -61,9 +61,7 @@ type Config struct {
 		AwsAccessKeyID     string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_ID"`
 		AwsAccessKeySecret string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"`
 		AwsRegion          string `envconfig:"DRONE_SETTINGS_AWS_REGION"`
-		AwsKeyPairName     string `envconfig:"DRONE_SETTINGS_KEY_PAIR_NAME"`
-		PrivateKeyFile     string `envconfig:"DRONE_SETTINGS_PRIVATE_KEY_FILE"`
-		PublicKeyFile      string `envconfig:"DRONE_SETTINGS_PUBLIC_KEY_FILE"`
+		AwsKeyPairName     string `envconfig:"DRONE_SETTINGS_AWS_KEY_PAIR_NAME"`
 		LiteEnginePath     string `envconfig:"DRONE_SETTINGS_LITE_ENGINE_PATH"`
 		CertificateFolder  string `envconfig:"DRONE_SETTINGS_CERTIFICATE_FOLDER" default:"/tmp/certs"`
 		BusyMaxAge         int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"2"`

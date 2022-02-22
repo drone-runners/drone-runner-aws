@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"reflect"
+	"sync"
 	"time"
 
 	"google.golang.org/api/compute/v1"
@@ -18,20 +20,19 @@ import (
 const (
 	provider = "google"
 
-	tagRunner      = vmpool.TagPrefix + "name"
-	tagCreator     = vmpool.TagPrefix + "creator"
-	tagPool        = vmpool.TagPrefix + "pool"
-	tagStatus      = vmpool.TagPrefix + "status"
-	tagStatusValue = "in-use"
+	tagRunner  = vmpool.TagPrefix + "name"
+	tagCreator = vmpool.TagPrefix + "creator"
+	tagPool    = vmpool.TagPrefix + "pool"
 )
 
 type googlePool struct {
+	init sync.Once
+
 	name        string
 	runnerName  string
 	credentials Credentials
 	keyPairName string
 
-	region  string
 	os      string
 	rootDir string
 
@@ -49,7 +50,8 @@ type googlePool struct {
 	size                string
 	tags                []string
 	zones               []string
-	userdataKey         string
+	userData            string
+	userDataKey         string
 
 	// pool size data
 	sizeMin int
@@ -59,11 +61,11 @@ type googlePool struct {
 }
 
 func (p *googlePool) GetName() string {
-	panic("implement me")
+	return p.name
 }
 
 func (p *googlePool) GetOS() string {
-	panic("implement me")
+	return p.os
 }
 
 func (p *googlePool) GetUser() string {
@@ -75,31 +77,157 @@ func (p *googlePool) GetPrivateKey() string {
 }
 
 func (p *googlePool) GetRootDir() string {
-	panic("implement me")
+	return p.rootDir
 }
 
 func (p *googlePool) GetMaxSize() int {
-	panic("implement me")
+	return p.sizeMax
 }
 
 func (p *googlePool) GetMinSize() int {
-	panic("implement me")
+	return p.sizeMin
+}
+
+func (p *googlePool) GetZone() string {
+	return p.zones[rand.Intn(len(p.zones))]
 }
 
 func (p *googlePool) Ping(ctx context.Context) error {
-	panic("implement me")
+	client := p.credentials.getService()
+	healthCheck := client.Regions.List(p.project).Context(ctx)
+	response, err := healthCheck.Do()
+	if err != nil {
+		return err
+	}
+	if response.ServerResponse.HTTPStatusCode == http.StatusOK {
+		return nil
+	}
+	return errors.New("unable to ping google")
 }
 
 func (p *googlePool) List(ctx context.Context) (busy, free []vmpool.Instance, err error) {
-	panic("implement me")
+	client := p.credentials.getService()
+
+	logr := logger.FromContext(ctx).
+		WithField("provider", provider).
+		WithField("pool", p.name)
+
+	list, err := client.Instances.List(p.project, p.GetZone()).Context(ctx).
+		Filter(fmt.Sprintf("labels.%s=%s", tagCreator, p.runnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", tagRunner, vmpool.RunnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", tagPool, p.name)).
+		Do()
+
+	if list.Items == nil {
+		return
+	}
+
+	for _, vm := range list.Items {
+		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
+			inst := p.mapToInstance(vm)
+			var isBusy bool
+			for key, value := range vm.Labels {
+				if key == vmpool.TagStatus {
+					isBusy = value == vmpool.TagStatusValue
+					break
+				}
+			}
+			if isBusy {
+				busy = append(busy, inst)
+			} else {
+				free = append(free, inst)
+			}
+		}
+
+		if err != nil {
+			logr.WithError(err).Error("unable to list zones")
+			return
+		}
+
+		logr.
+			WithField("free", len(free)).
+			WithField("busy", len(busy)).
+			Traceln("gcp: list VMs")
+	}
+	return
 }
 
 func (p *googlePool) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *vmpool.Instance, err error) {
-	panic("implement me")
+	client := p.credentials.getService()
+
+	logr := logger.FromContext(ctx).
+		WithField("provider", provider).
+		WithField("pool", p.name).
+		WithField("label", tag).
+		WithField("label-value", value)
+
+	list, err := client.Instances.List(p.project, p.GetZone()).Context(ctx).
+		Filter(fmt.Sprintf("labels.%s=%s", tagCreator, p.runnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", tagRunner, vmpool.RunnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", tagPool, p.name)).
+		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagStatus, vmpool.TagStatusValue)).
+		Filter(fmt.Sprintf("labels.%s=%s", tag, value)).
+		Do()
+
+	if err != nil {
+		logr.WithError(err).
+			Errorln("gcp: failed to get VM by tag")
+		return
+	}
+	if len(list.Items) == 0 {
+		err = errors.New("no VM found")
+		return
+	}
+	vm := list.Items[0]
+	if vm.Status == "RUNNING" {
+		instanceMap := p.mapToInstance(vm)
+		logr.
+			WithField("id", inst.ID).
+			WithField("ip", inst.IP).
+			Traceln("gcp: found VM by tag")
+		return &instanceMap, nil
+	}
+
+	return
 }
 
 func (p *googlePool) Tag(ctx context.Context, instanceID string, tags map[string]string) (err error) {
-	panic("implement me")
+	client := p.credentials.getService()
+
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceID).
+		WithField("provider", provider)
+
+	vm, err := client.Instances.Get(p.project, p.GetZone(), instanceID).Context(ctx).Do()
+	if err != nil {
+		logr.WithError(err).Errorln("gcp: failed to get VM")
+	}
+
+	for k, v := range vm.Labels {
+		logr.Traceln("gcp: original label", k, v)
+	}
+	logr.Traceln("gcp: fingerprint", vm.LabelFingerprint)
+
+	for k, v := range tags {
+		vm.Labels[k] = v
+		logr.Traceln("gcp: adding tag", k, v)
+	}
+
+	var labels = compute.InstancesSetLabelsRequest{
+		Labels:           vm.Labels,
+		LabelFingerprint: vm.LabelFingerprint,
+	}
+
+	_, err = client.Instances.SetLabels(p.project, p.GetZone(), instanceID, &labels).Context(ctx).Do()
+	if err != nil {
+		for k, v := range vm.Labels {
+			logr.Traceln("gcp: error adding tag", k, v)
+		}
+		logr.WithError(err).Errorln("gcp: failed to tag VM")
+	}
+
+	logr.Traceln("gcp: VM tagged")
+	return
 }
 
 func (p *googlePool) TagAsInUse(ctx context.Context, instanceID string) (err error) {
@@ -107,7 +235,32 @@ func (p *googlePool) TagAsInUse(ctx context.Context, instanceID string) (err err
 }
 
 func (p *googlePool) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
-	panic("implement me")
+	if len(instanceIDs) == 0 {
+		return
+	}
+
+	client := p.credentials.getService()
+
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceIDs).
+		WithField("provider", provider)
+
+	for _, instanceID := range instanceIDs {
+		_, err = client.Instances.Delete(p.project, p.GetZone(), instanceID).Context(ctx).Do()
+		if err != nil {
+			logr.WithError(err).
+				Errorln("gcp: failed to terminate VMs")
+			if gerr, ok := err.(*googleapi.Error); ok &&
+				gerr.Code == http.StatusNotFound {
+				return errors.New("not Found")
+			}
+			return
+		}
+	}
+
+	logr.Traceln("gcp: VMs terminated")
+
+	return
 }
 
 func (p *googlePool) GetProviderName() string {
@@ -121,20 +274,35 @@ func (p *googlePool) GetInstanceType() string {
 func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *vmpool.Instance, err error) {
 	p.service = p.credentials.getService()
 
-	zone := p.zones[rand.Intn(len(p.zones))]
+	p.init.Do(func() {
+		p.setup(ctx)
+	})
+
+	zone := p.GetZone()
+
+	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
 
 	logr := logger.FromContext(ctx).
 		WithField("provider", provider).
+		WithField("name", name).
 		WithField("image", p.GetInstanceType()).
 		WithField("pool", p.name).
-		WithField("region", p.region).
+		WithField("zone", zone).
 		WithField("image", p.image).
 		WithField("size", p.size)
+
+	labels := createCopy(p.labels)
+	labels[tagRunner] = vmpool.RunnerName
+	labels[tagPool] = p.name
+	labels[tagCreator] = p.runnerName
+	if tagAsInUse {
+		labels[vmpool.TagStatus] = vmpool.TagStatusValue
+	}
 
 	// create the instance
 	startTime := time.Now()
 
-	logr.Traceln("aws: provisioning VM")
+	logr.Traceln("gcp: provisioning VM")
 
 	networkConfig := []*compute.AccessConfig{}
 
@@ -148,18 +316,18 @@ func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *
 	}
 
 	in := &compute.Instance{
-		Name:           p.name,
+		Name:           name,
 		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.credentials.ProjectID, zone),
 		MinCpuPlatform: "Automatic",
 		MachineType:    fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.credentials.ProjectID, zone, p.size),
-		//Metadata: &compute.Metadata{
-		//	Items: []*compute.MetadataItems{
-		//		{
-		//			Key:   p.userdataKey,
-		//			Value: googleapi.String(buf.String()),
-		//		},
-		//	},
-		//},
+		Metadata: &compute.Metadata{
+			Items: []*compute.MetadataItems{
+				{
+					Key:   p.userDataKey,
+					Value: googleapi.String(p.userData),
+				},
+			},
+		},
 		Tags: &compute.Tags{
 			Items: p.tags,
 		},
@@ -185,7 +353,7 @@ func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *
 				AccessConfigs: networkConfig,
 			},
 		},
-		Labels: p.labels,
+		Labels: labels,
 		Scheduling: &compute.Scheduling{
 			Preemptible:       false,
 			OnHostMaintenance: "MIGRATE",
@@ -202,7 +370,7 @@ func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *
 
 	op, err := p.service.Instances.Insert(p.project, zone, in).Context(ctx).Do()
 	if err != nil {
-		logr.WithError(err).Errorln("aws: failed to provision VM")
+		logr.WithError(err).Errorln("gcp: failed to provision VM")
 		return nil, err
 	}
 
@@ -217,9 +385,36 @@ func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *
 	logr.
 		WithField("ip", op.Id).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
-		Debugln("aws: [provision] complete")
+		Debugln("google: [provision] VM provisioned")
 
-	return nil, nil
+	vm, err := p.service.Instances.Get(p.project, zone, name).Context(ctx).Do()
+	if err != nil {
+		logr.WithError(err).Errorln("gcp: failed to get VM")
+		return nil, err
+	}
+
+	instanceMap := p.mapToInstance(vm)
+
+	logr.
+		WithField("ip", instanceMap.IP).
+		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
+		Debugln("gcp: [provision] complete")
+
+	return &instanceMap, nil
+}
+
+func (p *googlePool) mapToInstance(vm *compute.Instance) vmpool.Instance {
+	network := vm.NetworkInterfaces[0]
+	accessConfigs := network.AccessConfigs[0]
+	instanceIP := accessConfigs.NatIP
+	creationTime, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
+
+	return vmpool.Instance{
+		ID:        vm.Name,
+		IP:        instanceIP,
+		Tags:      vm.Labels,
+		StartedAt: creationTime,
+	}
 }
 
 func (p *googlePool) waitZoneOperation(ctx context.Context, name string, zone string) error {
@@ -228,8 +423,82 @@ func (p *googlePool) waitZoneOperation(ctx context.Context, name string, zone st
 		if err != nil {
 			if gerr, ok := err.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
-				return errors.New("Not Found")
+				return errors.New("not Found")
 			}
+			return err
+		}
+		if op.Error != nil {
+			return errors.New(op.Error.Errors[0].Message)
+		}
+		if op.Status == "DONE" {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+// helper function creates a copy of map[string]string
+func createCopy(in map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func (p *googlePool) setup(ctx context.Context) error {
+	if reflect.DeepEqual(p.tags, defaultTags) {
+		return p.setupFirewall(ctx)
+	}
+	return nil
+}
+
+func (p *googlePool) setupFirewall(ctx context.Context) error {
+	logger := logger.FromContext(ctx)
+
+	logger.Debugln("finding default firewall rules")
+
+	_, err := p.service.Firewalls.Get(p.project, "default-allow-docker").Context(ctx).Do()
+	if err == nil {
+		logger.Debugln("found default firewall rule")
+		return nil
+	}
+
+	rule := &compute.Firewall{
+		Allowed: []*compute.FirewallAllowed{
+			{
+				IPProtocol: "tcp",
+				Ports:      []string{"2376", "9079"},
+			},
+		},
+		Direction:    "INGRESS",
+		Name:         "default-allow-docker",
+		Network:      p.network,
+		Priority:     1000,
+		SourceRanges: []string{"0.0.0.0/0"},
+		TargetTags:   []string{"allow-docker"},
+	}
+
+	op, err := p.service.Firewalls.Insert(p.project, rule).Context(ctx).Do()
+	if err != nil {
+		logger.WithError(err).
+			Errorln("cannot create firewall operation")
+		return err
+	}
+
+	err = p.waitGlobalOperation(ctx, op.Name)
+	if err != nil {
+		logger.WithError(err).
+			Errorln("cannot create firewall rule")
+	}
+
+	return err
+}
+
+func (p *googlePool) waitGlobalOperation(ctx context.Context, name string) error {
+	for {
+		op, err := p.service.GlobalOperations.Get(p.project, name).Context(ctx).Do()
+		if err != nil {
 			return err
 		}
 		if op.Error != nil {

@@ -14,13 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
-
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
@@ -95,11 +94,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		println("received signal, terminating process")
 		cancel()
 	})
-
-	if (config.DefaultPoolSettings.PrivateKeyFile != "" && config.DefaultPoolSettings.PublicKeyFile == "") ||
-		(config.DefaultPoolSettings.PrivateKeyFile == "" && config.DefaultPoolSettings.PublicKeyFile != "") {
-		logrus.Fatalln("delegate: specify a private key file and public key file or leave both settings empty to generate keys")
-	}
 	// generate cert files if needed
 	certGenerationErr := le.GenerateLECerts(config.Runner.Name, config.DefaultPoolSettings.CertificateFolder)
 	if certGenerationErr != nil {
@@ -118,8 +112,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// we have enough information for default pool settings
 	c.defaultPoolSettings = vmpool.DefaultSettings{
 		RunnerName:         config.Runner.Name,
-		PrivateKeyFile:     config.DefaultPoolSettings.PrivateKeyFile,
-		PublicKeyFile:      config.DefaultPoolSettings.PublicKeyFile,
 		AwsAccessKeyID:     config.DefaultPoolSettings.AwsAccessKeyID,
 		AwsAccessKeySecret: config.DefaultPoolSettings.AwsAccessKeySecret,
 		AwsRegion:          config.DefaultPoolSettings.AwsRegion,
@@ -560,7 +552,7 @@ func RegisterDelegate(app *kingpin.Application) {
 		StringVar(&c.awsPoolfile)
 	cmd.Flag("pool_file_google", "file to seed the google pool").
 		Default(".drone_pool_google.yml").
-		StringVar(&c.awsPoolfile)
+		StringVar(&c.googlePoolFile)
 }
 
 func (c *delegateCommand) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {

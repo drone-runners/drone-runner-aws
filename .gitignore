@@ -9,3 +9,4 @@ simple*.yml
 __debug_bin
 temp.pem
 .drone_pool.yml
+.drone_pool_google.yml

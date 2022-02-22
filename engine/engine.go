@@ -112,7 +112,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	//		}
 	//		tags[k] = v
 	//	}
-	tags[vmpool.TagStageID] = stageID
+	tags[vmpool.TagStageID] = "1" //TODO issue if blank
 
 	err = poolMngr.Tag(ctx, poolName, instance.ID, tags)
 	if err != nil {

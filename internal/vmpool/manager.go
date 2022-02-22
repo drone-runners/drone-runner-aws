@@ -288,7 +288,7 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 
 	inst := &free[0]
 
-	err = pool.TagAsInUse(ctx, inst.ID)
+	err = pool.Tag(ctx, inst.ID, map[string]string{TagStatus: TagStatusValue})
 	if err != nil {
 		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
