@@ -39,6 +39,7 @@ type Pipeline struct {
 	Services    []*Step           `json:"services,omitempty"`
 	Steps       []*Step           `json:"steps,omitempty"`
 	Volumes     []*Volume         `json:"volumes,omitempty"`
+	PullSecrets []string          `json:"image_pull_secrets,omitempty" yaml:"image_pull_secrets"`
 	Workspace   Workspace         `json:"workspace,omitempty"`
 }
 
@@ -86,6 +87,7 @@ type (
 		Commands    []string                       `json:"commands,omitempty"`
 		Detach      bool                           `json:"detach,omitempty"`
 		DependsOn   []string                       `json:"depends_on,omitempty" yaml:"depends_on"`
+		Entrypoint  []string                       `json:"entrypoint,omitempty"`
 		Environment map[string]*manifest.Variable  `json:"environment,omitempty"`
 		Failure     string                         `json:"failure,omitempty"`
 		Image       string                         `json:"image,omitempty"`

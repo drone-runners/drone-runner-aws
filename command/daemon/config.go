@@ -85,6 +85,11 @@ type Config struct {
 		SkipVerify bool   `envconfig:"DRONE_SECRET_PLUGIN_SKIP_VERIFY"`
 	}
 
+	Docker struct {
+		Config string `envconfig:"DRONE_DOCKER_CONFIG"`
+		Stream bool   `envconfig:"DRONE_DOCKER_STREAM_PULL" default:"true"` // TODO: Currently unused
+	}
+
 	Registry struct {
 		Endpoint   string `envconfig:"DRONE_REGISTRY_PLUGIN_ENDPOINT"`
 		Token      string `envconfig:"DRONE_REGISTRY_PLUGIN_TOKEN"`

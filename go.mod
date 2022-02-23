@@ -15,7 +15,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/google/go-cmp v0.5.5
-	github.com/harness/lite-engine v0.0.2-0.20220209135420-984164d12eac
+	github.com/harness/lite-engine v0.0.2-0.20220223100350-d462b20d1a43
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-isatty v0.0.14
@@ -33,6 +33,7 @@ require (
 	github.com/bmatcuk/doublestar v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
+	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
@@ -40,6 +41,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/natessilva/dag v0.0.0-20180124060714-7194b8dcc5c4 // indirect
+	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.6.1 // indirect
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect

@@ -21,6 +21,7 @@ import (
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
+	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 	lespec "github.com/harness/lite-engine/engine/spec"
 
@@ -205,6 +206,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 			"my_username": "octocat",
 		}),
 		PoolManager: poolManager,
+		Registry:    registry.Combine(),
 	}
 	args := runtime.CompilerArgs{
 		Repo:     &drone.Repo{},
