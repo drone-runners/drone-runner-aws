@@ -74,10 +74,6 @@ func (p *awsPool) GetOS() string {
 	return p.os
 }
 
-func (p *awsPool) GetUser() string {
-	return p.user
-}
-
 func (p *awsPool) GetRootDir() string {
 	return p.rootDir
 }

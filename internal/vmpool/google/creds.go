@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/drone/runner-go/logger"
+
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
@@ -19,6 +21,10 @@ type Credentials struct {
 
 func (prov *Credentials) getService() *compute.Service {
 	ctx := context.Background()
+	logr := logger.FromContext(ctx).
+		WithField("provider", provider).
+		WithField("project", prov.ProjectID)
+
 	var client *http.Client
 	var err error
 	if prov.JsonPath != "" {
@@ -27,11 +33,11 @@ func (prov *Credentials) getService() *compute.Service {
 
 	client, err = google.DefaultClient(ctx, compute.ComputeScope)
 	if err != nil {
-		panic(err)
+		logr.WithError(err).Errorln("unable to create google client")
 	}
 	computeService, err := compute.New(client)
 	if err != nil {
-		panic(err)
+		logr.WithError(err).Errorln("unable to create google client")
 	}
 	return computeService
 }

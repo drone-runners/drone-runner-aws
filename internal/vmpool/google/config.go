@@ -110,7 +110,6 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 				ProjectID: poolDef.Account.ProjectID,
 				JsonPath:  poolDef.Account.JsonPath,
 			},
-			keyPairName:         defaultPoolSettings.AwsKeyPairName,
 			os:                  poolDef.Platform.OS,
 			rootDir:             tempdir(poolDef.Platform.OS),
 			image:               poolDef.Instance.Image,

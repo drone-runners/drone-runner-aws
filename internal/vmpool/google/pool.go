@@ -10,19 +10,15 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/api/compute/v1"
-	"google.golang.org/api/googleapi"
-
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone/runner-go/logger"
+
+	"google.golang.org/api/compute/v1"
+	"google.golang.org/api/googleapi"
 )
 
 const (
 	provider = "google"
-
-	tagRunner  = vmpool.TagPrefix + "name"
-	tagCreator = vmpool.TagPrefix + "creator"
-	tagPool    = vmpool.TagPrefix + "pool"
 )
 
 type googlePool struct {
@@ -31,7 +27,6 @@ type googlePool struct {
 	name        string
 	runnerName  string
 	credentials Credentials
-	keyPairName string
 
 	os      string
 	rootDir string
@@ -66,14 +61,6 @@ func (p *googlePool) GetName() string {
 
 func (p *googlePool) GetOS() string {
 	return p.os
-}
-
-func (p *googlePool) GetUser() string {
-	panic("implement me")
-}
-
-func (p *googlePool) GetPrivateKey() string {
-	panic("implement me")
 }
 
 func (p *googlePool) GetRootDir() string {
@@ -113,9 +100,9 @@ func (p *googlePool) List(ctx context.Context) (busy, free []vmpool.Instance, er
 		WithField("pool", p.name)
 
 	list, err := client.Instances.List(p.project, p.GetZone()).Context(ctx).
-		Filter(fmt.Sprintf("labels.%s=%s", tagCreator, p.runnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", tagRunner, vmpool.RunnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", tagPool, p.name)).
+		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagCreator, p.runnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagRunner, vmpool.RunnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagPool, p.name)).
 		Do()
 
 	if list.Items == nil {
@@ -123,6 +110,11 @@ func (p *googlePool) List(ctx context.Context) (busy, free []vmpool.Instance, er
 	}
 
 	for _, vm := range list.Items {
+		logr.
+			WithField("machine", vm.Name).
+			WithField("id", vm.Id).
+			WithField("status", vm.Status).
+			Traceln("-------- list machines -----------")
 		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
 			inst := p.mapToInstance(vm)
 			var isBusy bool
@@ -162,9 +154,9 @@ func (p *googlePool) GetUsedInstanceByTag(ctx context.Context, tag, value string
 		WithField("label-value", value)
 
 	list, err := client.Instances.List(p.project, p.GetZone()).Context(ctx).
-		Filter(fmt.Sprintf("labels.%s=%s", tagCreator, p.runnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", tagRunner, vmpool.RunnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", tagPool, p.name)).
+		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagCreator, p.runnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagRunner, vmpool.RunnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagPool, p.name)).
 		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagStatus, vmpool.TagStatusValue)).
 		Filter(fmt.Sprintf("labels.%s=%s", tag, value)).
 		Do()
@@ -198,14 +190,14 @@ func (p *googlePool) Tag(ctx context.Context, instanceID string, tags map[string
 		WithField("id", instanceID).
 		WithField("provider", provider)
 
-	vm, err := client.Instances.Get(p.project, p.GetZone(), instanceID).Context(ctx).Do()
+	vm, err := p.getInstanceById(ctx, instanceID)
 	if err != nil {
 		logr.WithError(err).Errorln("gcp: failed to get VM")
 	}
 
 	for k, v := range tags {
 		vm.Labels[k] = v
-		logr.Traceln("gcp: adding tag", k, v)
+		logr.Traceln("gcp: adding label", k, v)
 	}
 
 	var labels = compute.InstancesSetLabelsRequest{
@@ -215,18 +207,11 @@ func (p *googlePool) Tag(ctx context.Context, instanceID string, tags map[string
 
 	_, err = client.Instances.SetLabels(p.project, p.GetZone(), instanceID, &labels).Context(ctx).Do()
 	if err != nil {
-		for k, v := range vm.Labels {
-			logr.Traceln("gcp: error adding tag", k, v)
-		}
 		logr.WithError(err).Errorln("gcp: failed to tag VM")
 	}
 
 	logr.Traceln("gcp: VM tagged")
 	return
-}
-
-func (p *googlePool) TagAsInUse(ctx context.Context, instanceID string) (err error) {
-	panic("implement me")
 }
 
 func (p *googlePool) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
@@ -241,20 +226,25 @@ func (p *googlePool) Destroy(ctx context.Context, instanceIDs ...string) (err er
 		WithField("provider", provider)
 
 	for _, instanceID := range instanceIDs {
-		_, err = client.Instances.Delete(p.project, p.GetZone(), instanceID).Context(ctx).Do()
+		vm, err := p.getInstanceById(ctx, instanceID)
 		if err != nil {
-			logr.WithError(err).
-				Errorln("gcp: failed to terminate VMs")
-			if gerr, ok := err.(*googleapi.Error); ok &&
-				gerr.Code == http.StatusNotFound {
-				return errors.New("not Found")
+			logr.Errorln("gcp: failed to get VM", vm.Id)
+			continue
+		}
+		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
+			_, err = client.Instances.Delete(p.project, p.GetZone(), instanceID).Context(ctx).Do()
+			if err != nil {
+				logr.WithError(err).
+					Errorln("gcp: failed to terminate VMs")
+				if gerr, ok := err.(*googleapi.Error); ok &&
+					gerr.Code == http.StatusNotFound {
+					return errors.New("not Found")
+				}
+				continue
 			}
-			return
+			logr.Traceln("gcp: VMs terminated", vm.Name)
 		}
 	}
-
-	logr.Traceln("gcp: VMs terminated")
-
 	return
 }
 
@@ -287,11 +277,12 @@ func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *
 		WithField("size", p.size)
 
 	labels := createCopy(p.labels)
-	labels[tagRunner] = vmpool.RunnerName
-	labels[tagPool] = p.name
-	labels[tagCreator] = p.runnerName
+	labels[vmpool.TagRunner] = vmpool.RunnerName
+	labels[vmpool.TagPool] = p.name
+	labels[vmpool.TagCreator] = p.runnerName
 	if tagAsInUse {
 		labels[vmpool.TagStatus] = vmpool.TagStatusValue
+		logr.Debugln("gcp: tagging VM as in use", name)
 	}
 
 	// create the instance
@@ -504,4 +495,13 @@ func (p *googlePool) waitGlobalOperation(ctx context.Context, name string) error
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+func (p *googlePool) getInstanceById(ctx context.Context, instanceID string) (*compute.Instance, error) {
+	client := p.credentials.getService()
+	vm, err := client.Instances.Get(p.project, p.GetZone(), instanceID).Context(ctx).Do()
+	if err != nil {
+		return nil, err
+	}
+	return vm, nil
 }
