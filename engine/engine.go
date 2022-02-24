@@ -257,6 +257,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		Network:      step.Network,
 		Networks:     step.Networks,
 		OutputVars:   nil, // not used by Drone
+		PortBindings: step.PortBindings,
 		Privileged:   step.Privileged,
 		Pull:         step.Pull,
 		Run: leapi.RunConfig{

@@ -291,18 +291,19 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		// create the step
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Step: lespec.Step{
-				Command:    command,
-				Detach:     src.Detach,
-				Envs:       stepEnv,
-				Entrypoint: entrypoint,
-				Files:      files,
-				ID:         stepID,
-				Image:      src.Image,
-				Name:       src.Name,
-				Privileged: src.Image != "", // all steps that use images, run in privileged mode
-				Secrets:    stepSecrets,
-				WorkingDir: workingDir,
-				Volumes:    volumeMounts,
+				Command:      command,
+				Detach:       src.Detach,
+				Envs:         stepEnv,
+				Entrypoint:   entrypoint,
+				Files:        files,
+				ID:           stepID,
+				Image:        src.Image,
+				Name:         src.Name,
+				PortBindings: src.PortBindings,
+				Privileged:   src.Image != "", // all steps that use images, run in privileged mode
+				Secrets:      stepSecrets,
+				WorkingDir:   workingDir,
+				Volumes:      volumeMounts,
 			},
 			DependsOn: src.DependsOn,
 			RunPolicy: runPolicy,
