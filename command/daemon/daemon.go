@@ -10,12 +10,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/le"
-
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
@@ -30,6 +29,7 @@ import (
 	"github.com/drone/runner-go/pipeline/reporter/remote"
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/poller"
+	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
@@ -193,6 +193,16 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 				),
 			),
 			PoolManager: poolManager,
+			Registry: registry.Combine(
+				registry.File(
+					config.Docker.Config,
+				),
+				registry.External(
+					config.Registry.Endpoint,
+					config.Registry.Token,
+					config.Registry.SkipVerify,
+				),
+			),
 		},
 		Exec: runtime.NewExecer(
 			tracer,

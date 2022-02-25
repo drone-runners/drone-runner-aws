@@ -21,7 +21,10 @@ import (
 	"github.com/drone/runner-go/labels"
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
+	"github.com/drone/runner-go/registry"
+	"github.com/drone/runner-go/registry/auths"
 	"github.com/drone/runner-go/secret"
+	leimage "github.com/harness/lite-engine/engine/docker/image"
 	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/dchest/uniuri"
@@ -37,10 +40,16 @@ var random = func() string {
 type Compiler struct {
 	// Environ provides a set of environment variables that should be added to each pipeline step by default.
 	Environ provider.Provider
+
 	// Secret returns a named secret value that can be injected into the pipeline step.
 	Secret secret.Provider
+
 	// Pools is a map of named pools that can be referenced by a pipeline.
 	PoolManager *vmpool.Manager
+
+	// Registry returns a list of registry credentials that can be
+	// used to pull private container images.
+	Registry registry.Provider
 }
 
 // Compile compiles the configuration file.
@@ -54,6 +63,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	targetPool := pipeline.Pool.Use
 	pool := c.PoolManager.Get(targetPool)
 	if pool == nil {
+		// TODO return an error to the caller if the requested pool does not exist.
 		return spec
 	}
 
@@ -197,11 +207,13 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			scriptToExecute := oshelp.GenScript(pipelineOS, src.Commands)
 			scriptPath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, stepID))
 
-			files = append(files, &lespec.File{
-				Path: scriptPath,
-				Mode: 0700,
-				Data: scriptToExecute,
-			})
+			files = []*lespec.File{
+				{
+					Path: scriptPath,
+					Mode: 0700,
+					Data: scriptToExecute,
+				},
+			}
 
 			// the command is actually a file name where combined script for the step is located
 			command = append(command, scriptPath)
@@ -221,8 +233,14 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			// mount the source directory in the container
 			volumeMounts = append(volumeMounts, &lespec.VolumeMount{Name: "source_dir", Path: containerSourcePath})
 
-			// mount the script directory, but only if the steps has commands defined
-			if len(src.Commands) > 0 {
+			if len(src.Entrypoint) > 0 {
+				entrypoint = src.Entrypoint
+
+				// can't use both, entrypoint and commands... the entrypoint overrides the commands
+				command = nil
+				files = nil
+			} else if len(src.Commands) > 0 {
+				// mount the script directory, but only if the step has commands defined
 				volumeMounts = append(volumeMounts, &lespec.VolumeMount{Name: "script_dir", Path: scriptDir})
 			}
 
@@ -273,22 +291,56 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		// create the step
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Step: lespec.Step{
-				Command:    command,
-				Detach:     src.Detach,
-				Envs:       stepEnv,
-				Entrypoint: entrypoint,
-				Files:      files,
-				ID:         stepID,
-				Image:      src.Image,
-				Name:       src.Name,
-				Privileged: src.Image != "", // all steps that use images, run in privileged mode
-				Secrets:    stepSecrets,
-				WorkingDir: workingDir,
-				Volumes:    volumeMounts,
+				Command:      command,
+				Detach:       src.Detach,
+				Envs:         stepEnv,
+				Entrypoint:   entrypoint,
+				Files:        files,
+				ID:           stepID,
+				Image:        src.Image,
+				Name:         src.Name,
+				PortBindings: src.PortBindings,
+				Privileged:   src.Image != "", // all steps that use images, run in privileged mode
+				Secrets:      stepSecrets,
+				WorkingDir:   workingDir,
+				Volumes:      volumeMounts,
 			},
 			DependsOn: src.DependsOn,
 			RunPolicy: runPolicy,
 		})
+	}
+
+	// get registry credentials from registry plugins
+	creds, err := c.Registry.List(ctx, &registry.Request{
+		Repo:  args.Repo,
+		Build: args.Build,
+	})
+	if err != nil { //nolint:staticcheck
+		// TODO (bradrydzewski) return an error to the caller if the provider returns an error.
+	}
+	// get registry credentials from pull secrets
+	for _, name := range pipeline.PullSecrets {
+		if sec, ok := c.findSecret(ctx, args, name); ok {
+			parsed, err := auths.ParseString(sec)
+			if err == nil {
+				creds = append(parsed, creds...)
+			}
+		}
+	}
+	for _, step := range spec.Steps {
+		if step.Image == "" {
+			continue
+		}
+		for _, cred := range creds {
+			if leimage.MatchHostname(step.Image, cred.Address) {
+				step.Auth = &lespec.Auth{
+					Address:  cred.Address,
+					Username: cred.Username,
+					Password: cred.Password,
+				}
+				break
+			}
+		}
 	}
 
 	// create volumes

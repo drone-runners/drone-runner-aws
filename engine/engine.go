@@ -231,46 +231,47 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 
 	// TODO: This code repacks the step data. This is unfortunate implementation in LE. Step should be embedded in StartStepRequest. Should be improved.
 	req := &leapi.StartStepRequest{
-		ID:         step.ID,
-		Detach:     step.Detach,
-		Envs:       environ.Combine(step.Envs, secretEnvs),
-		Name:       step.Name,
-		LogKey:     step.ID,
-		LogDrone:   true, // must be true for the logging to work
-		Secrets:    nil,  // not used by Drone
-		WorkingDir: step.WorkingDir,
-		Kind:       leapi.Run,
-		Run: leapi.RunConfig{
-			Command:    step.Command,
-			Entrypoint: step.Entrypoint,
-		},
-		RunTest:      leapi.RunTestConfig{},
-		OutputVars:   nil,
-		TestReport:   leapi.TestReport{},
-		Timeout:      int(timeoutStep.Seconds()),
 		Auth:         step.Auth,
 		CPUPeriod:    step.CPUPeriod,
 		CPUQuota:     step.CPUQuota,
 		CPUShares:    step.CPUShares,
 		CPUSet:       step.CPUSet,
+		Files:        step.Files,
+		Detach:       step.Detach,
 		Devices:      step.Devices,
 		DNS:          step.DNS,
 		DNSSearch:    step.DNSSearch,
+		Envs:         environ.Combine(step.Envs, secretEnvs),
 		ExtraHosts:   step.ExtraHosts,
+		ID:           step.ID,
 		IgnoreStdout: step.IgnoreStdout,
 		IgnoreStderr: step.IgnoreStdout,
 		Image:        step.Image,
+		Kind:         leapi.Run,
 		Labels:       step.Labels,
+		LogKey:       step.ID,
+		LogDrone:     true, // must be true for the logging to work
 		MemSwapLimit: step.MemSwapLimit,
 		MemLimit:     step.MemLimit,
+		Name:         step.Name,
 		Network:      step.Network,
 		Networks:     step.Networks,
+		OutputVars:   nil, // not used by Drone
+		PortBindings: step.PortBindings,
 		Privileged:   step.Privileged,
 		Pull:         step.Pull,
-		ShmSize:      step.ShmSize,
-		User:         step.User,
-		Volumes:      step.Volumes,
-		Files:        step.Files,
+		Run: leapi.RunConfig{
+			Command:    step.Command,
+			Entrypoint: step.Entrypoint,
+		},
+		RunTest:    leapi.RunTestConfig{},
+		Secrets:    nil, // not used by Drone
+		ShmSize:    step.ShmSize,
+		TestReport: leapi.TestReport{},
+		Timeout:    int(timeoutStep.Seconds()),
+		User:       step.User,
+		Volumes:    step.Volumes,
+		WorkingDir: step.WorkingDir,
 	}
 
 	wg := &sync.WaitGroup{}
@@ -288,7 +289,9 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 
 		streamErr := client.GetStepLogOutput(ctx, &leapi.StreamOutputRequest{ID: req.ID, Offset: 0}, w)
 		if streamErr != nil {
-			if totalWritten == 0 {
+			if step.Detach && errors.Is(streamErr, context.Canceled) {
+				logr.WithError(streamErr).Traceln("aborted detached step output streaming")
+			} else if totalWritten == 0 {
 				logr.WithError(streamErr).Errorln("failed to stream step output")
 			} else {
 				logr.WithError(streamErr).Warnln("failed to finish step output streaming")
@@ -298,7 +301,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 
 	startStepResponse, err := client.StartStep(ctx, req)
 	if err != nil {
-		logr.WithError(err).Errorln("failed to call LE.StartStep")
+		logr.WithError(err).Errorln("failed to start step")
 		return nil, err
 	}
 
@@ -307,7 +310,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 
 	pollResponse, err := client.RetryPollStep(ctx, &leapi.PollStepRequest{ID: req.ID}, timeoutStep)
 	if err != nil {
-		logr.WithError(err).Errorln("failed to call LE.StartStep")
+		logr.WithError(err).Errorln("failed to poll step result")
 		return nil, err
 	}
 
