@@ -6,9 +6,14 @@ import (
 )
 
 const (
-	RunnerName = "drone-runner-aws"
-	TagPrefix  = "runner-"
-	TagStageID = TagPrefix + "stage-id"
+	RunnerName     = "drone-runner-cloud"
+	TagPrefix      = "runner-"
+	TagStageID     = TagPrefix + "stage-id"
+	TagStatus      = TagPrefix + "status"
+	TagRunner      = TagPrefix + "name"
+	TagCreator     = TagPrefix + "creator"
+	TagPool        = TagPrefix + "pool"
+	TagStatusValue = "in-use"
 )
 
 type Pool interface {
@@ -17,7 +22,6 @@ type Pool interface {
 
 	GetName() string
 	GetOS() string
-	GetUser() string
 	GetRootDir() string
 
 	// GetMaxSize and GetMinSize should be used for managing pool size: Number of VM instances available in the pool.
@@ -29,7 +33,6 @@ type Pool interface {
 	List(ctx context.Context) (busy, free []Instance, err error)
 	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *Instance, err error)
 	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
-	TagAsInUse(ctx context.Context, instanceID string) (err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
 }
 

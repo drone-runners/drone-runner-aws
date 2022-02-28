@@ -20,7 +20,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
@@ -42,6 +42,7 @@ import (
 type delegateCommand struct {
 	envfile             string
 	awsPoolfile         string
+	googlePoolFile      string
 	defaultPoolSettings vmpool.DefaultSettings
 	poolManager         *vmpool.Manager
 }
@@ -123,16 +124,30 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		KeyFile:             config.DefaultPoolSettings.KeyFile,
 	}
 	// process the pool file
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
-	if poolFileErr != nil {
-		logrus.WithError(poolFileErr).
-			Errorln("delegate: unable to parse pool file")
-		return poolFileErr
+	poolsAWS, err := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to parse aws pool file")
+		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	}
+	err = c.poolManager.Add(poolsAWS...)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: unable to add to aws pools")
+		os.Exit(1)
+	}
+	poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &c.defaultPoolSettings)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to parse google pool file")
+		os.Exit(1)
 	}
 
-	err = c.poolManager.Add(pools...)
+	err = c.poolManager.Add(poolsGCP...)
 	if err != nil {
-		return err
+		logrus.WithError(err).
+			Errorln("delegate: unable to add to google pools")
+		os.Exit(1)
 	}
 
 	err = c.poolManager.Ping(ctx)
@@ -544,6 +559,9 @@ func RegisterDelegate(app *kingpin.Application) {
 	cmd.Flag("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
 		StringVar(&c.awsPoolfile)
+	cmd.Flag("pool_file_google", "file to seed the google pool").
+		Default(".drone_pool_google.yml").
+		StringVar(&c.googlePoolFile)
 }
 
 func (c *delegateCommand) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {
