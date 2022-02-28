@@ -129,6 +129,8 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	poolManager := &vmpool.Manager{}
+	poolManager.SetGlobalCtx(ctx)
+
 	poolsAWS, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
 	if err != nil {
 		logrus.WithError(err).

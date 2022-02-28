@@ -59,16 +59,13 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	spec.Name = pipeline.Name
 
-	// get OS and the root directory where the work directory and everything else will be placed
+	// get OS and the root directory (where the work directory and everything else will be placed)
 	targetPool := pipeline.Pool.Use
-	pool := c.PoolManager.Get(targetPool)
-	if pool == nil {
+	pipelineOS, pipelineRoot := c.PoolManager.Inspect(targetPool)
+	if pipelineOS == "" {
 		// TODO return an error to the caller if the requested pool does not exist.
 		return spec
 	}
-
-	pipelineOS := pool.GetOS()
-	pipelineRoot := pool.GetRootDir()
 
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
 	spec.CloudInstance.PoolName = targetPool

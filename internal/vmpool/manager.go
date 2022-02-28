@@ -16,6 +16,7 @@ import (
 
 type (
 	Manager struct {
+		globalCtx        context.Context
 		poolMap          map[string]*poolEntry
 		poolSizeStrategy Strategy
 		cleanupTimer     *time.Ticker
@@ -28,6 +29,17 @@ type (
 )
 
 var ErrorNoInstanceAvailable = errors.New("no free instances available")
+
+func (m *Manager) SetGlobalCtx(ctx context.Context) {
+	m.globalCtx = ctx
+}
+
+func (m *Manager) GetGlobalCtx() context.Context {
+	if m.globalCtx == nil {
+		return context.Background()
+	}
+	return m.globalCtx
+}
 
 func (m *Manager) Add(pools ...Pool) error {
 	if len(pools) == 0 {
@@ -148,17 +160,20 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 	return nil
 }
 
-// Get returns a Pool or nil if a pool with this name isn't defined.
-// TODO: It would be nice if we could remove this function. Rest of the code should work only with the PoolManager and not directly with Pool objects.
-func (m *Manager) Get(name string) Pool {
+// Inspect returns a OS and root directory for a pool.
+func (m *Manager) Inspect(name string) (os, rootDir string) {
 	entry := m.poolMap[name]
 	if entry == nil {
-		return nil
+		return
 	}
 
-	return entry.Pool
+	os = entry.GetOS()
+	rootDir = entry.GetRootDir()
+
+	return
 }
 
+// Exists returns true if a pool with given name exists.
 func (m *Manager) Exists(name string) bool {
 	return m.poolMap[name] != nil
 }
@@ -231,7 +246,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				WithField("pool", pool.GetName()).
 				WithField("id", instance.ID).
 				Infoln("build pool: created new instance")
-		}(context.Background(), logr)
+		}(ctx, logr)
 
 		shouldCreate--
 	}
@@ -293,9 +308,11 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 
+	// the go routine here uses the global context because this function is called
+	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
 		_ = m.buildPoolWithMutex(ctx, pool)
-	}(context.Background())
+	}(m.GetGlobalCtx())
 
 	return inst, nil
 }
@@ -315,9 +332,11 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
 
+	// the go routine here uses the global context because this function is called
+	// from destroy API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
 		_ = m.buildPoolWithMutex(ctx, pool)
-	}(context.Background())
+	}(m.GetGlobalCtx())
 
 	return nil
 }
