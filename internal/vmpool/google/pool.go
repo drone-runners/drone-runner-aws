@@ -76,6 +76,7 @@ func (p *googlePool) GetMinSize() int {
 }
 
 func (p *googlePool) GetZone() string {
+	/* #nosec */
 	return p.zones[rand.Intn(len(p.zones))]
 }
 
@@ -190,7 +191,7 @@ func (p *googlePool) Tag(ctx context.Context, instanceID string, tags map[string
 		WithField("id", instanceID).
 		WithField("provider", provider)
 
-	vm, err := p.getInstanceById(ctx, instanceID)
+	vm, err := p.getInstanceByID(ctx, instanceID)
 	if err != nil {
 		logr.WithError(err).Errorln("gcp: failed to get VM")
 	}
@@ -211,8 +212,8 @@ func (p *googlePool) Tag(ctx context.Context, instanceID string, tags map[string
 	}
 	// required as there's a delay in labels getting set on GCP side
 	for {
-		updatedVm, _ := p.getInstanceById(ctx, instanceID)
-		if len(updatedVm.Labels) == len(vm.Labels) {
+		updatedVM, _ := p.getInstanceByID(ctx, instanceID)
+		if len(updatedVM.Labels) == len(vm.Labels) {
 			break
 		}
 	}
@@ -241,7 +242,7 @@ func (p *googlePool) Destroy(ctx context.Context, instanceIDs ...string) (err er
 				logr.WithError(err).Errorln("gcp: VM not found")
 			}
 		}
-		p.waitZoneOperation(ctx, instanceID, p.GetZone())
+		_ = p.waitZoneOperation(ctx, instanceID, p.GetZone())
 	}
 	return
 }
@@ -258,7 +259,7 @@ func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *
 	p.service = p.credentials.getService()
 
 	p.init.Do(func() {
-		p.setup(ctx)
+		_ = p.setup(ctx)
 	})
 
 	zone := p.GetZone()
@@ -401,7 +402,7 @@ func (p *googlePool) mapToInstance(vm *compute.Instance) vmpool.Instance {
 	}
 }
 
-func (p *googlePool) waitZoneOperation(ctx context.Context, name string, zone string) error {
+func (p *googlePool) waitZoneOperation(ctx context.Context, name, zone string) error {
 	for {
 		client := p.credentials.getService()
 		op, err := client.ZoneOperations.Get(p.project, zone, name).Context(ctx).Do()
@@ -439,13 +440,13 @@ func (p *googlePool) setup(ctx context.Context) error {
 }
 
 func (p *googlePool) setupFirewall(ctx context.Context) error {
-	logger := logger.FromContext(ctx)
+	logr := logger.FromContext(ctx)
 
-	logger.Debugln("finding default firewall rules")
+	logr.Debugln("finding default firewall rules")
 
 	_, err := p.service.Firewalls.Get(p.project, "default-allow-docker").Context(ctx).Do()
 	if err == nil {
-		logger.Debugln("found default firewall rule")
+		logr.Debugln("found default firewall rule")
 		return nil
 	}
 
@@ -466,14 +467,14 @@ func (p *googlePool) setupFirewall(ctx context.Context) error {
 
 	op, err := p.service.Firewalls.Insert(p.project, rule).Context(ctx).Do()
 	if err != nil {
-		logger.WithError(err).
+		logr.WithError(err).
 			Errorln("cannot create firewall operation")
 		return err
 	}
 
 	err = p.waitGlobalOperation(ctx, op.Name)
 	if err != nil {
-		logger.WithError(err).
+		logr.WithError(err).
 			Errorln("cannot create firewall rule")
 	}
 
@@ -496,9 +497,8 @@ func (p *googlePool) waitGlobalOperation(ctx context.Context, name string) error
 	}
 }
 
-func (p *googlePool) getInstanceById(ctx context.Context, instanceID string) (*compute.Instance, error) {
+func (p *googlePool) getInstanceByID(ctx context.Context, instanceID string) (*compute.Instance, error) {
 	client := p.credentials.getService()
-	time.Sleep(2 * time.Second)
 	vm, err := client.Instances.Get(p.project, p.GetZone(), instanceID).Context(ctx).Do()
 	if err != nil {
 		return nil, err

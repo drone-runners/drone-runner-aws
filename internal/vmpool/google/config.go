@@ -29,7 +29,7 @@ type (
 
 	account struct {
 		ProjectID           string   `json:"project_id,omitempty"  yaml:"project_id"`
-		JsonPath            string   `json:"json_path,omitempty"  yaml:"json_path"`
+		JSONPath            string   `json:"json_path,omitempty"  yaml:"json_path"`
 		Scopes              []string `json:"scopes,omitempty"  yaml:"scopes"`
 		ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email"`
 	}
@@ -96,7 +96,7 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			return nil, err
 		}
 
-		poolDef.applyDefaults(defaultPoolSettings)
+		poolDef.applyDefaults()
 
 		err = poolDef.applyInitScript(defaultPoolSettings)
 		if err != nil {
@@ -108,7 +108,7 @@ func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings
 			runnerName: defaultPoolSettings.RunnerName,
 			credentials: Credentials{
 				ProjectID: poolDef.Account.ProjectID,
-				JsonPath:  poolDef.Account.JsonPath,
+				JSONPath:  poolDef.Account.JSONPath,
 			},
 			os:                  poolDef.Platform.OS,
 			rootDir:             tempdir(poolDef.Platform.OS),
@@ -178,7 +178,7 @@ func (p *poolDefinition) applyInitScript(defaultPoolSettings *vmpool.DefaultSett
 	return
 }
 
-func (p *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.DefaultSettings) {
+func (p *poolDefinition) applyDefaults() {
 	if p.MinPoolSize < 0 {
 		p.MinPoolSize = 0
 	}

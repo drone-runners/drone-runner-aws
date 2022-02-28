@@ -2,8 +2,8 @@ package google
 
 import (
 	"context"
-	"io/ioutil"
 	"net/http"
+	"os"
 
 	"github.com/drone/runner-go/logger"
 
@@ -14,7 +14,7 @@ import (
 
 type Credentials struct {
 	ProjectID   string
-	JsonPath    string
+	JSONPath    string
 	TokenSource oauth2.TokenSource
 	JSON        []byte
 }
@@ -27,15 +27,16 @@ func (prov *Credentials) getService() *compute.Service {
 
 	var client *http.Client
 	var err error
-	if prov.JsonPath != "" {
-		prov.JSON, _ = ioutil.ReadFile(prov.JsonPath)
+	if prov.JSONPath != "" {
+		prov.JSON, _ = os.ReadFile(prov.JSONPath)
 	}
 
 	client, err = google.DefaultClient(ctx, compute.ComputeScope)
 	if err != nil {
 		logr.WithError(err).Errorln("unable to create google client")
 	}
-	computeService, err := compute.New(client)
+
+	computeService, err := compute.New(client) //nolint:staticcheck
 	if err != nil {
 		logr.WithError(err).Errorln("unable to create google client")
 	}

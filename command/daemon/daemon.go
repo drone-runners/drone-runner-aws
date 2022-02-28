@@ -128,12 +128,31 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	poolManager := &vmpool.Manager{}
-
 	poolsAWS, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to parse aws pool file")
+		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	}
 	err = poolManager.Add(poolsAWS...)
-
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to add to aws pools")
+		os.Exit(1)
+	}
 	poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &defaultPoolSettings)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to parse google pool file")
+		os.Exit(1)
+	}
+
 	err = poolManager.Add(poolsGCP...)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to add to google pools")
+		os.Exit(1)
+	}
 
 	err = poolManager.Ping(ctx)
 	if err != nil {
