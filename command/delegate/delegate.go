@@ -14,13 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
@@ -125,24 +124,11 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		KeyFile:             config.DefaultPoolSettings.KeyFile,
 	}
 	// process the pool file
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
-	if poolFileErr != nil {
-		logrus.WithError(poolFileErr).
-			Errorln("delegate: unable to parse pool file")
-		return poolFileErr
-	}
+	poolsAWS, err := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
+	err = c.poolManager.Add(poolsAWS...)
 
-	pools, poolFileErr = google.ProcessPoolFile(c.googlePoolFile, &c.defaultPoolSettings)
-	if poolFileErr != nil {
-		logrus.WithError(poolFileErr).
-			Errorln("delegate: unable to parse pool file")
-		return poolFileErr
-	}
-
-	err = c.poolManager.Add(pools...)
-	if err != nil {
-		return err
-	}
+	poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &c.defaultPoolSettings)
+	err = c.poolManager.Add(poolsGCP...)
 
 	err = c.poolManager.Ping(ctx)
 	if err != nil {
