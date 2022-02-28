@@ -30,6 +30,7 @@ import (
 	"github.com/drone/runner-go/pipeline/reporter/remote"
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/poller"
+	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
@@ -209,6 +210,16 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 				),
 			),
 			PoolManager: poolManager,
+			Registry: registry.Combine(
+				registry.File(
+					config.Docker.Config,
+				),
+				registry.External(
+					config.Registry.Endpoint,
+					config.Registry.Token,
+					config.Registry.SkipVerify,
+				),
+			),
 		},
 		Exec: runtime.NewExecer(
 			tracer,

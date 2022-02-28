@@ -23,6 +23,7 @@ import (
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline/runtime"
+	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -34,6 +35,7 @@ type compileCommand struct {
 	Poolfile string
 	Environ  map[string]string
 	Secrets  map[string]string
+	Config   string
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
@@ -107,6 +109,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		Environ:     provider.Static(c.Environ),
 		Secret:      secret.StaticVars(c.Secrets),
 		PoolManager: poolManager,
+		Registry:    registry.File(c.Config),
 	}
 	args := runtime.CompilerArgs{
 		Pipeline: resourceInstance,
@@ -147,6 +150,9 @@ func registerCompile(app *kingpin.Application) {
 
 	cmd.Flag("environ", "environment variables").
 		StringMapVar(&c.Environ)
-	// shared pipeline flags
+
+	cmd.Flag("docker-config", "path to the docker config file").
+		StringVar(&c.Config)
+
 	c.Flags = internal.ParseFlags(cmd)
 }
