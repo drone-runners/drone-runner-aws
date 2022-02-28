@@ -1,0 +1,18 @@
+---
+kind: pipeline
+type: aws
+name: test
+
+pool:
+  use: cats
+
+steps:
+- name: build
+  commands:
+  - go build
+
+- name: test
+  commands:
+  - go test
+
+...
