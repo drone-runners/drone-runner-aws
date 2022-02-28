@@ -209,6 +209,13 @@ func (p *googlePool) Tag(ctx context.Context, instanceID string, tags map[string
 	if err != nil {
 		logr.WithError(err).Errorln("gcp: failed to tag VM")
 	}
+	// required as there's a delay in labels getting set on GCP side
+	for {
+		updatedVm, _ := p.getInstanceById(ctx, instanceID)
+		if len(updatedVm.Labels) == len(vm.Labels) {
+			break
+		}
+	}
 
 	logr.Traceln("gcp: VM tagged")
 	return
@@ -226,24 +233,15 @@ func (p *googlePool) Destroy(ctx context.Context, instanceIDs ...string) (err er
 		WithField("provider", provider)
 
 	for _, instanceID := range instanceIDs {
-		vm, err := p.getInstanceById(ctx, instanceID)
+		_, err = client.Instances.Delete(p.project, p.GetZone(), instanceID).Context(ctx).Do()
 		if err != nil {
-			logr.Errorln("gcp: failed to get VM", vm.Id)
-			continue
-		}
-		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
-			_, err = client.Instances.Delete(p.project, p.GetZone(), instanceID).Context(ctx).Do()
-			if err != nil {
-				logr.WithError(err).
-					Errorln("gcp: failed to terminate VMs")
-				if gerr, ok := err.(*googleapi.Error); ok &&
-					gerr.Code == http.StatusNotFound {
-					return errors.New("not Found")
-				}
-				continue
+			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
+			if gerr, ok := err.(*googleapi.Error); ok &&
+				gerr.Code == http.StatusNotFound {
+				logr.WithError(err).Errorln("gcp: VM not found")
 			}
-			logr.Traceln("gcp: VMs terminated", vm.Name)
 		}
+		p.waitZoneOperation(ctx, instanceID, p.GetZone())
 	}
 	return
 }
@@ -288,7 +286,7 @@ func (p *googlePool) Provision(ctx context.Context, tagAsInUse bool) (instance *
 	// create the instance
 	startTime := time.Now()
 
-	logr.Traceln("gcp: provisioning VM")
+	logr.Traceln("gcp: creating VM")
 
 	networkConfig := []*compute.AccessConfig{}
 
@@ -405,7 +403,8 @@ func (p *googlePool) mapToInstance(vm *compute.Instance) vmpool.Instance {
 
 func (p *googlePool) waitZoneOperation(ctx context.Context, name string, zone string) error {
 	for {
-		op, err := p.service.ZoneOperations.Get(p.project, zone, name).Context(ctx).Do()
+		client := p.credentials.getService()
+		op, err := client.ZoneOperations.Get(p.project, zone, name).Context(ctx).Do()
 		if err != nil {
 			if gerr, ok := err.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
@@ -499,6 +498,7 @@ func (p *googlePool) waitGlobalOperation(ctx context.Context, name string) error
 
 func (p *googlePool) getInstanceById(ctx context.Context, instanceID string) (*compute.Instance, error) {
 	client := p.credentials.getService()
+	time.Sleep(2 * time.Second)
 	vm, err := client.Instances.Get(p.project, p.GetZone(), instanceID).Context(ctx).Do()
 	if err != nil {
 		return nil, err

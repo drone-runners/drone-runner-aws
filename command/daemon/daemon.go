@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
+
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
 
 	"github.com/drone-runners/drone-runner-aws/internal/le"
@@ -127,13 +129,13 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		CertFile:            config.DefaultPoolSettings.CertFile,
 		KeyFile:             config.DefaultPoolSettings.KeyFile,
 	}
-	//pools, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
-	//if err != nil {
-	//	logrus.WithError(err).
-	//		Errorln("daemon: unable to parse pool file")
-	//	os.Exit(1) //nolint:gocritic // failing fast before we do any work.
-	//}
-	pools, err := google.ProcessPoolFile(c.googlePoolFile, &defaultPoolSettings)
+	pools, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to parse pool file")
+		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	}
+	pools, err = google.ProcessPoolFile(c.googlePoolFile, &defaultPoolSettings)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: unable to parse pool file")

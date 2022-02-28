@@ -225,8 +225,10 @@ func (p *poolDefinition) applyDefaults(defaultPoolSettings *vmpool.DefaultSettin
 	if p.Account.ServiceAccountEmail == "" {
 		p.Account.ServiceAccountEmail = "default"
 	}
-	if p.Instance.UserDataKey == "" {
+	if p.Instance.UserDataKey == "" && p.Platform.OS == oshelp.OSLinux {
 		p.Instance.UserDataKey = "user-data"
+	} else {
+		p.Instance.UserDataKey = "windows-startup-script-ps1"
 	}
 }
 
