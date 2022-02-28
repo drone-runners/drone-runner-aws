@@ -7,13 +7,11 @@ import (
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
-
-	"github.com/buildkite/yaml"
 	"github.com/drone/runner-go/logger"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/buildkite/yaml"
 )
 
 type (

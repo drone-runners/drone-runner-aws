@@ -111,11 +111,6 @@ func (p *googlePool) List(ctx context.Context) (busy, free []vmpool.Instance, er
 	}
 
 	for _, vm := range list.Items {
-		logr.
-			WithField("machine", vm.Name).
-			WithField("id", vm.Id).
-			WithField("status", vm.Status).
-			Traceln("-------- list machines -----------")
 		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
 			inst := p.mapToInstance(vm)
 			var isBusy bool
