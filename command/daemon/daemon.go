@@ -157,6 +157,11 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		os.Exit(1)
 	}
 
+	if poolManager.Count() == 0 {
+		logrus.Infoln("daemon: no instance pools found... aborting")
+		os.Exit(1)
+	}
+
 	err = poolManager.Ping(ctx)
 	if err != nil {
 		logrus.WithError(err).
