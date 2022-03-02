@@ -94,6 +94,7 @@ type (
 		PortBindings map[string]string              `json:"port_bindings" yaml:"port_bindings"`
 		Settings     map[string]*manifest.Parameter `json:"settings,omitempty"`
 		Name         string                         `json:"name,omitempty"`
+		Network      string                         `json:"network_mode,omitempty" yaml:"network_mode"`
 		Shell        string                         `json:"shell,omitempty"`
 		When         manifest.Conditions            `json:"when,omitempty"`
 		Volumes      []*VolumeMount                 `json:"volumes,omitempty"`

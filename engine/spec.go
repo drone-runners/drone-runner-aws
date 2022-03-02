@@ -21,6 +21,7 @@ type (
 		Files         []*lespec.File   `json:"files,omitempty"`
 		Steps         []*Step          `json:"steps,omitempty"`
 		Volumes       []*lespec.Volume `json:"volumes,omitempty"`
+		Network       lespec.Network   `json:"network"`
 	}
 
 	// CloudInstance provides basic instance information

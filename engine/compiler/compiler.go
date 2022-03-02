@@ -41,6 +41,10 @@ type Compiler struct {
 	// Environ provides a set of environment variables that should be added to each pipeline step by default.
 	Environ provider.Provider
 
+	// NetworkOpts provides a set of network options that
+	// are used when creating the docker network.
+	NetworkOpts map[string]string
+
 	// Secret returns a named secret value that can be injected into the pipeline step.
 	Secret secret.Provider
 
@@ -296,6 +300,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				ID:           stepID,
 				Image:        src.Image,
 				Name:         src.Name,
+				Network:      src.Network,
+				Networks:     nil, // not used by the runner
 				PortBindings: src.PortBindings,
 				Privileged:   src.Image != "", // all steps that use images, run in privileged mode
 				Secrets:      stepSecrets,
@@ -340,7 +346,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		}
 	}
 
-	// create volumes
+	// labels
 	systemLabels := labels.Combine(
 		labels.FromRepo(args.Repo),
 		labels.FromBuild(args.Build),
@@ -348,6 +354,15 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		labels.FromSystem(args.System),
 		labels.WithTimeout(args.Repo),
 	)
+
+	// create network
+	spec.Network = lespec.Network{
+		ID:      random(),
+		Labels:  systemLabels,
+		Options: c.NetworkOpts,
+	}
+
+	// create volumes
 	for _, v := range pipeline.Volumes {
 		if v.EmptyDir != nil {
 			spec.Volumes = append(spec.Volumes, &lespec.Volume{
