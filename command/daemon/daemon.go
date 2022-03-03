@@ -206,6 +206,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 					config.Environ.SkipVerify,
 				),
 			),
+			NetworkOpts: config.Runner.NetworkOpts,
 			Secret: secret.Combine(
 				secret.StaticVars(
 					config.Runner.Secrets,

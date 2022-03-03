@@ -120,8 +120,10 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
 		Environ:     provider.Static(c.Environ),
+		NetworkOpts: nil,
 		Secret:      secret.StaticVars(c.Secrets),
 		PoolManager: poolManager,
+		Registry:    nil,
 	}
 
 	// lint the pipeline and return an error if any linting rules are broken

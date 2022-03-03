@@ -248,7 +248,9 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 	}
 
 	opts := cmp.Options{
+		cmpopts.IgnoreFields(engine.Spec{}, "Network"),
 		cmpopts.IgnoreFields(engine.Step{}, "Envs", "Secrets"),
+		cmpopts.IgnoreFields(lespec.Network{}, "Labels"),
 		cmpopts.IgnoreFields(lespec.VolumeHostPath{}, "Labels"),
 		cmpopts.IgnoreFields(lespec.VolumeEmptyDir{}, "Labels"),
 	}

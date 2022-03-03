@@ -20,7 +20,6 @@ import (
 
 	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
-	lespec "github.com/harness/lite-engine/engine/spec"
 )
 
 var (
@@ -143,12 +142,8 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		Traceln("LE.RetryHealth check complete")
 
 	setupRequest := &leapi.SetupRequest{
-		Envs: nil, // // no global envs, envs are passed to each step individually
-		Network: lespec.Network{
-			ID:      "drone",
-			Labels:  nil,
-			Options: nil,
-		},
+		Envs:      nil, // no global envs, envs are passed to each step individually
+		Network:   spec.Network,
 		Volumes:   spec.Volumes,
 		Secrets:   nil,               // no global secrets, secrets are passed to each step individually
 		LogConfig: leapi.LogConfig{}, // unused... I guess

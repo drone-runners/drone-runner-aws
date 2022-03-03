@@ -107,6 +107,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
 		Environ:     provider.Static(c.Environ),
+		NetworkOpts: nil,
 		Secret:      secret.StaticVars(c.Secrets),
 		PoolManager: poolManager,
 		Registry:    registry.File(c.Config),
