@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
+
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
@@ -51,7 +51,7 @@ const TagStageID = vmpool.TagPrefix + "stage-id"
 
 // helper function configures the global logger from
 // the loaded configuration.
-func setupLogger(config *daemon.Config) {
+func setupLogger(config *Config) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),
@@ -74,14 +74,14 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 			Errorln("delegate: failed to load environment variables")
 	}
 	// load the configuration from the environment
-	var config daemon.Config // TODO: Do not use daemon config, use delegate config
+	var config Config
 	processEnvErr := envconfig.Process("", &config)
 	if processEnvErr != nil {
 		logrus.WithError(processEnvErr).
 			Errorln("delegate: failed to load configuration")
 	}
 	// load the configuration from the environment
-	config, err := daemon.FromEnviron()
+	config, err := fromEnviron()
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	poolsAWS, err := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to parse aws pool file")
+			Errorln("delegate: unable to parse aws pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 	err = c.poolManager.Add(poolsAWS...)
@@ -139,7 +139,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &c.defaultPoolSettings)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to parse google pool file")
+			Errorln("delegate: unable to parse google pool file")
 		os.Exit(1)
 	}
 
