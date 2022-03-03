@@ -83,6 +83,9 @@ type (
 
 func ProcessPoolFile(rawFile string, defaultPoolSettings *vmpool.DefaultSettings) ([]vmpool.Pool, error) {
 	rawPool, err := os.ReadFile(rawFile)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
 	if err != nil {
 		err = fmt.Errorf("unable to read file %s: %w", rawFile, err)
 		return nil, err
