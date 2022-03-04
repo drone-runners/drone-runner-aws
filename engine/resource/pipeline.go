@@ -87,17 +87,24 @@ type (
 		Commands     []string                       `json:"commands,omitempty"`
 		Detach       bool                           `json:"detach,omitempty"`
 		DependsOn    []string                       `json:"depends_on,omitempty" yaml:"depends_on"`
+		Devices      []*VolumeDevice                `json:"devices,omitempty"`
+		DNS          []string                       `json:"dns,omitempty"`
+		DNSSearch    []string                       `json:"dns_search,omitempty" yaml:"dns_search"`
 		Entrypoint   []string                       `json:"entrypoint,omitempty"`
 		Environment  map[string]*manifest.Variable  `json:"environment,omitempty"`
+		ExtraHosts   []string                       `json:"extra_hosts,omitempty" yaml:"extra_hosts"`
 		Failure      string                         `json:"failure,omitempty"`
 		Image        string                         `json:"image,omitempty"`
-		PortBindings map[string]string              `json:"port_bindings" yaml:"port_bindings"`
-		Settings     map[string]*manifest.Parameter `json:"settings,omitempty"`
 		Name         string                         `json:"name,omitempty"`
 		Network      string                         `json:"network_mode,omitempty" yaml:"network_mode"`
+		PortBindings map[string]string              `json:"port_bindings" yaml:"port_bindings"`
+		Pull         string                         `json:"pull,omitempty"`
+		Settings     map[string]*manifest.Parameter `json:"settings,omitempty"`
 		Shell        string                         `json:"shell,omitempty"`
-		When         manifest.Conditions            `json:"when,omitempty"`
+		ShmSize      manifest.BytesSize             `json:"shm_size,omitempty" yaml:"shm_size"`
+		User         string                         `json:"user,omitempty"`
 		Volumes      []*VolumeMount                 `json:"volumes,omitempty"`
+		When         manifest.Conditions            `json:"when,omitempty"`
 		WorkingDir   string                         `json:"working_dir,omitempty" yaml:"working_dir"`
 	}
 
@@ -116,6 +123,13 @@ type (
 		Name     string          `json:"name,omitempty"`
 		EmptyDir *VolumeEmptyDir `json:"temp,omitempty" yaml:"temp"`
 		HostPath *VolumeHostPath `json:"host,omitempty" yaml:"host"`
+	}
+
+	// VolumeDevice describes a mapping of a raw block
+	// device within a container.
+	VolumeDevice struct {
+		Name       string `json:"name,omitempty"`
+		DevicePath string `json:"path,omitempty" yaml:"path"`
 	}
 
 	// VolumeMount describes a mounting of a Volume
