@@ -58,7 +58,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// load the configuration from the environment
-	config, err := FromEnviron()
+	config, err := fromEnviron()
 	if err != nil {
 		return err
 	}
