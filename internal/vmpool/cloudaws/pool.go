@@ -86,8 +86,8 @@ func (p *awsPool) GetMaxSize() int {
 	return p.sizeMax
 }
 
-// Ping checks that we can log into EC2, and the regions respond
-func (p *awsPool) Ping(ctx context.Context) error {
+// CheckProvider checks that we can log into EC2, and the regions respond
+func (p *awsPool) CheckProvider(ctx context.Context) error {
 	client := p.credentials.getClient()
 
 	allRegions := true

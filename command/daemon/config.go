@@ -59,19 +59,14 @@ type Config struct {
 	}
 
 	DefaultPoolSettings struct {
-		AwsAccessKeyID      string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_ID"`
-		AwsAccessKeySecret  string `envconfig:"DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"`
-		AwsRegion           string `envconfig:"DRONE_SETTINGS_AWS_REGION"`
-		AwsAvailabilityZone string `envconfig:"DRONE_SETTINGS_AWS_AVAILABILITY_ZONE"`
-		AwsKeyPairName      string `envconfig:"DRONE_SETTINGS_AWS_KEY_PAIR_NAME"`
-		LiteEnginePath      string `envconfig:"DRONE_SETTINGS_LITE_ENGINE_PATH"`
-		CertificateFolder   string `envconfig:"DRONE_SETTINGS_CERTIFICATE_FOLDER" default:"/tmp/certs"`
-		BusyMaxAge          int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"2"`
-		FreeMaxAge          int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"12"`
-		CaCertFile          string `envconfig:"DRONE_SETTINGS_CA_CERT_FILE"`
-		CertFile            string `envconfig:"DRONE_SETTINGS_CERT_FILE"`
-		KeyFile             string `envconfig:"DRONE_SETTINGS_KEY_FILE"`
-		ReusePool           bool   `envconfig:"DRONE_SETTINGS_REUSE_POOL"`
+		LiteEnginePath    string `envconfig:"DRONE_SETTINGS_LITE_ENGINE_PATH"`
+		CertificateFolder string `envconfig:"DRONE_SETTINGS_CERTIFICATE_FOLDER" default:"/tmp/certs"`
+		BusyMaxAge        int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"2"`
+		FreeMaxAge        int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"12"`
+		CaCertFile        string `envconfig:"DRONE_SETTINGS_CA_CERT_FILE"`
+		CertFile          string `envconfig:"DRONE_SETTINGS_CERT_FILE"`
+		KeyFile           string `envconfig:"DRONE_SETTINGS_KEY_FILE"`
+		ReusePool         bool   `envconfig:"DRONE_SETTINGS_REUSE_POOL"`
 	}
 
 	Environ struct {

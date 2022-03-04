@@ -17,7 +17,6 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	PublicKey      string
 	LiteEnginePath string
 	CaCertFile     string
 	CertFile       string

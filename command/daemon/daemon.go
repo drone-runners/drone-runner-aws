@@ -7,19 +7,20 @@ package daemon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
-
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/handler/router"
@@ -45,9 +46,9 @@ import (
 var nocontext = context.Background()
 
 type daemonCommand struct {
-	envFile        string
-	poolFile       string
-	googlePoolFile string
+	envFile  string
+	poolFile string
+	pool     string
 }
 
 func (c *daemonCommand) run(*kingpin.ParseContext) error {
@@ -58,22 +59,22 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// load the configuration from the environment
-	config, err := fromEnviron()
+	env, err := fromEnviron()
 	if err != nil {
 		return err
 	}
 
-	// TODO: These can be set in the config struct as `required: "true"` instead
+	// TODO: These can be set in the env struct as `required: "true"` instead
 	// once we have separate configs for the daemon and the delegate
-	if config.Client.Host == "" {
+	if env.Client.Host == "" {
 		return errors.New("missing DRONE_RPC_HOST")
 	}
-	if config.Client.Secret == "" {
+	if env.Client.Secret == "" {
 		return errors.New("missing DRONE_RPC_SECRET")
 	}
 
 	// setup the global logrus logger.
-	SetupLogger(&config)
+	SetupLogger(&env)
 
 	ctx, cancel := context.WithCancel(nocontext)
 	defer cancel()
@@ -86,13 +87,13 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	})
 
 	cli := client.New(
-		config.Client.Address,
-		config.Client.Secret,
-		config.Client.SkipVerify,
+		env.Client.Address,
+		env.Client.Secret,
+		env.Client.SkipVerify,
 	)
-	if config.Client.Dump {
+	if env.Client.Dump {
 		cli.Dumper = logger.StandardDumper(
-			config.Client.DumpBody,
+			env.Client.DumpBody,
 		)
 	}
 	cli.Logger = logger.Logrus(
@@ -101,14 +102,14 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 	// generate le cert files if needed
-	err = le.GenerateLECerts(config.Runner.Name, config.DefaultPoolSettings.CertificateFolder)
+	err = le.GenerateLECerts(env.Runner.Name, env.DefaultPoolSettings.CertificateFolder)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: failed to generate certificates")
 		return err
 	}
 	// read cert files into memory
-	config.DefaultPoolSettings.CaCertFile, config.DefaultPoolSettings.CertFile, config.DefaultPoolSettings.KeyFile, err = le.ReadLECerts(config.DefaultPoolSettings.CertificateFolder)
+	env.DefaultPoolSettings.CaCertFile, env.DefaultPoolSettings.CertFile, env.DefaultPoolSettings.KeyFile, err = le.ReadLECerts(env.DefaultPoolSettings.CertificateFolder)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: failed to read certificates")
@@ -116,44 +117,77 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 	// we have enough information for default pool settings
 	defaultPoolSettings := vmpool.DefaultSettings{
-		RunnerName:          config.Runner.Name,
-		AwsAccessKeyID:      config.DefaultPoolSettings.AwsAccessKeyID,
-		AwsAccessKeySecret:  config.DefaultPoolSettings.AwsAccessKeySecret,
-		AwsRegion:           config.DefaultPoolSettings.AwsRegion,
-		AwsAvailabilityZone: config.DefaultPoolSettings.AwsAvailabilityZone,
-		AwsKeyPairName:      config.DefaultPoolSettings.AwsKeyPairName,
-		LiteEnginePath:      config.DefaultPoolSettings.LiteEnginePath,
-		CaCertFile:          config.DefaultPoolSettings.CaCertFile,
-		CertFile:            config.DefaultPoolSettings.CertFile,
-		KeyFile:             config.DefaultPoolSettings.KeyFile,
+		RunnerName:     env.Runner.Name,
+		LiteEnginePath: env.DefaultPoolSettings.LiteEnginePath,
+		CaCertFile:     env.DefaultPoolSettings.CaCertFile,
+		CertFile:       env.DefaultPoolSettings.CertFile,
+		KeyFile:        env.DefaultPoolSettings.KeyFile,
 	}
 
 	poolManager := &vmpool.Manager{}
 	poolManager.SetGlobalCtx(ctx)
 
-	poolsAWS, err := cloudaws.ProcessPoolFile(c.poolFile, &defaultPoolSettings)
+	poolFile, err := config.ProcessPoolFile(c.pool)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to parse aws pool file")
-		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
-	}
-	err = poolManager.Add(poolsAWS...)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("daemon: unable to add to aws pools")
-		os.Exit(1)
-	}
-	poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &defaultPoolSettings)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("daemon: unable to parse google pool file")
+			Errorln("daemon: unable to parse pool file")
 		os.Exit(1)
 	}
 
-	err = poolManager.Add(poolsGCP...)
+	var pools = []vmpool.Pool{}
+	cloudInitParams := &cloudinit.Params{
+		LiteEnginePath: defaultPoolSettings.LiteEnginePath,
+		CaCertFile:     defaultPoolSettings.CaCertFile,
+		CertFile:       defaultPoolSettings.CertFile,
+		KeyFile:        defaultPoolSettings.KeyFile,
+	}
+
+	for _, i := range poolFile.Instances {
+		switch i.Type {
+		case "aws":
+			//
+		case "gcp":
+			var g, ok = i.Spec.(*config.Google)
+			if !ok {
+				logrus.WithError(err).Errorln("daemon: unable to parse pool file")
+			}
+			var pool, err = google.New(
+				google.WithRunnerName(defaultPoolSettings.RunnerName),
+				google.WithArch(i.Platform.Arch),
+				google.WithOs(i.Platform.OS),
+				google.WithLimit(i.Limit),
+				google.WithPool(i.Pool),
+				google.WithName(i.Name),
+				google.WithDiskSize(g.Disk.Size),
+				google.WithDiskType(g.Disk.Type),
+				google.WithMachineImage(g.Image),
+				google.WithMachineType(g.MachineType),
+				google.WithLabels(g.Labels),
+				google.WithNetwork(g.Network),
+				google.WithSubnetwork(g.Subnetwork),
+				google.WithPrivateIP(g.PrivateIP),
+				google.WithServiceAccountEmail(g.Account.ServiceAccountEmail),
+				google.WithProject(g.Account.ProjectID),
+				google.WithJsonPath(g.Account.JSONPath),
+				google.WithTags(g.Tags...),
+				google.WithScopes(g.Scopes...),
+				google.WithUserData(g.UserData, cloudInitParams),
+				google.WithZones(g.Zone...),
+				google.WithUserDataKey(g.UserDataKey),
+			)
+			if err != nil {
+				logrus.WithError(err).Errorln("daemon: unable to create google config")
+			}
+			pools = append(pools, pool)
+		default:
+			return fmt.Errorf("unknown instance type %s", i.Type)
+		}
+	}
+
+	err = poolManager.Add(pools...)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to add to google pools")
+			Errorln("daemon: unable to add to the pool")
 		os.Exit(1)
 	}
 
@@ -162,7 +196,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		os.Exit(1)
 	}
 
-	err = poolManager.Ping(ctx)
+	err = poolManager.CheckProvider(ctx)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: cannot connect to cloud provider")
@@ -188,44 +222,44 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	daemonLint.PoolManager = poolManager
 	runner := &runtime.Runner{
 		Client:   cli,
-		Machine:  config.Runner.Name,
+		Machine:  env.Runner.Name,
 		Reporter: tracer,
 		Lookup:   resource.Lookup,
 		Lint:     daemonLint.Lint,
 		Match: match.Func(
-			config.Limit.Repos,
-			config.Limit.Events,
-			config.Limit.Trusted,
+			env.Limit.Repos,
+			env.Limit.Events,
+			env.Limit.Trusted,
 		),
 		Compiler: &compiler.Compiler{
 			Environ: provider.Combine(
-				provider.Static(config.Runner.Environ),
+				provider.Static(env.Runner.Environ),
 				provider.External(
-					config.Environ.Endpoint,
-					config.Environ.Token,
-					config.Environ.SkipVerify,
+					env.Environ.Endpoint,
+					env.Environ.Token,
+					env.Environ.SkipVerify,
 				),
 			),
-			NetworkOpts: config.Runner.NetworkOpts,
+			NetworkOpts: env.Runner.NetworkOpts,
 			Secret: secret.Combine(
 				secret.StaticVars(
-					config.Runner.Secrets,
+					env.Runner.Secrets,
 				),
 				secret.External(
-					config.Secret.Endpoint,
-					config.Secret.Token,
-					config.Secret.SkipVerify,
+					env.Secret.Endpoint,
+					env.Secret.Token,
+					env.Secret.SkipVerify,
 				),
 			),
 			PoolManager: poolManager,
 			Registry: registry.Combine(
 				registry.File(
-					config.Docker.Config,
+					env.Docker.Config,
 				),
 				registry.External(
-					config.Registry.Endpoint,
-					config.Registry.Token,
-					config.Registry.SkipVerify,
+					env.Registry.Endpoint,
+					env.Registry.Token,
+					env.Registry.SkipVerify,
 				),
 			),
 		},
@@ -234,7 +268,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 			remoteInstance,
 			pipeline.NopUploader(),
 			engInstance,
-			config.Runner.Procs,
+			env.Runner.Procs,
 		).Exec,
 	}
 
@@ -249,24 +283,24 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 
 	var g errgroup.Group
 	serverInstance := server.Server{
-		Addr: config.Server.Port,
+		Addr: env.Server.Port,
 		Handler: router.New(tracer, hook, router.Config{
-			Username: config.Dashboard.Username,
-			Password: config.Dashboard.Password,
-			Realm:    config.Dashboard.Realm,
+			Username: env.Dashboard.Username,
+			Password: env.Dashboard.Password,
+			Realm:    env.Dashboard.Realm,
 		}),
 	}
 
-	logrus.WithField("addr", config.Server.Port).
+	logrus.WithField("addr", env.Server.Port).
 		Infoln("daemon: starting the server")
 
 	g.Go(func() error {
 		return serverInstance.ListenAndServe(ctx)
 	})
 
-	// Ping the server and block until a successful connection to the server has been established.
+	// CheckProvider the server and block until a successful connection to the server has been established.
 	for {
-		pingErr := cli.Ping(ctx, config.Runner.Name)
+		pingErr := cli.Ping(ctx, env.Runner.Name)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -286,18 +320,18 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	g.Go(func() error {
-		logrus.WithField("capacity", config.Runner.Capacity).
-			WithField("endpoint", config.Client.Address).
+		logrus.WithField("capacity", env.Runner.Capacity).
+			WithField("endpoint", env.Client.Address).
 			WithField("kind", resource.Kind).
 			WithField("type", resource.Type).
 			Infoln("daemon: polling the remote drone server")
 
-		pollerInstance.Poll(ctx, config.Runner.Capacity)
+		pollerInstance.Poll(ctx, env.Runner.Capacity)
 		return nil
 	})
 
 	// if there is no keyfiles lets remove any old instances.
-	if !config.DefaultPoolSettings.ReusePool {
+	if !env.DefaultPoolSettings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
@@ -315,7 +349,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 	logrus.Infoln("daemon: pool created")
 
-	if !config.DefaultPoolSettings.ReusePool {
+	if !env.DefaultPoolSettings.ReusePool {
 		g.Go(func() error {
 			<-ctx.Done()
 			// clean up pool on termination
@@ -367,7 +401,7 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
 		StringVar(&c.poolFile)
-	cmd.Flag("pool_file_google", "file to seed the google pool").
-		Default(".drone_pool_google.yml").
-		StringVar(&c.googlePoolFile)
+	cmd.Flag("pool", "file to seed the pool").
+		Default(".pool.yml").
+		StringVar(&c.pool)
 }

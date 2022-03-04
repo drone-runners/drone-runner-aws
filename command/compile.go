@@ -16,8 +16,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -79,23 +77,23 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// we have enough information for default pool settings
-	defaultPoolSettings := vmpool.DefaultSettings{
-		RunnerName:         runnerName,
-		AwsAccessKeyID:     c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_ID"],
-		AwsAccessKeySecret: c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"],
-		AwsKeyPairName:     c.Environ["DRONE_SETTINGS_AWS_KEY_PAIR_NAME"],
-	}
+	//defaultPoolSettings := vmpool.DefaultSettings{
+	//	RunnerName:         runnerName,
+	//	//AwsAccessKeyID:     c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_ID"],
+	//	//AwsAccessKeySecret: c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"],
+	//	//AwsKeyPairName:     c.Environ["DRONE_SETTINGS_AWS_KEY_PAIR_NAME"],
+	//}
 	// read the poolfile
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
-	if poolFileErr != nil {
-		return poolFileErr
-	}
+	//pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
+	//if poolFileErr != nil {
+	//	return poolFileErr
+	//}
 
 	poolManager := &vmpool.Manager{}
-	err = poolManager.Add(pools...)
-	if err != nil {
-		return err
-	}
+	//err = poolManager.Add(pools...)
+	//if err != nil {
+	//	return err
+	//}
 
 	// lint the pipeline and return an error if any linting rules are broken
 	lint := linter.New()

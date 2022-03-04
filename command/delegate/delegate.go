@@ -18,9 +18,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
-
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
@@ -112,45 +109,40 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 	// we have enough information for default pool settings
 	c.defaultPoolSettings = vmpool.DefaultSettings{
-		RunnerName:          config.Runner.Name,
-		AwsAccessKeyID:      config.DefaultPoolSettings.AwsAccessKeyID,
-		AwsAccessKeySecret:  config.DefaultPoolSettings.AwsAccessKeySecret,
-		AwsRegion:           config.DefaultPoolSettings.AwsRegion,
-		AwsAvailabilityZone: config.DefaultPoolSettings.AwsAvailabilityZone,
-		AwsKeyPairName:      config.DefaultPoolSettings.AwsKeyPairName,
-		LiteEnginePath:      config.DefaultPoolSettings.LiteEnginePath,
-		CaCertFile:          config.DefaultPoolSettings.CaCertFile,
-		CertFile:            config.DefaultPoolSettings.CertFile,
-		KeyFile:             config.DefaultPoolSettings.KeyFile,
+		RunnerName:     config.Runner.Name,
+		LiteEnginePath: config.DefaultPoolSettings.LiteEnginePath,
+		CaCertFile:     config.DefaultPoolSettings.CaCertFile,
+		CertFile:       config.DefaultPoolSettings.CertFile,
+		KeyFile:        config.DefaultPoolSettings.KeyFile,
 	}
 	// process the pool file
-	poolsAWS, err := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("delegate: unable to parse aws pool file")
-		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
-	}
-	err = c.poolManager.Add(poolsAWS...)
+	//poolsAWS, err := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
+	//if err != nil {
+	//	logrus.WithError(err).
+	//		Errorln("delegate: unable to parse aws pool file")
+	//	os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	//}
+	//err = c.poolManager.Add(poolsAWS...)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to add to aws pools")
 		os.Exit(1)
 	}
-	poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &c.defaultPoolSettings)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("delegate: unable to parse google pool file")
-		os.Exit(1)
-	}
+	//poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &c.defaultPoolSettings)
+	//if err != nil {
+	//	logrus.WithError(err).
+	//		Errorln("delegate: unable to parse google pool file")
+	//	os.Exit(1)
+	//}
 
-	err = c.poolManager.Add(poolsGCP...)
+	//err = c.poolManager.Add(poolsGCP...)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to add to google pools")
 		os.Exit(1)
 	}
 
-	err = c.poolManager.Ping(ctx)
+	err = c.poolManager.CheckProvider(ctx)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: cannot connect to cloud provider")

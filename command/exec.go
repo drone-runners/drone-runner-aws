@@ -19,8 +19,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -106,16 +104,16 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		RunnerName: runnerName,
 	}
 	// read the pool file
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
-	if poolFileErr != nil {
-		return poolFileErr
-	}
+	//pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
+	//if poolFileErr != nil {
+	//	return poolFileErr
+	//}
 
 	poolManager := &vmpool.Manager{}
-	err = poolManager.Add(pools...)
-	if err != nil {
-		return err
-	}
+	//err = poolManager.Add(pools...)
+	//if err != nil {
+	//	return err
+	//}
 
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
