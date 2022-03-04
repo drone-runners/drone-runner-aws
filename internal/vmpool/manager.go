@@ -87,7 +87,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 	d := time.Duration(maxAgeBusy.Minutes() * 0.9 * float64(time.Minute))
 	m.cleanupTimer = time.NewTicker(d)
 
-	logrus.Infof("Instance purger started. It will run every %.2f minutes", d.Minutes())
+	logrus.Infof("gcpConfig purger started. It will run every %.2f minutes", d.Minutes())
 
 	go func() {
 		for {
@@ -392,9 +392,9 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 	return nil
 }
 
-func (m *Manager) Ping(ctx context.Context) error {
+func (m *Manager) CheckProvider(ctx context.Context) error {
 	for _, pool := range m.poolMap {
-		err := pool.Ping(ctx)
+		err := pool.CheckProvider(ctx)
 		if err != nil {
 			return err
 		}
