@@ -50,6 +50,7 @@ type Config struct {
 		Secrets     map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
 		Labels      map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
 		NetworkOpts map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
+		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
 	}
 
 	Limit struct {

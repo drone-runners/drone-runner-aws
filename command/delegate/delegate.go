@@ -8,9 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +30,7 @@ import (
 	"github.com/drone/signal"
 	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
+	lespec "github.com/harness/lite-engine/engine/spec"
 	lelivelog "github.com/harness/lite-engine/livelog"
 	lestream "github.com/harness/lite-engine/logstream/remote"
 
@@ -84,6 +88,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
+
 	// setup the global logrus logger.
 	setupLogger(&env)
 
@@ -295,6 +300,12 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
+	// load the configuration from the environment
+	config, err := fromEnviron()
+	if err != nil {
+		return
+	}
+
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
 	var logr *logrus.Entry
@@ -316,6 +327,27 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		logr = log.WithField("pool", reqData.PoolID)
 
 		ctx = logger.WithContext(r.Context(), logger.Logrus(logr))
+	}
+
+	// append global volumes to the setup request.
+	for _, pair := range config.Runner.Volumes {
+		z := strings.SplitN(pair, ":", 2)
+		if len(z) != 2 {
+			log.Warnf("skipping %s as it does not comply with the format src:dest\n", pair)
+			continue
+		}
+		src := z[0]
+		dest := z[1]
+		ro := strings.HasSuffix(dest, ":ro")
+		vol := lespec.Volume{
+			HostPath: &lespec.VolumeHostPath{
+				ID:       id(src),
+				Name:     id(src),
+				Path:     src,
+				ReadOnly: ro,
+			},
+		}
+		reqData.Volumes = append(reqData.Volumes, &vol)
 	}
 
 	poolName := reqData.PoolID
@@ -396,6 +428,15 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// generate a id from the filename
+// /path/to/a.txt and /other/path/to/a.txt should generate different hashes
+// eg - a-txt10098 and a-txt-270089
+func id(filename string) string {
+	h := fnv.New32a()
+	h.Write([]byte(filename))
+	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))
+}
+
 func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	reqData := &struct {
 		ID                     string `json:"id"`
@@ -427,6 +468,32 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		WithField("correlation_id", reqData.CorrelationID)
 
 	ctx := r.Context()
+
+	// load the configuration from the environment
+	config, err := fromEnviron()
+	if err != nil {
+		return
+	}
+
+	// add global volumes as mounts only if image is specified
+	if reqData.Image != "" {
+		for _, pair := range config.Runner.Volumes {
+			z := strings.SplitN(pair, ":", 2)
+			if len(z) != 2 {
+				logr.Warnf("skipping %s as it does not comply with the format src:dest\n", pair)
+				continue
+			}
+			src := z[0]
+			dest := z[1]
+			t := strings.TrimSuffix(dest, ":ro")
+			mount := &lespec.VolumeMount{
+				Name: id(src),
+				Path: t,
+			}
+			fmt.Println("mount: ", mount)
+			reqData.Volumes = append(reqData.Volumes, mount)
+		}
+	}
 
 	var ipAddress string
 

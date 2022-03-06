@@ -53,6 +53,9 @@ type Compiler struct {
 	// Registry returns a list of registry credentials that can be
 	// used to pull private container images.
 	Registry registry.Provider
+
+	// Volumes provides a set of volumes that should be mounted to each pipeline container
+	Volumes []string
 }
 
 // Compile compiles the configuration file.
@@ -214,7 +217,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 					Data: scriptToExecute,
 				},
 			}
-
 			// the command is actually a file name where combined script for the step is located
 			command = append(command, scriptPath)
 		}
@@ -385,6 +387,38 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		ID:      random(),
 		Labels:  systemLabels,
 		Options: c.NetworkOpts,
+	}
+
+	// append global volumes and volume mounts to steps which have an image specified.
+	for _, pair := range c.Volumes {
+		z := strings.SplitN(pair, ":", 2)
+		if len(z) != 2 {
+			continue
+		}
+		src := z[0]
+		dest := z[1]
+		id := random()
+		ro := strings.HasSuffix(dest, ":ro")
+		dest = strings.TrimSuffix(dest, ":ro")
+		volume := &lespec.Volume{
+			HostPath: &lespec.VolumeHostPath{
+				ID:       id,
+				Name:     id,
+				Path:     src,
+				ReadOnly: ro,
+			},
+		}
+		spec.Volumes = append(spec.Volumes, volume)
+		for _, step := range spec.Steps {
+			if step.Image == "" { // skip volume mounts on steps which don't have images
+				continue
+			}
+			mount := &lespec.VolumeMount{
+				Name: id,
+				Path: dest,
+			}
+			step.Volumes = append(step.Volumes, mount)
+		}
 	}
 
 	// create volumes
