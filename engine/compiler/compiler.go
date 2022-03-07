@@ -57,7 +57,7 @@ type Compiler struct {
 }
 
 // Compile compiles the configuration file.
-func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic,gocyclo
+func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic,gocyclo,funlen
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	spec := &engine.Spec{}
 
@@ -298,6 +298,15 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			runPolicy = runtime.RunNever
 		}
 
+		// set the pipeline failure policy. steps can choose to ignore the failure, or fail fast.
+		errorPolicy := runtime.ErrFail
+		switch src.Failure {
+		case "ignore":
+			errorPolicy = runtime.ErrIgnore
+		case "fast", "fast-fail", "fail-fast":
+			errorPolicy = runtime.ErrFailFast
+		}
+
 		// create the step
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Step: lespec.Step{
@@ -325,6 +334,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				WorkingDir:   workingDir,
 			},
 			DependsOn: src.DependsOn,
+			ErrPolicy: errorPolicy,
 			RunPolicy: runPolicy,
 		})
 	}
