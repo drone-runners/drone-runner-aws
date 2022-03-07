@@ -7,12 +7,12 @@ package compiler
 import (
 	"strings"
 
-	lespec "github.com/harness/lite-engine/engine/spec"
-
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
+	lespec "github.com/harness/lite-engine/engine/spec"
 )
 
 const cloneStep = "clone"
@@ -123,5 +123,20 @@ func removeCloneDeps(spec *engine.Spec) {
 			step.DependsOn[0] == cloneStep {
 			step.DependsOn = []string{}
 		}
+	}
+}
+
+// helper function modifies the pipeline dependency graph to
+// account for the clone step.
+func convertPullPolicy(s string) lespec.PullPolicy {
+	switch strings.ToLower(s) {
+	case "always":
+		return lespec.PullAlways
+	case "if-not-exists":
+		return lespec.PullIfNotExists
+	case "never":
+		return lespec.PullNever
+	default:
+		return lespec.PullDefault
 	}
 }

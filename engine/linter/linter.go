@@ -17,6 +17,10 @@ import (
 	"github.com/drone/runner-go/manifest"
 )
 
+// ErrDuplicateStepName is returned when two Pipeline steps
+// have the same name.
+var ErrDuplicateStepName = errors.New("linter: duplicate step names")
+
 // Linter evaluates the pipeline against a set of
 // rules and returns an error if one or more of the
 // rules are broken.
@@ -65,12 +69,27 @@ func checkPools(pipeline *resource.Pipeline, poolManager *vmpool.Manager) error 
 
 func checkSteps(pipeline *resource.Pipeline) error {
 	steps := append(pipeline.Services, pipeline.Steps...) //nolint:gocritic // creating a new slice is ok
+	names := map[string]struct{}{}
+	if !pipeline.Clone.Disable {
+		names["clone"] = struct{}{}
+	}
 
 	for _, step := range steps {
 		if step == nil {
 			return errors.New("linter: nil step")
 		}
+
+		// unique list of names
+		_, ok := names[step.Name]
+		if ok {
+			return ErrDuplicateStepName
+		}
+		names[step.Name] = struct{}{}
+
 		if err := checkStep(step); err != nil {
+			return err
+		}
+		if err := checkDeps(step, names); err != nil {
 			return err
 		}
 	}
@@ -98,6 +117,19 @@ func checkVolumes(pipeline *resource.Pipeline) error {
 			return fmt.Errorf("linter: missing volume name")
 		case "workspace", "_workspace", "_docker_socket":
 			return fmt.Errorf("linter: invalid volume name: %s", volume.Name)
+		}
+	}
+	return nil
+}
+
+func checkDeps(step *resource.Step, deps map[string]struct{}) error {
+	for _, dep := range step.DependsOn {
+		_, ok := deps[dep]
+		if !ok {
+			return fmt.Errorf("linter: unknown step dependency detected: %s references %s", step.Name, dep)
+		}
+		if step.Name == dep {
+			return fmt.Errorf("linter: cyclical step dependency detected: %s", dep)
 		}
 	}
 	return nil

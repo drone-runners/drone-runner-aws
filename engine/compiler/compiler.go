@@ -250,6 +250,15 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			workingDir = sourceDir
 		}
 
+		// appends the devices to the container def.
+		var devices []*lespec.VolumeDevice
+		for _, vol := range src.Devices {
+			devices = append(devices, &lespec.VolumeDevice{
+				Name:       vol.Name,
+				DevicePath: vol.DevicePath,
+			})
+		}
+
 		// appends the settings variables to the container definition.
 		for key, value := range src.Settings {
 			if value == nil {
@@ -294,8 +303,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			Step: lespec.Step{
 				Command:      command,
 				Detach:       src.Detach,
+				Devices:      devices,
+				DNS:          src.DNS,
+				DNSSearch:    src.DNSSearch,
 				Envs:         stepEnv,
 				Entrypoint:   entrypoint,
+				ExtraHosts:   src.ExtraHosts,
 				Files:        files,
 				ID:           stepID,
 				Image:        src.Image,
@@ -304,9 +317,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				Networks:     nil, // not used by the runner
 				PortBindings: src.PortBindings,
 				Privileged:   src.Image != "", // all steps that use images, run in privileged mode
+				Pull:         convertPullPolicy(src.Pull),
 				Secrets:      stepSecrets,
-				WorkingDir:   workingDir,
+				ShmSize:      int64(src.ShmSize),
+				User:         src.User,
 				Volumes:      volumeMounts,
+				WorkingDir:   workingDir,
 			},
 			DependsOn: src.DependsOn,
 			RunPolicy: runPolicy,
