@@ -7,9 +7,10 @@ package daemon
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"time"
+
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
@@ -20,7 +21,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/handler/router"
@@ -46,9 +46,8 @@ import (
 var nocontext = context.Background()
 
 type daemonCommand struct {
-	envFile  string
-	poolFile string
-	pool     string
+	envFile string
+	pool    string
 }
 
 func (c *daemonCommand) run(*kingpin.ParseContext) error {
@@ -131,10 +130,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: unable to parse pool file")
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 
-	var pools = []vmpool.Pool{}
 	cloudInitParams := &cloudinit.Params{
 		LiteEnginePath: defaultPoolSettings.LiteEnginePath,
 		CaCertFile:     defaultPoolSettings.CaCertFile,
@@ -142,48 +140,12 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		KeyFile:        defaultPoolSettings.KeyFile,
 	}
 
-	for _, i := range poolFile.Instances {
-		switch i.Type {
-		case "aws":
-			//
-		case "gcp":
-			var g, ok = i.Spec.(*config.Google)
-			if !ok {
-				logrus.WithError(err).Errorln("daemon: unable to parse pool file")
-			}
-			var pool, err = google.New(
-				google.WithRunnerName(defaultPoolSettings.RunnerName),
-				google.WithArch(i.Platform.Arch),
-				google.WithOs(i.Platform.OS),
-				google.WithLimit(i.Limit),
-				google.WithPool(i.Pool),
-				google.WithName(i.Name),
-				google.WithDiskSize(g.Disk.Size),
-				google.WithDiskType(g.Disk.Type),
-				google.WithMachineImage(g.Image),
-				google.WithMachineType(g.MachineType),
-				google.WithLabels(g.Labels),
-				google.WithNetwork(g.Network),
-				google.WithSubnetwork(g.Subnetwork),
-				google.WithPrivateIP(g.PrivateIP),
-				google.WithServiceAccountEmail(g.Account.ServiceAccountEmail),
-				google.WithProject(g.Account.ProjectID),
-				google.WithJsonPath(g.Account.JSONPath),
-				google.WithTags(g.Tags...),
-				google.WithScopes(g.Scopes...),
-				google.WithUserData(g.UserData, cloudInitParams),
-				google.WithZones(g.Zone...),
-				google.WithUserDataKey(g.UserDataKey),
-			)
-			if err != nil {
-				logrus.WithError(err).Errorln("daemon: unable to create google config")
-			}
-			pools = append(pools, pool)
-		default:
-			return fmt.Errorf("unknown instance type %s", i.Type)
-		}
+	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, cloudInitParams)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to process pool file")
+		os.Exit(1)
 	}
-
 	err = poolManager.Add(pools...)
 	if err != nil {
 		logrus.WithError(err).
@@ -372,18 +334,16 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	return err
 }
 
-// helper function configures the global logger from
-// the loaded configuration.
-func SetupLogger(config *Config) {
+func SetupLogger(c *Config) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),
 		),
 	)
-	if config.Debug {
+	if c.Debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
-	if config.Trace {
+	if c.Trace {
 		logrus.SetLevel(logrus.TraceLevel)
 	}
 }
@@ -398,10 +358,7 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("envfile", "load the environment variable file").
 		Default("").
 		StringVar(&c.envFile)
-	cmd.Flag("poolfile", "file to seed the aws pool").
-		Default(".drone_pool.yml").
-		StringVar(&c.poolFile)
 	cmd.Flag("pool", "file to seed the pool").
-		Default(".pool.yml").
+		Default(".drone_pool.yml").
 		StringVar(&c.pool)
 }

@@ -8,11 +8,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool/amazon"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -44,7 +42,7 @@ func TestLint(t *testing.T) {
 				return
 			}
 
-			pool := cloudaws.DummyPool("cats", "runner")
+			pool := DummyPool("cats", "runner")
 
 			poolManager := &vmpool.Manager{}
 			err = poolManager.Add(pool)
@@ -92,7 +90,7 @@ func Test_checkPools(t *testing.T) {
 		poolManager *vmpool.Manager
 	}
 
-	poolInstance := cloudaws.DummyPool("test", "runner")
+	poolInstance := DummyPool("test", "runner")
 	poolManagerEmpty := &vmpool.Manager{}
 	poolManagerWithOne := &vmpool.Manager{}
 	_ = poolManagerWithOne.Add(poolInstance)
@@ -144,4 +142,15 @@ func Test_checkPools(t *testing.T) {
 			}
 		})
 	}
+}
+
+func DummyPool(name, runnerName string) vmpool.Pool {
+	var pool, err = amazon.New(
+		amazon.WithRunnerName(runnerName),
+		amazon.WithName(name), // pool name
+	)
+	if err != nil {
+		return pool
+	}
+	return pool
 }

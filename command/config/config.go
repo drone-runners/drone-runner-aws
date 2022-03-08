@@ -39,7 +39,6 @@ type (
 		Disk        disk              `json:"disk,omitempty"`
 		Network     string            `json:"network,omitempty"`
 		Subnetwork  string            `json:"Subnetwork,omitempty"`
-		Device      device            `json:"device,omitempty"`
 		PrivateIP   bool              `json:"private_ip,omitempty"`
 		Zone        []string          `json:"zone,omitempty" yaml:"zone"`
 		Labels      map[string]string `json:"labels,omitempty"`
@@ -52,21 +51,23 @@ type (
 			AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
 			AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
 			Region           string `json:"region,omitempty"`
+			Retries          int    `json:"retries,omitempty"`
 			AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone"`
+			KeyPairName      string `json:"key_pair_name,omitempty" yaml:"key_pair_name"`
 		} `json:"account,omitempty"`
-		Name       string            `json:"name,omitempty"`
-		Size       string            `json:"size,omitempty"`
-		Tags       map[string]string `json:"tags,omitempty"`
-		Type       string            `json:"type,omitempty"`
-		PrivateKey string            `json:"private_key,omitempty" yaml:"private_key"`
-		PublicKey  string            `json:"public_key,omitempty" yaml:"public_key"`
-		UserData   string            `json:"user_data,omitempty"`
-		Disk       disk              `json:"disk,omitempty"`
-		Network    network           `json:"network,omitempty"`
-		Device     device            `json:"device,omitempty"`
-		ID         string            `json:"id,omitempty"`
-		IP         string            `json:"ip,omitempty"`
-		Zone       []string          `json:"zone,omitempty" yaml:"zone"`
+		Name          string            `json:"name,omitempty"`
+		Size          string            `json:"size,omitempty"`
+		SizeAlt       string            `json:"size_alt,omitempty"`
+		AMI           string            `json:"ami,omitempty"`
+		Tags          map[string]string `json:"tags,omitempty"`
+		Type          string            `json:"type,omitempty"`
+		UserData      string            `json:"user_data,omitempty"`
+		Disk          disk              `json:"disk,omitempty"`
+		Network       network           `json:"network,omitempty"`
+		DeviceName    string            `json:"device_name,omitempty"`
+		IamProfileArn string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
+		MarketType    string            `json:"market_type,omitempty" yaml:"market_type"`
+		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory"`
 	}
 
 	// platform specifies the configuration for a platform instance.
@@ -80,11 +81,6 @@ type (
 		Size int64  `json:"size,omitempty"`
 		Type string `json:"type,omitempty"`
 		Iops int64  `json:"iops,omitempty"`
-	}
-
-	// device provides the device settings.
-	device struct {
-		Name string `json:"name,omitempty"`
 	}
 
 	// network provides network settings.
@@ -109,7 +105,7 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch s.Type {
-	case "aws":
+	case "amazon":
 		s.Spec = new(Amazon)
 	case "gcp":
 		s.Spec = new(Google)

@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net/http"
 	"reflect"
-	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
@@ -21,43 +20,6 @@ const (
 	cloud = "google"
 )
 
-type provider struct {
-	init sync.Once
-
-	name       string
-	runnerName string
-
-	projectID string
-	JSONPath  string
-	JSON      []byte
-
-	os      string
-	arch    string
-	rootDir string
-
-	// vm instance data
-	diskSize            int64
-	diskType            string
-	image               string
-	labels              map[string]string
-	network             string
-	subnetwork          string
-	privateIP           bool
-	scopes              []string
-	serviceAccountEmail string
-	size                string
-	tags                []string
-	zones               []string
-	userData            string
-	userDataKey         string
-
-	// pool size data
-	pool  int
-	limit int
-
-	service *compute.Service
-}
-
 func (p *provider) GetName() string {
 	return p.name
 }
@@ -67,7 +29,7 @@ func (p *provider) GetOS() string {
 }
 
 func (p *provider) GetRootDir() string {
-	return p.rootDir
+	return "/"
 }
 
 func (p *provider) GetMaxSize() int {

@@ -14,14 +14,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
+
 	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 	lelivelog "github.com/harness/lite-engine/livelog"
@@ -38,8 +43,7 @@ import (
 
 type delegateCommand struct {
 	envfile             string
-	awsPoolfile         string
-	googlePoolFile      string
+	pool                string
 	defaultPoolSettings vmpool.DefaultSettings
 	poolManager         *vmpool.Manager
 }
@@ -48,17 +52,17 @@ const TagStageID = vmpool.TagPrefix + "stage-id"
 
 // helper function configures the global logger from
 // the loaded configuration.
-func setupLogger(config *Config) {
+func setupLogger(c *Config) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),
 		),
 	)
 
-	if config.Debug {
+	if c.Debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
-	if config.Trace {
+	if c.Trace {
 		logrus.SetLevel(logrus.TraceLevel)
 	}
 }
@@ -71,19 +75,19 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 			Errorln("delegate: failed to load environment variables")
 	}
 	// load the configuration from the environment
-	var config Config
-	processEnvErr := envconfig.Process("", &config)
+	var env Config
+	processEnvErr := envconfig.Process("", &env)
 	if processEnvErr != nil {
 		logrus.WithError(processEnvErr).
 			Errorln("delegate: failed to load configuration")
 	}
 	// load the configuration from the environment
-	config, err := fromEnviron()
+	env, err := fromEnviron()
 	if err != nil {
 		return err
 	}
 	// setup the global logrus logger.
-	setupLogger(&config)
+	setupLogger(&env)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -93,7 +97,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 	// generate cert files if needed
-	certGenerationErr := le.GenerateLECerts(config.Runner.Name, config.DefaultPoolSettings.CertificateFolder)
+	certGenerationErr := le.GenerateLECerts(env.Runner.Name, env.DefaultPoolSettings.CertificateFolder)
 	if certGenerationErr != nil {
 		logrus.WithError(certGenerationErr).
 			Errorln("delegate: failed to generate certificates")
@@ -101,7 +105,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 	// read cert files into memory
 	var readCertsErr error
-	config.DefaultPoolSettings.CaCertFile, config.DefaultPoolSettings.CertFile, config.DefaultPoolSettings.KeyFile, readCertsErr = le.ReadLECerts(config.DefaultPoolSettings.CertificateFolder)
+	env.DefaultPoolSettings.CaCertFile, env.DefaultPoolSettings.CertFile, env.DefaultPoolSettings.KeyFile, readCertsErr = le.ReadLECerts(env.DefaultPoolSettings.CertificateFolder)
 	if readCertsErr != nil {
 		logrus.WithError(readCertsErr).
 			Errorln("delegate: failed to read certificates")
@@ -109,33 +113,35 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 	// we have enough information for default pool settings
 	c.defaultPoolSettings = vmpool.DefaultSettings{
-		RunnerName:     config.Runner.Name,
-		LiteEnginePath: config.DefaultPoolSettings.LiteEnginePath,
-		CaCertFile:     config.DefaultPoolSettings.CaCertFile,
-		CertFile:       config.DefaultPoolSettings.CertFile,
-		KeyFile:        config.DefaultPoolSettings.KeyFile,
+		RunnerName:     env.Runner.Name,
+		LiteEnginePath: env.DefaultPoolSettings.LiteEnginePath,
+		CaCertFile:     env.DefaultPoolSettings.CaCertFile,
+		CertFile:       env.DefaultPoolSettings.CertFile,
+		KeyFile:        env.DefaultPoolSettings.KeyFile,
 	}
-	// process the pool file
-	//poolsAWS, err := cloudaws.ProcessPoolFile(c.awsPoolfile, &c.defaultPoolSettings)
-	//if err != nil {
-	//	logrus.WithError(err).
-	//		Errorln("delegate: unable to parse aws pool file")
-	//	os.Exit(1) //nolint:gocritic // failing fast before we do any work.
-	//}
-	//err = c.poolManager.Add(poolsAWS...)
+
+	cloudInitParams := &cloudinit.Params{
+		LiteEnginePath: c.defaultPoolSettings.LiteEnginePath,
+		CaCertFile:     c.defaultPoolSettings.CaCertFile,
+		CertFile:       c.defaultPoolSettings.CertFile,
+		KeyFile:        c.defaultPoolSettings.KeyFile,
+	}
+
+	poolFile, err := config.ProcessPoolFile(c.pool)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("delegate: unable to add to aws pools")
+			Errorln("daemon: unable to parse pool file")
+		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	}
+
+	pools, err := poolfile.MapPool(poolFile, &c.defaultPoolSettings, cloudInitParams)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to process pool file")
 		os.Exit(1)
 	}
-	//poolsGCP, err := google.ProcessPoolFile(c.googlePoolFile, &c.defaultPoolSettings)
-	//if err != nil {
-	//	logrus.WithError(err).
-	//		Errorln("delegate: unable to parse google pool file")
-	//	os.Exit(1)
-	//}
 
-	//err = c.poolManager.Add(poolsGCP...)
+	err = c.poolManager.Add(pools...)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to add to google pools")
@@ -150,8 +156,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// setup lifetimes of instances
-	busyMaxAge := time.Hour * time.Duration(config.DefaultPoolSettings.BusyMaxAge) // includes time required to setup an instance
-	freeMaxAge := time.Hour * time.Duration(config.DefaultPoolSettings.FreeMaxAge)
+	busyMaxAge := time.Hour * time.Duration(env.DefaultPoolSettings.BusyMaxAge) // includes time required to setup an instance
+	freeMaxAge := time.Hour * time.Duration(env.DefaultPoolSettings.FreeMaxAge)
 	err = c.poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
 	if err != nil {
 		logrus.WithError(err).
@@ -160,7 +166,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// lets remove any old instances.
-	if !config.DefaultPoolSettings.ReusePool {
+	if !env.DefaultPoolSettings.ReusePool {
 		cleanErr := c.poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
@@ -183,7 +189,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 
 	var g errgroup.Group
 	runnerServer := server.Server{
-		Addr:    config.Server.Port,
+		Addr:    env.Server.Port,
 		Handler: c.delegateListener(),
 	}
 
@@ -203,7 +209,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// lets remove any old instances.
-	if !config.DefaultPoolSettings.ReusePool {
+	if !env.DefaultPoolSettings.ReusePool {
 		cleanErr := c.poolManager.CleanPools(context.Background(), true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
@@ -548,12 +554,9 @@ func RegisterDelegate(app *kingpin.Application) {
 	cmd.Flag("envfile", "load the environment variable file").
 		Default("").
 		StringVar(&c.envfile)
-	cmd.Flag("poolfile", "file to seed the aws pool").
+	cmd.Flag("poolfile", "file to seed the amazon pool").
 		Default(".drone_pool.yml").
-		StringVar(&c.awsPoolfile)
-	cmd.Flag("pool_file_google", "file to seed the google pool").
-		Default(".drone_pool_google.yml").
-		StringVar(&c.googlePoolFile)
+		StringVar(&c.pool)
 }
 
 func (c *delegateCommand) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {

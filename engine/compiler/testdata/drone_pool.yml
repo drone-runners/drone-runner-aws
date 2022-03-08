@@ -1,17 +1,21 @@
-name: ubuntu
-max_pool_size: 1
-
-account:
-  region: us-east-2
-  access_key_id: asdasd
-  access_key_secret: asdasdasd
-
-instance:
-  ami: ami-051197ce9cbb023ea 
-  type: t2.micro
-  network:
-    security_groups:
-      - sg-0f5aaeb48d35162a4 
-  tags:
-    cat: dog
-  
+  version: "1"
+  instances:
+    - name: ubuntu
+      default: true
+      type: amazon
+      pool: 1    # total number of warm instances in the pool at all times
+      limit: 100  # limit the total number of running servers. If exceeded block or error.
+      platform:
+        os: linux
+        arch: amd64
+      spec:
+        account:
+          region: us-east-2
+          availability_zone: us-east-2c
+        ami: ami-051197ce9cbb023ea
+        size: t2.micro
+        network:
+          security_groups:
+            - sg-0f5aaeb48d35162a4
+        tags:
+          cat: dog

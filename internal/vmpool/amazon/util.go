@@ -2,7 +2,7 @@
 // Use of this source code is governed by the Polyform License
 // that can be found in the LICENSE file.
 
-package cloudaws
+package amazon
 
 import (
 	"github.com/aws/aws-sdk-go/aws"

@@ -12,10 +12,13 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/sirupsen/logrus"
+
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
@@ -32,8 +35,7 @@ import (
 var nocontext = context.Background()
 
 var defaultPoolSettings = vmpool.DefaultSettings{
-	RunnerName:     "runner",
-	AwsAccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+	RunnerName: "runner",
 }
 
 // dummy function that returns a non-random string for testing.
@@ -185,10 +187,18 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	pools, err := cloudaws.ProcessPoolFile("testdata/drone_pool.yml", &defaultPoolSettings)
+	poolFile, err := config.ProcessPoolFile("testdata/drone_pool.yml")
 	if err != nil {
-		t.Error(err)
-		return nil
+		logrus.WithError(err).
+			Errorln("daemon: unable to parse pool file")
+		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	}
+
+	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, nil)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to process pool file")
+		os.Exit(1)
 	}
 
 	poolManager := &vmpool.Manager{}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/ghodss/yaml"
@@ -15,7 +14,7 @@ func ProcessPoolFile(rawFile string) (*PoolFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	data := ioutil.NopCloser(
+	data := io.NopCloser(
 		bytes.NewBuffer(rawPool),
 	)
 	inst, err := Parse(data)
@@ -27,7 +26,7 @@ func ProcessPoolFile(rawFile string) (*PoolFile, error) {
 
 // Parse parses the configuration from io.Reader r.
 func Parse(r io.Reader) (*PoolFile, error) {
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}

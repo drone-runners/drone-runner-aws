@@ -1,9 +1,10 @@
 package google
 
 import (
-	"fmt"
 	"net/http"
 	"os"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
@@ -18,7 +19,7 @@ type Option func(*provider)
 // Client used with the Google Compute provider.
 func WithClient(client *http.Client) Option {
 	return func(p *provider) {
-		service, err := compute.New(client)
+		service, err := compute.New(client) //nolint:staticcheck
 		if err != nil {
 			panic(err)
 		}
@@ -47,9 +48,9 @@ func WithPool(pool int) Option {
 	}
 }
 
-func WithOs(os string) Option {
+func WithOs(machineOs string) Option {
 	return func(p *provider) {
-		p.os = os
+		p.os = machineOs
 	}
 }
 
@@ -130,8 +131,8 @@ func WithProject(project string) Option {
 	}
 }
 
-// WithJsonPath returns an option to set the json path
-func WithJsonPath(path string) Option {
+// WithJSONPath returns an option to set the json path
+func WithJSONPath(path string) Option {
 	return func(p *provider) {
 		p.JSONPath = path
 	}
@@ -160,7 +161,7 @@ func WithUserData(text string, params *cloudinit.Params) Option {
 		}
 		data, err := os.ReadFile(text)
 		if err != nil {
-			err = fmt.Errorf("failed to load cloud init script template: %w", err)
+			logrus.Error(err)
 			return
 		}
 		p.userData, _ = cloudinit.Custom(string(data), params)

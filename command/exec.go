@@ -13,6 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+
 	"github.com/drone-runners/drone-runner-aws/command/internal"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
@@ -38,17 +41,17 @@ import (
 
 type execCommand struct {
 	*internal.Flags
-	Source   *os.File
-	Poolfile string
-	Include  []string
-	Exclude  []string
-	Environ  map[string]string
-	Secrets  map[string]string
-	Pretty   bool
-	Procs    int64
-	Debug    bool
-	Trace    bool
-	Dump     bool
+	Source  *os.File
+	Pool    string
+	Include []string
+	Exclude []string
+	Environ map[string]string
+	Secrets map[string]string
+	Pretty  bool
+	Procs   int64
+	Debug   bool
+	Trace   bool
+	Dump    bool
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its complex but not too bad.
@@ -82,13 +85,13 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 
 	// evaluates string replacement expressions and returns an
 	// update configuration.
-	config, err := envsubst.Eval(string(rawsource), subf)
+	env, err := envsubst.Eval(string(rawsource), subf)
 	if err != nil {
 		return err
 	}
 
 	// parse and lint the configuration.
-	mnfst, err := manifest.ParseString(config)
+	mnfst, err := manifest.ParseString(env)
 	if err != nil {
 		return err
 	}
@@ -103,17 +106,26 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	defaultPoolSettings := vmpool.DefaultSettings{
 		RunnerName: runnerName,
 	}
-	// read the pool file
-	//pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
-	//if poolFileErr != nil {
-	//	return poolFileErr
-	//}
+
+	poolFile, err := config.ProcessPoolFile(c.Pool)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to parse pool file")
+		os.Exit(1)
+	}
+
+	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, nil)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("daemon: unable to process pool file")
+		os.Exit(1)
+	}
 
 	poolManager := &vmpool.Manager{}
-	//err = poolManager.Add(pools...)
-	//if err != nil {
-	//	return err
-	//}
+	err = poolManager.Add(pools...)
+	if err != nil {
+		return err
+	}
 
 	// compile the pipeline to an intermediate representation.
 	comp := &compiler.Compiler{
@@ -272,7 +284,7 @@ func registerExec(app *kingpin.Application) {
 
 	cmd.Arg("poolfile", "file to seed the aws pool").
 		Default(".drone_pool.yml").
-		StringVar(&c.Poolfile)
+		StringVar(&c.Pool)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)

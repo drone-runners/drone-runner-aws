@@ -2,6 +2,7 @@ package google
 
 import (
 	"os"
+	"sync"
 
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
@@ -22,6 +23,42 @@ var (
 		"https://www.googleapis.com/auth/trace.append",
 	}
 )
+
+type provider struct {
+	init sync.Once
+
+	name       string
+	runnerName string
+
+	projectID string
+	JSONPath  string
+	JSON      []byte
+
+	os   string
+	arch string
+
+	// vm instance data
+	diskSize            int64
+	diskType            string
+	image               string
+	labels              map[string]string
+	network             string
+	subnetwork          string
+	privateIP           bool
+	scopes              []string
+	serviceAccountEmail string
+	size                string
+	tags                []string
+	zones               []string
+	userData            string
+	userDataKey         string
+
+	// pool size data
+	pool  int
+	limit int
+
+	service *compute.Service
+}
 
 func New(opts ...Option) (vmpool.Pool, error) {
 	p := new(provider)
@@ -83,27 +120,15 @@ func New(opts ...Option) (vmpool.Pool, error) {
 		if p.JSONPath != "" {
 			p.JSON, _ = os.ReadFile(p.JSONPath)
 		}
-		client, err := google.DefaultClient(oauth2.NoContext, compute.ComputeScope)
+		client, err := google.DefaultClient(oauth2.NoContext, compute.ComputeScope) //nolint:staticcheck
 		if err != nil {
 			return nil, err
 		}
 
-		p.service, err = compute.New(client)
+		p.service, err = compute.New(client) //nolint:staticcheck
 		if err != nil {
 			return nil, err
 		}
 	}
 	return p, nil
-}
-
-// helper function returns the base temporary directory based on the target platform.
-func tempdir(inputOS string) string {
-	const dir = "google"
-
-	switch inputOS {
-	case oshelp.OSWindows:
-		return oshelp.JoinPaths(inputOS, "C:\\Windows\\Temp", dir)
-	default:
-		return oshelp.JoinPaths(inputOS, "/tmp", dir)
-	}
 }
