@@ -12,13 +12,11 @@ import (
 	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
-	"github.com/sirupsen/logrus"
-
 	"github.com/drone-runners/drone-runner-aws/command/internal"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -28,6 +26,7 @@ import (
 	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 

@@ -3,10 +3,10 @@ package amazon
 import (
 	"os"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Option func(*provider)

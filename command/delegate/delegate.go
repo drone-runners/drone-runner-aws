@@ -21,12 +21,10 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
-
 	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 	lelivelog "github.com/harness/lite-engine/livelog"

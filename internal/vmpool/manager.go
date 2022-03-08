@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/drone/runner-go/logger"
+
+	"github.com/sirupsen/logrus"
 )
 
 type (

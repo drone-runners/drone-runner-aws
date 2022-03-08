@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"

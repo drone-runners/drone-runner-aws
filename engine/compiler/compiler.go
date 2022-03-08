@@ -14,7 +14,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/encoder"
 	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
-
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"

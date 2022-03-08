@@ -28,7 +28,6 @@ instances:
     spec:
       account:
         region: us-east-2
-        availability_zone: us-east-2c
         access_key_id: asdasdasd
         access_key_secret: asdasdasdasd
       ami: ami-0840994b9b4c03cb1

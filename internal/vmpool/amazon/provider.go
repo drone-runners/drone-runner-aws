@@ -1,12 +1,13 @@
 package amazon
 
 import (
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
 )
 
 // provider is a struct that implements vmpool.Pool interface

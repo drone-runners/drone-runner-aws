@@ -4,12 +4,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/compute/v1"
 )
 

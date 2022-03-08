@@ -10,9 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
