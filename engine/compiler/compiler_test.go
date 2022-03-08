@@ -24,7 +24,6 @@ import (
 	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 	lespec "github.com/harness/lite-engine/engine/spec"
-	"github.com/sirupsen/logrus"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -187,16 +186,14 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 
 	poolFile, err := config.ProcessPoolFile("testdata/drone_pool.yml")
 	if err != nil {
-		logrus.WithError(err).
-			Errorln("daemon: unable to parse pool file")
-		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+		t.Errorf("unable to parse pool file: %s", err)
+		return nil
 	}
 
 	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, nil)
 	if err != nil {
-		logrus.WithError(err).
-			Errorln("daemon: unable to process pool file")
-		os.Exit(1)
+		t.Errorf("unable to process pool file")
+		return nil
 	}
 
 	poolManager := &vmpool.Manager{}

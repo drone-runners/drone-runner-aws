@@ -87,15 +87,15 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	poolFile, err := config.ProcessPoolFile(c.Pool)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to parse pool file")
-		os.Exit(1)
+			Errorln("compile: unable to parse pool file")
+		return err
 	}
 
 	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, nil)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to process pool file")
-		os.Exit(1)
+			Errorln("compile: unable to process pool file")
+		return err
 	}
 
 	poolManager := &vmpool.Manager{}

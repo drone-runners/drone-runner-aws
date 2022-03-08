@@ -128,21 +128,21 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	poolFile, err := config.ProcessPoolFile(c.pool)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to parse pool file")
+			Errorln("delegate: unable to parse pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 
 	pools, err := poolfile.MapPool(poolFile, &c.defaultPoolSettings, cloudInitParams)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to process pool file")
+			Errorln("delegate: unable to process pool file")
 		os.Exit(1)
 	}
 
 	err = c.poolManager.Add(pools...)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("delegate: unable to add to google pools")
+			Errorln("delegate: unable to add pools")
 		os.Exit(1)
 	}
 

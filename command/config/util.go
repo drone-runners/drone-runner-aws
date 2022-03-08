@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -10,14 +9,13 @@ import (
 )
 
 func ProcessPoolFile(rawFile string) (*PoolFile, error) {
-	rawPool, err := os.ReadFile(rawFile)
+	f, err := os.Open(rawFile)
 	if err != nil {
 		return nil, err
 	}
-	data := io.NopCloser(
-		bytes.NewBuffer(rawPool),
-	)
-	inst, err := Parse(data)
+	defer f.Close()
+
+	inst, err := Parse(f)
 	if err != nil {
 		return nil, err
 	}
