@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
@@ -35,12 +35,12 @@ type Opts struct {
 // Engine implements a pipeline engine.
 type Engine struct {
 	opts         Opts
-	poolManager  *vmpool.Manager
-	poolSettings *vmpool.DefaultSettings
+	poolManager  *drivers.Manager
+	poolSettings *drivers.DefaultSettings
 }
 
 // New returns a new engine.
-func New(opts Opts, poolManager *vmpool.Manager, defaultPoolSettings *vmpool.DefaultSettings) (*Engine, error) {
+func New(opts Opts, poolManager *drivers.Manager, defaultPoolSettings *drivers.DefaultSettings) (*Engine, error) {
 	return &Engine{
 		opts:         opts,
 		poolManager:  poolManager,
@@ -106,12 +106,12 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	tags := map[string]string{}
 	// TODO: Add Tags to spec then uncomment this code
 	//	for k, v := range spec.Tags {
-	//		if strings.HasPrefix(k, vmpool.TagPrefix) {
+	//		if strings.HasPrefix(k, drivers.TagPrefix) {
 	//			continue
 	//		}
 	//		tags[k] = v
 	//	}
-	tags[vmpool.TagStageID] = stageID
+	tags[drivers.TagStageID] = stageID
 
 	err = poolMngr.Tag(ctx, poolName, instance.ID, tags)
 	if err != nil {

@@ -1,4 +1,4 @@
-package vmpool
+package drivers
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/drone/runner-go/logger"
+
+	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -236,7 +236,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 		go func(ctx context.Context, logr logger.Logger) {
 			defer wg.Done()
 
-			instance, err := pool.Provision(ctx, false)
+			instance, err := pool.Create(ctx, false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create an instance")
 				return
@@ -291,7 +291,7 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 
 		var inst *Instance
 
-		inst, err = pool.Provision(ctx, true)
+		inst, err = pool.Create(ctx, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to provision a new instance in %q pool: %w", poolName, err)
 		}
@@ -392,9 +392,9 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 	return nil
 }
 
-func (m *Manager) Ping(ctx context.Context) error {
+func (m *Manager) CheckProvider(ctx context.Context) error {
 	for _, pool := range m.poolMap {
-		err := pool.Ping(ctx)
+		err := pool.CheckProvider(ctx)
 		if err != nil {
 			return err
 		}

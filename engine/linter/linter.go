@@ -10,9 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -25,7 +24,7 @@ var ErrDuplicateStepName = errors.New("linter: duplicate step names")
 // rules and returns an error if one or more of the
 // rules are broken.
 type Linter struct {
-	PoolManager *vmpool.Manager
+	PoolManager *drivers.Manager
 }
 
 // New returns a new Linter.
@@ -52,7 +51,7 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 	return err
 }
 
-func checkPools(pipeline *resource.Pipeline, poolManager *vmpool.Manager) error {
+func checkPools(pipeline *resource.Pipeline, poolManager *drivers.Manager) error {
 	if poolManager.Count() == 0 {
 		return fmt.Errorf("linter: there are no pools defined")
 	}

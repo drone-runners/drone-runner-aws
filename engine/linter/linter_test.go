@@ -8,11 +8,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -44,9 +42,9 @@ func TestLint(t *testing.T) {
 				return
 			}
 
-			pool := cloudaws.DummyPool("cats", "runner")
+			pool := DummyPool("cats", "runner")
 
-			poolManager := &vmpool.Manager{}
+			poolManager := &drivers.Manager{}
 			err = poolManager.Add(pool)
 			if err != nil {
 				t.Error(err)
@@ -89,12 +87,12 @@ func TestLint(t *testing.T) {
 func Test_checkPools(t *testing.T) {
 	type args struct {
 		pipeline    *resource.Pipeline
-		poolManager *vmpool.Manager
+		poolManager *drivers.Manager
 	}
 
-	poolInstance := cloudaws.DummyPool("test", "runner")
-	poolManagerEmpty := &vmpool.Manager{}
-	poolManagerWithOne := &vmpool.Manager{}
+	poolInstance := DummyPool("test", "runner")
+	poolManagerEmpty := &drivers.Manager{}
+	poolManagerWithOne := &drivers.Manager{}
 	_ = poolManagerWithOne.Add(poolInstance)
 
 	tests := []struct {
@@ -144,4 +142,15 @@ func Test_checkPools(t *testing.T) {
 			}
 		})
 	}
+}
+
+func DummyPool(name, runnerName string) drivers.Pool {
+	var pool, err = amazon.New(
+		amazon.WithRunnerName(runnerName),
+		amazon.WithName(name), // pool name
+	)
+	if err != nil {
+		return pool
+	}
+	return pool
 }

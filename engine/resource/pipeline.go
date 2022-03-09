@@ -116,7 +116,6 @@ type (
 	Pool struct {
 		Use string `json:"use,omitempty" yaml:"use"`
 	}
-	// Instance provides instance settings.
 
 	// Volume that can be mounted by containers.
 	Volume struct {

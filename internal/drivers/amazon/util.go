@@ -2,12 +2,13 @@
 // Use of this source code is governed by the Polyform License
 // that can be found in the LICENSE file.
 
-package cloudaws
+package amazon
 
 import (
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
 )
 
 // helper function converts an array of tags in string

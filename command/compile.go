@@ -11,13 +11,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/internal"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -26,16 +26,17 @@ import (
 	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type compileCommand struct {
 	*internal.Flags
-	Source   *os.File
-	Poolfile string
-	Environ  map[string]string
-	Secrets  map[string]string
-	Config   string
+	Source  *os.File
+	Pool    string
+	Environ map[string]string
+	Secrets map[string]string
+	Config  string
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
@@ -64,12 +65,12 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		return v
 	}
 	// evaluates string replacement expressions and returns an update configuration.
-	config, err := envsubst.Eval(string(rawsource), subf)
+	env, err := envsubst.Eval(string(rawsource), subf)
 	if err != nil {
 		return err
 	}
 	// parse and lint the configuration
-	mnfst, err := manifest.ParseString(config)
+	mnfst, err := manifest.ParseString(env)
 	if err != nil {
 		return err
 	}
@@ -79,19 +80,25 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// we have enough information for default pool settings
-	defaultPoolSettings := vmpool.DefaultSettings{
-		RunnerName:         runnerName,
-		AwsAccessKeyID:     c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_ID"],
-		AwsAccessKeySecret: c.Environ["DRONE_SETTINGS_AWS_ACCESS_KEY_SECRET"],
-		AwsKeyPairName:     c.Environ["DRONE_SETTINGS_AWS_KEY_PAIR_NAME"],
-	}
-	// read the poolfile
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
-	if poolFileErr != nil {
-		return poolFileErr
+	defaultPoolSettings := drivers.DefaultSettings{
+		RunnerName: runnerName,
 	}
 
-	poolManager := &vmpool.Manager{}
+	poolFile, err := config.ParseFile(c.Pool)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("compile: unable to parse pool file")
+		return err
+	}
+
+	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, nil)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("compile: unable to process pool file")
+		return err
+	}
+
+	poolManager := &drivers.Manager{}
 	err = poolManager.Add(pools...)
 	if err != nil {
 		return err
@@ -142,9 +149,9 @@ func registerCompile(app *kingpin.Application) {
 		Default(".drone.yml").
 		FileVar(&c.Source)
 
-	cmd.Arg("poolfile", "file to seed the aws pool").
-		Default(".drone_pool.yml").
-		StringVar(&c.Poolfile)
+	cmd.Arg("pool", "file to seed the aws pool").
+		Default("pool.yml").
+		StringVar(&c.Pool)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)

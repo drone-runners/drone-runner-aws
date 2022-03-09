@@ -1,4 +1,4 @@
-package vmpool
+package drivers
 
 import (
 	"context"
@@ -28,8 +28,8 @@ type Pool interface {
 	GetMaxSize() int
 	GetMinSize() int
 
-	Ping(ctx context.Context) error
-	Provision(ctx context.Context, tagAsInUse bool) (instance *Instance, err error)
+	CheckProvider(ctx context.Context) error
+	Create(ctx context.Context, tagAsInUse bool) (instance *Instance, err error)
 	List(ctx context.Context) (busy, free []Instance, err error)
 	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *Instance, err error)
 	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
@@ -53,14 +53,9 @@ type Platform struct {
 }
 
 type DefaultSettings struct {
-	RunnerName          string
-	AwsAccessKeyID      string
-	AwsAccessKeySecret  string
-	AwsRegion           string
-	AwsAvailabilityZone string
-	AwsKeyPairName      string
-	LiteEnginePath      string
-	CaCertFile          string
-	CertFile            string
-	KeyFile             string
+	RunnerName     string
+	LiteEnginePath string
+	CaCertFile     string
+	CertFile       string
+	KeyFile        string
 }

@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/internal"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/cloudaws"
-
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -40,17 +40,17 @@ import (
 
 type execCommand struct {
 	*internal.Flags
-	Source   *os.File
-	Poolfile string
-	Include  []string
-	Exclude  []string
-	Environ  map[string]string
-	Secrets  map[string]string
-	Pretty   bool
-	Procs    int64
-	Debug    bool
-	Trace    bool
-	Dump     bool
+	Source  *os.File
+	Pool    string
+	Include []string
+	Exclude []string
+	Environ map[string]string
+	Secrets map[string]string
+	Pretty  bool
+	Procs   int64
+	Debug   bool
+	Trace   bool
+	Dump    bool
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its complex but not too bad.
@@ -84,13 +84,13 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 
 	// evaluates string replacement expressions and returns an
 	// update configuration.
-	config, err := envsubst.Eval(string(rawsource), subf)
+	env, err := envsubst.Eval(string(rawsource), subf)
 	if err != nil {
 		return err
 	}
 
 	// parse and lint the configuration.
-	mnfst, err := manifest.ParseString(config)
+	mnfst, err := manifest.ParseString(env)
 	if err != nil {
 		return err
 	}
@@ -102,16 +102,25 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return err
 	}
 	// we have enough information for default pool settings
-	defaultPoolSettings := vmpool.DefaultSettings{
+	defaultPoolSettings := drivers.DefaultSettings{
 		RunnerName: runnerName,
 	}
-	// read the pool file
-	pools, poolFileErr := cloudaws.ProcessPoolFile(c.Poolfile, &defaultPoolSettings)
-	if poolFileErr != nil {
-		return poolFileErr
+
+	poolFile, err := config.ParseFile(c.Pool)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("exec: unable to parse pool file")
+		return err
 	}
 
-	poolManager := &vmpool.Manager{}
+	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, nil)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("exec: unable to process pool file")
+		return err
+	}
+
+	poolManager := &drivers.Manager{}
 	err = poolManager.Add(pools...)
 	if err != nil {
 		return err
@@ -272,9 +281,9 @@ func registerExec(app *kingpin.Application) {
 		Default(".drone.yml").
 		FileVar(&c.Source)
 
-	cmd.Arg("poolfile", "file to seed the aws pool").
-		Default(".drone_pool.yml").
-		StringVar(&c.Poolfile)
+	cmd.Arg("pool", "file to seed the aws pool").
+		Default("pool.yml").
+		StringVar(&c.Pool)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)
