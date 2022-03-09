@@ -29,7 +29,7 @@ instances:
       arch: amd64
     spec:
       account:
-        project_id: drone-ci-289110
+        project_id: xxxxxxxxxxx
         json_path: path/to/credentials.json
       image: projects/ubuntu-os-pro-cloud/global/images/ubuntu-pro-1804-bionic-v20220131
       machine_type: e2-small
