@@ -129,21 +129,21 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to parse pool file")
-		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+		return err
 	}
 
 	pools, err := poolfile.ProcessPool(poolFile, &c.defaultPoolSettings, cloudInitParams)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to process pool file")
-		os.Exit(1)
+		return err
 	}
 
 	err = c.poolManager.Add(pools...)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to add pools")
-		os.Exit(1)
+		return err
 	}
 
 	err = c.poolManager.CheckProvider(ctx)
