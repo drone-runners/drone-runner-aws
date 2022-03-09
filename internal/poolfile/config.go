@@ -5,15 +5,15 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/amazon"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool/google"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
 
 	"github.com/sirupsen/logrus"
 )
 
-func MapPool(poolFile *config.PoolFile, settings *vmpool.DefaultSettings, cloudInitParams *cloudinit.Params) ([]vmpool.Pool, error) {
-	var pools = []vmpool.Pool{}
+func MapPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, cloudInitParams *cloudinit.Params) ([]drivers.Pool, error) {
+	var pools = []drivers.Pool{}
 
 	for _, i := range poolFile.Instances {
 		switch i.Type {

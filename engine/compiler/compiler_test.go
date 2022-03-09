@@ -15,8 +15,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/manifest"
@@ -31,7 +31,7 @@ import (
 
 var nocontext = context.Background()
 
-var defaultPoolSettings = vmpool.DefaultSettings{
+var defaultPoolSettings = drivers.DefaultSettings{
 	RunnerName: "runner",
 }
 
@@ -196,7 +196,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	poolManager := &vmpool.Manager{}
+	poolManager := &drivers.Manager{}
 	err = poolManager.Add(pools...)
 	if err != nil {
 		t.Error(err)

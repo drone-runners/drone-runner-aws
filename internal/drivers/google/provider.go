@@ -4,7 +4,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
 	"golang.org/x/oauth2"
@@ -61,7 +61,7 @@ type provider struct {
 	service *compute.Service
 }
 
-func New(opts ...Option) (vmpool.Pool, error) {
+func New(opts ...Option) (drivers.Pool, error) {
 	p := new(provider)
 	for _, opt := range opts {
 		opt(p)

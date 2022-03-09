@@ -1,4 +1,4 @@
-package vmpool
+package drivers
 
 type Strategy interface {
 	CountCreateRemove(minSize, maxSize, busyCount, freeCount int) (shouldCreate, shouldRemove int)

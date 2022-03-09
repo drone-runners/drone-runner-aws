@@ -17,10 +17,10 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
@@ -42,11 +42,11 @@ import (
 type delegateCommand struct {
 	envfile             string
 	pool                string
-	defaultPoolSettings vmpool.DefaultSettings
-	poolManager         *vmpool.Manager
+	defaultPoolSettings drivers.DefaultSettings
+	poolManager         *drivers.Manager
 }
 
-const TagStageID = vmpool.TagPrefix + "stage-id"
+const TagStageID = drivers.TagPrefix + "stage-id"
 
 // helper function configures the global logger from
 // the loaded configuration.
@@ -110,7 +110,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return readCertsErr
 	}
 	// we have enough information for default pool settings
-	c.defaultPoolSettings = vmpool.DefaultSettings{
+	c.defaultPoolSettings = drivers.DefaultSettings{
 		RunnerName:     env.Runner.Name,
 		LiteEnginePath: env.DefaultPoolSettings.LiteEnginePath,
 		CaCertFile:     env.DefaultPoolSettings.CaCertFile,
@@ -344,7 +344,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	tags := map[string]string{}
 	for k, v := range reqData.Tags {
-		if strings.HasPrefix(k, vmpool.TagPrefix) {
+		if strings.HasPrefix(k, drivers.TagPrefix) {
 			continue
 		}
 		tags[k] = v
@@ -545,7 +545,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 func RegisterDelegate(app *kingpin.Application) {
 	c := new(delegateCommand)
 
-	c.poolManager = &vmpool.Manager{}
+	c.poolManager = &drivers.Manager{}
 
 	cmd := app.Command("delegate", "starts the delegate").
 		Action(c.run)

@@ -19,8 +19,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -102,7 +102,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return err
 	}
 	// we have enough information for default pool settings
-	defaultPoolSettings := vmpool.DefaultSettings{
+	defaultPoolSettings := drivers.DefaultSettings{
 		RunnerName: runnerName,
 	}
 
@@ -120,7 +120,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return err
 	}
 
-	poolManager := &vmpool.Manager{}
+	poolManager := &drivers.Manager{}
 	err = poolManager.Add(pools...)
 	if err != nil {
 		return err

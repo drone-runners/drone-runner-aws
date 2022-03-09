@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -98,8 +98,8 @@ func (p *provider) getTags(amazonInstance *ec2.Instance) map[string]string {
 	return tags
 }
 
-// Provision creates an AWS instance for the pool, it will not perform build specific setup.
-func (p *provider) Provision(ctx context.Context, tagAsInUse bool) (instance *vmpool.Instance, err error) {
+// Create an AWS instance for the pool, it will not perform build specific setup.
+func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drivers.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -111,11 +111,11 @@ func (p *provider) Provision(ctx context.Context, tagAsInUse bool) (instance *vm
 		WithField("size", p.size)
 
 	tags := createCopy(p.tags)
-	tags[vmpool.TagRunner] = vmpool.RunnerName
-	tags[vmpool.TagPool] = p.name
-	tags[vmpool.TagCreator] = p.runnerName
+	tags[drivers.TagRunner] = drivers.RunnerName
+	tags[drivers.TagPool] = p.name
+	tags[drivers.TagCreator] = p.runnerName
 	if tagAsInUse {
-		tags[vmpool.TagStatus] = vmpool.TagStatusValue
+		tags[drivers.TagStatus] = drivers.TagStatusValue
 	}
 
 	// create the instance
@@ -267,7 +267,7 @@ func (p *provider) Provision(ctx context.Context, tagAsInUse bool) (instance *vm
 				continue
 			}
 
-			instance = &vmpool.Instance{
+			instance = &drivers.Instance{
 				ID:        instanceID,
 				IP:        instanceIP,
 				Tags:      instanceTags,
@@ -284,7 +284,7 @@ func (p *provider) Provision(ctx context.Context, tagAsInUse bool) (instance *vm
 	}
 }
 
-func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err error) {
+func (p *provider) List(ctx context.Context) (busy, free []drivers.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -298,15 +298,15 @@ func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err 
 				Values: []*string{aws.String("pending"), aws.String("running")},
 			},
 			{
-				Name:   aws.String("tag:" + vmpool.TagCreator),
+				Name:   aws.String("tag:" + drivers.TagCreator),
 				Values: []*string{aws.String(p.runnerName)},
 			},
 			{
-				Name:   aws.String("tag:" + vmpool.TagRunner),
-				Values: []*string{aws.String(vmpool.RunnerName)},
+				Name:   aws.String("tag:" + drivers.TagRunner),
+				Values: []*string{aws.String(drivers.RunnerName)},
 			},
 			{
-				Name:   aws.String("tag:" + vmpool.TagPool),
+				Name:   aws.String("tag:" + drivers.TagPool),
 				Values: []*string{aws.String(p.name)},
 			},
 		},
@@ -326,7 +326,7 @@ func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err 
 			tags := p.getTags(awsInstance)
 			launchTime := p.getLaunchTime(awsInstance)
 
-			inst := vmpool.Instance{
+			inst := drivers.Instance{
 				ID:        id,
 				IP:        ip,
 				Tags:      tags,
@@ -335,8 +335,8 @@ func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err 
 
 			var isBusy bool
 			for _, keys := range awsInstance.Tags {
-				if *keys.Key == vmpool.TagStatus {
-					isBusy = *keys.Value == vmpool.TagStatusValue
+				if *keys.Key == drivers.TagStatus {
+					isBusy = *keys.Value == drivers.TagStatusValue
 					break
 				}
 			}
@@ -356,7 +356,7 @@ func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err 
 	return
 }
 
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *vmpool.Instance, err error) {
+func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *drivers.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -372,20 +372,20 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 				Values: []*string{aws.String("running")},
 			},
 			{
-				Name:   aws.String("tag:" + vmpool.TagCreator),
+				Name:   aws.String("tag:" + drivers.TagCreator),
 				Values: []*string{aws.String(p.runnerName)},
 			},
 			{
-				Name:   aws.String("tag:" + vmpool.TagRunner),
-				Values: []*string{aws.String(vmpool.RunnerName)},
+				Name:   aws.String("tag:" + drivers.TagRunner),
+				Values: []*string{aws.String(drivers.RunnerName)},
 			},
 			{
-				Name:   aws.String("tag:" + vmpool.TagPool),
+				Name:   aws.String("tag:" + drivers.TagPool),
 				Values: []*string{aws.String(p.name)},
 			},
 			{
-				Name:   aws.String("tag:" + vmpool.TagStatus),
-				Values: []*string{aws.String(vmpool.TagStatusValue)},
+				Name:   aws.String("tag:" + drivers.TagStatus),
+				Values: []*string{aws.String(drivers.TagStatusValue)},
 			},
 			{
 				Name:   aws.String("tag:" + tag),
@@ -408,7 +408,7 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 			tags := p.getTags(awsInstance)
 			launchTime := p.getLaunchTime(awsInstance)
 
-			inst = &vmpool.Instance{
+			inst = &drivers.Instance{
 				ID:        id,
 				IP:        ip,
 				Tags:      tags,
@@ -461,7 +461,7 @@ func (p *provider) Tag(ctx context.Context, instanceID string, tags map[string]s
 }
 
 func (p *provider) TagAsInUse(ctx context.Context, instanceID string) error {
-	return p.Tag(ctx, instanceID, map[string]string{vmpool.TagStatus: vmpool.TagStatusValue})
+	return p.Tag(ctx, instanceID, map[string]string{drivers.TagStatus: drivers.TagStatusValue})
 }
 
 // Destroy destroys the server AWS EC2 instances.

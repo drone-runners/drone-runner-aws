@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone/runner-go/logger"
 
 	"google.golang.org/api/compute/v1"
@@ -58,7 +58,7 @@ func (p *provider) CheckProvider(ctx context.Context) error {
 	return errors.New("unable to ping google")
 }
 
-func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err error) {
+func (p *provider) List(ctx context.Context) (busy, free []drivers.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -66,9 +66,9 @@ func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err 
 		WithField("pool", p.name)
 
 	list, err := client.Instances.List(p.projectID, p.GetZone()).Context(ctx).
-		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagCreator, p.runnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagRunner, vmpool.RunnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagPool, p.name)).
+		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagCreator, p.runnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagRunner, drivers.RunnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagPool, p.name)).
 		Do()
 
 	if list.Items == nil {
@@ -80,8 +80,8 @@ func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err 
 			inst := p.mapToInstance(vm)
 			var isBusy bool
 			for key, value := range vm.Labels {
-				if key == vmpool.TagStatus {
-					isBusy = value == vmpool.TagStatusValue
+				if key == drivers.TagStatus {
+					isBusy = value == drivers.TagStatusValue
 					break
 				}
 			}
@@ -105,7 +105,7 @@ func (p *provider) List(ctx context.Context) (busy, free []vmpool.Instance, err 
 	return
 }
 
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *vmpool.Instance, err error) {
+func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *drivers.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -115,10 +115,10 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 		WithField("label-value", value)
 
 	list, err := client.Instances.List(p.projectID, p.GetZone()).Context(ctx).
-		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagCreator, p.runnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagRunner, vmpool.RunnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagPool, p.name)).
-		Filter(fmt.Sprintf("labels.%s=%s", vmpool.TagStatus, vmpool.TagStatusValue)).
+		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagCreator, p.runnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagRunner, drivers.RunnerName)).
+		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagPool, p.name)).
+		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagStatus, drivers.TagStatusValue)).
 		Filter(fmt.Sprintf("labels.%s=%s", tag, value)).
 		Do()
 
@@ -215,7 +215,7 @@ func (p *provider) GetInstanceType() string {
 	return p.image
 }
 
-func (p *provider) Provision(ctx context.Context, tagAsInUse bool) (instance *vmpool.Instance, err error) {
+func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drivers.Instance, err error) {
 	p.init.Do(func() {
 		_ = p.setup(ctx)
 	})
@@ -234,11 +234,11 @@ func (p *provider) Provision(ctx context.Context, tagAsInUse bool) (instance *vm
 		WithField("size", p.size)
 
 	labels := createCopy(p.labels)
-	labels[vmpool.TagRunner] = vmpool.RunnerName
-	labels[vmpool.TagPool] = p.name
-	labels[vmpool.TagCreator] = p.runnerName
+	labels[drivers.TagRunner] = drivers.RunnerName
+	labels[drivers.TagPool] = p.name
+	labels[drivers.TagCreator] = p.runnerName
 	if tagAsInUse {
-		labels[vmpool.TagStatus] = vmpool.TagStatusValue
+		labels[drivers.TagStatus] = drivers.TagStatusValue
 		logr.Debugln("gcp: tagging VM as in use", name)
 	}
 
@@ -346,13 +346,13 @@ func (p *provider) Provision(ctx context.Context, tagAsInUse bool) (instance *vm
 	return &instanceMap, nil
 }
 
-func (p *provider) mapToInstance(vm *compute.Instance) vmpool.Instance {
+func (p *provider) mapToInstance(vm *compute.Instance) drivers.Instance {
 	network := vm.NetworkInterfaces[0]
 	accessConfigs := network.AccessConfigs[0]
 	instanceIP := accessConfigs.NatIP
 	creationTime, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 
-	return vmpool.Instance{
+	return drivers.Instance{
 		ID:        vm.Name,
 		IP:        instanceIP,
 		Tags:      vm.Labels,

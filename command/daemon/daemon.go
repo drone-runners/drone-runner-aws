@@ -16,10 +16,10 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/handler/router"
@@ -114,7 +114,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// we have enough information for default pool settings
-	defaultPoolSettings := vmpool.DefaultSettings{
+	defaultPoolSettings := drivers.DefaultSettings{
 		RunnerName:     env.Runner.Name,
 		LiteEnginePath: env.DefaultPoolSettings.LiteEnginePath,
 		CaCertFile:     env.DefaultPoolSettings.CaCertFile,
@@ -122,7 +122,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		KeyFile:        env.DefaultPoolSettings.KeyFile,
 	}
 
-	poolManager := &vmpool.Manager{}
+	poolManager := &drivers.Manager{}
 	poolManager.SetGlobalCtx(ctx)
 
 	poolFile, err := config.ProcessPoolFile(c.pool)

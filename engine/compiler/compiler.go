@@ -11,8 +11,8 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/encoder"
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
@@ -48,7 +48,7 @@ type Compiler struct {
 	Secret secret.Provider
 
 	// Pools is a map of named pools that can be referenced by a pipeline.
-	PoolManager *vmpool.Manager
+	PoolManager *drivers.Manager
 
 	// Registry returns a list of registry credentials that can be
 	// used to pull private container images.

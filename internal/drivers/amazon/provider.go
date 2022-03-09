@@ -1,7 +1,7 @@
 package amazon
 
 import (
-	"github.com/drone-runners/drone-runner-aws/internal/vmpool"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-// provider is a struct that implements vmpool.Pool interface
+// provider is a struct that implements drivers.Pool interface
 type provider struct {
 	name       string
 	runnerName string
@@ -50,7 +50,7 @@ type provider struct {
 	service *ec2.EC2
 }
 
-func New(opts ...Option) (vmpool.Pool, error) {
+func New(opts ...Option) (drivers.Pool, error) {
 	p := new(provider)
 	for _, opt := range opts {
 		opt(p)
