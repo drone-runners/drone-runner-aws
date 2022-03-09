@@ -184,15 +184,15 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	poolFile, err := config.ProcessPoolFile("testdata/drone_pool.yml")
+	poolFile, err := config.ParseFile("testdata/drone_pool.yml")
 	if err != nil {
 		t.Errorf("unable to parse pool file: %s", err)
 		return nil
 	}
 
-	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, nil)
+	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, nil)
 	if err != nil {
-		t.Errorf("unable to process pool file")
+		t.Errorf("unable to process pool file: %s", err)
 		return nil
 	}
 

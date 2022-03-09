@@ -95,7 +95,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 	// generate cert files if needed
-	certGenerationErr := le.GenerateLECerts(env.Runner.Name, env.DefaultPoolSettings.CertificateFolder)
+	certGenerationErr := le.GenerateLECerts(env.Runner.Name, env.Settings.CertificateFolder)
 	if certGenerationErr != nil {
 		logrus.WithError(certGenerationErr).
 			Errorln("delegate: failed to generate certificates")
@@ -103,7 +103,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 	// read cert files into memory
 	var readCertsErr error
-	env.DefaultPoolSettings.CaCertFile, env.DefaultPoolSettings.CertFile, env.DefaultPoolSettings.KeyFile, readCertsErr = le.ReadLECerts(env.DefaultPoolSettings.CertificateFolder)
+	env.Settings.CaCertFile, env.Settings.CertFile, env.Settings.KeyFile, readCertsErr = le.ReadLECerts(env.Settings.CertificateFolder)
 	if readCertsErr != nil {
 		logrus.WithError(readCertsErr).
 			Errorln("delegate: failed to read certificates")
@@ -112,10 +112,10 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// we have enough information for default pool settings
 	c.defaultPoolSettings = drivers.DefaultSettings{
 		RunnerName:     env.Runner.Name,
-		LiteEnginePath: env.DefaultPoolSettings.LiteEnginePath,
-		CaCertFile:     env.DefaultPoolSettings.CaCertFile,
-		CertFile:       env.DefaultPoolSettings.CertFile,
-		KeyFile:        env.DefaultPoolSettings.KeyFile,
+		LiteEnginePath: env.Settings.LiteEnginePath,
+		CaCertFile:     env.Settings.CaCertFile,
+		CertFile:       env.Settings.CertFile,
+		KeyFile:        env.Settings.KeyFile,
 	}
 
 	cloudInitParams := &cloudinit.Params{
@@ -125,14 +125,14 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		KeyFile:        c.defaultPoolSettings.KeyFile,
 	}
 
-	poolFile, err := config.ProcessPoolFile(c.pool)
+	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to parse pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 
-	pools, err := poolfile.MapPool(poolFile, &c.defaultPoolSettings, cloudInitParams)
+	pools, err := poolfile.ProcessPool(poolFile, &c.defaultPoolSettings, cloudInitParams)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to process pool file")
@@ -154,8 +154,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// setup lifetimes of instances
-	busyMaxAge := time.Hour * time.Duration(env.DefaultPoolSettings.BusyMaxAge) // includes time required to setup an instance
-	freeMaxAge := time.Hour * time.Duration(env.DefaultPoolSettings.FreeMaxAge)
+	busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
+	freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
 	err = c.poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
 	if err != nil {
 		logrus.WithError(err).
@@ -164,7 +164,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// lets remove any old instances.
-	if !env.DefaultPoolSettings.ReusePool {
+	if !env.Settings.ReusePool {
 		cleanErr := c.poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
@@ -207,7 +207,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// lets remove any old instances.
-	if !env.DefaultPoolSettings.ReusePool {
+	if !env.Settings.ReusePool {
 		cleanErr := c.poolManager.CleanPools(context.Background(), true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
@@ -552,8 +552,8 @@ func RegisterDelegate(app *kingpin.Application) {
 	cmd.Flag("envfile", "load the environment variable file").
 		Default("").
 		StringVar(&c.envfile)
-	cmd.Flag("poolfile", "file to seed the amazon pool").
-		Default(".drone_pool.yml").
+	cmd.Flag("pool", "file to seed the amazon pool").
+		Default("pool.yml").
 		StringVar(&c.pool)
 }
 

@@ -87,7 +87,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 	d := time.Duration(maxAgeBusy.Minutes() * 0.9 * float64(time.Minute))
 	m.cleanupTimer = time.NewTicker(d)
 
-	logrus.Infof("gcpConfig purger started. It will run every %.2f minutes", d.Minutes())
+	logrus.Infof("Instance purger started. It will run every %.2f minutes", d.Minutes())
 
 	go func() {
 		for {

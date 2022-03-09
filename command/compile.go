@@ -84,14 +84,14 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		RunnerName: runnerName,
 	}
 
-	poolFile, err := config.ProcessPoolFile(c.Pool)
+	poolFile, err := config.ParseFile(c.Pool)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("compile: unable to parse pool file")
 		return err
 	}
 
-	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, nil)
+	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, nil)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("compile: unable to process pool file")
@@ -149,8 +149,8 @@ func registerCompile(app *kingpin.Application) {
 		Default(".drone.yml").
 		FileVar(&c.Source)
 
-	cmd.Arg("poolfile", "file to seed the aws pool").
-		Default(".drone_pool.yml").
+	cmd.Arg("pool", "file to seed the aws pool").
+		Default("pool.yml").
 		StringVar(&c.Pool)
 
 	cmd.Flag("secrets", "secret parameters").

@@ -8,7 +8,7 @@ import (
 	"github.com/ghodss/yaml"
 )
 
-func ProcessPoolFile(rawFile string) (*PoolFile, error) {
+func ParseFile(rawFile string) (*PoolFile, error) {
 	f, err := os.Open(rawFile)
 	if err != nil {
 		return nil, err

@@ -6,7 +6,6 @@ package daemon
 
 import (
 	"context"
-	"errors"
 	"os"
 	"time"
 
@@ -52,7 +51,7 @@ type daemonCommand struct {
 func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	err := godotenv.Load(c.envFile)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -62,17 +61,8 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	// TODO: These can be set in the env struct as `required: "true"` instead
-	// once we have separate configs for the daemon and the delegate
-	if env.Client.Host == "" {
-		return errors.New("missing DRONE_RPC_HOST")
-	}
-	if env.Client.Secret == "" {
-		return errors.New("missing DRONE_RPC_SECRET")
-	}
-
 	// setup the global logrus logger.
-	SetupLogger(&env)
+	setupLogger(&env)
 
 	ctx, cancel := context.WithCancel(nocontext)
 	defer cancel()
@@ -100,14 +90,14 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 	// generate le cert files if needed
-	err = le.GenerateLECerts(env.Runner.Name, env.DefaultPoolSettings.CertificateFolder)
+	err = le.GenerateLECerts(env.Runner.Name, env.Settings.CertificateFolder)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: failed to generate certificates")
 		return err
 	}
 	// read cert files into memory
-	env.DefaultPoolSettings.CaCertFile, env.DefaultPoolSettings.CertFile, env.DefaultPoolSettings.KeyFile, err = le.ReadLECerts(env.DefaultPoolSettings.CertificateFolder)
+	env.Settings.CaCertFile, env.Settings.CertFile, env.Settings.KeyFile, err = le.ReadLECerts(env.Settings.CertificateFolder)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: failed to read certificates")
@@ -116,16 +106,16 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	// we have enough information for default pool settings
 	defaultPoolSettings := drivers.DefaultSettings{
 		RunnerName:     env.Runner.Name,
-		LiteEnginePath: env.DefaultPoolSettings.LiteEnginePath,
-		CaCertFile:     env.DefaultPoolSettings.CaCertFile,
-		CertFile:       env.DefaultPoolSettings.CertFile,
-		KeyFile:        env.DefaultPoolSettings.KeyFile,
+		LiteEnginePath: env.Settings.LiteEnginePath,
+		CaCertFile:     env.Settings.CaCertFile,
+		CertFile:       env.Settings.CertFile,
+		KeyFile:        env.Settings.KeyFile,
 	}
 
 	poolManager := &drivers.Manager{}
 	poolManager.SetGlobalCtx(ctx)
 
-	poolFile, err := config.ProcessPoolFile(c.pool)
+	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: unable to parse pool file")
@@ -139,7 +129,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		KeyFile:        defaultPoolSettings.KeyFile,
 	}
 
-	pools, err := poolfile.MapPool(poolFile, &defaultPoolSettings, cloudInitParams)
+	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, cloudInitParams)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: unable to process pool file")
@@ -259,7 +249,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return serverInstance.ListenAndServe(ctx)
 	})
 
-	// CheckProvider the server and block until a successful connection to the server has been established.
+	// Ping the server and block until a successful connection to the server has been established.
 	for {
 		pingErr := cli.Ping(ctx, env.Runner.Name)
 		select {
@@ -292,7 +282,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	})
 
 	// if there is no keyfiles lets remove any old instances.
-	if !env.DefaultPoolSettings.ReusePool {
+	if !env.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			logrus.WithError(cleanErr).
@@ -310,7 +300,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 	logrus.Infoln("daemon: pool created")
 
-	if !env.DefaultPoolSettings.ReusePool {
+	if !env.Settings.ReusePool {
 		g.Go(func() error {
 			<-ctx.Done()
 			// clean up pool on termination
@@ -333,7 +323,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	return err
 }
 
-func SetupLogger(c *Config) {
+func setupLogger(c *Config) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),
@@ -358,6 +348,6 @@ func Register(app *kingpin.Application) {
 		Default("").
 		StringVar(&c.envFile)
 	cmd.Flag("pool", "file to seed the pool").
-		Default(".drone_pool.yml").
+		Default("pool.yml").
 		StringVar(&c.pool)
 }

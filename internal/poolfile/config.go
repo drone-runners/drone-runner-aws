@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func MapPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, cloudInitParams *cloudinit.Params) ([]drivers.Pool, error) {
+func ProcessPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, cloudInitParams *cloudinit.Params) ([]drivers.Pool, error) {
 	var pools = []drivers.Pool{}
 
 	for _, i := range poolFile.Instances {
