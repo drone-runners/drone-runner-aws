@@ -2,7 +2,8 @@ package drivers
 
 import (
 	"context"
-	"time"
+
+	"github.com/drone-runners/drone-runner-aws/core"
 )
 
 const (
@@ -29,19 +30,11 @@ type Pool interface {
 	GetMinSize() int
 
 	CheckProvider(ctx context.Context) error
-	Create(ctx context.Context, tagAsInUse bool) (instance *Instance, err error)
-	List(ctx context.Context) (busy, free []Instance, err error)
-	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *Instance, err error)
+	Create(ctx context.Context, tagAsInUse bool, opts *core.InstanceCreateOpts) (instance *core.Instance, err error)
+	List(ctx context.Context) (busy, free []core.Instance, err error)
+	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *core.Instance, err error)
 	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
-}
-
-// Instance represents a provisioned server instance.
-type Instance struct {
-	ID        string
-	IP        string
-	Tags      map[string]string
-	StartedAt time.Time
 }
 
 // Platform defines the target platform.
@@ -50,12 +43,4 @@ type Platform struct {
 	Arch    string `json:"arch,omitempty"`
 	Variant string `json:"variant,omitempty"`
 	Version string `json:"version,omitempty"`
-}
-
-type DefaultSettings struct {
-	RunnerName     string
-	LiteEnginePath string
-	CaCertFile     string
-	CertFile       string
-	KeyFile        string
 }

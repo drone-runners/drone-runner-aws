@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/core"
+
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone/runner-go/logger"
 
@@ -99,7 +101,7 @@ func (p *provider) getTags(amazonInstance *ec2.Instance) map[string]string {
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
-func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drivers.Instance, err error) {
+func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.InstanceCreateOpts) (instance *core.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -259,7 +261,7 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drive
 			amazonInstance := desc.Reservations[0].Instances[0]
 			instanceID := *amazonInstance.InstanceId
 			instanceIP := p.getIP(amazonInstance)
-			instanceTags := p.getTags(amazonInstance)
+			//instanceTags := p.getTags(amazonInstance)
 			launchTime := p.getLaunchTime(amazonInstance)
 
 			if instanceIP == "" {
@@ -267,10 +269,10 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drive
 				continue
 			}
 
-			instance = &drivers.Instance{
-				ID:        instanceID,
-				IP:        instanceIP,
-				Tags:      instanceTags,
+			instance = &core.Instance{
+				ID: instanceID,
+				IP: instanceIP,
+				//Tags:      instanceTags,
 				StartedAt: launchTime,
 			}
 
@@ -284,7 +286,7 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drive
 	}
 }
 
-func (p *provider) List(ctx context.Context) (busy, free []drivers.Instance, err error) {
+func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -323,13 +325,13 @@ func (p *provider) List(ctx context.Context) (busy, free []drivers.Instance, err
 		for _, awsInstance := range awsReservation.Instances {
 			id := *awsInstance.InstanceId
 			ip := p.getIP(awsInstance)
-			tags := p.getTags(awsInstance)
+			//tags := p.getTags(awsInstance)
 			launchTime := p.getLaunchTime(awsInstance)
 
-			inst := drivers.Instance{
-				ID:        id,
-				IP:        ip,
-				Tags:      tags,
+			inst := core.Instance{
+				ID: id,
+				IP: ip,
+				//Tags:      tags,
 				StartedAt: launchTime,
 			}
 
@@ -356,7 +358,7 @@ func (p *provider) List(ctx context.Context) (busy, free []drivers.Instance, err
 	return
 }
 
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *drivers.Instance, err error) {
+func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *core.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -405,13 +407,13 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 		for _, awsInstance := range awsReservation.Instances {
 			id := *awsInstance.InstanceId
 			ip := p.getIP(awsInstance)
-			tags := p.getTags(awsInstance)
+			//tags := p.getTags(awsInstance)
 			launchTime := p.getLaunchTime(awsInstance)
 
-			inst = &drivers.Instance{
-				ID:        id,
-				IP:        ip,
-				Tags:      tags,
+			inst = &core.Instance{
+				ID: id,
+				IP: ip,
+				//Tags:      tags,
 				StartedAt: launchTime,
 			}
 

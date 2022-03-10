@@ -9,6 +9,12 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+
+	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
+
+	"github.com/drone-runners/drone-runner-aws/core"
+
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone/runner-go/logger"
 
@@ -58,7 +64,7 @@ func (p *provider) CheckProvider(ctx context.Context) error {
 	return errors.New("unable to ping google")
 }
 
-func (p *provider) List(ctx context.Context) (busy, free []drivers.Instance, err error) {
+func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -105,7 +111,7 @@ func (p *provider) List(ctx context.Context) (busy, free []drivers.Instance, err
 	return
 }
 
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *drivers.Instance, err error) {
+func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *core.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
@@ -215,10 +221,26 @@ func (p *provider) GetInstanceType() string {
 	return p.image
 }
 
-func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drivers.Instance, err error) {
+func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.InstanceCreateOpts) (instance *core.Instance, err error) {
 	p.init.Do(func() {
 		_ = p.setup(ctx)
 	})
+
+	if p.userData == "" {
+		var params = cloudinit.Params{
+			Architecture:   p.arch,
+			Platform:       p.os,
+			CACert:         string(opts.CACert),
+			TLSCert:        string(opts.TLSCert),
+			TLSKey:         string(opts.TLSKey),
+			LiteEnginePath: opts.LiteEnginePath,
+		}
+		if p.os == oshelp.OSWindows {
+			p.userData = cloudinit.Windows(&params)
+		} else {
+			p.userData = cloudinit.Linux(&params)
+		}
+	}
 
 	zone := p.GetZone()
 
@@ -346,16 +368,16 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool) (instance *drive
 	return &instanceMap, nil
 }
 
-func (p *provider) mapToInstance(vm *compute.Instance) drivers.Instance {
+func (p *provider) mapToInstance(vm *compute.Instance) core.Instance {
 	network := vm.NetworkInterfaces[0]
 	accessConfigs := network.AccessConfigs[0]
 	instanceIP := accessConfigs.NatIP
 	creationTime, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 
-	return drivers.Instance{
-		ID:        vm.Name,
-		IP:        instanceIP,
-		Tags:      vm.Labels,
+	return core.Instance{
+		ID: vm.Name,
+		IP: instanceIP,
+		//Tags:      vm.Labels,
 		StartedAt: creationTime,
 	}
 }

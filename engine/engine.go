@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/core"
+
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 
 	"github.com/drone/runner-go/environ"
@@ -34,26 +36,28 @@ type Opts struct {
 
 // Engine implements a pipeline engine.
 type Engine struct {
-	opts         Opts
-	poolManager  *drivers.Manager
-	poolSettings *drivers.DefaultSettings
+	opts           Opts
+	poolManager    *drivers.Manager
+	serverName     string
+	liteEnginePath string
 }
 
 // New returns a new engine.
-func New(opts Opts, poolManager *drivers.Manager, defaultPoolSettings *drivers.DefaultSettings) (*Engine, error) {
+func New(opts Opts, poolManager *drivers.Manager, serverName, liteEnginePath string) (*Engine, error) {
 	return &Engine{
-		opts:         opts,
-		poolManager:  poolManager,
-		poolSettings: defaultPoolSettings,
+		opts:           opts,
+		poolManager:    poolManager,
+		serverName:     serverName,
+		liteEnginePath: liteEnginePath,
 	}, nil
 }
 
-func (eng *Engine) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instanceIP)
+func (eng *Engine) getLEClient(instance *core.Instance) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:9079/", instance.IP)
 
 	return lehttp.NewHTTPClient(leURL,
-		eng.poolSettings.RunnerName, eng.poolSettings.CaCertFile,
-		eng.poolSettings.CertFile, eng.poolSettings.KeyFile)
+		eng.serverName, instance.CACert,
+		instance.TLSCert, instance.TLSKey)
 }
 
 // Setup the pipeline environment.
@@ -75,7 +79,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// lets see if there is anything in the pool
-	instance, err := poolMngr.Provision(ctx, poolName)
+	instance, err := poolMngr.Provision(ctx, poolName, eng.serverName, eng.liteEnginePath)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
@@ -120,7 +124,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 
-	client, err := eng.getLEClient(instance.IP)
+	client, err := eng.getLEClient(instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		go cleanUpFn()
@@ -211,7 +215,9 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		WithField("id", instanceID).
 		WithField("ip", instanceIP)
 
-	client, err := eng.getLEClient(instanceIP)
+	store := eng.poolManager.GetInstanceStore()
+	instance, err := store.Find(ctx, instanceID)
+	client, err := eng.getLEClient(instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return nil, err

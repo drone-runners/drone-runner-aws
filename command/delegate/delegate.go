@@ -16,10 +16,8 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
-	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
@@ -40,10 +38,9 @@ import (
 )
 
 type delegateCommand struct {
-	envfile             string
-	pool                string
-	defaultPoolSettings drivers.DefaultSettings
-	poolManager         *drivers.Manager
+	envfile     string
+	pool        string
+	poolManager *drivers.Manager
 }
 
 const TagStageID = drivers.TagPrefix + "stage-id"
@@ -94,36 +91,36 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		println("received signal, terminating process")
 		cancel()
 	})
-	// generate cert files if needed
-	certGenerationErr := le.GenerateLECerts(env.Runner.Name, env.Settings.CertificateFolder)
-	if certGenerationErr != nil {
-		logrus.WithError(certGenerationErr).
-			Errorln("delegate: failed to generate certificates")
-		return certGenerationErr
-	}
-	// read cert files into memory
-	var readCertsErr error
-	env.Settings.CaCertFile, env.Settings.CertFile, env.Settings.KeyFile, readCertsErr = le.ReadLECerts(env.Settings.CertificateFolder)
-	if readCertsErr != nil {
-		logrus.WithError(readCertsErr).
-			Errorln("delegate: failed to read certificates")
-		return readCertsErr
-	}
-	// we have enough information for default pool settings
-	c.defaultPoolSettings = drivers.DefaultSettings{
-		RunnerName:     env.Runner.Name,
-		LiteEnginePath: env.Settings.LiteEnginePath,
-		CaCertFile:     env.Settings.CaCertFile,
-		CertFile:       env.Settings.CertFile,
-		KeyFile:        env.Settings.KeyFile,
-	}
-
-	cloudInitParams := &cloudinit.Params{
-		LiteEnginePath: c.defaultPoolSettings.LiteEnginePath,
-		CaCertFile:     c.defaultPoolSettings.CaCertFile,
-		CertFile:       c.defaultPoolSettings.CertFile,
-		KeyFile:        c.defaultPoolSettings.KeyFile,
-	}
+	//// generate cert files if needed
+	//certGenerationErr := certs.Generate(env.Runner.Name, env.Settings.CertificateFolder)
+	//if certGenerationErr != nil {
+	//	logrus.WithError(certGenerationErr).
+	//		Errorln("delegate: failed to generate certificates")
+	//	return certGenerationErr
+	//}
+	//// read cert files into memory
+	//var readCertsErr error
+	//env.Settings.CACert, env.Settings.TLSCert, env.Settings.TLSKey, readCertsErr = certs.ReadLECerts(env.Settings.CertificateFolder)
+	//if readCertsErr != nil {
+	//	logrus.WithError(readCertsErr).
+	//		Errorln("delegate: failed to read certificates")
+	//	return readCertsErr
+	//}
+	//// we have enough information for default pool settings
+	//c.defaultPoolSettings = drivers.DefaultSettings{
+	//	RunnerName:     env.Runner.Name,
+	//	LiteEnginePath: env.Settings.LiteEnginePath,
+	//	CACert:     env.Settings.CACert,
+	//	TLSCert:       env.Settings.TLSCert,
+	//	TLSKey:        env.Settings.TLSKey,
+	//}
+	//
+	//cloudInitParams := &cloudinit.Params{
+	//	LiteEnginePath: c.defaultPoolSettings.LiteEnginePath,
+	//	CACert:     c.defaultPoolSettings.CACert,
+	//	TLSCert:       c.defaultPoolSettings.TLSCert,
+	//	TLSKey:        c.defaultPoolSettings.TLSKey,
+	//}
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
@@ -132,7 +129,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, &c.defaultPoolSettings, cloudInitParams)
+	pools, err := poolfile.ProcessPool(poolFile, env.Runner.Name)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to process pool file")
@@ -324,7 +321,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	instance, err := c.poolManager.Provision(ctx, poolName)
+	instance, err := c.poolManager.Provision(ctx, poolName, "runneranme", "") //TODO FIX  THIS
 	if err != nil {
 		httprender.InternalError(w, "failed provisioning", err, logr)
 		return
@@ -561,8 +558,8 @@ func (c *delegateCommand) getLEClient(instanceIP string) (*lehttp.HTTPClient, er
 	leURL := fmt.Sprintf("https://%s:9079/", instanceIP)
 
 	return lehttp.NewHTTPClient(leURL,
-		c.defaultPoolSettings.RunnerName, c.defaultPoolSettings.CaCertFile,
-		c.defaultPoolSettings.CertFile, c.defaultPoolSettings.KeyFile)
+		"", []byte(""),
+		[]byte(""), []byte(""))
 }
 
 func getJSONDataFromReader(r io.Reader, data interface{}) error {

@@ -4,9 +4,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
-
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/compute/v1"
 )
@@ -145,16 +142,16 @@ func WithTags(tags ...string) Option {
 
 // WithUserData returns an option to set the cloud-init
 // template from text.
-func WithUserData(text string, params *cloudinit.Params) Option {
+func WithUserData(text string) Option {
 	return func(p *provider) {
 		if text == "" {
-			params.Platform = p.os
-			params.Architecture = p.arch
-			if p.os == oshelp.OSWindows {
-				p.userData = cloudinit.Windows(params)
-			} else {
-				p.userData = cloudinit.Linux(params)
-			}
+			//params.Platform = p.os
+			//params.Architecture = p.arch
+			//if p.os == oshelp.OSWindows {
+			//	p.userData = cloudinit.Windows(params)
+			//} else {
+			//	p.userData = cloudinit.Linux(params)
+			//}
 			return
 		}
 		data, err := os.ReadFile(text)
@@ -162,7 +159,7 @@ func WithUserData(text string, params *cloudinit.Params) Option {
 			logrus.Error(err)
 			return
 		}
-		p.userData, _ = cloudinit.Custom(string(data), params)
+		p.userData = string(data) //cloudinit.Custom(string(data), params)
 	}
 }
 

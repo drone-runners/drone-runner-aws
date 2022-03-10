@@ -18,9 +18,9 @@ import (
 // Params defines parameters used to create userdata files.
 type Params struct {
 	LiteEnginePath string
-	CaCertFile     string
-	CertFile       string
-	KeyFile        string
+	CACert         string
+	TLSCert        string
+	TLSKey         string
 	Platform       string
 	Architecture   string
 }
@@ -83,15 +83,15 @@ write_files:
 - path: {{ .CaCertPath }}
   permissions: '0600'
   encoding: b64
-  content: {{ .CaCertFile | base64  }}
+  content: {{ .CACert | base64  }}
 - path: {{ .CertPath }}
   permissions: '0600'
   encoding: b64
-  content: {{ .CertFile | base64 }}
+  content: {{ .TLSCert | base64 }}
 - path: {{ .KeyPath }}
   permissions: '0600'
   encoding: b64
-  content: {{ .KeyFile | base64 }}
+  content: {{ .TLSKey | base64 }}
 runcmd:
 - 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
@@ -136,15 +136,15 @@ choco install -y git
 mkdir "C:\Program Files\lite-engine"
 mkdir "{{ .CertDir }}"
 
-$object0 = "{{ .CaCertFile | base64 }}"
+$object0 = "{{ .CACert | base64 }}"
 $Object = [System.Convert]::FromBase64String($object0)
 [system.io.file]::WriteAllBytes("{{ .CaCertPath }}",$object)
 
-$object1 = "{{ .CertFile | base64 }}"
+$object1 = "{{ .TLSCert | base64 }}"
 $Object = [System.Convert]::FromBase64String($object1)
 [system.io.file]::WriteAllBytes("{{ .CertPath }}",$object)
 
-$object2 = "{{ .KeyFile | base64 }}"
+$object2 = "{{ .TLSKey | base64 }}"
 $Object = [System.Convert]::FromBase64String($object2)
 [system.io.file]::WriteAllBytes("{{ .KeyPath }}",$object)
 

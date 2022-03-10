@@ -9,14 +9,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/store"
+
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/runner-go/client"
@@ -89,31 +89,12 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 			logrus.StandardLogger(),
 		),
 	)
-	// generate le cert files if needed
-	err = le.GenerateLECerts(env.Runner.Name, env.Settings.CertificateFolder)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("delegate: failed to generate certificates")
-		return err
-	}
-	// read cert files into memory
-	env.Settings.CaCertFile, env.Settings.CertFile, env.Settings.KeyFile, err = le.ReadLECerts(env.Settings.CertificateFolder)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("daemon: failed to read certificates")
-		return err
-	}
-	// we have enough information for default pool settings
-	defaultPoolSettings := drivers.DefaultSettings{
-		RunnerName:     env.Runner.Name,
-		LiteEnginePath: env.Settings.LiteEnginePath,
-		CaCertFile:     env.Settings.CaCertFile,
-		CertFile:       env.Settings.CertFile,
-		KeyFile:        env.Settings.KeyFile,
-	}
 
 	poolManager := &drivers.Manager{}
 	poolManager.SetGlobalCtx(ctx)
+
+	instanceStore := store.NewInstanceStore()
+	poolManager.SetInstanceStore(instanceStore)
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
@@ -122,14 +103,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 
-	cloudInitParams := &cloudinit.Params{
-		LiteEnginePath: defaultPoolSettings.LiteEnginePath,
-		CaCertFile:     defaultPoolSettings.CaCertFile,
-		CertFile:       defaultPoolSettings.CertFile,
-		KeyFile:        defaultPoolSettings.KeyFile,
-	}
-
-	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, cloudInitParams)
+	pools, err := poolfile.ProcessPool(poolFile, env.Runner.Name)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: unable to process pool file")
@@ -158,7 +132,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		Repopulate: true,
 	}
 
-	engInstance, engineErr := engine.New(opts, poolManager, &defaultPoolSettings)
+	engInstance, engineErr := engine.New(opts, poolManager, env.Runner.Name, env.Settings.LiteEnginePath)
 	if engineErr != nil {
 		logrus.WithError(engineErr).
 			Fatalln("daemon: cannot load the engine")

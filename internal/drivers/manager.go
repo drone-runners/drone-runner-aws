@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/certs"
+
+	"github.com/drone-runners/drone-runner-aws/core"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/sirupsen/logrus"
@@ -20,6 +23,9 @@ type (
 		poolMap          map[string]*poolEntry
 		poolSizeStrategy Strategy
 		cleanupTimer     *time.Ticker
+		instanceStore    core.InstanceStore
+		serverName       string
+		liteEnginePath   string
 	}
 
 	poolEntry struct {
@@ -39,6 +45,14 @@ func (m *Manager) GetGlobalCtx() context.Context {
 		return context.Background()
 	}
 	return m.globalCtx
+}
+
+func (m *Manager) SetInstanceStore(store core.InstanceStore) {
+	m.instanceStore = store
+}
+
+func (m *Manager) GetInstanceStore() core.InstanceStore {
+	return m.instanceStore
 }
 
 func (m *Manager) Add(pools ...Pool) error {
@@ -236,10 +250,26 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 		go func(ctx context.Context, logr logger.Logger) {
 			defer wg.Done()
 
-			instance, err := pool.Create(ctx, false)
+			// generate certs cert
+			certOptions, err := certs.Generate(m.serverName)
+			if err != nil {
+				logrus.WithError(err).
+					Errorln("delegate: failed to generate certificates")
+			}
+
+			instance, err := pool.Create(ctx, false, certOptions)
+			instance.CACert = certOptions.CACert
+			instance.CAKey = certOptions.CAKey
+			instance.TLSCert = certOptions.TLSCert
+			instance.TLSKey = certOptions.TLSKey
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create an instance")
 				return
+			}
+
+			err = m.instanceStore.Create(ctx, instance)
+			if err != nil {
+
 			}
 
 			logr.
@@ -265,7 +295,10 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEnginePath string) (*core.Instance, error) {
+	m.serverName = serverName
+	m.liteEnginePath = liteEnginePath
+
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
@@ -289,11 +322,26 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 			return nil, ErrorNoInstanceAvailable
 		}
 
-		var inst *Instance
+		var inst *core.Instance
+		certOptions, err := certs.Generate(m.serverName)
+		if err != nil {
+			logrus.WithError(err).
+				Errorln("delegate: failed to generate certificates")
+		}
+		certOptions.LiteEnginePath = m.liteEnginePath
 
-		inst, err = pool.Create(ctx, true)
+		inst, err = pool.Create(ctx, true, certOptions)
+		inst.CACert = certOptions.CACert
+		inst.CAKey = certOptions.CAKey
+		inst.TLSCert = certOptions.TLSCert
+		inst.TLSKey = certOptions.TLSKey
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to provision a new instance in %q pool: %w", poolName, err)
+		}
+		// persist instance
+		err = m.instanceStore.Create(ctx, inst)
+		if err != nil {
+			return nil, fmt.Errorf("provision: failed to store instance %q: %w", inst.ID, err)
 		}
 
 		return inst, nil
@@ -302,10 +350,13 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 	sort.Slice(free, func(i, j int) bool { return free[i].StartedAt.Before(free[j].StartedAt) })
 
 	inst := &free[0]
-
 	err = pool.Tag(ctx, inst.ID, map[string]string{TagStatus: TagStatusValue})
 	if err != nil {
 		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+	}
+	inst, err = m.instanceStore.Find(ctx, inst.ID)
+	if err != nil {
+		return nil, fmt.Errorf("provision: failed to find instance %q: %w", inst.ID, err)
 	}
 
 	// the go routine here uses the global context because this function is called
@@ -354,7 +405,7 @@ func (m *Manager) Tag(ctx context.Context, poolName, instanceID string, tags map
 	return pool.Tag(ctx, instanceID, tags)
 }
 
-func (m *Manager) GetUsedInstanceByTag(ctx context.Context, poolName, tag, value string) (*Instance, error) {
+func (m *Manager) GetUsedInstanceByTag(ctx context.Context, poolName, tag, value string) (*core.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("get by tag: pool name %q not found", poolName)
