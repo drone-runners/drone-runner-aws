@@ -123,25 +123,15 @@ func WithTags(tags map[string]string) Option {
 // template from text.
 func WithUserData(text string) Option {
 	return func(p *provider) {
-		if text == "" {
-			//if params == nil {
-			//	return
-			//}
-			//params.Platform = p.os
-			//params.Architecture = p.arch
-			//if p.os == oshelp.OSWindows {
-			//	p.userData = cloudinit.Windows(params)
-			//} else {
-			//	p.userData = cloudinit.Linux(params)
-			//}
-			return
+		if text != "" {
+			data, err := os.ReadFile(text)
+			if err != nil {
+				logrus.Error(err)
+				return
+			}
+			p.userData = string(data)
 		}
-		data, err := os.ReadFile(text)
-		if err != nil {
-			logrus.Error(err)
-			return
-		}
-		p.userData = string(data) //cloudinit.Custom(string(data), params)
+		return
 	}
 }
 

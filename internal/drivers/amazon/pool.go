@@ -7,23 +7,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
-
 	"github.com/drone-runners/drone-runner-aws/core"
-
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/userdata"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-const (
-	cloud = "amazon"
-)
-
 func (p *provider) GetProviderName() string {
-	return cloud
+	return string(core.ProviderAmazon)
 }
 
 func (p *provider) GetName() string {
@@ -107,7 +101,7 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", cloud).
+		WithField("provider", core.ProviderAmazon).
 		WithField("ami", p.GetInstanceType()).
 		WithField("pool", p.name).
 		WithField("region", p.region).
@@ -305,7 +299,7 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", cloud).
+		WithField("provider", core.ProviderAmazon).
 		WithField("pool", p.name)
 
 	params := &ec2.DescribeInstancesInput{
@@ -375,7 +369,7 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", cloud).
+		WithField("provider", core.ProviderAmazon).
 		WithField("pool", p.name).
 		WithField("tag", tag).
 		WithField("tag-value", value)
@@ -449,7 +443,7 @@ func (p *provider) Tag(ctx context.Context, instanceID string, tags map[string]s
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
-		WithField("provider", cloud)
+		WithField("provider", core.ProviderAmazon)
 
 	awsTags := make([]*ec2.Tag, 0, len(tags))
 	for key, value := range tags {
@@ -489,7 +483,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("provider", cloud)
+		WithField("provider", core.ProviderAmazon)
 
 	awsIDs := make([]*string, len(instanceIDs))
 	for i, instanceID := range instanceIDs {
