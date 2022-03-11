@@ -93,8 +93,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	poolManager := &drivers.Manager{}
 	poolManager.SetGlobalCtx(ctx)
 
-	instanceStore := store.NewInstanceStore()
-	poolManager.SetInstanceStore(instanceStore)
+	poolManager.SetInstanceStore(store.NewInstanceStore())
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {

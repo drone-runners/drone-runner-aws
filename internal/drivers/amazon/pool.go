@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+
 	"github.com/drone-runners/drone-runner-aws/core"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -111,6 +113,8 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 		WithField("region", p.region).
 		WithField("image", p.image).
 		WithField("size", p.size)
+
+	p.userData = userdata.Generate(p.userData, p.os, p.arch, opts)
 
 	tags := createCopy(p.tags)
 	tags[drivers.TagRunner] = drivers.RunnerName
@@ -261,7 +265,6 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 			amazonInstance := desc.Reservations[0].Instances[0]
 			instanceID := *amazonInstance.InstanceId
 			instanceIP := p.getIP(amazonInstance)
-			//instanceTags := p.getTags(amazonInstance)
 			launchTime := p.getLaunchTime(amazonInstance)
 
 			if instanceIP == "" {
@@ -270,9 +273,21 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 			}
 
 			instance = &core.Instance{
-				ID: instanceID,
-				IP: instanceIP,
-				//Tags:      instanceTags,
+				ID:        instanceID,
+				Provider:  core.ProviderAmazon,
+				State:     core.StateCreated,
+				Pool:      p.name,
+				Image:     p.image,
+				Zone:      p.availabilityZone,
+				Region:    p.region,
+				Size:      p.size,
+				Platform:  p.os,
+				IP:        instanceIP,
+				CACert:    opts.CACert,
+				CAKey:     opts.CAKey,
+				TLSCert:   opts.TLSCert,
+				TLSKey:    opts.TLSKey,
+				Started:   time.Now().Unix(),
 				StartedAt: launchTime,
 			}
 
@@ -325,13 +340,11 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 		for _, awsInstance := range awsReservation.Instances {
 			id := *awsInstance.InstanceId
 			ip := p.getIP(awsInstance)
-			//tags := p.getTags(awsInstance)
 			launchTime := p.getLaunchTime(awsInstance)
 
 			inst := core.Instance{
-				ID: id,
-				IP: ip,
-				//Tags:      tags,
+				ID:        id,
+				IP:        ip,
 				StartedAt: launchTime,
 			}
 

@@ -251,30 +251,14 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 			defer wg.Done()
 
 			// generate certs cert
-			certOptions, err := certs.Generate(m.serverName)
+			inst, err := m.setupInstance(ctx, pool, false)
 			if err != nil {
-				logrus.WithError(err).
-					Errorln("delegate: failed to generate certificates")
-			}
-
-			instance, err := pool.Create(ctx, false, certOptions)
-			instance.CACert = certOptions.CACert
-			instance.CAKey = certOptions.CAKey
-			instance.TLSCert = certOptions.TLSCert
-			instance.TLSKey = certOptions.TLSKey
-			if err != nil {
-				logr.WithError(err).Errorln("build pool: failed to create an instance")
+				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
 			}
-
-			err = m.instanceStore.Create(ctx, instance)
-			if err != nil {
-
-			}
-
 			logr.
 				WithField("pool", pool.GetName()).
-				WithField("id", instance.ID).
+				WithField("id", inst.ID).
 				Infoln("build pool: created new instance")
 		}(ctx, logr)
 
@@ -322,28 +306,10 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 			return nil, ErrorNoInstanceAvailable
 		}
 
-		var inst *core.Instance
-		certOptions, err := certs.Generate(m.serverName)
+		inst, err := m.setupInstance(ctx, pool, true)
 		if err != nil {
-			logrus.WithError(err).
-				Errorln("delegate: failed to generate certificates")
+			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
-		certOptions.LiteEnginePath = m.liteEnginePath
-
-		inst, err = pool.Create(ctx, true, certOptions)
-		inst.CACert = certOptions.CACert
-		inst.CAKey = certOptions.CAKey
-		inst.TLSCert = certOptions.TLSCert
-		inst.TLSKey = certOptions.TLSKey
-		if err != nil {
-			return nil, fmt.Errorf("provision: failed to provision a new instance in %q pool: %w", poolName, err)
-		}
-		// persist instance
-		err = m.instanceStore.Create(ctx, inst)
-		if err != nil {
-			return nil, fmt.Errorf("provision: failed to store instance %q: %w", inst.ID, err)
-		}
-
 		return inst, nil
 	}
 
@@ -455,4 +421,33 @@ func (m *Manager) CheckProvider(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool) (*core.Instance, error) {
+	var inst *core.Instance
+
+	// generate certs
+	certOptions, err := certs.Generate(m.serverName)
+	certOptions.LiteEnginePath = m.liteEnginePath
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: failed to generate certificates")
+		return nil, err
+	}
+
+	// create instance
+	inst, err = pool.Create(ctx, inuse, certOptions)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: failed to create instance")
+		return nil, err
+	}
+
+	// store instance
+	err = m.instanceStore.Create(ctx, inst)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: failed store instance")
+	}
+	return inst, nil
 }

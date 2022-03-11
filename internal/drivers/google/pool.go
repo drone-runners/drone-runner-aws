@@ -9,9 +9,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/oshelp"
-
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
+	"github.com/drone-runners/drone-runner-aws/internal/userdata"
 
 	"github.com/drone-runners/drone-runner-aws/core"
 
@@ -20,10 +18,6 @@ import (
 
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
-)
-
-const (
-	cloud = "google"
 )
 
 func (p *provider) GetName() string {
@@ -51,6 +45,14 @@ func (p *provider) GetZone() string {
 	return p.zones[rand.Intn(len(p.zones))]
 }
 
+func (p *provider) GetProviderName() string {
+	return string(core.ProviderGoogle)
+}
+
+func (p *provider) GetInstanceType() string {
+	return p.image
+}
+
 func (p *provider) CheckProvider(ctx context.Context) error {
 	client := p.service
 	healthCheck := client.Regions.List(p.projectID).Context(ctx)
@@ -68,7 +70,7 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", cloud).
+		WithField("cloud", core.ProviderGoogle).
 		WithField("pool", p.name)
 
 	list, err := client.Instances.List(p.projectID, p.GetZone()).Context(ctx).
@@ -83,7 +85,7 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 
 	for _, vm := range list.Items {
 		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
-			inst := p.mapToInstance(vm)
+			inst := p.mapToInstance(vm, &core.InstanceCreateOpts{})
 			var isBusy bool
 			for key, value := range vm.Labels {
 				if key == drivers.TagStatus {
@@ -115,7 +117,7 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", cloud).
+		WithField("cloud", core.ProviderGoogle).
 		WithField("pool", p.name).
 		WithField("label", tag).
 		WithField("label-value", value)
@@ -139,7 +141,7 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 	}
 	vm := list.Items[0]
 	if vm.Status == "RUNNING" {
-		instanceMap := p.mapToInstance(vm)
+		instanceMap := p.mapToInstance(vm, &core.InstanceCreateOpts{})
 		logr.
 			WithField("id", inst.ID).
 			WithField("ip", inst.IP).
@@ -155,7 +157,7 @@ func (p *provider) Tag(ctx context.Context, instanceID string, tags map[string]s
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
-		WithField("cloud", cloud)
+		WithField("cloud", core.ProviderGoogle)
 
 	vm, err := p.getInstanceByID(ctx, instanceID)
 	if err != nil {
@@ -197,7 +199,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("cloud", cloud)
+		WithField("cloud", core.ProviderGoogle)
 
 	for _, instanceID := range instanceIDs {
 		_, err = client.Instances.Delete(p.projectID, p.GetZone(), instanceID).Context(ctx).Do()
@@ -213,41 +215,20 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) GetProviderName() string {
-	return cloud
-}
-
-func (p *provider) GetInstanceType() string {
-	return p.image
-}
-
 func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.InstanceCreateOpts) (instance *core.Instance, err error) {
 	p.init.Do(func() {
 		_ = p.setup(ctx)
 	})
 
-	if p.userData == "" {
-		var params = cloudinit.Params{
-			Architecture:   p.arch,
-			Platform:       p.os,
-			CACert:         string(opts.CACert),
-			TLSCert:        string(opts.TLSCert),
-			TLSKey:         string(opts.TLSKey),
-			LiteEnginePath: opts.LiteEnginePath,
-		}
-		if p.os == oshelp.OSWindows {
-			p.userData = cloudinit.Windows(&params)
-		} else {
-			p.userData = cloudinit.Linux(&params)
-		}
-	}
+	// generate user data
+	p.userData = userdata.Generate(p.userData, p.os, p.arch, opts)
 
 	zone := p.GetZone()
 
 	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", cloud).
+		WithField("cloud", core.ProviderGoogle).
 		WithField("name", name).
 		WithField("image", p.GetInstanceType()).
 		WithField("pool", p.name).
@@ -358,7 +339,7 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 		return nil, err
 	}
 
-	instanceMap := p.mapToInstance(vm)
+	instanceMap := p.mapToInstance(vm, opts)
 
 	logr.
 		WithField("ip", instanceMap.IP).
@@ -368,17 +349,30 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 	return &instanceMap, nil
 }
 
-func (p *provider) mapToInstance(vm *compute.Instance) core.Instance {
+func (p *provider) mapToInstance(vm *compute.Instance, opts *core.InstanceCreateOpts) core.Instance {
 	network := vm.NetworkInterfaces[0]
 	accessConfigs := network.AccessConfigs[0]
 	instanceIP := accessConfigs.NatIP
 	creationTime, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 
 	return core.Instance{
-		ID: vm.Name,
-		IP: instanceIP,
-		//Tags:      vm.Labels,
+		ID:        vm.Name, //TODO needs updated to ID
+		Provider:  core.ProviderGoogle,
+		State:     core.StateCreated,
+		Pool:      p.name,
+		Name:      vm.Name,
+		Image:     p.image,
+		Zone:      p.GetZone(),
+		Size:      p.size,
+		Platform:  p.os,
+		IP:        instanceIP,
+		CACert:    opts.CACert,
+		CAKey:     opts.CAKey,
+		TLSCert:   opts.TLSCert,
+		TLSKey:    opts.TLSKey,
+		Created:   vm.CreationTimestamp,
 		StartedAt: creationTime,
+		Started:   time.Now().Unix(),
 	}
 }
 

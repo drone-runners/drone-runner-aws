@@ -55,18 +55,19 @@ type Instance struct {
 	IP        string        `json:"ip"`
 	Provider  ProviderType  `json:"provider"`
 	State     InstanceState `json:"state"`
+	Pool      string        `json:"pool_name"`
 	Name      string        `json:"name"`
 	Image     string        `json:"image"`
 	Region    string        `json:"region"`
+	Zone      string        `json:"zone"`
 	Size      string        `json:"size"`
 	Platform  string        `json:"platform"`
-	Address   string        `json:"address"`
 	Capacity  int           `json:"capacity"`
 	CAKey     []byte        `json:"ca_key"`
 	CACert    []byte        `json:"ca_cert"`
 	TLSKey    []byte        `json:"tls_key"`
 	TLSCert   []byte        `json:"tls_cert"`
-	Created   int64         `json:"created"`
+	Created   string        `json:"created"`
 	Updated   int64         `json:"updated"`
 	Started   int64         `json:"started"`
 	Stopped   int64         `json:"stopped"`

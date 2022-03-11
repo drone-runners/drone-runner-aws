@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/store"
+
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -38,9 +40,11 @@ import (
 )
 
 type delegateCommand struct {
-	envfile     string
-	pool        string
-	poolManager *drivers.Manager
+	envfile        string
+	pool           string
+	poolManager    *drivers.Manager
+	runnerName     string
+	liteEnginePath string
 }
 
 const TagStageID = drivers.TagPrefix + "stage-id"
@@ -84,6 +88,10 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// setup the global logrus logger.
 	setupLogger(&env)
 
+	// Set runner name & lite engine path
+	c.liteEnginePath = env.Settings.LiteEnginePath
+	c.runnerName = env.Runner.Name
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// listen for termination signals to gracefully shutdown the runner.
@@ -91,36 +99,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		println("received signal, terminating process")
 		cancel()
 	})
-	//// generate cert files if needed
-	//certGenerationErr := certs.Generate(env.Runner.Name, env.Settings.CertificateFolder)
-	//if certGenerationErr != nil {
-	//	logrus.WithError(certGenerationErr).
-	//		Errorln("delegate: failed to generate certificates")
-	//	return certGenerationErr
-	//}
-	//// read cert files into memory
-	//var readCertsErr error
-	//env.Settings.CACert, env.Settings.TLSCert, env.Settings.TLSKey, readCertsErr = certs.ReadLECerts(env.Settings.CertificateFolder)
-	//if readCertsErr != nil {
-	//	logrus.WithError(readCertsErr).
-	//		Errorln("delegate: failed to read certificates")
-	//	return readCertsErr
-	//}
-	//// we have enough information for default pool settings
-	//c.defaultPoolSettings = drivers.DefaultSettings{
-	//	RunnerName:     env.Runner.Name,
-	//	LiteEnginePath: env.Settings.LiteEnginePath,
-	//	CACert:     env.Settings.CACert,
-	//	TLSCert:       env.Settings.TLSCert,
-	//	TLSKey:        env.Settings.TLSKey,
-	//}
-	//
-	//cloudInitParams := &cloudinit.Params{
-	//	LiteEnginePath: c.defaultPoolSettings.LiteEnginePath,
-	//	CACert:     c.defaultPoolSettings.CACert,
-	//	TLSCert:       c.defaultPoolSettings.TLSCert,
-	//	TLSKey:        c.defaultPoolSettings.TLSKey,
-	//}
+
+	c.poolManager.SetInstanceStore(store.NewInstanceStore())
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
@@ -129,7 +109,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, env.Runner.Name)
+	pools, err := poolfile.ProcessPool(poolFile, c.runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to process pool file")
@@ -321,7 +301,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	instance, err := c.poolManager.Provision(ctx, poolName, "runneranme", "") //TODO FIX  THIS
+	instance, err := c.poolManager.Provision(ctx, poolName, c.runnerName, c.liteEnginePath)
 	if err != nil {
 		httprender.InternalError(w, "failed provisioning", err, logr)
 		return
