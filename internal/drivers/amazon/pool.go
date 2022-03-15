@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/core"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -17,7 +17,7 @@ import (
 )
 
 func (p *provider) GetProviderName() string {
-	return string(core.ProviderAmazon)
+	return string(types.ProviderAmazon)
 }
 
 func (p *provider) GetName() string {
@@ -97,11 +97,11 @@ func (p *provider) getTags(amazonInstance *ec2.Instance) map[string]string {
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
-func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.InstanceCreateOpts) (instance *core.Instance, err error) {
+func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", core.ProviderAmazon).
+		WithField("provider", types.ProviderAmazon).
 		WithField("ami", p.GetInstanceType()).
 		WithField("pool", p.name).
 		WithField("region", p.region).
@@ -114,12 +114,8 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 	tags[drivers.TagRunner] = drivers.RunnerName
 	tags[drivers.TagPool] = p.name
 	tags[drivers.TagCreator] = p.runnerName
-	if tagAsInUse {
-		tags[drivers.TagStatus] = drivers.TagStatusValue
-	}
 
 	// create the instance
-
 	startTime := time.Now()
 
 	logr.Traceln("amazon: provisioning VM")
@@ -266,23 +262,23 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 				continue
 			}
 
-			instance = &core.Instance{
-				ID:        instanceID,
-				Provider:  core.ProviderAmazon,
-				State:     core.StateCreated,
-				Pool:      p.name,
-				Image:     p.image,
-				Zone:      p.availabilityZone,
-				Region:    p.region,
-				Size:      p.size,
-				Platform:  p.os,
-				IP:        instanceIP,
-				CACert:    opts.CACert,
-				CAKey:     opts.CAKey,
-				TLSCert:   opts.TLSCert,
-				TLSKey:    opts.TLSKey,
-				Started:   time.Now().Unix(),
-				StartedAt: launchTime,
+			instance = &types.Instance{
+				ID:       instanceID,
+				Provider: types.ProviderAmazon,
+				State:    types.StateCreated,
+				Pool:     p.name,
+				Image:    p.image,
+				Zone:     p.availabilityZone,
+				Region:   p.region,
+				Size:     p.size,
+				Platform: p.os,
+				Address:  instanceIP,
+				CACert:   opts.CACert,
+				CAKey:    opts.CAKey,
+				TLSCert:  opts.TLSCert,
+				TLSKey:   opts.TLSKey,
+				Started:  time.Now().Unix(),
+				Created:  launchTime.String(),
 			}
 
 			logr.
@@ -295,11 +291,11 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 	}
 }
 
-func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err error) {
+func (p *provider) List(ctx context.Context) (busy, free []types.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", core.ProviderAmazon).
+		WithField("provider", types.ProviderAmazon).
 		WithField("pool", p.name)
 
 	params := &ec2.DescribeInstancesInput{
@@ -336,10 +332,10 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 			ip := p.getIP(awsInstance)
 			launchTime := p.getLaunchTime(awsInstance)
 
-			inst := core.Instance{
-				ID:        id,
-				IP:        ip,
-				StartedAt: launchTime,
+			inst := types.Instance{
+				ID:      id,
+				Address: ip,
+				Started: launchTime.Unix(),
 			}
 
 			var isBusy bool
@@ -365,11 +361,11 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 	return
 }
 
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *core.Instance, err error) {
+func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *types.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", core.ProviderAmazon).
+		WithField("provider", types.ProviderAmazon).
 		WithField("pool", p.name).
 		WithField("tag", tag).
 		WithField("tag-value", value)
@@ -417,16 +413,15 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 			//tags := p.getTags(awsInstance)
 			launchTime := p.getLaunchTime(awsInstance)
 
-			inst = &core.Instance{
-				ID: id,
-				IP: ip,
-				//Tags:      tags,
-				StartedAt: launchTime,
+			inst = &types.Instance{
+				ID:      id,
+				Address: ip,
+				Started: launchTime.Unix(),
 			}
 
 			logr.
 				WithField("id", inst.ID).
-				WithField("ip", inst.IP).
+				WithField("ip", inst.Address).
 				Traceln("amazon: found VM by tag")
 
 			return
@@ -443,7 +438,7 @@ func (p *provider) Tag(ctx context.Context, instanceID string, tags map[string]s
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
-		WithField("provider", core.ProviderAmazon)
+		WithField("provider", types.ProviderAmazon)
 
 	awsTags := make([]*ec2.Tag, 0, len(tags))
 	for key, value := range tags {
@@ -483,7 +478,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("provider", core.ProviderAmazon)
+		WithField("provider", types.ProviderAmazon)
 
 	awsIDs := make([]*string, len(instanceIDs))
 	for i, instanceID := range instanceIDs {

@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/store/database"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
@@ -61,6 +61,11 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
+	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
+	if err != nil {
+		logrus.WithError(err).
+			Fatalln("Invalid or missing hosting provider")
+	}
 	// setup the global logrus logger.
 	setupLogger(&env)
 
@@ -89,11 +94,8 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 			logrus.StandardLogger(),
 		),
 	)
-
-	poolManager := &drivers.Manager{}
-	poolManager.SetGlobalCtx(ctx)
-
-	poolManager.SetInstanceStore(store.NewInstanceStore())
+	store := database.ProvideInstanceStore(db)
+	poolManager := drivers.New(ctx, store, env.Settings.LiteEnginePath, env.Runner.Name)
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {

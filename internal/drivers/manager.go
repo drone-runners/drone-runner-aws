@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
-
-	"github.com/drone-runners/drone-runner-aws/core"
+	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/sirupsen/logrus"
@@ -19,13 +19,13 @@ import (
 
 type (
 	Manager struct {
-		globalCtx        context.Context
-		poolMap          map[string]*poolEntry
-		poolSizeStrategy Strategy
-		cleanupTimer     *time.Ticker
-		instanceStore    core.InstanceStore
-		serverName       string
-		liteEnginePath   string
+		globalCtx      context.Context
+		poolMap        map[string]*poolEntry
+		strategy       Strategy
+		cleanupTimer   *time.Ticker
+		serverName     string
+		liteEnginePath string
+		instanceStore  store.InstanceStore
 	}
 
 	poolEntry struct {
@@ -34,25 +34,47 @@ type (
 	}
 )
 
-var ErrorNoInstanceAvailable = errors.New("no free instances available")
-
-func (m *Manager) SetGlobalCtx(ctx context.Context) {
-	m.globalCtx = ctx
-}
-
-func (m *Manager) GetGlobalCtx() context.Context {
-	if m.globalCtx == nil {
-		return context.Background()
+func New(
+	globalContext context.Context,
+	instanceStore store.InstanceStore,
+	liteEnginePath string,
+	serverName string,
+) *Manager {
+	return &Manager{
+		globalCtx:      globalContext,
+		instanceStore:  instanceStore,
+		serverName:     serverName,
+		liteEnginePath: liteEnginePath,
 	}
-	return m.globalCtx
 }
 
-func (m *Manager) SetInstanceStore(store core.InstanceStore) {
-	m.instanceStore = store
+func (m *Manager) Find(ctx context.Context, instanceID string) (*types.Instance, error) {
+	return m.instanceStore.Find(ctx, instanceID)
 }
 
-func (m *Manager) GetInstanceStore() core.InstanceStore {
-	return m.instanceStore
+func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free []types.Instance, err error) {
+	list, err := m.instanceStore.List(ctx, pool.GetName())
+	if err != nil {
+		logger.FromContext(ctx).WithError(err).
+			Errorln("manager: failed to list instances")
+		return
+	}
+	for _, instance := range list {
+		if instance.State == types.StateInUse {
+			busy = append(busy, *instance)
+		} else {
+			free = append(free, *instance)
+		}
+	}
+	return busy, free, nil
+}
+
+func (m *Manager) Delete(ctx context.Context, instanceID string) error {
+	return m.instanceStore.Delete(ctx, instanceID)
+}
+
+func (m *Manager) Update(ctx context.Context, instance *types.Instance) error {
+	return m.instanceStore.Update(ctx, instance)
 }
 
 func (m *Manager) Add(pools ...Pool) error {
@@ -126,20 +148,21 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 						pool.Lock()
 						defer pool.Unlock()
 
-						busy, free, err := pool.List(ctx)
+						busy, free, err := m.List(ctx, pool)
 						if err != nil {
 							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.GetName(), err)
 						}
 
 						var ids []string
-
 						for _, inst := range busy {
-							if time.Since(inst.StartedAt) > maxAgeBusy {
+							startedAt := time.Unix(inst.Started, 0)
+							if time.Since(startedAt) > maxAgeBusy {
 								ids = append(ids, inst.ID)
 							}
 						}
 						for _, inst := range free {
-							if time.Since(inst.StartedAt) > maxAgeFree {
+							startedAt := time.Unix(inst.Started, 0)
+							if time.Since(startedAt) > maxAgeFree {
 								ids = append(ids, inst.ID)
 							}
 						}
@@ -209,12 +232,12 @@ func (m *Manager) Count() int {
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
 func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
-	instBusy, instFree, err := pool.List(ctx)
+	instBusy, instFree, err := m.List(ctx, pool)
 	if err != nil {
 		return err
 	}
 
-	strategy := m.poolSizeStrategy
+	strategy := m.strategy
 	if strategy == nil {
 		strategy = Greedy{}
 	}
@@ -279,7 +302,7 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEnginePath string) (*core.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEnginePath string) (*types.Instance, error) {
 	m.serverName = serverName
 	m.liteEnginePath = liteEnginePath
 
@@ -291,12 +314,12 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 	pool.Lock()
 	defer pool.Unlock()
 
-	strategy := m.poolSizeStrategy
+	strategy := m.strategy
 	if strategy == nil {
 		strategy = Greedy{}
 	}
 
-	busy, free, err := pool.List(ctx)
+	busy, free, err := m.List(ctx, pool)
 	if err != nil {
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
@@ -305,31 +328,36 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 		if canCreate := strategy.CanCreate(pool.GetMinSize(), pool.GetMaxSize(), len(busy), len(free)); !canCreate {
 			return nil, ErrorNoInstanceAvailable
 		}
-
-		inst, err := m.setupInstance(ctx, pool, true)
+		var inst *types.Instance
+		inst, err = m.setupInstance(ctx, pool, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
 		return inst, nil
 	}
 
-	sort.Slice(free, func(i, j int) bool { return free[i].StartedAt.Before(free[j].StartedAt) })
+	sort.Slice(free, func(i, j int) bool {
+		iTime := time.Unix(free[i].Started, 0)
+		jTime := time.Unix(free[j].Started, 0)
+		return iTime.Before(jTime)
+	})
 
 	inst := &free[0]
-	err = pool.Tag(ctx, inst.ID, map[string]string{TagStatus: TagStatusValue})
-	if err != nil {
-		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
-	}
 	inst, err = m.instanceStore.Find(ctx, inst.ID)
 	if err != nil {
 		return nil, fmt.Errorf("provision: failed to find instance %q: %w", inst.ID, err)
+	}
+	inst.State = types.StateInUse
+	err = m.instanceStore.Update(ctx, inst)
+	if err != nil {
+		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
 		_ = m.buildPoolWithMutex(ctx, pool)
-	}(m.GetGlobalCtx())
+	}(m.globalCtx)
 
 	return inst, nil
 }
@@ -348,12 +376,15 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
-
+	err = m.Destroy(ctx, poolName, instanceID)
+	if err != nil {
+		return fmt.Errorf("provision: failed to delete an instance of %q pool: %w", poolName, err)
+	}
 	// the go routine here uses the global context because this function is called
 	// from destroy API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
 		_ = m.buildPoolWithMutex(ctx, pool)
-	}(m.GetGlobalCtx())
+	}(m.globalCtx)
 
 	return nil
 }
@@ -362,16 +393,7 @@ func (m *Manager) BuildPools(ctx context.Context) error {
 	return m.forEach(ctx, m.buildPoolWithMutex)
 }
 
-func (m *Manager) Tag(ctx context.Context, poolName, instanceID string, tags map[string]string) error {
-	pool := m.poolMap[poolName]
-	if pool == nil {
-		return fmt.Errorf("tag: pool name %q not found", poolName)
-	}
-
-	return pool.Tag(ctx, instanceID, tags)
-}
-
-func (m *Manager) GetUsedInstanceByTag(ctx context.Context, poolName, tag, value string) (*core.Instance, error) {
+func (m *Manager) GetUsedInstanceByTag(ctx context.Context, poolName, tag, value string) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("get by tag: pool name %q not found", poolName)
@@ -382,7 +404,7 @@ func (m *Manager) GetUsedInstanceByTag(ctx context.Context, poolName, tag, value
 
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	for _, pool := range m.poolMap {
-		busy, free, err := pool.List(ctx)
+		busy, free, err := m.List(ctx, pool)
 		if err != nil {
 			return err
 		}
@@ -404,6 +426,12 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 		if err != nil {
 			return err
 		}
+		for _, inst := range instanceIDs {
+			err = m.Delete(ctx, inst)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -423,8 +451,8 @@ func (m *Manager) CheckProvider(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool) (*core.Instance, error) {
-	var inst *core.Instance
+func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool) (*types.Instance, error) {
+	var inst *types.Instance
 
 	// generate certs
 	certOptions, err := certs.Generate(m.serverName)
@@ -436,11 +464,15 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	}
 
 	// create instance
-	inst, err = pool.Create(ctx, inuse, certOptions)
+	inst, err = pool.Create(ctx, certOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: failed to create instance")
 		return nil, err
+	}
+
+	if inuse {
+		inst.State = types.StateInUse
 	}
 
 	// store instance

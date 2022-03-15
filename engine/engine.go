@@ -12,10 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/core"
-
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
@@ -52,8 +50,8 @@ func New(opts Opts, poolManager *drivers.Manager, serverName, liteEnginePath str
 	}, nil
 }
 
-func (eng *Engine) getLEClient(instance *core.Instance) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instance.IP)
+func (eng *Engine) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
 
 	return lehttp.NewHTTPClient(leURL,
 		eng.serverName, instance.CACert,
@@ -65,7 +63,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 
 	poolName := spec.CloudInstance.PoolName
-	poolMngr := eng.poolManager
+	manager := eng.poolManager
 	stageID := "" // TODO: Check how to obtain this value. Or create value here is it's not yet defined...
 
 	logr := logger.FromContext(ctx).
@@ -79,29 +77,29 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// lets see if there is anything in the pool
-	instance, err := poolMngr.Provision(ctx, poolName, eng.serverName, eng.liteEnginePath)
+	instance, err := manager.Provision(ctx, poolName, eng.serverName, eng.liteEnginePath)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
 	}
 
 	logr = logr.
-		WithField("ip", instance.IP).
+		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
 
 	// now we have an instance, put the information in the spec
 	spec.CloudInstance.PoolName = poolName
 	spec.CloudInstance.ID = instance.ID
-	spec.CloudInstance.IP = instance.IP
+	spec.CloudInstance.IP = instance.Address
 
-	if !poolMngr.Exists(poolName) {
+	if !manager.Exists(poolName) {
 		logr.Errorln("pool does not exist")
 		return ErrorPoolNotDefined
 	}
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpFn := func() {
-		errCleanUp := poolMngr.Destroy(context.Background(), poolName, instance.ID)
+		errCleanUp := manager.Destroy(context.Background(), poolName, instance.ID)
 		if errCleanUp != nil {
 			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
 		}
@@ -117,7 +115,8 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	//	}
 	tags[drivers.TagStageID] = stageID
 
-	err = poolMngr.Tag(ctx, poolName, instance.ID, tags)
+	instance.State = types.StateInUse
+	err = manager.Update(ctx, instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to tag")
 		go cleanUpFn()
@@ -215,8 +214,11 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		WithField("id", instanceID).
 		WithField("ip", instanceIP)
 
-	store := eng.poolManager.GetInstanceStore()
-	instance, err := store.Find(ctx, instanceID)
+	instance, err := eng.poolManager.Find(ctx, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("cannot find instance")
+		return nil, err
+	}
 	client, err := eng.getLEClient(instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")

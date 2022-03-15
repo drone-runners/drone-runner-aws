@@ -85,6 +85,11 @@ type Config struct {
 		Token      string `envconfig:"DRONE_REGISTRY_PLUGIN_TOKEN"`
 		SkipVerify bool   `envconfig:"DRONE_REGISTRY_PLUGIN_SKIP_VERIFY"`
 	}
+
+	Database struct {
+		Driver     string `envconfig:"APP_DATABASE_DRIVER" default:"sqlite3"`
+		Datasource string `envconfig:"APP_DATABASE_DATASOURCE" default:"database.sqlite3"`
+	}
 }
 
 // legacy environment variables. the key is the legacy

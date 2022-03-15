@@ -131,7 +131,6 @@ func WithUserData(text string) Option {
 			}
 			p.userData = string(data)
 		}
-		return
 	}
 }
 

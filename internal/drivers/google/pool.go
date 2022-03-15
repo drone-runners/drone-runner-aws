@@ -7,13 +7,13 @@ import (
 	"math/rand"
 	"net/http"
 	"reflect"
+	"strconv"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
-
-	"github.com/drone-runners/drone-runner-aws/core"
-
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+
+	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
 	"google.golang.org/api/compute/v1"
@@ -46,7 +46,7 @@ func (p *provider) GetZone() string {
 }
 
 func (p *provider) GetProviderName() string {
-	return string(core.ProviderGoogle)
+	return string(types.ProviderGoogle)
 }
 
 func (p *provider) GetInstanceType() string {
@@ -66,11 +66,11 @@ func (p *provider) CheckProvider(ctx context.Context) error {
 	return errors.New("unable to ping google")
 }
 
-func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err error) {
+func (p *provider) List(ctx context.Context) (busy, free []types.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", core.ProviderGoogle).
+		WithField("cloud", types.ProviderGoogle).
 		WithField("pool", p.name)
 
 	list, err := client.Instances.List(p.projectID, p.GetZone()).Context(ctx).
@@ -85,7 +85,7 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 
 	for _, vm := range list.Items {
 		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
-			inst := p.mapToInstance(vm, &core.InstanceCreateOpts{})
+			inst := p.mapToInstance(vm, &types.InstanceCreateOpts{})
 			var isBusy bool
 			for key, value := range vm.Labels {
 				if key == drivers.TagStatus {
@@ -113,11 +113,11 @@ func (p *provider) List(ctx context.Context) (busy, free []core.Instance, err er
 	return
 }
 
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *core.Instance, err error) {
+func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *types.Instance, err error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", core.ProviderGoogle).
+		WithField("cloud", types.ProviderGoogle).
 		WithField("pool", p.name).
 		WithField("label", tag).
 		WithField("label-value", value)
@@ -141,10 +141,10 @@ func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) 
 	}
 	vm := list.Items[0]
 	if vm.Status == "RUNNING" {
-		instanceMap := p.mapToInstance(vm, &core.InstanceCreateOpts{})
+		instanceMap := p.mapToInstance(vm, &types.InstanceCreateOpts{})
 		logr.
 			WithField("id", inst.ID).
-			WithField("ip", inst.IP).
+			WithField("ip", inst.Address).
 			Traceln("gcp: found VM by tag")
 		return &instanceMap, nil
 	}
@@ -157,7 +157,7 @@ func (p *provider) Tag(ctx context.Context, instanceID string, tags map[string]s
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
-		WithField("cloud", core.ProviderGoogle)
+		WithField("cloud", types.ProviderGoogle)
 
 	vm, err := p.getInstanceByID(ctx, instanceID)
 	if err != nil {
@@ -199,7 +199,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("cloud", core.ProviderGoogle)
+		WithField("cloud", types.ProviderGoogle)
 
 	for _, instanceID := range instanceIDs {
 		_, err = client.Instances.Delete(p.projectID, p.GetZone(), instanceID).Context(ctx).Do()
@@ -215,7 +215,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.InstanceCreateOpts) (instance *core.Instance, err error) {
+func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	p.init.Do(func() {
 		_ = p.setup(ctx)
 	})
@@ -228,7 +228,7 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", core.ProviderGoogle).
+		WithField("cloud", types.ProviderGoogle).
 		WithField("name", name).
 		WithField("image", p.GetInstanceType()).
 		WithField("pool", p.name).
@@ -240,10 +240,6 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 	labels[drivers.TagRunner] = drivers.RunnerName
 	labels[drivers.TagPool] = p.name
 	labels[drivers.TagCreator] = p.runnerName
-	if tagAsInUse {
-		labels[drivers.TagStatus] = drivers.TagStatusValue
-		logr.Debugln("gcp: tagging VM as in use", name)
-	}
 
 	// create the instance
 	startTime := time.Now()
@@ -342,37 +338,35 @@ func (p *provider) Create(ctx context.Context, tagAsInUse bool, opts *core.Insta
 	instanceMap := p.mapToInstance(vm, opts)
 
 	logr.
-		WithField("ip", instanceMap.IP).
+		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("gcp: [provision] complete")
 
 	return &instanceMap, nil
 }
 
-func (p *provider) mapToInstance(vm *compute.Instance, opts *core.InstanceCreateOpts) core.Instance {
+func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
 	network := vm.NetworkInterfaces[0]
 	accessConfigs := network.AccessConfigs[0]
 	instanceIP := accessConfigs.NatIP
-	creationTime, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 
-	return core.Instance{
-		ID:        vm.Name, //TODO needs updated to ID
-		Provider:  core.ProviderGoogle,
-		State:     core.StateCreated,
-		Pool:      p.name,
-		Name:      vm.Name,
-		Image:     p.image,
-		Zone:      p.GetZone(),
-		Size:      p.size,
-		Platform:  p.os,
-		IP:        instanceIP,
-		CACert:    opts.CACert,
-		CAKey:     opts.CAKey,
-		TLSCert:   opts.TLSCert,
-		TLSKey:    opts.TLSKey,
-		Created:   vm.CreationTimestamp,
-		StartedAt: creationTime,
-		Started:   time.Now().Unix(),
+	return types.Instance{
+		ID:       strconv.FormatUint(vm.Id, 10),
+		Name:     vm.Name,
+		Provider: types.ProviderGoogle,
+		State:    types.StateCreated,
+		Pool:     p.name,
+		Image:    p.image,
+		Zone:     p.GetZone(),
+		Size:     p.size,
+		Platform: p.os,
+		Address:  instanceIP,
+		CACert:   opts.CACert,
+		CAKey:    opts.CAKey,
+		TLSCert:  opts.TLSCert,
+		TLSKey:   opts.TLSKey,
+		Created:  vm.CreationTimestamp,
+		Started:  time.Now().Unix(),
 	}
 }
 

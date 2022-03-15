@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/store"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -100,7 +98,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	c.poolManager.SetInstanceStore(store.NewInstanceStore())
+	//c.poolManager.SetInstanceStore(database.NewInstanceStore())
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
@@ -308,7 +306,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logr = logr.
-		WithField("ip", instance.IP).
+		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
@@ -328,14 +326,14 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	tags[TagStageID] = reqData.ID
 
-	err = c.poolManager.Tag(ctx, poolName, instance.ID, tags)
-	if err != nil {
-		httprender.InternalError(w, "failed to tag", err, logr)
-		go cleanUpFn()
-		return
-	}
+	//err = c.poolManager.Tag(ctx, poolName, instance.ID, tags)
+	//if err != nil {
+	//	httprender.InternalError(w, "failed to tag", err, logr)
+	//	go cleanUpFn()
+	//	return
+	//}
 
-	client, err := c.getLEClient(instance.IP)
+	client, err := c.getLEClient(instance.Address)
 	if err != nil {
 		httprender.InternalError(w, "failed to create LE client", err, logr)
 		go cleanUpFn()
@@ -368,7 +366,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		InstanceID string `json:"instance_id,omitempty"`
 		IPAddress  string `json:"ip_address,omitempty"`
 	}{
-		IPAddress:  instance.IP,
+		IPAddress:  instance.Address,
 		InstanceID: instance.ID,
 	})
 }
@@ -415,12 +413,12 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return
 		}
-		if inst == nil || inst.IP == "" {
+		if inst == nil || inst.Address == "" {
 			httprender.NotFound(w, "instance with provided ID not found", logr)
 			return
 		}
 
-		ipAddress = inst.IP
+		ipAddress = inst.Address
 	}
 
 	logr = logr.

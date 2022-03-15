@@ -2,8 +2,9 @@ package drivers
 
 import (
 	"context"
+	"errors"
 
-	"github.com/drone-runners/drone-runner-aws/core"
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 const (
@@ -16,6 +17,8 @@ const (
 	TagPool        = TagPrefix + "pool"
 	TagStatusValue = "in-use"
 )
+
+var ErrorNoInstanceAvailable = errors.New("no free instances available")
 
 type Pool interface {
 	// GetProviderName returns VM provider name. It should be a fixed string for each implementation. The value is used for logging.
@@ -30,10 +33,10 @@ type Pool interface {
 	GetMinSize() int
 
 	CheckProvider(ctx context.Context) error
-	Create(ctx context.Context, tagAsInUse bool, opts *core.InstanceCreateOpts) (instance *core.Instance, err error)
-	List(ctx context.Context) (busy, free []core.Instance, err error)
-	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *core.Instance, err error)
-	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
+	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
+	//List(ctx context.Context) (busy, free []types.Instance, err error)
+	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *types.Instance, err error)
+	//Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
 }
 

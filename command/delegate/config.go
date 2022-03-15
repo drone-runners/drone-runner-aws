@@ -27,14 +27,10 @@ type Config struct {
 	}
 
 	Settings struct {
-		LiteEnginePath    string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.0.1.14/"`
-		CertificateFolder string `envconfig:"DRONE_SETTINGS_CERTIFICATE_FOLDER" default:"/tmp/certs"`
-		BusyMaxAge        int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"2"`
-		FreeMaxAge        int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"12"`
-		CaCertFile        string `envconfig:"DRONE_SETTINGS_CA_CERT_FILE"`
-		CertFile          string `envconfig:"DRONE_SETTINGS_CERT_FILE"`
-		KeyFile           string `envconfig:"DRONE_SETTINGS_KEY_FILE"`
-		ReusePool         bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
+		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.0.1.14/"`
+		BusyMaxAge     int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"2"`
+		FreeMaxAge     int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"12"`
+		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 	}
 }
 
