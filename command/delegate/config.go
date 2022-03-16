@@ -32,6 +32,11 @@ type Config struct {
 		FreeMaxAge     int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"12"`
 		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 	}
+
+	Database struct {
+		Driver     string `envconfig:"APP_DATABASE_DRIVER" default:"sqlite3"`
+		Datasource string `envconfig:"APP_DATABASE_DATASOURCE" default:"database.sqlite3"`
+	}
 }
 
 // legacy environment variables. the key is the legacy

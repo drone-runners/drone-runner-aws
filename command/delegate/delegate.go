@@ -14,6 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
+
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -46,6 +49,21 @@ type delegateCommand struct {
 }
 
 const TagStageID = drivers.TagPrefix + "stage-id"
+
+func RegisterDelegate(app *kingpin.Application) {
+	c := new(delegateCommand)
+
+	c.poolManager = &drivers.Manager{}
+
+	cmd := app.Command("delegate", "starts the delegate").
+		Action(c.run)
+	cmd.Flag("envfile", "load the environment variable file").
+		Default("").
+		StringVar(&c.envfile)
+	cmd.Flag("pool", "file to seed the amazon pool").
+		Default("pool.yml").
+		StringVar(&c.pool)
+}
 
 // helper function configures the global logger from
 // the loaded configuration.
@@ -86,6 +104,12 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// setup the global logrus logger.
 	setupLogger(&env)
 
+	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
+	if err != nil {
+		logrus.WithError(err).
+			Fatalln("Invalid or missing hosting provider")
+	}
+
 	// Set runner name & lite engine path
 	c.liteEnginePath = env.Settings.LiteEnginePath
 	c.runnerName = env.Runner.Name
@@ -98,7 +122,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	//c.poolManager.SetInstanceStore(database.NewInstanceStore())
+	store := database.ProvideInstanceStore(db)
+	c.poolManager = drivers.New(ctx, store, c.liteEnginePath, c.runnerName)
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
@@ -340,7 +365,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := c.getLEClient(instance.Address)
+	client, err := c.getLEClient(instance)
 	if err != nil {
 		httprender.InternalError(w, "failed to create LE client", err, logr)
 		go cleanUpFn()
@@ -410,28 +435,16 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	var ipAddress string
-
-	if reqData.IPAddress != "" {
-		ipAddress = reqData.IPAddress
-	} else {
-		inst, err := c.poolManager.GetInstanceByStageId(ctx, reqData.PoolID, TagStageID, reqData.ID)
-		if err != nil {
-			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
-			return
-		}
-		if inst == nil || inst.Address == "" {
-			httprender.NotFound(w, "instance with provided ID not found", logr)
-			return
-		}
-
-		ipAddress = inst.Address
+	inst, err := c.poolManager.GetInstanceByStageId(ctx, reqData.PoolID, TagStageID, reqData.ID)
+	if err != nil {
+		httprender.InternalError(w, "cannot get the instance by stageId", err, logr)
+		return
 	}
 
 	logr = logr.
-		WithField("ip", ipAddress)
+		WithField("ip", inst.Address)
 
-	client, err := c.getLEClient(ipAddress)
+	client, err := c.getLEClient(inst)
 	if err != nil {
 		httprender.InternalError(w, "failed to create client", err, logr)
 		return
@@ -518,33 +531,24 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		httprender.InternalError(w, "cannot destroy the instance", err, logr)
 		return
 	}
-
 	logr.Traceln("destroyed instance")
+
+	err := c.poolManager.Delete(ctx, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("cannot delete the instance from store")
+		return
+	}
+	logr.Traceln("instance remove from store")
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func RegisterDelegate(app *kingpin.Application) {
-	c := new(delegateCommand)
-
-	c.poolManager = &drivers.Manager{}
-
-	cmd := app.Command("delegate", "starts the delegate").
-		Action(c.run)
-	cmd.Flag("envfile", "load the environment variable file").
-		Default("").
-		StringVar(&c.envfile)
-	cmd.Flag("pool", "file to seed the amazon pool").
-		Default("pool.yml").
-		StringVar(&c.pool)
-}
-
-func (c *delegateCommand) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instanceIP)
+func (c *delegateCommand) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
 
 	return lehttp.NewHTTPClient(leURL,
-		"", []byte(""),
-		[]byte(""), []byte(""))
+		c.runnerName, instance.CACert,
+		instance.TLSCert, instance.TLSKey)
 }
 
 func getJSONDataFromReader(r io.Reader, data interface{}) error {

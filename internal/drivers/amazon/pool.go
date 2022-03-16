@@ -3,6 +3,7 @@ package amazon
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -224,6 +225,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 			instance = &types.Instance{
 				ID:       instanceID,
+				Name:     instanceID,
 				Provider: types.ProviderAmazon,
 				State:    types.StateCreated,
 				Pool:     p.name,
@@ -232,6 +234,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				Region:   p.region,
 				Size:     p.size,
 				Platform: p.os,
+				Arch:     p.arch,
 				Address:  instanceIP,
 				CACert:   opts.CACert,
 				CAKey:    opts.CAKey,
@@ -241,7 +244,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				Created:  launchTime.String(),
 				Updated:  time.Now().String(),
 			}
-
+			instance.Tags, _ = json.Marshal(tags)
 			logr.
 				WithField("ip", instanceIP).
 				WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).

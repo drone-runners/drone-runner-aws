@@ -37,16 +37,16 @@ type Opts struct {
 type Engine struct {
 	opts           Opts
 	poolManager    *drivers.Manager
-	serverName     string
+	runnerName     string
 	liteEnginePath string
 }
 
 // New returns a new engine.
-func New(opts Opts, poolManager *drivers.Manager, serverName, liteEnginePath string) (*Engine, error) {
+func New(opts Opts, poolManager *drivers.Manager, runnerName, liteEnginePath string) (*Engine, error) {
 	return &Engine{
 		opts:           opts,
 		poolManager:    poolManager,
-		serverName:     serverName,
+		runnerName:     runnerName,
 		liteEnginePath: liteEnginePath,
 	}, nil
 }
@@ -70,7 +70,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// lets see if there is anything in the pool
-	instance, err := manager.Provision(ctx, poolName, eng.serverName, eng.liteEnginePath)
+	instance, err := manager.Provision(ctx, poolName, eng.runnerName, eng.liteEnginePath)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
@@ -348,6 +348,6 @@ func (eng *Engine) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, er
 	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
 
 	return lehttp.NewHTTPClient(leURL,
-		eng.serverName, instance.CACert,
+		eng.runnerName, instance.CACert,
 		instance.TLSCert, instance.TLSKey)
 }

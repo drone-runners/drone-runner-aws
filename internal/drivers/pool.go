@@ -8,14 +8,12 @@ import (
 )
 
 const (
-	RunnerName     = "drone-runner-cloud"
-	TagPrefix      = "runner-"
-	TagStageID     = TagPrefix + "stage-id"
-	TagStatus      = TagPrefix + "status"
-	TagRunner      = TagPrefix + "name"
-	TagCreator     = TagPrefix + "creator"
-	TagPool        = TagPrefix + "pool"
-	TagStatusValue = "in-use"
+	RunnerName = "drone-runner-cloud"
+	TagPrefix  = "runner-"
+	TagStageID = TagPrefix + "stage-id"
+	TagRunner  = TagPrefix + "name"
+	TagCreator = TagPrefix + "creator"
+	TagPool    = TagPrefix + "pool"
 )
 
 var ErrorNoInstanceAvailable = errors.New("no free instances available")
