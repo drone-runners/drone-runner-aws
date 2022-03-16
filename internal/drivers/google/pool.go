@@ -225,7 +225,7 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 	labels, _ := json.Marshal(vm.Labels)
 
 	return types.Instance{
-		ID:       strconv.FormatUint(vm.Id, 10),
+		ID:       strconv.FormatUint(vm.Id, 10), //nolint
 		Name:     vm.Name,
 		Provider: types.ProviderGoogle,
 		State:    types.StateCreated,
@@ -340,13 +340,4 @@ func (p *provider) waitGlobalOperation(ctx context.Context, name string) error {
 		}
 		time.Sleep(time.Second)
 	}
-}
-
-func (p *provider) getInstanceByID(ctx context.Context, instanceID string) (*compute.Instance, error) {
-	client := p.service
-	vm, err := client.Instances.Get(p.projectID, p.GetZone(), instanceID).Context(ctx).Do()
-	if err != nil {
-		return nil, err
-	}
-	return vm, nil
 }

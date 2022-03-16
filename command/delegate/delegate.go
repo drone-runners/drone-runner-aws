@@ -435,7 +435,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	inst, err := c.poolManager.GetInstanceByStageId(ctx, reqData.PoolID, TagStageID, reqData.ID)
+	inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, TagStageID, reqData.ID)
 	if err != nil {
 		httprender.InternalError(w, "cannot get the instance by stageId", err, logr)
 		return
@@ -511,7 +511,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	if reqData.InstanceID != "" {
 		instanceID = reqData.InstanceID
 	} else {
-		inst, err := c.poolManager.GetInstanceByStageId(ctx, reqData.PoolID, TagStageID, reqData.ID)
+		inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, TagStageID, reqData.ID)
 		if err != nil {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return

@@ -6,14 +6,9 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/store/database/migrate"
 
-	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // required for sqlite3
 )
-
-// build is a global instance of the sql builder. we are able to
-// hardcode to postgres since sqlite3 is compatible with postgres.
-var builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
 // Connect to a database and verify with a ping.
 func Connect(driver, datasource string) (*sqlx.DB, error) {

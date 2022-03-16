@@ -75,7 +75,7 @@ func (m *Manager) Find(ctx context.Context, instanceID string) (*types.Instance,
 	return m.instanceStore.Find(ctx, instanceID)
 }
 
-func (m *Manager) GetInstanceByStageId(ctx context.Context, poolName, key, value string) (*types.Instance, error) {
+func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, key, value string) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	query := types.QueryParams{Status: types.StateInUse}
 	list, err := m.instanceStore.List(ctx, pool.GetName(), &query)
@@ -86,7 +86,7 @@ func (m *Manager) GetInstanceByStageId(ctx context.Context, poolName, key, value
 	}
 	for _, instance := range list {
 		var tags map[string]string
-		tags, err = convertTagsToMap(ctx, err, instance)
+		tags, err = convertTagsToMap(ctx, instance)
 		if err != nil {
 			return nil, err
 		}
@@ -99,20 +99,24 @@ func (m *Manager) GetInstanceByStageId(ctx context.Context, poolName, key, value
 	return nil, errors.New("manager: instance not found")
 }
 
-func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free []types.Instance, err error) {
+func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free []*types.Instance, err error) {
 	list, err := m.instanceStore.List(ctx, pool.GetName(), nil)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
 			Errorln("manager: failed to list instances")
 		return
 	}
+
 	for _, instance := range list {
+		// required to append instance not pointer
+		loopInstance := instance
 		if instance.State == types.StateInUse {
-			busy = append(busy, *instance)
+			busy = append(busy, loopInstance)
 		} else {
-			free = append(free, *instance)
+			free = append(free, loopInstance)
 		}
 	}
+
 	return busy, free, nil
 }
 
@@ -286,7 +290,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 		return iTime.Before(jTime)
 	})
 
-	inst := &free[0]
+	inst := free[0]
 	inst.State = types.StateInUse
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
@@ -481,9 +485,9 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	return inst, nil
 }
 
-func convertTagsToMap(ctx context.Context, err error, instance *types.Instance) (map[string]string, error) {
+func convertTagsToMap(ctx context.Context, instance *types.Instance) (map[string]string, error) {
 	var tagsMap = map[string]string{}
-	err = json.Unmarshal(instance.Tags, &tagsMap)
+	var err = json.Unmarshal(instance.Tags, &tagsMap)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
 			Errorln("manager: failed to unmarshal instance tags")

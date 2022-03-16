@@ -11,8 +11,8 @@ import (
 
 var _ store.InstanceStore = (*InstanceStoreSync)(nil)
 
-func NewInstanceStoreSync(store *InstanceStore) *InstanceStoreSync {
-	return &InstanceStoreSync{store}
+func NewInstanceStoreSync(instanceStore *InstanceStore) *InstanceStoreSync {
+	return &InstanceStoreSync{instanceStore}
 }
 
 type InstanceStoreSync struct{ base *InstanceStore }

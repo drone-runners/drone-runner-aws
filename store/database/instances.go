@@ -50,7 +50,7 @@ func (s InstanceStore) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint
 	if _, err := tx.Exec(instanceDelete, id); err != nil {
 		return err
 	}

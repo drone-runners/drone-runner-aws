@@ -303,21 +303,3 @@ func (p *provider) getLaunchTime(amazonInstance *ec2.Instance) time.Time {
 	}
 	return *amazonInstance.LaunchTime
 }
-
-func (p *provider) getTags(amazonInstance *ec2.Instance) map[string]string {
-	if len(amazonInstance.Tags) == 0 {
-		return nil
-	}
-
-	tags := make(map[string]string, len(amazonInstance.Tags))
-
-	for _, awsTag := range amazonInstance.Tags {
-		if awsTag == nil || awsTag.Key == nil || awsTag.Value == nil {
-			continue
-		}
-
-		tags[*awsTag.Key] = *awsTag.Value
-	}
-
-	return tags
-}
