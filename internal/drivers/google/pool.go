@@ -2,6 +2,7 @@ package google
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -10,9 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-
 	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -53,7 +54,7 @@ func (p *provider) GetInstanceType() string {
 	return p.image
 }
 
-func (p *provider) CheckProvider(ctx context.Context) error {
+func (p *provider) PingProvider(ctx context.Context) error {
 	client := p.service
 	healthCheck := client.Regions.List(p.projectID).Context(ctx)
 	response, err := healthCheck.Do()
@@ -66,166 +67,13 @@ func (p *provider) CheckProvider(ctx context.Context) error {
 	return errors.New("unable to ping google")
 }
 
-func (p *provider) List(ctx context.Context) (busy, free []types.Instance, err error) {
-	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("cloud", types.ProviderGoogle).
-		WithField("pool", p.name)
-
-	list, err := client.Instances.List(p.projectID, p.GetZone()).Context(ctx).
-		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagCreator, p.runnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagRunner, drivers.RunnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagPool, p.name)).
-		Do()
-
-	if list.Items == nil {
-		return
-	}
-
-	for _, vm := range list.Items {
-		if vm.Status == "RUNNING" || vm.Status == "PROVISIONING" {
-			inst := p.mapToInstance(vm, &types.InstanceCreateOpts{})
-			var isBusy bool
-			for key, value := range vm.Labels {
-				if key == drivers.TagStatus {
-					isBusy = value == drivers.TagStatusValue
-					break
-				}
-			}
-			if isBusy {
-				busy = append(busy, inst)
-			} else {
-				free = append(free, inst)
-			}
-		}
-
-		if err != nil {
-			logr.WithError(err).Error("unable to list zones")
-			return
-		}
-
-		logr.
-			WithField("free", len(free)).
-			WithField("busy", len(busy)).
-			Traceln("gcp: list VMs")
-	}
-	return
-}
-
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *types.Instance, err error) {
-	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("cloud", types.ProviderGoogle).
-		WithField("pool", p.name).
-		WithField("label", tag).
-		WithField("label-value", value)
-
-	list, err := client.Instances.List(p.projectID, p.GetZone()).Context(ctx).
-		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagCreator, p.runnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagRunner, drivers.RunnerName)).
-		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagPool, p.name)).
-		Filter(fmt.Sprintf("labels.%s=%s", drivers.TagStatus, drivers.TagStatusValue)).
-		Filter(fmt.Sprintf("labels.%s=%s", tag, value)).
-		Do()
-
-	if err != nil {
-		logr.WithError(err).
-			Errorln("gcp: failed to get VM by tag")
-		return
-	}
-	if len(list.Items) == 0 {
-		err = errors.New("no VM found")
-		return
-	}
-	vm := list.Items[0]
-	if vm.Status == "RUNNING" {
-		instanceMap := p.mapToInstance(vm, &types.InstanceCreateOpts{})
-		logr.
-			WithField("id", inst.ID).
-			WithField("ip", inst.Address).
-			Traceln("gcp: found VM by tag")
-		return &instanceMap, nil
-	}
-
-	return
-}
-
-func (p *provider) Tag(ctx context.Context, instanceID string, tags map[string]string) (err error) {
-	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("id", instanceID).
-		WithField("cloud", types.ProviderGoogle)
-
-	vm, err := p.getInstanceByID(ctx, instanceID)
-	if err != nil {
-		logr.WithError(err).Errorln("gcp: failed to get VM")
-	}
-
-	for k, v := range tags {
-		vm.Labels[k] = v
-		logr.Traceln("gcp: adding label", k, v)
-	}
-
-	var labels = compute.InstancesSetLabelsRequest{
-		Labels:           vm.Labels,
-		LabelFingerprint: vm.LabelFingerprint,
-	}
-
-	_, err = client.Instances.SetLabels(p.projectID, p.GetZone(), instanceID, &labels).Context(ctx).Do()
-	if err != nil {
-		logr.WithError(err).Errorln("gcp: failed to tag VM")
-	}
-	// required as there's a delay in labels getting set on GCP side
-	for {
-		updatedVM, _ := p.getInstanceByID(ctx, instanceID)
-		if len(updatedVM.Labels) == len(vm.Labels) {
-			break
-		}
-	}
-
-	logr.Traceln("gcp: VM tagged")
-	return
-}
-
-func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
-	if len(instanceIDs) == 0 {
-		return
-	}
-
-	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("id", instanceIDs).
-		WithField("cloud", types.ProviderGoogle)
-
-	for _, instanceID := range instanceIDs {
-		_, err = client.Instances.Delete(p.projectID, p.GetZone(), instanceID).Context(ctx).Do()
-		if err != nil {
-			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
-			if gerr, ok := err.(*googleapi.Error); ok &&
-				gerr.Code == http.StatusNotFound {
-				logr.WithError(err).Errorln("gcp: VM not found")
-			}
-		}
-		_ = p.waitZoneOperation(ctx, instanceID, p.GetZone())
-	}
-	return
-}
-
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	p.init.Do(func() {
 		_ = p.setup(ctx)
 	})
 
-	// generate user data
-	p.userData = userdata.Generate(p.userData, p.os, p.arch, opts)
-
-	zone := p.GetZone()
-
 	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
+	zone := p.GetZone()
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.ProviderGoogle).
@@ -266,7 +114,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 			Items: []*compute.MetadataItems{
 				{
 					Key:   p.userDataKey,
-					Value: googleapi.String(p.userData),
+					Value: googleapi.String(userdata.Generate(p.userData, p.os, p.arch, opts)),
 				},
 			},
 		},
@@ -336,7 +184,6 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	}
 
 	instanceMap := p.mapToInstance(vm, opts)
-
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
@@ -345,10 +192,37 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	return &instanceMap, nil
 }
 
+func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+	if len(instanceIDs) == 0 {
+		return
+	}
+
+	client := p.service
+
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceIDs).
+		WithField("cloud", types.ProviderGoogle)
+
+	for _, instanceID := range instanceIDs {
+		_, err = client.Instances.Delete(p.projectID, p.GetZone(), instanceID).Context(ctx).Do()
+		if err != nil {
+			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
+			if gerr, ok := err.(*googleapi.Error); ok &&
+				gerr.Code == http.StatusNotFound {
+				logr.WithError(err).Errorln("gcp: VM not found")
+			}
+		}
+		_ = p.waitZoneOperation(ctx, instanceID, p.GetZone())
+	}
+	return
+}
+
 func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
 	network := vm.NetworkInterfaces[0]
 	accessConfigs := network.AccessConfigs[0]
 	instanceIP := accessConfigs.NatIP
+
+	labels, _ := json.Marshal(vm.Labels)
 
 	return types.Instance{
 		ID:       strconv.FormatUint(vm.Id, 10),
@@ -360,6 +234,8 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 		Zone:     p.GetZone(),
 		Size:     p.size,
 		Platform: p.os,
+		Arch:     p.arch,
+		Tags:     labels,
 		Address:  instanceIP,
 		CACert:   opts.CACert,
 		CAKey:    opts.CAKey,
@@ -367,6 +243,7 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 		TLSKey:   opts.TLSKey,
 		Created:  vm.CreationTimestamp,
 		Started:  time.Now().Unix(),
+		Updated:  time.Now().String(),
 	}
 }
 

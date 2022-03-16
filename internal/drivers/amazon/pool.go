@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -44,8 +45,8 @@ func (p *provider) GetMinSize() int {
 	return p.pool
 }
 
-// CheckProvider checks that we can log into EC2, and the regions respond
-func (p *provider) CheckProvider(ctx context.Context) error {
+// PingProvider checks that we can log into EC2, and the regions respond
+func (p *provider) PingProvider(ctx context.Context) error {
 	client := p.service
 
 	allRegions := true
@@ -55,45 +56,6 @@ func (p *provider) CheckProvider(ctx context.Context) error {
 	_, err := client.DescribeRegionsWithContext(ctx, input)
 
 	return err
-}
-
-func (p *provider) getIP(amazonInstance *ec2.Instance) string {
-	if p.allocPublicIP {
-		if amazonInstance.PublicIpAddress == nil {
-			return ""
-		}
-		return *amazonInstance.PublicIpAddress
-	}
-
-	if amazonInstance.PrivateIpAddress == nil {
-		return ""
-	}
-	return *amazonInstance.PrivateIpAddress
-}
-
-func (p *provider) getLaunchTime(amazonInstance *ec2.Instance) time.Time {
-	if amazonInstance.LaunchTime == nil {
-		return time.Now()
-	}
-	return *amazonInstance.LaunchTime
-}
-
-func (p *provider) getTags(amazonInstance *ec2.Instance) map[string]string {
-	if len(amazonInstance.Tags) == 0 {
-		return nil
-	}
-
-	tags := make(map[string]string, len(amazonInstance.Tags))
-
-	for _, awsTag := range amazonInstance.Tags {
-		if awsTag == nil || awsTag.Key == nil || awsTag.Value == nil {
-			continue
-		}
-
-		tags[*awsTag.Key] = *awsTag.Value
-	}
-
-	return tags
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
@@ -107,8 +69,6 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("region", p.region).
 		WithField("image", p.image).
 		WithField("size", p.size)
-
-	p.userData = userdata.Generate(p.userData, p.os, p.arch, opts)
 
 	tags := createCopy(p.tags)
 	tags[drivers.TagRunner] = drivers.RunnerName
@@ -136,7 +96,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		IamInstanceProfile: iamProfile,
 		UserData: aws.String(
 			base64.StdEncoding.EncodeToString(
-				[]byte(p.userData),
+				[]byte(userdata.Generate(p.userData, p.os, p.arch, opts)),
 			),
 		),
 		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
@@ -279,6 +239,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				TLSKey:   opts.TLSKey,
 				Started:  time.Now().Unix(),
 				Created:  launchTime.String(),
+				Updated:  time.Now().String(),
 			}
 
 			logr.
@@ -289,183 +250,6 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 			return
 		}
 	}
-}
-
-func (p *provider) List(ctx context.Context) (busy, free []types.Instance, err error) {
-	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("provider", types.ProviderAmazon).
-		WithField("pool", p.name)
-
-	params := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("instance-state-name"),
-				Values: []*string{aws.String("pending"), aws.String("running")},
-			},
-			{
-				Name:   aws.String("tag:" + drivers.TagCreator),
-				Values: []*string{aws.String(p.runnerName)},
-			},
-			{
-				Name:   aws.String("tag:" + drivers.TagRunner),
-				Values: []*string{aws.String(drivers.RunnerName)},
-			},
-			{
-				Name:   aws.String("tag:" + drivers.TagPool),
-				Values: []*string{aws.String(p.name)},
-			},
-		},
-	}
-
-	describeRes, err := client.DescribeInstancesWithContext(ctx, params)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("amazon: failed to list VMs")
-		return
-	}
-
-	for _, awsReservation := range describeRes.Reservations {
-		for _, awsInstance := range awsReservation.Instances {
-			id := *awsInstance.InstanceId
-			ip := p.getIP(awsInstance)
-			launchTime := p.getLaunchTime(awsInstance)
-
-			inst := types.Instance{
-				ID:      id,
-				Address: ip,
-				Started: launchTime.Unix(),
-			}
-
-			var isBusy bool
-			for _, keys := range awsInstance.Tags {
-				if *keys.Key == drivers.TagStatus {
-					isBusy = *keys.Value == drivers.TagStatusValue
-					break
-				}
-			}
-			if isBusy {
-				busy = append(busy, inst)
-			} else {
-				free = append(free, inst)
-			}
-		}
-	}
-
-	logr.
-		WithField("free", len(free)).
-		WithField("busy", len(busy)).
-		Traceln("amazon: list VMs")
-
-	return
-}
-
-func (p *provider) GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *types.Instance, err error) {
-	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("provider", types.ProviderAmazon).
-		WithField("pool", p.name).
-		WithField("tag", tag).
-		WithField("tag-value", value)
-
-	params := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("instance-state-name"),
-				Values: []*string{aws.String("running")},
-			},
-			{
-				Name:   aws.String("tag:" + drivers.TagCreator),
-				Values: []*string{aws.String(p.runnerName)},
-			},
-			{
-				Name:   aws.String("tag:" + drivers.TagRunner),
-				Values: []*string{aws.String(drivers.RunnerName)},
-			},
-			{
-				Name:   aws.String("tag:" + drivers.TagPool),
-				Values: []*string{aws.String(p.name)},
-			},
-			{
-				Name:   aws.String("tag:" + drivers.TagStatus),
-				Values: []*string{aws.String(drivers.TagStatusValue)},
-			},
-			{
-				Name:   aws.String("tag:" + tag),
-				Values: []*string{aws.String(value)},
-			},
-		},
-	}
-
-	describeRes, err := client.DescribeInstancesWithContext(ctx, params)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("amazon: failed to get VM by tag")
-		return
-	}
-
-	for _, awsReservation := range describeRes.Reservations {
-		for _, awsInstance := range awsReservation.Instances {
-			id := *awsInstance.InstanceId
-			ip := p.getIP(awsInstance)
-			//tags := p.getTags(awsInstance)
-			launchTime := p.getLaunchTime(awsInstance)
-
-			inst = &types.Instance{
-				ID:      id,
-				Address: ip,
-				Started: launchTime.Unix(),
-			}
-
-			logr.
-				WithField("id", inst.ID).
-				WithField("ip", inst.Address).
-				Traceln("amazon: found VM by tag")
-
-			return
-		}
-	}
-
-	logr.Traceln("amazon: didn't found VM by tag")
-
-	return
-}
-
-func (p *provider) Tag(ctx context.Context, instanceID string, tags map[string]string) (err error) {
-	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("id", instanceID).
-		WithField("provider", types.ProviderAmazon)
-
-	awsTags := make([]*ec2.Tag, 0, len(tags))
-	for key, value := range tags {
-		awsTags = append(awsTags, &ec2.Tag{
-			Key:   aws.String(key),
-			Value: aws.String(value),
-		})
-	}
-
-	input := &ec2.CreateTagsInput{
-		Resources: []*string{aws.String(instanceID)},
-		Tags:      awsTags,
-	}
-
-	_, err = client.CreateTagsWithContext(ctx, input)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("amazon: failed to tag VM")
-		return
-	}
-
-	logr.Traceln("amazon: VM tagged")
-	return
-}
-
-func (p *provider) TagAsInUse(ctx context.Context, instanceID string) error {
-	return p.Tag(ctx, instanceID, map[string]string{drivers.TagStatus: drivers.TagStatusValue})
 }
 
 // Destroy destroys the server AWS EC2 instances.
@@ -494,4 +278,43 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr.Traceln("amazon: VMs terminated")
 	return
+}
+
+func (p *provider) getIP(amazonInstance *ec2.Instance) string {
+	if p.allocPublicIP {
+		if amazonInstance.PublicIpAddress == nil {
+			return ""
+		}
+		return *amazonInstance.PublicIpAddress
+	}
+
+	if amazonInstance.PrivateIpAddress == nil {
+		return ""
+	}
+	return *amazonInstance.PrivateIpAddress
+}
+
+func (p *provider) getLaunchTime(amazonInstance *ec2.Instance) time.Time {
+	if amazonInstance.LaunchTime == nil {
+		return time.Now()
+	}
+	return *amazonInstance.LaunchTime
+}
+
+func (p *provider) getTags(amazonInstance *ec2.Instance) map[string]string {
+	if len(amazonInstance.Tags) == 0 {
+		return nil
+	}
+
+	tags := make(map[string]string, len(amazonInstance.Tags))
+
+	for _, awsTag := range amazonInstance.Tags {
+		if awsTag == nil || awsTag.Key == nil || awsTag.Value == nil {
+			continue
+		}
+
+		tags[*awsTag.Key] = *awsTag.Value
+	}
+
+	return tags
 }

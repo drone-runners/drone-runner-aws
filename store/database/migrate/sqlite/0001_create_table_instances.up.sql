@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS instances (
     ,instance_zone      VARCHAR(50)
     ,instance_size      VARCHAR(50)
     ,instance_platform  VARCHAR(50)
-    ,instance_capacity  INTEGER
-    ,instance_error     BLOB
+    ,instance_arch      VARCHAR(50)
+    ,instance_tags      BLOB
     ,instance_ca_key    BLOB
     ,instance_ca_cert   BLOB
     ,instance_tls_key   BLOB
@@ -19,6 +19,5 @@ CREATE TABLE IF NOT EXISTS instances (
     ,instance_created   INTEGER
     ,instance_updated   INTEGER
     ,instance_started   INTEGER
-    ,instance_stopped   INTEGER
 ,UNIQUE(instance_name)
 );

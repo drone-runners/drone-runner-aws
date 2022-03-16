@@ -25,8 +25,14 @@ func (s InstanceStore) Find(_ context.Context, id string) (*types.Instance, erro
 	return dst, err
 }
 
-func (s InstanceStore) List(_ context.Context, pool string) ([]*types.Instance, error) {
+func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryParams) ([]*types.Instance, error) {
 	dst := []*types.Instance{}
+	if params != nil {
+		if params.Status != "" {
+			err := s.db.Select(&dst, instanceFindByStatus, pool, params.Status)
+			return dst, err
+		}
+	}
 	err := s.db.Select(&dst, instanceFind, pool)
 	return dst, err
 }
@@ -52,7 +58,7 @@ func (s InstanceStore) Delete(ctx context.Context, id string) error {
 }
 
 func (s InstanceStore) Update(_ context.Context, instance *types.Instance) error {
-	query, arg, err := s.db.BindNamed(instanceUpdateState, instance)
+	query, arg, err := s.db.BindNamed(instanceUpdate, instance)
 	if err != nil {
 		return err
 	}
@@ -77,12 +83,15 @@ SELECT
 ,instance_zone
 ,instance_size
 ,instance_platform
+,instance_arch
+,instance_tags
 ,instance_ca_key
 ,instance_ca_cert
 ,instance_tls_key
 ,instance_tls_cert
 ,instance_created
 ,instance_started
+,instance_updated
 FROM instances
 `
 
@@ -92,6 +101,12 @@ WHERE instance_id = $1
 
 const instanceFind = instanceBase + `
 WHERE instance_pool = $1
+ORDER BY instance_created ASC
+`
+
+const instanceFindByStatus = instanceBase + `
+WHERE instance_pool = $1
+AND   instance_state = $2
 ORDER BY instance_created ASC
 `
 
@@ -108,12 +123,15 @@ INSERT INTO instances (
 ,instance_zone
 ,instance_size
 ,instance_platform
+,instance_arch
+,instance_tags
 ,instance_ca_key
 ,instance_ca_cert
 ,instance_tls_key
 ,instance_tls_cert
 ,instance_created
 ,instance_started
+,instance_updated
 ) values (
  :instance_id
 ,:instance_name
@@ -126,12 +144,15 @@ INSERT INTO instances (
 ,:instance_zone
 ,:instance_size
 ,:instance_platform
+,:instance_arch
+,:instance_tags
 ,:instance_ca_key
 ,:instance_ca_cert
 ,:instance_tls_key
 ,:instance_tls_cert
 ,:instance_created
 ,:instance_started
+,:instance_updated
 ) RETURNING instance_id
 `
 
@@ -140,9 +161,11 @@ DELETE FROM instances
 WHERE instance_id = $1
 `
 
-const instanceUpdateState = `
+const instanceUpdate = `
 UPDATE instances
 SET
- instance_state   = :instance_state
-WHERE instance_id = :instance_id
+  instance_state    = :instance_state
+ ,instance_tags	    = :instance_tags
+ ,instance_updated  = :instance_updated
+WHERE instance_id   = :instance_id
 `

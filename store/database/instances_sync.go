@@ -23,10 +23,10 @@ func (i InstanceStoreSync) Find(ctx context.Context, s string) (*types.Instance,
 	return i.base.Find(ctx, s)
 }
 
-func (i InstanceStoreSync) List(ctx context.Context, pool string) ([]*types.Instance, error) {
+func (i InstanceStoreSync) List(ctx context.Context, pool string, params *types.QueryParams) ([]*types.Instance, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
-	return i.base.List(ctx, pool)
+	return i.base.List(ctx, pool, params)
 }
 
 func (i InstanceStoreSync) Create(ctx context.Context, instance *types.Instance) error {

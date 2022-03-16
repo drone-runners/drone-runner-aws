@@ -25,7 +25,6 @@ const (
 const (
 	StateCreated = InstanceState("created")
 	StateInUse   = InstanceState("inuse")
-	StateStopped = InstanceState("stopped")
 )
 
 type Instance struct {
@@ -40,19 +39,34 @@ type Instance struct {
 	Zone     string        `db:"instance_zone" json:"zone"`
 	Size     string        `db:"instance_size" json:"size"`
 	Platform string        `db:"instance_platform" json:"platform"`
+	Arch     string        `db:"instance_arch" json:"arch"`
+	Tags     []byte        `db:"instance_tags" json:"tags"`
 	CAKey    []byte        `db:"instance_ca_key" json:"ca_key"`
 	CACert   []byte        `db:"instance_ca_cert" json:"ca_cert"`
 	TLSKey   []byte        `db:"instance_tls_key" json:"tls_key"`
 	TLSCert  []byte        `db:"instance_tls_cert" json:"tls_cert"`
 	Created  string        `db:"instance_created" json:"created"`
+	Updated  string        `db:"instance_updated" json:"updated"`
 	Started  int64         `db:"instance_started" json:"started"`
 }
 
 type InstanceCreateOpts struct {
-	Name           string
 	CAKey          []byte
 	CACert         []byte
 	TLSKey         []byte
 	TLSCert        []byte
 	LiteEnginePath string
+}
+
+// Platform defines the target platform.
+type Platform struct {
+	OS      string `json:"os,omitempty"`
+	Arch    string `json:"arch,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	Version string `json:"version,omitempty"`
+}
+
+type QueryParams struct {
+	Status InstanceState
+	Tag    map[string]string
 }

@@ -32,18 +32,7 @@ type Pool interface {
 	GetMaxSize() int
 	GetMinSize() int
 
-	CheckProvider(ctx context.Context) error
+	PingProvider(ctx context.Context) error
 	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
-	//List(ctx context.Context) (busy, free []types.Instance, err error)
-	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *types.Instance, err error)
-	//Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
-}
-
-// Platform defines the target platform.
-type Platform struct {
-	OS      string `json:"os,omitempty"`
-	Arch    string `json:"arch,omitempty"`
-	Variant string `json:"variant,omitempty"`
-	Version string `json:"version,omitempty"`
 }

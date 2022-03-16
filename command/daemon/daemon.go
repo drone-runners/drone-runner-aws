@@ -122,7 +122,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		os.Exit(1)
 	}
 
-	err = poolManager.CheckProvider(ctx)
+	err = poolManager.PingProvider(ctx)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("daemon: cannot connect to cloud provider")

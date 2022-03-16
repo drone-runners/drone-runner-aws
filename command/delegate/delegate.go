@@ -121,7 +121,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	err = c.poolManager.CheckProvider(ctx)
+	err = c.poolManager.PingProvider(ctx)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: cannot connect to cloud provider")
@@ -325,13 +325,20 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		tags[k] = v
 	}
 	tags[TagStageID] = reqData.ID
-
-	//err = c.poolManager.Tag(ctx, poolName, instance.ID, tags)
-	//if err != nil {
-	//	httprender.InternalError(w, "failed to tag", err, logr)
-	//	go cleanUpFn()
-	//	return
-	//}
+	tagStrings, err := json.Marshal(tags)
+	if err != nil {
+		httprender.InternalError(w, "failed to marshal tags", err, logr)
+		cleanUpFn()
+		return
+	}
+	instance.Tags = tagStrings
+	instance.Updated = time.Now().String()
+	err = c.poolManager.Update(ctx, instance)
+	if err != nil {
+		httprender.InternalError(w, "failed to tag", err, logr)
+		go cleanUpFn()
+		return
+	}
 
 	client, err := c.getLEClient(instance.Address)
 	if err != nil {
@@ -408,7 +415,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	if reqData.IPAddress != "" {
 		ipAddress = reqData.IPAddress
 	} else {
-		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
+		inst, err := c.poolManager.GetInstanceByStageId(ctx, reqData.PoolID, TagStageID, reqData.ID)
 		if err != nil {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return
@@ -491,7 +498,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	if reqData.InstanceID != "" {
 		instanceID = reqData.InstanceID
 	} else {
-		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
+		inst, err := c.poolManager.GetInstanceByStageId(ctx, reqData.PoolID, TagStageID, reqData.ID)
 		if err != nil {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return

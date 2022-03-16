@@ -6,6 +6,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -48,14 +49,6 @@ func New(opts Opts, poolManager *drivers.Manager, serverName, liteEnginePath str
 		serverName:     serverName,
 		liteEnginePath: liteEnginePath,
 	}, nil
-}
-
-func (eng *Engine) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
-
-	return lehttp.NewHTTPClient(leURL,
-		eng.serverName, instance.CACert,
-		instance.TLSCert, instance.TLSKey)
 }
 
 // Setup the pipeline environment.
@@ -113,9 +106,18 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	//		}
 	//		tags[k] = v
 	//	}
-	tags[drivers.TagStageID] = stageID
 
-	instance.State = types.StateInUse
+	err = json.Unmarshal(instance.Tags, &tags)
+	if err != nil {
+		logr.WithError(err).Errorln("failed to unmarshal tags")
+		return err
+	}
+	tags[drivers.TagStageID] = stageID
+	instance.Tags, err = json.Marshal(tags)
+	if err != nil {
+		logr.WithError(err).Errorln("failed to marshal tags")
+		return err
+	}
 	err = manager.Update(ctx, instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to tag")
@@ -192,7 +194,11 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		logr.WithError(err).Errorln("cannot destroy the instance")
 		return err
 	}
-
+	err := eng.poolManager.Delete(ctx, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("cannot delete the instance from store")
+		return err
+	}
 	logr.Traceln("destroyed instance")
 
 	return nil
@@ -336,4 +342,12 @@ type counterWriter int
 func (q *counterWriter) Write(data []byte) (int, error) {
 	*q += counterWriter(len(data))
 	return len(data), nil
+}
+
+func (eng *Engine) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
+
+	return lehttp.NewHTTPClient(leURL,
+		eng.serverName, instance.CACert,
+		instance.TLSCert, instance.TLSKey)
 }
