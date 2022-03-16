@@ -391,8 +391,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// append global volumes and volume mounts to steps which have an image specified.
 	for _, pair := range c.Volumes {
-		z := strings.SplitN(pair, ":", 2)
-		if len(z) != 2 {
+		plen := 2
+		z := strings.SplitN(pair, ":", plen)
+		if len(z) != plen {
 			continue
 		}
 		src := z[0]

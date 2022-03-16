@@ -300,12 +300,6 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// load the configuration from the environment
-	config, err := fromEnviron()
-	if err != nil {
-		return
-	}
-
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
 	var logr *logrus.Entry
@@ -329,10 +323,18 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		ctx = logger.WithContext(r.Context(), logger.Logrus(logr))
 	}
 
+	// load the configuration from the environment
+	env, err := fromEnviron()
+	if err != nil {
+		log.Errorf("could not load config from environment: %s", err)
+		return
+	}
+
 	// append global volumes to the setup request.
-	for _, pair := range config.Runner.Volumes {
-		z := strings.SplitN(pair, ":", 2)
-		if len(z) != 2 {
+	for _, pair := range env.Runner.Volumes {
+		plen := 2
+		z := strings.SplitN(pair, ":", plen)
+		if len(z) != plen {
 			log.Warnf("skipping %s as it does not comply with the format src:dest\n", pair)
 			continue
 		}
@@ -470,16 +472,18 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// load the configuration from the environment
-	config, err := fromEnviron()
+	env, err := fromEnviron()
 	if err != nil {
+		logr.Errorf("could not load environment: %s", err)
 		return
 	}
 
 	// add global volumes as mounts only if image is specified
 	if reqData.Image != "" {
-		for _, pair := range config.Runner.Volumes {
-			z := strings.SplitN(pair, ":", 2)
-			if len(z) != 2 {
+		for _, pair := range env.Runner.Volumes {
+			plen := 2
+			z := strings.SplitN(pair, ":", plen)
+			if len(z) != plen {
 				logr.Warnf("skipping %s as it does not comply with the format src:dest\n", pair)
 				continue
 			}
@@ -490,7 +494,6 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 				Name: id(src),
 				Path: t,
 			}
-			fmt.Println("mount: ", mount)
 			reqData.Volumes = append(reqData.Volumes, mount)
 		}
 	}
@@ -500,7 +503,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	if reqData.IPAddress != "" {
 		ipAddress = reqData.IPAddress
 	} else {
-		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
+		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID) //nolint:govet
 		if err != nil {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return
