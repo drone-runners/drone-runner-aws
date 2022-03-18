@@ -32,6 +32,8 @@ type Pool interface {
 	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
 	TagAsInUse(ctx context.Context, instanceID string) (err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
+	Start(ctx context.Context, currInstance *Instance) (instance *Instance, err error)
+	Hibernate(ctx context.Context, instanceID string) (err error)
 }
 
 // Instance represents a provisioned server instance.
@@ -40,6 +42,7 @@ type Instance struct {
 	IP        string
 	Tags      map[string]string
 	StartedAt time.Time
+	State     string
 }
 
 // Platform defines the target platform.

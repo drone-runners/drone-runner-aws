@@ -318,6 +318,14 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if instance.IP == "" {
+		instance, err = c.poolManager.StartInstance(ctx, poolName, instance)
+		if err != nil {
+			httprender.InternalError(w, "failed to start the instance up", err, logr)
+			return
+		}
+	}
+
 	logr = logr.
 		WithField("ip", instance.IP).
 		WithField("id", instance.ID)

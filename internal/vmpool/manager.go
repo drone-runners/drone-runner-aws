@@ -231,6 +231,12 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				WithField("pool", pool.GetName()).
 				WithField("id", instance.ID).
 				Infoln("build pool: created new instance")
+			go func() {
+				herr := m.Hibernate(ctx, pool.GetName(), instance.ID)
+				if herr != nil {
+					logr.WithError(herr).Errorln("failed to hibernated the vm")
+				}
+			}()
 		}(context.Background(), logr)
 
 		shouldCreate--
@@ -298,6 +304,15 @@ func (m *Manager) Provision(ctx context.Context, poolName string) (*Instance, er
 	}(context.Background())
 
 	return inst, nil
+}
+
+func (m *Manager) StartInstance(ctx context.Context, poolName string, currInstance *Instance) (*Instance, error) {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
+	}
+
+	return pool.Start(ctx, currInstance)
 }
 
 // Destroy destroys an instance in a pool.
@@ -385,4 +400,16 @@ func (m *Manager) Ping(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (m *Manager) Hibernate(ctx context.Context, poolName, instanceID string) error {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return fmt.Errorf("get by tag: pool name %q not found", poolName)
+	}
+	time.Sleep(600 * time.Second)
+
+	pool.Lock()
+	defer pool.Unlock()
+	return pool.Hibernate(ctx, instanceID)
 }
