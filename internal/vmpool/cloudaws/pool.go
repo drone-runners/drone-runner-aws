@@ -537,6 +537,8 @@ func (p *awsPool) Start(ctx context.Context, currInstance *vmpool.Instance) (ins
 		return
 	}
 
+	// TODO: Handle vms that are present in stopping state.
+
 	if currInstance.State == "stopped" {
 		_, err = client.StartInstances(&ec2.StartInstancesInput{InstanceIds: []*string{aws.String(instanceID)}})
 		if err != nil {
@@ -555,10 +557,10 @@ func (p *awsPool) Start(ctx context.Context, currInstance *vmpool.Instance) (ins
 	return
 }
 
+// TODO: WaitWithContext to handle this in a single line. Refer: WaitUntilInstanceRunning
 func (p *awsPool) pollInstanceIPAddr(ctx context.Context, client *ec2.EC2, instanceID string, startTime time.Time, logr logger.Logger) (instance *vmpool.Instance, err error) {
 	// poll the amazon endpoint for server updates
 	// and exit when a network address is allocated.
-
 	attempt := 0
 	intervals := []time.Duration{0, 15 * time.Second, 30 * time.Second, 45 * time.Second, time.Minute}
 

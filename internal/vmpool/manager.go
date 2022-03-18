@@ -221,6 +221,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 		go func(ctx context.Context, logr logger.Logger) {
 			defer wg.Done()
 
+			// TODO: Waiting for ip address in a lock may not be a good idea
 			instance, err := pool.Provision(ctx, false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create an instance")
@@ -409,6 +410,7 @@ func (m *Manager) Hibernate(ctx context.Context, poolName, instanceID string) er
 	}
 	time.Sleep(600 * time.Second)
 
+	// TODO: Take lock only to call st
 	pool.Lock()
 	defer pool.Unlock()
 	return pool.Hibernate(ctx, instanceID)
