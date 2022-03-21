@@ -8,7 +8,7 @@ import (
 // ParseVolume parses a volume string of the form <src>:<dest>
 // and returns the source, destination and whether the volume
 // is read only.
-func ParseVolume(v string) (src string, dest string, ro bool, err error) {
+func ParseVolume(v string) (src, dest string, ro bool, err error) {
 	plen := 2
 	z := strings.SplitN(v, ":", plen)
 	if len(z) != plen {
