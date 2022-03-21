@@ -45,6 +45,7 @@ import (
 
 type delegateCommand struct {
 	envfile             string
+	env                 Config
 	pool                string
 	defaultPoolSettings drivers.DefaultSettings
 	poolManager         *drivers.Manager
@@ -122,6 +123,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		CertFile:       env.Settings.CertFile,
 		KeyFile:        env.Settings.KeyFile,
 	}
+
+	// Pass in the environment configs
+	c.env = env
 
 	cloudInitParams := &cloudinit.Params{
 		LiteEnginePath: c.defaultPoolSettings.LiteEnginePath,
@@ -323,24 +327,13 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		ctx = logger.WithContext(r.Context(), logger.Logrus(logr))
 	}
 
-	// load the configuration from the environment
-	env, err := fromEnviron()
-	if err != nil {
-		log.Errorf("could not load config from environment: %s", err)
-		return
-	}
-
 	// append global volumes to the setup request.
-	for _, pair := range env.Runner.Volumes {
-		plen := 2
-		z := strings.SplitN(pair, ":", plen)
-		if len(z) != plen {
-			log.Warnf("skipping %s as it does not comply with the format src:dest\n", pair)
+	for _, pair := range c.env.Runner.Volumes {
+		src, _, ro, err := resource.ParseVolume(pair)
+		if err != nil {
+			log.Warn(err)
 			continue
 		}
-		src := z[0]
-		dest := z[1]
-		ro := strings.HasSuffix(dest, ":ro")
 		vol := lespec.Volume{
 			HostPath: &lespec.VolumeHostPath{
 				ID:       id(src),
@@ -471,28 +464,17 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// load the configuration from the environment
-	env, err := fromEnviron()
-	if err != nil {
-		logr.Errorf("could not load environment: %s", err)
-		return
-	}
-
 	// add global volumes as mounts only if image is specified
 	if reqData.Image != "" {
-		for _, pair := range env.Runner.Volumes {
-			plen := 2
-			z := strings.SplitN(pair, ":", plen)
-			if len(z) != plen {
-				logr.Warnf("skipping %s as it does not comply with the format src:dest\n", pair)
+		for _, pair := range c.env.Runner.Volumes {
+			src, dest, _, err := resource.ParseVolume(pair)
+			if err != nil {
+				logr.Warn(err)
 				continue
 			}
-			src := z[0]
-			dest := z[1]
-			t := strings.TrimSuffix(dest, ":ro")
 			mount := &lespec.VolumeMount{
 				Name: id(src),
-				Path: t,
+				Path: dest,
 			}
 			reqData.Volumes = append(reqData.Volumes, mount)
 		}

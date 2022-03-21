@@ -158,6 +158,8 @@ func registerCompile(app *kingpin.Application) {
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)
 
+	// Check documentation of DRONE_RUNNER_VOLUMES to see how to
+	// use this param.
 	cmd.Flag("volumes", "drone runner volumes").
 		StringsVar(&c.Volumes)
 

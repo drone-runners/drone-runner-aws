@@ -391,16 +391,11 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// append global volumes and volume mounts to steps which have an image specified.
 	for _, pair := range c.Volumes {
-		plen := 2
-		z := strings.SplitN(pair, ":", plen)
-		if len(z) != plen {
+		src, dest, ro, err := resource.ParseVolume(pair)
+		id := random()
+		if err != nil {
 			continue
 		}
-		src := z[0]
-		dest := z[1]
-		id := random()
-		ro := strings.HasSuffix(dest, ":ro")
-		dest = strings.TrimSuffix(dest, ":ro")
 		volume := &lespec.Volume{
 			HostPath: &lespec.VolumeHostPath{
 				ID:       id,
