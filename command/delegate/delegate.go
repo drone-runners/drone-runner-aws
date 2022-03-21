@@ -485,7 +485,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	if reqData.IPAddress != "" {
 		ipAddress = reqData.IPAddress
 	} else {
-		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID) //nolint:govet
+		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
 		if err != nil {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return

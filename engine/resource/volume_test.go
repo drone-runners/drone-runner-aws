@@ -30,6 +30,6 @@ func TestParseVolume_WithRo(t *testing.T) {
 
 func TestParseVolumeError(t *testing.T) {
 	v := "/path/to/src.txt,/path/to/dest.txt"
-	_, _, _, err := ParseVolume(v)
+	_, _, _, err := ParseVolume(v) //nolint:dogsled
 	assert.NotNil(t, err)
 }
