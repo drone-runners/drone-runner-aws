@@ -222,7 +222,7 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 	instanceIP := accessConfigs.NatIP
 
 	labels, _ := json.Marshal(vm.Labels)
-
+	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 	return types.Instance{
 		ID:       strconv.FormatUint(vm.Id, 10), //nolint
 		Name:     vm.Name,
@@ -240,9 +240,8 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 		CAKey:    opts.CAKey,
 		TLSCert:  opts.TLSCert,
 		TLSKey:   opts.TLSKey,
-		Created:  vm.CreationTimestamp,
-		Started:  time.Now().Unix(),
-		Updated:  time.Now().String(),
+		Started:  started.Unix(),
+		Updated:  time.Now().Unix(),
 	}
 }
 

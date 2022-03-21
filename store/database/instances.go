@@ -89,7 +89,6 @@ SELECT
 ,instance_ca_cert
 ,instance_tls_key
 ,instance_tls_cert
-,instance_created
 ,instance_started
 ,instance_updated
 FROM instances
@@ -101,13 +100,13 @@ WHERE instance_id = $1
 
 const instanceFind = instanceBase + `
 WHERE instance_pool = $1
-ORDER BY instance_created ASC
+ORDER BY instance_started ASC
 `
 
 const instanceFindByStatus = instanceBase + `
 WHERE instance_pool = $1
 AND   instance_state = $2
-ORDER BY instance_created ASC
+ORDER BY instance_started ASC
 `
 
 const instanceInsert = `
@@ -129,7 +128,6 @@ INSERT INTO instances (
 ,instance_ca_cert
 ,instance_tls_key
 ,instance_tls_cert
-,instance_created
 ,instance_started
 ,instance_updated
 ) values (
@@ -150,7 +148,6 @@ INSERT INTO instances (
 ,:instance_ca_cert
 ,:instance_tls_key
 ,:instance_tls_cert
-,:instance_created
 ,:instance_started
 ,:instance_updated
 ) RETURNING instance_id

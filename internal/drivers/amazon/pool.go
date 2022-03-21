@@ -239,9 +239,8 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				CAKey:    opts.CAKey,
 				TLSCert:  opts.TLSCert,
 				TLSKey:   opts.TLSKey,
-				Started:  time.Now().Unix(),
-				Created:  launchTime.String(),
-				Updated:  time.Now().String(),
+				Started:  launchTime.Unix(),
+				Updated:  time.Now().Unix(),
 			}
 			instance.Tags, _ = json.Marshal(tags)
 			logr.

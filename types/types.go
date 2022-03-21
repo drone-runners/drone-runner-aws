@@ -45,8 +45,7 @@ type Instance struct {
 	CACert   []byte        `db:"instance_ca_cert" json:"ca_cert"`
 	TLSKey   []byte        `db:"instance_tls_key" json:"tls_key"`
 	TLSCert  []byte        `db:"instance_tls_cert" json:"tls_cert"`
-	Created  string        `db:"instance_created" json:"created"`
-	Updated  string        `db:"instance_updated" json:"updated"`
+	Updated  int64         `db:"instance_updated" json:"updated"`
 	Started  int64         `db:"instance_started" json:"started"`
 }
 

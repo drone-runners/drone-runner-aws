@@ -356,7 +356,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	instance.Tags = tagStrings
-	instance.Updated = time.Now().String()
+	instance.Updated = time.Now().Unix()
 	err = c.poolManager.Update(ctx, instance)
 	if err != nil {
 		httprender.InternalError(w, "failed to tag", err, logr)
