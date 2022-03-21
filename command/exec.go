@@ -46,6 +46,7 @@ type execCommand struct {
 	Exclude []string
 	Environ map[string]string
 	Secrets map[string]string
+	Volumes []string
 	Pretty  bool
 	Procs   int64
 	Debug   bool
@@ -131,6 +132,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		Environ:     provider.Static(c.Environ),
 		NetworkOpts: nil,
 		Secret:      secret.StaticVars(c.Secrets),
+		Volumes:     c.Volumes,
 		PoolManager: poolManager,
 		Registry:    nil,
 	}
@@ -287,6 +289,11 @@ func registerExec(app *kingpin.Application) {
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)
+
+	// Check documentation of DRONE_RUNNER_VOLUMES to see how to
+	// use this param.
+	cmd.Flag("volumes", "drone runner volumes").
+		StringsVar(&c.Volumes)
 
 	cmd.Flag("include", "include pipeline steps").
 		StringsVar(&c.Include)

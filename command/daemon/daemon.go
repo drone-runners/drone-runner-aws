@@ -192,6 +192,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 				),
 			),
 			NetworkOpts: env.Runner.NetworkOpts,
+			Volumes:     env.Runner.Volumes,
 			Secret: secret.Combine(
 				secret.StaticVars(
 					env.Runner.Secrets,

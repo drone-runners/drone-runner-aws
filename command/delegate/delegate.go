@@ -8,9 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +30,7 @@ import (
 	"github.com/drone/signal"
 	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
+	lespec "github.com/harness/lite-engine/engine/spec"
 	lelivelog "github.com/harness/lite-engine/livelog"
 	lestream "github.com/harness/lite-engine/logstream/remote"
 
@@ -41,6 +45,7 @@ import (
 
 type delegateCommand struct {
 	envfile             string
+	env                 Config
 	pool                string
 	defaultPoolSettings drivers.DefaultSettings
 	poolManager         *drivers.Manager
@@ -84,6 +89,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
+
 	// setup the global logrus logger.
 	setupLogger(&env)
 
@@ -117,6 +123,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		CertFile:       env.Settings.CertFile,
 		KeyFile:        env.Settings.KeyFile,
 	}
+
+	// Pass in the environment configs
+	c.env = env
 
 	cloudInitParams := &cloudinit.Params{
 		LiteEnginePath: c.defaultPoolSettings.LiteEnginePath,
@@ -318,6 +327,24 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		ctx = logger.WithContext(r.Context(), logger.Logrus(logr))
 	}
 
+	// append global volumes to the setup request.
+	for _, pair := range c.env.Runner.Volumes {
+		src, _, ro, err := resource.ParseVolume(pair)
+		if err != nil {
+			log.Warn(err)
+			continue
+		}
+		vol := lespec.Volume{
+			HostPath: &lespec.VolumeHostPath{
+				ID:       id(src),
+				Name:     id(src),
+				Path:     src,
+				ReadOnly: ro,
+			},
+		}
+		reqData.Volumes = append(reqData.Volumes, &vol)
+	}
+
 	poolName := reqData.PoolID
 	if !c.poolManager.Exists(poolName) {
 		httprender.BadRequest(w, "pool not defined", logr)
@@ -396,6 +423,15 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// generate a id from the filename
+// /path/to/a.txt and /other/path/to/a.txt should generate different hashes
+// eg - a-txt10098 and a-txt-270089
+func id(filename string) string {
+	h := fnv.New32a()
+	h.Write([]byte(filename))
+	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))
+}
+
 func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	reqData := &struct {
 		ID                     string `json:"id"`
@@ -427,6 +463,22 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		WithField("correlation_id", reqData.CorrelationID)
 
 	ctx := r.Context()
+
+	// add global volumes as mounts only if image is specified
+	if reqData.Image != "" {
+		for _, pair := range c.env.Runner.Volumes {
+			src, dest, _, err := resource.ParseVolume(pair)
+			if err != nil {
+				logr.Warn(err)
+				continue
+			}
+			mount := &lespec.VolumeMount{
+				Name: id(src),
+				Path: dest,
+			}
+			reqData.Volumes = append(reqData.Volumes, mount)
+		}
+	}
 
 	var ipAddress string
 
