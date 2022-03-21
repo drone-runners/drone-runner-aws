@@ -9,8 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/store/database"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
@@ -19,6 +17,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/handler/router"

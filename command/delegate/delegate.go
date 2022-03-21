@@ -14,14 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/drone-runners/drone-runner-aws/types"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"

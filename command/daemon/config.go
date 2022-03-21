@@ -87,8 +87,8 @@ type Config struct {
 	}
 
 	Database struct {
-		Driver     string `envconfig:"APP_DATABASE_DRIVER" default:"sqlite3"`
-		Datasource string `envconfig:"APP_DATABASE_DATASOURCE" default:"database.sqlite3"`
+		Driver     string `envconfig:"DRONE_DATABASE_DRIVER" default:"sqlite3"`
+		Datasource string `envconfig:"DRONE_DATABASE_DATASOURCE" default:"database.sqlite3"`
 	}
 }
 

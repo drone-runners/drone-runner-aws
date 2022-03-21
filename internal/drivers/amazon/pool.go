@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
-
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/userdata"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
