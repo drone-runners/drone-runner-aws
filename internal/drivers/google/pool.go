@@ -2,7 +2,6 @@ package google
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -11,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/userdata"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -83,11 +81,6 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("image", p.image).
 		WithField("size", p.size)
 
-	labels := createCopy(p.labels)
-	labels[drivers.TagRunner] = drivers.RunnerName
-	labels[drivers.TagPool] = p.name
-	labels[drivers.TagCreator] = p.runnerName
-
 	// create the instance
 	startTime := time.Now()
 
@@ -117,9 +110,6 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				},
 			},
 		},
-		Tags: &compute.Tags{
-			Items: p.tags,
-		},
 		Disks: []*compute.AttachedDisk{
 			{
 				Type:       "PERSISTENT",
@@ -142,7 +132,6 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				AccessConfigs: networkConfig,
 			},
 		},
-		Labels: labels,
 		Scheduling: &compute.Scheduling{
 			Preemptible:       false,
 			OnHostMaintenance: "MIGRATE",
@@ -154,6 +143,9 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				Scopes: p.scopes,
 				Email:  p.serviceAccountEmail,
 			},
+		},
+		Tags: &compute.Tags{
+			Items: p.tags,
 		},
 	}
 
@@ -221,7 +213,6 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 	accessConfigs := network.AccessConfigs[0]
 	instanceIP := accessConfigs.NatIP
 
-	labels, _ := json.Marshal(vm.Labels)
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 	return types.Instance{
 		ID:       strconv.FormatUint(vm.Id, 10), //nolint
@@ -234,7 +225,6 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 		Size:     p.size,
 		Platform: p.os,
 		Arch:     p.arch,
-		Tags:     labels,
 		Address:  instanceIP,
 		CACert:   opts.CACert,
 		CAKey:    opts.CAKey,
@@ -264,15 +254,6 @@ func (p *provider) waitZoneOperation(ctx context.Context, name, zone string) err
 		}
 		time.Sleep(time.Second)
 	}
-}
-
-// helper function creates a copy of map[string]string
-func createCopy(in map[string]string) map[string]string {
-	out := map[string]string{}
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
 
 func (p *provider) setup(ctx context.Context) error {

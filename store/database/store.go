@@ -6,10 +6,13 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/store/database/migrate"
 
+	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"           // required for postgres
 	_ "github.com/mattn/go-sqlite3" // required for sqlite3
 )
+
+var builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
 // Connect to a database and verify with a ping.
 func Connect(driver, datasource string) (*sqlx.DB, error) {

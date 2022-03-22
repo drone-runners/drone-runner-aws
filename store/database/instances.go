@@ -6,6 +6,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 
+	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -27,13 +28,23 @@ func (s InstanceStore) Find(_ context.Context, id string) (*types.Instance, erro
 
 func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryParams) ([]*types.Instance, error) {
 	dst := []*types.Instance{}
+	var args []interface{}
+
+	stmt := builder.Select("*").From("instances").Where(squirrel.Eq{"instance_pool": pool})
+	args = append(args, pool)
 	if params != nil {
+		if params.Stage != "" {
+			stmt = stmt.Where(squirrel.Eq{"instance_stage": params.Stage})
+			args = append(args, params.Stage)
+		}
 		if params.Status != "" {
-			err := s.db.Select(&dst, instanceFindByStatus, pool, params.Status)
-			return dst, err
+			stmt = stmt.Where(squirrel.Eq{"instance_state": params.Status})
+			args = append(args, params.Status)
 		}
 	}
-	err := s.db.Select(&dst, instanceFind, pool)
+	stmt = stmt.OrderBy("instance_started " + "ASC")
+	sql, _, _ := stmt.ToSql()
+	var err = s.db.Select(&dst, sql, args...)
 	return dst, err
 }
 
@@ -84,7 +95,7 @@ SELECT
 ,instance_size
 ,instance_platform
 ,instance_arch
-,instance_tags
+,instance_stage
 ,instance_ca_key
 ,instance_ca_cert
 ,instance_tls_key
@@ -96,17 +107,6 @@ FROM instances
 
 const instanceFindByID = instanceBase + `
 WHERE instance_id = $1
-`
-
-const instanceFind = instanceBase + `
-WHERE instance_pool = $1
-ORDER BY instance_started ASC
-`
-
-const instanceFindByStatus = instanceBase + `
-WHERE instance_pool = $1
-AND   instance_state = $2
-ORDER BY instance_started ASC
 `
 
 const instanceInsert = `
@@ -123,7 +123,7 @@ INSERT INTO instances (
 ,instance_size
 ,instance_platform
 ,instance_arch
-,instance_tags
+,instance_stage
 ,instance_ca_key
 ,instance_ca_cert
 ,instance_tls_key
@@ -143,7 +143,7 @@ INSERT INTO instances (
 ,:instance_size
 ,:instance_platform
 ,:instance_arch
-,:instance_tags
+,:instance_stage
 ,:instance_ca_key
 ,:instance_ca_cert
 ,:instance_tls_key
@@ -162,7 +162,7 @@ const instanceUpdate = `
 UPDATE instances
 SET
   instance_state    = :instance_state
- ,instance_tags	    = :instance_tags
+ ,instance_stage	= :instance_stage
  ,instance_updated  = :instance_updated
 WHERE instance_id   = :instance_id
 `

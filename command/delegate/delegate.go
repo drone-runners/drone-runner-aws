@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -46,8 +45,6 @@ type delegateCommand struct {
 	runnerName     string
 	liteEnginePath string
 }
-
-const TagStageID = drivers.TagPrefix + "stage-id"
 
 func RegisterDelegate(app *kingpin.Application) {
 	c := new(delegateCommand)
@@ -341,21 +338,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tags := map[string]string{}
-	for k, v := range reqData.Tags {
-		if strings.HasPrefix(k, drivers.TagPrefix) {
-			continue
-		}
-		tags[k] = v
-	}
-	tags[TagStageID] = reqData.ID
-	tagStrings, err := json.Marshal(tags)
-	if err != nil {
-		httprender.InternalError(w, "failed to marshal tags", err, logr)
-		cleanUpFn()
-		return
-	}
-	instance.Tags = tagStrings
+	instance.Stage = reqData.ID
 	instance.Updated = time.Now().Unix()
 	err = c.poolManager.Update(ctx, instance)
 	if err != nil {
@@ -433,8 +416,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		WithField("correlation_id", reqData.CorrelationID)
 
 	ctx := r.Context()
-
-	inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, TagStageID, reqData.ID)
+	inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, reqData.ID)
 	if err != nil {
 		httprender.InternalError(w, "cannot get the instance by stageId", err, logr)
 		return
@@ -506,11 +488,10 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		WithField("correlation_id", reqData.CorrelationID)
 
 	var instanceID string
-
 	if reqData.InstanceID != "" {
 		instanceID = reqData.InstanceID
 	} else {
-		inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, TagStageID, reqData.ID)
+		inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, reqData.ID)
 		if err != nil {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return

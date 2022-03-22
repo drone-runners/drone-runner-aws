@@ -112,13 +112,6 @@ func WithSubnet(id string) Option {
 	}
 }
 
-// WithTags returns an option to set the image.
-func WithTags(tags map[string]string) Option {
-	return func(p *provider) {
-		p.tags = tags
-	}
-}
-
 // WithUserData returns an option to set the cloud-init
 // template from text.
 func WithUserData(text string) Option {

@@ -77,13 +77,6 @@ func WithDiskType(diskType string) Option {
 	}
 }
 
-// WithLabels returns an option to set the metadata labels.
-func WithLabels(labels map[string]string) Option {
-	return func(p *provider) {
-		p.labels = labels
-	}
-}
-
 // WithMachineImage returns an option to set the image.
 func WithMachineImage(image string) Option {
 	return func(p *provider) {

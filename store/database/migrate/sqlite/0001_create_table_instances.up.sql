@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS instances (
     ,instance_size      VARCHAR(50)
     ,instance_platform  VARCHAR(50)
     ,instance_arch      VARCHAR(50)
-    ,instance_tags      BLOB
+    ,instance_stage     INTEGER
     ,instance_ca_key    BLOB
     ,instance_ca_cert   BLOB
     ,instance_tls_key   BLOB

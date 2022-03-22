@@ -36,6 +36,7 @@ require (
 	cloud.google.com/go v0.65.0 // indirect
 	github.com/99designs/basicauth-go v0.0.0-20160802081356-2a93ba0f464d // indirect
 	github.com/99designs/httpsignatures-go v0.0.0-20170731043157-88528bf4ca7e // indirect
+	github.com/Masterminds/squirrel v1.5.2 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20210927113745-59d0afb8317a // indirect
 	github.com/bmatcuk/doublestar v1.1.1 // indirect
@@ -51,6 +52,8 @@ require (
 	github.com/hashicorp/go-multierror v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kr/pretty v0.2.0 // indirect
+	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
+	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/natessilva/dag v0.0.0-20180124060714-7194b8dcc5c4 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

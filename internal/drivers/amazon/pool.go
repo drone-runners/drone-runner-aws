@@ -3,12 +3,10 @@ package amazon
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/userdata"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -69,12 +67,11 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("region", p.region).
 		WithField("image", p.image).
 		WithField("size", p.size)
+	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
 
-	tags := createCopy(p.tags)
-	tags[drivers.TagRunner] = drivers.RunnerName
-	tags[drivers.TagPool] = p.name
-	tags[drivers.TagCreator] = p.runnerName
-
+	var tags = map[string]string{
+		"Name": name,
+	}
 	// create the instance
 	startTime := time.Now()
 
@@ -224,7 +221,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 			instance = &types.Instance{
 				ID:       instanceID,
-				Name:     instanceID,
+				Name:     name,
 				Provider: types.ProviderAmazon,
 				State:    types.StateCreated,
 				Pool:     p.name,
@@ -242,7 +239,6 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				Started:  launchTime.Unix(),
 				Updated:  time.Now().Unix(),
 			}
-			instance.Tags, _ = json.Marshal(tags)
 			logr.
 				WithField("ip", instanceIP).
 				WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).

@@ -40,11 +40,11 @@ type Instance struct {
 	Size     string        `db:"instance_size" json:"size"`
 	Platform string        `db:"instance_platform" json:"platform"`
 	Arch     string        `db:"instance_arch" json:"arch"`
-	Tags     []byte        `db:"instance_tags" json:"tags"`
 	CAKey    []byte        `db:"instance_ca_key" json:"ca_key"`
 	CACert   []byte        `db:"instance_ca_cert" json:"ca_cert"`
 	TLSKey   []byte        `db:"instance_tls_key" json:"tls_key"`
 	TLSCert  []byte        `db:"instance_tls_cert" json:"tls_cert"`
+	Stage    string        `db:"instance_stage" json:"stage"`
 	Updated  int64         `db:"instance_updated" json:"updated"`
 	Started  int64         `db:"instance_started" json:"started"`
 }
@@ -67,5 +67,5 @@ type Platform struct {
 
 type QueryParams struct {
 	Status InstanceState
-	Tag    map[string]string
+	Stage  string
 }

@@ -6,7 +6,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -98,22 +97,11 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		}
 	}
 
-	tags := map[string]string{}
-	// TODO: Add Tags to spec then uncomment this code
-	//	for k, v := range spec.Tags {
-	//		if strings.HasPrefix(k, drivers.TagPrefix) {
-	//			continue
-	//		}
-	//		tags[k] = v
-	//	}
-
-	err = json.Unmarshal(instance.Tags, &tags)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to unmarshal tags")
 		return err
 	}
-	tags[drivers.TagStageID] = stageID
-	instance.Tags, err = json.Marshal(tags)
+	instance.Stage = stageID
 	if err != nil {
 		logr.WithError(err).Errorln("failed to marshal tags")
 		return err

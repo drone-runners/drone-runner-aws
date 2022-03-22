@@ -2,7 +2,6 @@ package drivers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -75,28 +74,20 @@ func (m *Manager) Find(ctx context.Context, instanceID string) (*types.Instance,
 	return m.instanceStore.Find(ctx, instanceID)
 }
 
-func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, key, value string) (*types.Instance, error) {
+func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
-	query := types.QueryParams{Status: types.StateInUse}
+	query := types.QueryParams{Status: types.StateInUse, Stage: stage}
 	list, err := m.instanceStore.List(ctx, pool.GetName(), &query)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
 			Errorln("manager: failed to list instances")
 		return nil, err
 	}
-	for _, instance := range list {
-		var tags map[string]string
-		tags, err = convertTagsToMap(ctx, instance)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range tags {
-			if k == key && v == value {
-				return instance, nil
-			}
-		}
+
+	if len(list) == 0 {
+		return nil, errors.New("manager: instance not found")
 	}
-	return nil, errors.New("manager: instance not found")
+	return list[0], nil
 }
 
 func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free []*types.Instance, err error) {
@@ -483,17 +474,6 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 		_ = pool.Destroy(ctx, inst.ID)
 	}
 	return inst, nil
-}
-
-func convertTagsToMap(ctx context.Context, instance *types.Instance) (map[string]string, error) {
-	var tagsMap = map[string]string{}
-	var err = json.Unmarshal(instance.Tags, &tagsMap)
-	if err != nil {
-		logger.FromContext(ctx).WithError(err).
-			Errorln("manager: failed to unmarshal instance tags")
-		return nil, err
-	}
-	return tagsMap, nil
 }
 
 func (m *Manager) forEach(ctx context.Context, f func(ctx context.Context, pool *poolEntry) error) error {
