@@ -5,6 +5,7 @@ go 1.17
 replace github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.20200309214505-aa6a9891b09c+incompatible
 
 require (
+	github.com/Masterminds/squirrel v1.5.2
 	github.com/aws/aws-sdk-go v1.42.10
 	github.com/buildkite/yaml v2.1.0+incompatible
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
@@ -36,7 +37,6 @@ require (
 	cloud.google.com/go v0.65.0 // indirect
 	github.com/99designs/basicauth-go v0.0.0-20160802081356-2a93ba0f464d // indirect
 	github.com/99designs/httpsignatures-go v0.0.0-20170731043157-88528bf4ca7e // indirect
-	github.com/Masterminds/squirrel v1.5.2 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20210927113745-59d0afb8317a // indirect
 	github.com/bmatcuk/doublestar v1.1.1 // indirect
@@ -70,5 +70,3 @@ require (
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/harness/lite-engine => /Users/eoinmcafee/Desktop/Code/lite-engine

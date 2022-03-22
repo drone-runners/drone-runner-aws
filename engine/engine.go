@@ -336,6 +336,6 @@ func (eng *Engine) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, er
 	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
 
 	return lehttp.NewHTTPClient(leURL,
-		eng.runnerName, instance.CACert,
-		instance.TLSCert, instance.TLSKey)
+		eng.runnerName, string(instance.CACert),
+		string(instance.TLSCert), string(instance.TLSKey))
 }

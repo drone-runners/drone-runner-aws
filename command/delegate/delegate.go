@@ -527,8 +527,8 @@ func (c *delegateCommand) getLEClient(instance *types.Instance) (*lehttp.HTTPCli
 	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
 
 	return lehttp.NewHTTPClient(leURL,
-		c.runnerName, instance.CACert,
-		instance.TLSCert, instance.TLSKey)
+		c.runnerName, string(instance.CACert),
+		string(instance.TLSCert), string(instance.TLSKey))
 }
 
 func getJSONDataFromReader(r io.Reader, data interface{}) error {
