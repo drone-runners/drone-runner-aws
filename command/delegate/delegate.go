@@ -8,10 +8,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
+
+	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
@@ -40,6 +46,7 @@ import (
 
 type delegateCommand struct {
 	envfile        string
+	env            Config
 	pool           string
 	poolManager    *drivers.Manager
 	runnerName     string
@@ -92,6 +99,10 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		logrus.WithError(processEnvErr).
 			Errorln("delegate: failed to load configuration")
 	}
+
+	// Pass in the environment configs
+	c.env = env
+
 	// load the configuration from the environment
 	env, err := fromEnviron()
 	if err != nil {
@@ -314,6 +325,24 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		ctx = logger.WithContext(r.Context(), logger.Logrus(logr))
 	}
 
+	// append global volumes to the setup request.
+	for _, pair := range c.env.Runner.Volumes {
+		src, _, ro, err := resource.ParseVolume(pair)
+		if err != nil {
+			log.Warn(err)
+			continue
+		}
+		vol := lespec.Volume{
+			HostPath: &lespec.VolumeHostPath{
+				ID:       id(src),
+				Name:     id(src),
+				Path:     src,
+				ReadOnly: ro,
+			},
+		}
+		reqData.Volumes = append(reqData.Volumes, &vol)
+	}
+
 	poolName := reqData.PoolID
 	if !c.poolManager.Exists(poolName) {
 		httprender.BadRequest(w, "pool not defined", logr)
@@ -416,6 +445,22 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		WithField("correlation_id", reqData.CorrelationID)
 
 	ctx := r.Context()
+
+	// add global volumes as mounts only if image is specified
+	if reqData.Image != "" {
+		for _, pair := range c.env.Runner.Volumes {
+			src, dest, _, err := resource.ParseVolume(pair)
+			if err != nil {
+				logr.Warn(err)
+				continue
+			}
+			mount := &lespec.VolumeMount{
+				Name: id(src),
+				Path: dest,
+			}
+			reqData.Volumes = append(reqData.Volumes, mount)
+		}
+	}
 	inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, reqData.ID)
 	if err != nil {
 		httprender.InternalError(w, "cannot get the instance by stageId", err, logr)
@@ -550,4 +595,13 @@ func getStreamLogger(cfg leapi.LogConfig, logKey, correlationID string) *lelivel
 		}
 	}()
 	return wc
+}
+
+// generate a id from the filename
+// /path/to/a.txt and /other/path/to/a.txt should generate different hashes
+// eg - a-txt10098 and a-txt-270089
+func id(filename string) string {
+	h := fnv.New32a()
+	h.Write([]byte(filename))
+	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))
 }

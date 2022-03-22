@@ -37,6 +37,7 @@ type compileCommand struct {
 	Environ map[string]string
 	Secrets map[string]string
 	Config  string
+	Volumes []string
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
@@ -112,6 +113,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		Environ:     provider.Static(c.Environ),
 		NetworkOpts: nil,
 		Secret:      secret.StaticVars(c.Secrets),
+		Volumes:     c.Volumes,
 		PoolManager: poolManager,
 		Registry:    registry.File(c.Config),
 	}
@@ -151,6 +153,11 @@ func registerCompile(app *kingpin.Application) {
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)
+
+	// Check documentation of DRONE_RUNNER_VOLUMES to see how to
+	// use this param.
+	cmd.Flag("volumes", "drone runner volumes").
+		StringsVar(&c.Volumes)
 
 	cmd.Flag("environ", "environment variables").
 		StringMapVar(&c.Environ)

@@ -23,7 +23,8 @@ type Config struct {
 	}
 
 	Runner struct {
-		Name string `envconfig:"DRONE_RUNNER_NAME"`
+		Name    string   `envconfig:"DRONE_RUNNER_NAME"`
+		Volumes []string `envconfig:"DRONE_RUNNER_VOLUMES"`
 	}
 
 	Settings struct {
