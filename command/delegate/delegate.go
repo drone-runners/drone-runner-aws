@@ -17,8 +17,6 @@ import (
 	"strings"
 	"time"
 
-	lespec "github.com/harness/lite-engine/engine/spec"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -32,6 +30,7 @@ import (
 	"github.com/drone/signal"
 	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
+	lespec "github.com/harness/lite-engine/engine/spec"
 	lelivelog "github.com/harness/lite-engine/livelog"
 	lestream "github.com/harness/lite-engine/logstream/remote"
 
