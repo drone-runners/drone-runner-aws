@@ -19,11 +19,11 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
-	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
@@ -44,14 +44,28 @@ import (
 )
 
 type delegateCommand struct {
-	envfile             string
-	env                 Config
-	pool                string
-	defaultPoolSettings drivers.DefaultSettings
-	poolManager         *drivers.Manager
+	envfile        string
+	env            Config
+	pool           string
+	poolManager    *drivers.Manager
+	runnerName     string
+	liteEnginePath string
 }
 
-const TagStageID = drivers.TagPrefix + "stage-id"
+func RegisterDelegate(app *kingpin.Application) {
+	c := new(delegateCommand)
+
+	c.poolManager = &drivers.Manager{}
+
+	cmd := app.Command("delegate", "starts the delegate").
+		Action(c.run)
+	cmd.Flag("envfile", "load the environment variable file").
+		Default("").
+		StringVar(&c.envfile)
+	cmd.Flag("pool", "file to seed the amazon pool").
+		Default("pool.yml").
+		StringVar(&c.pool)
+}
 
 // helper function configures the global logger from
 // the loaded configuration.
@@ -84,14 +98,27 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		logrus.WithError(processEnvErr).
 			Errorln("delegate: failed to load configuration")
 	}
+
+	// Pass in the environment configs
+	c.env = env
+
 	// load the configuration from the environment
 	env, err := fromEnviron()
 	if err != nil {
 		return err
 	}
-
 	// setup the global logrus logger.
 	setupLogger(&env)
+
+	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
+	if err != nil {
+		logrus.WithError(err).
+			Fatalln("Invalid or missing hosting provider")
+	}
+
+	// Set runner name & lite engine path
+	c.liteEnginePath = env.Settings.LiteEnginePath
+	c.runnerName = env.Runner.Name
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -100,39 +127,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		println("received signal, terminating process")
 		cancel()
 	})
-	// generate cert files if needed
-	certGenerationErr := le.GenerateLECerts(env.Runner.Name, env.Settings.CertificateFolder)
-	if certGenerationErr != nil {
-		logrus.WithError(certGenerationErr).
-			Errorln("delegate: failed to generate certificates")
-		return certGenerationErr
-	}
-	// read cert files into memory
-	var readCertsErr error
-	env.Settings.CaCertFile, env.Settings.CertFile, env.Settings.KeyFile, readCertsErr = le.ReadLECerts(env.Settings.CertificateFolder)
-	if readCertsErr != nil {
-		logrus.WithError(readCertsErr).
-			Errorln("delegate: failed to read certificates")
-		return readCertsErr
-	}
-	// we have enough information for default pool settings
-	c.defaultPoolSettings = drivers.DefaultSettings{
-		RunnerName:     env.Runner.Name,
-		LiteEnginePath: env.Settings.LiteEnginePath,
-		CaCertFile:     env.Settings.CaCertFile,
-		CertFile:       env.Settings.CertFile,
-		KeyFile:        env.Settings.KeyFile,
-	}
 
-	// Pass in the environment configs
-	c.env = env
-
-	cloudInitParams := &cloudinit.Params{
-		LiteEnginePath: c.defaultPoolSettings.LiteEnginePath,
-		CaCertFile:     c.defaultPoolSettings.CaCertFile,
-		CertFile:       c.defaultPoolSettings.CertFile,
-		KeyFile:        c.defaultPoolSettings.KeyFile,
-	}
+	store := database.ProvideInstanceStore(db)
+	c.poolManager = drivers.New(ctx, store, c.liteEnginePath, c.runnerName)
 
 	poolFile, err := config.ParseFile(c.pool)
 	if err != nil {
@@ -141,7 +138,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, &c.defaultPoolSettings, cloudInitParams)
+	pools, err := poolfile.ProcessPool(poolFile, c.runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to process pool file")
@@ -155,7 +152,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	err = c.poolManager.CheckProvider(ctx)
+	err = c.poolManager.PingProvider(ctx)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: cannot connect to cloud provider")
@@ -351,14 +348,14 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	instance, err := c.poolManager.Provision(ctx, poolName)
+	instance, err := c.poolManager.Provision(ctx, poolName, c.runnerName, c.liteEnginePath)
 	if err != nil {
 		httprender.InternalError(w, "failed provisioning", err, logr)
 		return
 	}
 
 	logr = logr.
-		WithField("ip", instance.IP).
+		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
@@ -369,23 +366,16 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tags := map[string]string{}
-	for k, v := range reqData.Tags {
-		if strings.HasPrefix(k, drivers.TagPrefix) {
-			continue
-		}
-		tags[k] = v
-	}
-	tags[TagStageID] = reqData.ID
-
-	err = c.poolManager.Tag(ctx, poolName, instance.ID, tags)
+	instance.Stage = reqData.ID
+	instance.Updated = time.Now().Unix()
+	err = c.poolManager.Update(ctx, instance)
 	if err != nil {
 		httprender.InternalError(w, "failed to tag", err, logr)
 		go cleanUpFn()
 		return
 	}
 
-	client, err := c.getLEClient(instance.IP)
+	client, err := c.getLEClient(instance)
 	if err != nil {
 		httprender.InternalError(w, "failed to create LE client", err, logr)
 		go cleanUpFn()
@@ -418,18 +408,9 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		InstanceID string `json:"instance_id,omitempty"`
 		IPAddress  string `json:"ip_address,omitempty"`
 	}{
-		IPAddress:  instance.IP,
+		IPAddress:  instance.Address,
 		InstanceID: instance.ID,
 	})
-}
-
-// generate a id from the filename
-// /path/to/a.txt and /other/path/to/a.txt should generate different hashes
-// eg - a-txt10098 and a-txt-270089
-func id(filename string) string {
-	h := fnv.New32a()
-	h.Write([]byte(filename))
-	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))
 }
 
 func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
@@ -479,29 +460,16 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 			reqData.Volumes = append(reqData.Volumes, mount)
 		}
 	}
-
-	var ipAddress string
-
-	if reqData.IPAddress != "" {
-		ipAddress = reqData.IPAddress
-	} else {
-		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
-		if err != nil {
-			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
-			return
-		}
-		if inst == nil || inst.IP == "" {
-			httprender.NotFound(w, "instance with provided ID not found", logr)
-			return
-		}
-
-		ipAddress = inst.IP
+	inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, reqData.ID)
+	if err != nil {
+		httprender.InternalError(w, "cannot get the instance by stageId", err, logr)
+		return
 	}
 
 	logr = logr.
-		WithField("ip", ipAddress)
+		WithField("ip", inst.Address)
 
-	client, err := c.getLEClient(ipAddress)
+	client, err := c.getLEClient(inst)
 	if err != nil {
 		httprender.InternalError(w, "failed to create client", err, logr)
 		return
@@ -564,11 +532,10 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		WithField("correlation_id", reqData.CorrelationID)
 
 	var instanceID string
-
 	if reqData.InstanceID != "" {
 		instanceID = reqData.InstanceID
 	} else {
-		inst, err := c.poolManager.GetUsedInstanceByTag(ctx, reqData.PoolID, TagStageID, reqData.ID)
+		inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, reqData.ID)
 		if err != nil {
 			httprender.InternalError(w, "cannot get the instance by tag", err, logr)
 			return
@@ -588,33 +555,24 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		httprender.InternalError(w, "cannot destroy the instance", err, logr)
 		return
 	}
-
 	logr.Traceln("destroyed instance")
+
+	err := c.poolManager.Delete(ctx, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("cannot delete the instance from store")
+		return
+	}
+	logr.Traceln("instance remove from store")
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func RegisterDelegate(app *kingpin.Application) {
-	c := new(delegateCommand)
-
-	c.poolManager = &drivers.Manager{}
-
-	cmd := app.Command("delegate", "starts the delegate").
-		Action(c.run)
-	cmd.Flag("envfile", "load the environment variable file").
-		Default("").
-		StringVar(&c.envfile)
-	cmd.Flag("pool", "file to seed the amazon pool").
-		Default("pool.yml").
-		StringVar(&c.pool)
-}
-
-func (c *delegateCommand) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instanceIP)
+func (c *delegateCommand) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
 
 	return lehttp.NewHTTPClient(leURL,
-		c.defaultPoolSettings.RunnerName, c.defaultPoolSettings.CaCertFile,
-		c.defaultPoolSettings.CertFile, c.defaultPoolSettings.KeyFile)
+		c.runnerName, string(instance.CACert),
+		string(instance.TLSCert), string(instance.TLSKey))
 }
 
 func getJSONDataFromReader(r io.Reader, data interface{}) error {
@@ -636,4 +594,13 @@ func getStreamLogger(cfg leapi.LogConfig, logKey, correlationID string) *lelivel
 		}
 	}()
 	return wc
+}
+
+// generate a id from the filename
+// /path/to/a.txt and /other/path/to/a.txt should generate different hashes
+// eg - a-txt10098 and a-txt-270089
+func id(filename string) string {
+	h := fnv.New32a()
+	h.Write([]byte(filename))
+	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))
 }

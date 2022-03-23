@@ -31,10 +31,6 @@ import (
 
 var nocontext = context.Background()
 
-var defaultPoolSettings = drivers.DefaultSettings{
-	RunnerName: "runner",
-}
-
 // dummy function that returns a non-random string for testing.
 // it is used in place of the random function.
 func notRandom() string {
@@ -190,7 +186,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, nil)
+	pools, err := poolfile.ProcessPool(poolFile, "runner")
 	if err != nil {
 		t.Errorf("unable to process pool file: %s", err)
 		return nil

@@ -6,7 +6,6 @@ package main
 
 import (
 	"github.com/drone-runners/drone-runner-aws/command"
-
 	_ "github.com/joho/godotenv/autoload"
 )
 

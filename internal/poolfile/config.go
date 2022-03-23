@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
@@ -12,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ProcessPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, cloudInitParams *cloudinit.Params) ([]drivers.Pool, error) {
+func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, error) {
 	var pools = []drivers.Pool{}
 
 	for _, i := range poolFile.Instances {
@@ -30,7 +29,7 @@ func ProcessPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, c
 				amazon.WithAccessKeyID(a.Account.AccessKeyID),
 				amazon.WithSecretAccessKey(a.Account.AccessKeySecret),
 				amazon.WithZone(a.Account.AvailabilityZone),
-				amazon.WithRunnerName(settings.RunnerName),
+				amazon.WithRunnerName(runnerName),
 				amazon.WithKeyPair(a.Account.KeyPairName),
 				amazon.WithName(i.Name), // pool name
 				amazon.WithDeviceName(a.DeviceName),
@@ -43,8 +42,7 @@ func ProcessPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, c
 				amazon.WithSize(a.Size),
 				amazon.WithSizeAlt(a.SizeAlt),
 				amazon.WithSubnet(a.Network.SubnetID),
-				amazon.WithTags(a.Tags),
-				amazon.WithUserData(a.UserData, cloudInitParams),
+				amazon.WithUserData(a.UserData),
 				amazon.WithVolumeSize(a.Disk.Size),
 				amazon.WithVolumeType(a.Disk.Type),
 				amazon.WithVolumeIops(a.Disk.Iops),
@@ -61,7 +59,7 @@ func ProcessPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, c
 				logrus.Errorln("daemon: unable to parse pool file")
 			}
 			var pool, err = google.New(
-				google.WithRunnerName(settings.RunnerName),
+				google.WithRunnerName(runnerName),
 				google.WithArch(i.Platform.Arch),
 				google.WithOs(i.Platform.OS),
 				google.WithLimit(i.Limit),
@@ -71,7 +69,6 @@ func ProcessPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, c
 				google.WithDiskType(g.Disk.Type),
 				google.WithMachineImage(g.Image),
 				google.WithMachineType(g.MachineType),
-				google.WithLabels(g.Labels),
 				google.WithNetwork(g.Network),
 				google.WithSubnetwork(g.Subnetwork),
 				google.WithPrivateIP(g.PrivateIP),
@@ -80,7 +77,7 @@ func ProcessPool(poolFile *config.PoolFile, settings *drivers.DefaultSettings, c
 				google.WithJSONPath(g.Account.JSONPath),
 				google.WithTags(g.Tags...),
 				google.WithScopes(g.Scopes...),
-				google.WithUserData(g.UserData, cloudInitParams),
+				google.WithUserData(g.UserData),
 				google.WithZones(g.Zone...),
 				google.WithUserDataKey(g.UserDataKey),
 			)

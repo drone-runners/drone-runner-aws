@@ -2,19 +2,12 @@ package drivers
 
 import (
 	"context"
-	"time"
+	"errors"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
-const (
-	RunnerName     = "drone-runner-cloud"
-	TagPrefix      = "runner-"
-	TagStageID     = TagPrefix + "stage-id"
-	TagStatus      = TagPrefix + "status"
-	TagRunner      = TagPrefix + "name"
-	TagCreator     = TagPrefix + "creator"
-	TagPool        = TagPrefix + "pool"
-	TagStatusValue = "in-use"
-)
+var ErrorNoInstanceAvailable = errors.New("no free instances available")
 
 type Pool interface {
 	// GetProviderName returns VM provider name. It should be a fixed string for each implementation. The value is used for logging.
@@ -28,34 +21,7 @@ type Pool interface {
 	GetMaxSize() int
 	GetMinSize() int
 
-	CheckProvider(ctx context.Context) error
-	Create(ctx context.Context, tagAsInUse bool) (instance *Instance, err error)
-	List(ctx context.Context) (busy, free []Instance, err error)
-	GetUsedInstanceByTag(ctx context.Context, tag, value string) (inst *Instance, err error)
-	Tag(ctx context.Context, instanceID string, tags map[string]string) (err error)
+	PingProvider(ctx context.Context) error
+	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
-}
-
-// Instance represents a provisioned server instance.
-type Instance struct {
-	ID        string
-	IP        string
-	Tags      map[string]string
-	StartedAt time.Time
-}
-
-// Platform defines the target platform.
-type Platform struct {
-	OS      string `json:"os,omitempty"`
-	Arch    string `json:"arch,omitempty"`
-	Variant string `json:"variant,omitempty"`
-	Version string `json:"version,omitempty"`
-}
-
-type DefaultSettings struct {
-	RunnerName     string
-	LiteEnginePath string
-	CaCertFile     string
-	CertFile       string
-	KeyFile        string
 }

@@ -42,7 +42,6 @@ type provider struct {
 	diskSize            int64
 	diskType            string
 	image               string
-	labels              map[string]string
 	network             string
 	subnetwork          string
 	privateIP           bool

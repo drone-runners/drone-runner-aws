@@ -20,9 +20,9 @@ const (
 func TestLinux(t *testing.T) {
 	params := &cloudinit.Params{
 		LiteEnginePath: liteEnginePath,
-		CaCertFile:     caCertFile + "\n",
-		CertFile:       certFile + "\n",
-		KeyFile:        keyFile + "\n",
+		CACert:         caCertFile + "\n",
+		TLSCert:        certFile + "\n",
+		TLSKey:         keyFile + "\n",
 		Platform:       platform,
 		Architecture:   arch,
 	}
@@ -37,9 +37,9 @@ func TestLinux(t *testing.T) {
 func TestWindows(t *testing.T) {
 	params := &cloudinit.Params{
 		LiteEnginePath: liteEnginePath,
-		CaCertFile:     caCertFile + "\n",
-		CertFile:       certFile + "\n",
-		KeyFile:        keyFile + "\n",
+		CACert:         caCertFile + "\n",
+		TLSCert:        certFile + "\n",
+		TLSKey:         keyFile + "\n",
 	}
 
 	s := cloudinit.Windows(params)

@@ -13,11 +13,10 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
-
 	leapi "github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 )
@@ -34,26 +33,20 @@ type Opts struct {
 
 // Engine implements a pipeline engine.
 type Engine struct {
-	opts         Opts
-	poolManager  *drivers.Manager
-	poolSettings *drivers.DefaultSettings
+	opts           Opts
+	poolManager    *drivers.Manager
+	runnerName     string
+	liteEnginePath string
 }
 
 // New returns a new engine.
-func New(opts Opts, poolManager *drivers.Manager, defaultPoolSettings *drivers.DefaultSettings) (*Engine, error) {
+func New(opts Opts, poolManager *drivers.Manager, runnerName, liteEnginePath string) (*Engine, error) {
 	return &Engine{
-		opts:         opts,
-		poolManager:  poolManager,
-		poolSettings: defaultPoolSettings,
+		opts:           opts,
+		poolManager:    poolManager,
+		runnerName:     runnerName,
+		liteEnginePath: liteEnginePath,
 	}, nil
-}
-
-func (eng *Engine) getLEClient(instanceIP string) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instanceIP)
-
-	return lehttp.NewHTTPClient(leURL,
-		eng.poolSettings.RunnerName, eng.poolSettings.CaCertFile,
-		eng.poolSettings.CertFile, eng.poolSettings.KeyFile)
 }
 
 // Setup the pipeline environment.
@@ -61,7 +54,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 
 	poolName := spec.CloudInstance.PoolName
-	poolMngr := eng.poolManager
+	manager := eng.poolManager
 	stageID := "" // TODO: Check how to obtain this value. Or create value here is it's not yet defined...
 
 	logr := logger.FromContext(ctx).
@@ -75,52 +68,51 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// lets see if there is anything in the pool
-	instance, err := poolMngr.Provision(ctx, poolName)
+	instance, err := manager.Provision(ctx, poolName, eng.runnerName, eng.liteEnginePath)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
 	}
 
 	logr = logr.
-		WithField("ip", instance.IP).
+		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
 
 	// now we have an instance, put the information in the spec
 	spec.CloudInstance.PoolName = poolName
 	spec.CloudInstance.ID = instance.ID
-	spec.CloudInstance.IP = instance.IP
+	spec.CloudInstance.IP = instance.Address
 
-	if !poolMngr.Exists(poolName) {
+	if !manager.Exists(poolName) {
 		logr.Errorln("pool does not exist")
 		return ErrorPoolNotDefined
 	}
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpFn := func() {
-		errCleanUp := poolMngr.Destroy(context.Background(), poolName, instance.ID)
+		errCleanUp := manager.Destroy(context.Background(), poolName, instance.ID)
 		if errCleanUp != nil {
 			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
 		}
 	}
 
-	tags := map[string]string{}
-	// TODO: Add Tags to spec then uncomment this code
-	//	for k, v := range spec.Tags {
-	//		if strings.HasPrefix(k, drivers.TagPrefix) {
-	//			continue
-	//		}
-	//		tags[k] = v
-	//	}
-	tags[drivers.TagStageID] = stageID
-
-	err = poolMngr.Tag(ctx, poolName, instance.ID, tags)
+	if err != nil {
+		logr.WithError(err).Errorln("failed to unmarshal tags")
+		return err
+	}
+	instance.Stage = stageID
+	if err != nil {
+		logr.WithError(err).Errorln("failed to marshal tags")
+		return err
+	}
+	err = manager.Update(ctx, instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to tag")
 		go cleanUpFn()
 		return err
 	}
 
-	client, err := eng.getLEClient(instance.IP)
+	client, err := eng.getLEClient(instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		go cleanUpFn()
@@ -189,7 +181,11 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		logr.WithError(err).Errorln("cannot destroy the instance")
 		return err
 	}
-
+	err := eng.poolManager.Delete(ctx, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("cannot delete the instance from store")
+		return err
+	}
 	logr.Traceln("destroyed instance")
 
 	return nil
@@ -211,7 +207,12 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		WithField("id", instanceID).
 		WithField("ip", instanceIP)
 
-	client, err := eng.getLEClient(instanceIP)
+	instance, err := eng.poolManager.Find(ctx, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("cannot find instance")
+		return nil, err
+	}
+	client, err := eng.getLEClient(instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return nil, err
@@ -328,4 +329,12 @@ type counterWriter int
 func (q *counterWriter) Write(data []byte) (int, error) {
 	*q += counterWriter(len(data))
 	return len(data), nil
+}
+
+func (eng *Engine) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
+
+	return lehttp.NewHTTPClient(leURL,
+		eng.runnerName, string(instance.CACert),
+		string(instance.TLSCert), string(instance.TLSKey))
 }

@@ -60,12 +60,8 @@ type Config struct {
 	}
 
 	Settings struct {
-		LiteEnginePath    string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.0.1.14/"`
-		CertificateFolder string `envconfig:"DRONE_CERTIFICATE_FOLDER" default:"/tmp/certs"`
-		CaCertFile        string `envconfig:"DRONE_CA_CERT_FILE"`
-		CertFile          string `envconfig:"DRONE_CERT_FILE"`
-		KeyFile           string `envconfig:"DRONE_KEY_FILE"`
-		ReusePool         bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
+		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.0.1.14/"`
+		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 	}
 
 	Environ struct {
@@ -89,6 +85,11 @@ type Config struct {
 		Endpoint   string `envconfig:"DRONE_REGISTRY_PLUGIN_ENDPOINT"`
 		Token      string `envconfig:"DRONE_REGISTRY_PLUGIN_TOKEN"`
 		SkipVerify bool   `envconfig:"DRONE_REGISTRY_PLUGIN_SKIP_VERIFY"`
+	}
+
+	Database struct {
+		Driver     string `envconfig:"DRONE_DATABASE_DRIVER" default:"sqlite3"`
+		Datasource string `envconfig:"DRONE_DATABASE_DATASOURCE" default:"database.sqlite3"`
 	}
 }
 

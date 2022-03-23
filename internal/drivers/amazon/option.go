@@ -3,9 +3,6 @@ package amazon
 import (
 	"os"
 
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
-
 	"github.com/sirupsen/logrus"
 )
 
@@ -115,36 +112,18 @@ func WithSubnet(id string) Option {
 	}
 }
 
-// WithTags returns an option to set the image.
-func WithTags(tags map[string]string) Option {
-	return func(p *provider) {
-		p.tags = tags
-	}
-}
-
 // WithUserData returns an option to set the cloud-init
 // template from text.
-func WithUserData(text string, params *cloudinit.Params) Option {
+func WithUserData(text string) Option {
 	return func(p *provider) {
-		if text == "" {
-			if params == nil {
+		if text != "" {
+			data, err := os.ReadFile(text)
+			if err != nil {
+				logrus.Error(err)
 				return
 			}
-			params.Platform = p.os
-			params.Architecture = p.arch
-			if p.os == oshelp.OSWindows {
-				p.userData = cloudinit.Windows(params)
-			} else {
-				p.userData = cloudinit.Linux(params)
-			}
-			return
+			p.userData = string(data)
 		}
-		data, err := os.ReadFile(text)
-		if err != nil {
-			logrus.Error(err)
-			return
-		}
-		p.userData, _ = cloudinit.Custom(string(data), params)
 	}
 }
 

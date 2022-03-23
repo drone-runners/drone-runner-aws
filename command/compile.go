@@ -80,10 +80,6 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
-	// we have enough information for default pool settings
-	defaultPoolSettings := drivers.DefaultSettings{
-		RunnerName: runnerName,
-	}
 
 	poolFile, err := config.ParseFile(c.Pool)
 	if err != nil {
@@ -92,7 +88,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, nil)
+	pools, err := poolfile.ProcessPool(poolFile, runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("compile: unable to process pool file")

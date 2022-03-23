@@ -4,9 +4,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
-
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/compute/v1"
 )
@@ -80,13 +77,6 @@ func WithDiskType(diskType string) Option {
 	}
 }
 
-// WithLabels returns an option to set the metadata labels.
-func WithLabels(labels map[string]string) Option {
-	return func(p *provider) {
-		p.labels = labels
-	}
-}
-
 // WithMachineImage returns an option to set the image.
 func WithMachineImage(image string) Option {
 	return func(p *provider) {
@@ -145,24 +135,16 @@ func WithTags(tags ...string) Option {
 
 // WithUserData returns an option to set the cloud-init
 // template from text.
-func WithUserData(text string, params *cloudinit.Params) Option {
+func WithUserData(text string) Option {
 	return func(p *provider) {
-		if text == "" {
-			params.Platform = p.os
-			params.Architecture = p.arch
-			if p.os == oshelp.OSWindows {
-				p.userData = cloudinit.Windows(params)
-			} else {
-				p.userData = cloudinit.Linux(params)
+		if text != "" {
+			data, err := os.ReadFile(text)
+			if err != nil {
+				logrus.Error(err)
+				return
 			}
-			return
+			p.userData = string(data)
 		}
-		data, err := os.ReadFile(text)
-		if err != nil {
-			logrus.Error(err)
-			return
-		}
-		p.userData, _ = cloudinit.Custom(string(data), params)
 	}
 }
 

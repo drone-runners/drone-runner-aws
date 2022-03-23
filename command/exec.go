@@ -102,10 +102,6 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	if err != nil {
 		return err
 	}
-	// we have enough information for default pool settings
-	defaultPoolSettings := drivers.DefaultSettings{
-		RunnerName: runnerName,
-	}
 
 	poolFile, err := config.ParseFile(c.Pool)
 	if err != nil {
@@ -114,7 +110,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return err
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, &defaultPoolSettings, nil)
+	pools, err := poolfile.ProcessPool(poolFile, runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("exec: unable to process pool file")
@@ -239,7 +235,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 
 	engineInstance, err := engine.New(engine.Opts{
 		Repopulate: false,
-	}, poolManager, &defaultPoolSettings)
+	}, poolManager, runnerName, "")
 	if err != nil {
 		return err
 	}

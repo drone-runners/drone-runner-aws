@@ -39,7 +39,6 @@ type provider struct {
 	volumeType    string
 	volumeSize    int64
 	volumeIops    int64
-	tags          map[string]string
 	deviceName    string
 	iamProfileArn string
 
@@ -86,10 +85,6 @@ func New(opts ...Option) (drivers.Pool, error) {
 		} else {
 			p.size = "t3.nano"
 		}
-	}
-	// put something into tags even if empty
-	if p.tags == nil {
-		p.tags = make(map[string]string)
 	}
 	// set the default disk size if not provided
 	if p.volumeSize == 0 {

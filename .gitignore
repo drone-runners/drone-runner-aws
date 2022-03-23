@@ -8,3 +8,4 @@ TODO.md
 __debug_bin
 temp.pem
 pool.yml
+*.sqlite3
