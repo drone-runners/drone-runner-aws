@@ -195,7 +195,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				},
 			)
 			if descrErr != nil {
-				logr.WithError(err).Warnln("amazon: [provision] instance details failed")
+				logr.WithError(descrErr).Warnln("amazon: [provision] instance details failed")
 				continue
 			}
 
