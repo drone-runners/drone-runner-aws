@@ -48,6 +48,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithVolumeIops(a.Disk.Iops),
 				amazon.WithIamProfileArn(a.IamProfileArn),
 				amazon.WithMarketType(a.MarketType),
+				amazon.WithHibernate(a.Hibernate),
 			)
 			if err != nil {
 				logrus.WithError(err).Errorln("daemon: unable to create google config")

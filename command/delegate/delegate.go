@@ -354,6 +354,14 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if instance.IsHibernated {
+		instance, err = c.poolManager.StartInstance(ctx, poolName, instance.ID)
+		if err != nil {
+			httprender.InternalError(w, "failed to start the instance up", err, logr)
+			return
+		}
+	}
+
 	logr = logr.
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID)

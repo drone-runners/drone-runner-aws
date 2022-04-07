@@ -208,6 +208,14 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
+func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
+	return errors.New("Unimplemented")
+}
+
+func (p *provider) Start(ctx context.Context, instanceID string) (*types.Instance, error) {
+	return nil, errors.New("Unimplemented")
+}
+
 func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
 	network := vm.NetworkInterfaces[0]
 	accessConfigs := network.AccessConfigs[0]

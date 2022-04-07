@@ -197,3 +197,9 @@ func WithKeyPair(keyPair string) Option {
 		p.keyPairName = keyPair
 	}
 }
+
+func WithHibernate(hibernate bool) Option {
+	return func(p *provider) {
+		p.hibernate = hibernate
+	}
+}

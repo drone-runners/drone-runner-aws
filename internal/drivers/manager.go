@@ -311,6 +311,8 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
+
+	m.Delete(ctx, instanceID)
 	// the go routine here uses the global context because this function is called
 	// from destroy API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
@@ -426,6 +428,11 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				WithField("pool", pool.GetName()).
 				WithField("id", inst.ID).
 				Infoln("build pool: created new instance")
+
+			herr := m.hibernate(ctx, pool.GetName(), inst.ID)
+			if herr != nil {
+				logr.WithError(herr).Errorln("failed to hibernate the vm")
+			}
 		}(ctx, logr)
 
 		shouldCreate--
@@ -474,6 +481,66 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 		_ = pool.Destroy(ctx, inst.ID)
 	}
 	return inst, nil
+}
+
+func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string) (*types.Instance, error) {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return nil, fmt.Errorf("hibernate: pool name %q not found", poolName)
+	}
+
+	pool.Lock()
+	defer pool.Unlock()
+
+	inst, err := m.Find(ctx, instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
+	}
+
+	if !inst.IsHibernated {
+		return inst, nil
+	}
+
+	ipAddress, err := pool.Start(ctx, instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("hibernate: failed to start the instance %s of %q pool: %w", instanceID, poolName, err)
+	}
+
+	inst.IsHibernated = false
+	inst.Address = ipAddress
+	if err := m.instanceStore.Update(ctx, inst); err != nil {
+		return nil, fmt.Errorf("hibernate: failed to update instance store %s of %q pool: %w", instanceID, poolName, err)
+	}
+	return inst, nil
+}
+
+func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) error {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return fmt.Errorf("hibernate: pool name %q not found", poolName)
+	}
+
+	if !pool.CanHibernate() {
+		return nil
+	}
+
+	pool.Lock()
+	defer pool.Unlock()
+
+	err := pool.Hibernate(ctx, instanceID)
+	if err != nil {
+		return fmt.Errorf("hibernate: failed to hibernated an instance %s of %q pool: %w", instanceID, poolName, err)
+	}
+
+	inst, err := m.Find(ctx, instanceID)
+	if err != nil {
+		return fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
+	}
+	inst.IsHibernated = true
+	if err := m.instanceStore.Update(ctx, inst); err != nil {
+		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
+	}
+	return nil
 }
 
 func (m *Manager) forEach(ctx context.Context, f func(ctx context.Context, pool *poolEntry) error) error {
