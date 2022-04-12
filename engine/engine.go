@@ -189,11 +189,6 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		logr.WithError(err).Errorln("cannot destroy the instance")
 		return err
 	}
-	err := eng.poolManager.Delete(ctx, instanceID)
-	if err != nil {
-		logr.WithError(err).Errorln("cannot delete the instance from store")
-		return err
-	}
 	logr.Traceln("destroyed instance")
 
 	return nil

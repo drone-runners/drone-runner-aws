@@ -178,24 +178,25 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	launchTime := p.getLaunchTime(amazonInstance)
 
 	instance = &types.Instance{
-		ID:       instanceID,
-		Name:     name,
-		Provider: types.ProviderAmazon,
-		State:    types.StateCreated,
-		Pool:     p.name,
-		Image:    p.image,
-		Zone:     p.availabilityZone,
-		Region:   p.region,
-		Size:     p.size,
-		Platform: p.os,
-		Arch:     p.arch,
-		Address:  instanceIP,
-		CACert:   opts.CACert,
-		CAKey:    opts.CAKey,
-		TLSCert:  opts.TLSCert,
-		TLSKey:   opts.TLSKey,
-		Started:  launchTime.Unix(),
-		Updated:  time.Now().Unix(),
+		ID:           instanceID,
+		Name:         instanceID,
+		Provider:     types.ProviderAmazon,
+		State:        types.StateCreated,
+		Pool:         p.name,
+		Image:        p.image,
+		Zone:         p.availabilityZone,
+		Region:       p.region,
+		Size:         p.size,
+		Platform:     p.os,
+		Arch:         p.arch,
+		Address:      instanceIP,
+		CACert:       opts.CACert,
+		CAKey:        opts.CAKey,
+		TLSCert:      opts.TLSCert,
+		TLSKey:       opts.TLSKey,
+		Started:      launchTime.Unix(),
+		Updated:      time.Now().Unix(),
+		IsHibernated: false,
 	}
 	logr.
 		WithField("ip", instanceIP).
@@ -229,18 +230,17 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 		return
 	}
 
-	logr.Traceln("amazon: VMs terminated")
+	logr.Traceln("amazon: VM terminated")
 	return
 }
 
 func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
-	client := p.service
-
 	logr := logger.FromContext(ctx).
 		WithField("provider", types.ProviderAmazon).
 		WithField("pool", p.name).
 		WithField("instanceID", instanceID)
 
+	client := p.service
 	_, err := client.StopInstancesWithContext(ctx, &ec2.StopInstancesInput{
 		InstanceIds: []*string{aws.String(instanceID)},
 		Hibernate:   aws.Bool(true),
@@ -251,6 +251,7 @@ func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
 		return err
 	}
 
+	logr.Traceln("amazon: VM hibernated")
 	return nil
 }
 
@@ -284,6 +285,7 @@ func (p *provider) Start(ctx context.Context, instanceID string) (string, error)
 			Errorln("aws: failed to start VMs")
 		return "", err
 	}
+	logr.Traceln("amazon: VM started")
 
 	awsInstance, err := p.pollInstanceIPAddr(ctx, instanceID, logr)
 	if err != nil {

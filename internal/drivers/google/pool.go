@@ -51,6 +51,10 @@ func (p *provider) GetInstanceType() string {
 	return p.image
 }
 
+func (p *provider) CanHibernate() bool {
+	return false
+}
+
 func (p *provider) PingProvider(ctx context.Context) error {
 	client := p.service
 	healthCheck := client.Regions.List(p.projectID).Context(ctx)
@@ -212,8 +216,8 @@ func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
 	return errors.New("Unimplemented")
 }
 
-func (p *provider) Start(ctx context.Context, instanceID string) (*types.Instance, error) {
-	return nil, errors.New("Unimplemented")
+func (p *provider) Start(ctx context.Context, instanceID string) (string, error) {
+	return "", errors.New("Unimplemented")
 }
 
 func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
@@ -223,23 +227,24 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 	return types.Instance{
-		ID:       strconv.FormatUint(vm.Id, 10), //nolint
-		Name:     vm.Name,
-		Provider: types.ProviderGoogle,
-		State:    types.StateCreated,
-		Pool:     p.name,
-		Image:    p.image,
-		Zone:     p.GetZone(),
-		Size:     p.size,
-		Platform: p.os,
-		Arch:     p.arch,
-		Address:  instanceIP,
-		CACert:   opts.CACert,
-		CAKey:    opts.CAKey,
-		TLSCert:  opts.TLSCert,
-		TLSKey:   opts.TLSKey,
-		Started:  started.Unix(),
-		Updated:  time.Now().Unix(),
+		ID:           strconv.FormatUint(vm.Id, 10), //nolint
+		Name:         vm.Name,
+		Provider:     types.ProviderGoogle,
+		State:        types.StateCreated,
+		Pool:         p.name,
+		Image:        p.image,
+		Zone:         p.GetZone(),
+		Size:         p.size,
+		Platform:     p.os,
+		Arch:         p.arch,
+		Address:      instanceIP,
+		CACert:       opts.CACert,
+		CAKey:        opts.CAKey,
+		TLSCert:      opts.TLSCert,
+		TLSKey:       opts.TLSKey,
+		Started:      started.Unix(),
+		Updated:      time.Now().Unix(),
+		IsHibernated: false,
 	}
 }
 
