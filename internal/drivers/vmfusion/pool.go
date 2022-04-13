@@ -55,6 +55,10 @@ func (p *provider) PingProvider(ctx context.Context) error {
 	return nil
 }
 
+func (p *provider) CanHibernate() bool {
+	return false
+}
+
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	uData := userdata.Generate(p.userData, p.os, p.arch, opts)
 	machineName := fmt.Sprintf(p.runnerName+"-"+"-%d", time.Now().Unix())
@@ -192,6 +196,14 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 		}
 	}
 	return
+}
+
+func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
+	return errors.New("Unimplemented")
+}
+
+func (p *provider) Start(ctx context.Context, instanceID string) (string, error) {
+	return "", errors.New("Unimplemented")
 }
 
 func commandCopyFileToGuest(src, dest, username, password, path string) *exec.Cmd {
