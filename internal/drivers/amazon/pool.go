@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/internal/userdata"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/cenkalti/backoff/v4"
 )
 
 func (p *provider) GetProviderName() string {
