@@ -13,6 +13,7 @@ import (
 
 const OSWindows = "windows"
 const OSLinux = "linux"
+const OSMac = "darwin"
 
 // JoinPaths helper function joins the file paths.
 func JoinPaths(os string, paths ...string) string {
@@ -53,6 +54,10 @@ func GenScript(os string, commands []string) string {
 	switch os {
 	case OSWindows:
 		return powershell.Script(commands)
+	case OSMac:
+		macScript := bash.Script(commands)
+		macScript = "PATH=$PATH:/usr/local/bin" + macScript
+		return macScript
 	default:
 		return bash.Script(commands)
 	}

@@ -8,6 +8,7 @@ import (
 )
 
 var ErrorNoInstanceAvailable = errors.New("no free instances available")
+var ErrHostIsNotRunning = errors.New("host is not running")
 
 type Pool interface {
 	// GetProviderName returns VM provider name. It should be a fixed string for each implementation. The value is used for logging.

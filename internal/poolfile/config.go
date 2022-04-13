@@ -3,6 +3,8 @@ package poolfile
 import (
 	"fmt"
 
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
+
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
@@ -16,6 +18,33 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 
 	for _, i := range poolFile.Instances {
 		switch i.Type {
+		case "vmfusion":
+			var v, ok = i.Spec.(*config.VMFusion)
+			if !ok {
+				logrus.Errorln("daemon: unable to parse pool file")
+			}
+			pool, err := vmfusion.New(
+				vmfusion.WithRunnerName(runnerName),
+				vmfusion.WithPool(i.Pool),
+				vmfusion.WithLimit(i.Limit),
+				vmfusion.WithOs(i.Platform.OS),
+				vmfusion.WithArch(i.Platform.Arch),
+				vmfusion.WithVersion(i.Platform.Version),
+				vmfusion.WithName(i.Name), // pool name
+				vmfusion.WithStorePath(v.StorePath),
+				vmfusion.WithUsername(v.Account.Username),
+				vmfusion.WithPassword(v.Account.Password),
+				vmfusion.WithISO(v.ISO),
+				vmfusion.WithCPU(v.CPU),
+				vmfusion.WithMemory(v.Memory),
+				vmfusion.WithVDiskPath(v.VDiskPath),
+				vmfusion.WithUserData(v.UserData),
+				vmfusion.WithRootDirectory(v.RootDirectory),
+			)
+			if err != nil {
+				logrus.WithError(err).Errorln("daemon: unable to create vmfusion config")
+			}
+			pools = append(pools, pool)
 		case "amazon":
 			var a, ok = i.Spec.(*config.Amazon)
 			if !ok {

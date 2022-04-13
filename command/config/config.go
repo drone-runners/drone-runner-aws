@@ -71,10 +71,26 @@ type (
 		Hibernate     bool              `json:"hibernate,omitempty"`
 	}
 
+	VMFusion struct {
+		Account struct {
+			Username string `json:"username,omitempty"  yaml:"username"`
+			Password string `json:"password,omitempty"  yaml:"password"`
+		}
+		ISO           string `json:"iso,omitempty"`
+		Name          string `json:"name,omitempty" yaml:"name"`
+		Memory        int64  `json:"memory,omitempty" yaml:"memory"`
+		CPU           int64  `json:"cpu,omitempty" yaml:"cpu"`
+		VDiskPath     string `json:"v_disk_path,omitempty" yaml:"v_disk_path"`
+		UserData      string `json:"user_data,omitempty"`
+		StorePath     string `json:"store_path,omitempty" yaml:"store_path"`
+		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
+	}
+
 	// platform specifies the configuration for a platform instance.
 	platform struct {
-		OS   string `json:"os,omitempty"`
-		Arch string `json:"arch,omitempty"`
+		OS      string `json:"os,omitempty"`
+		Arch    string `json:"arch,omitempty"`
+		Version string `json:"version,omitempty"`
 	}
 
 	// disk provides disk size and type.
@@ -110,6 +126,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Amazon)
 	case "gcp":
 		s.Spec = new(Google)
+	case "vmfusion":
+		s.Spec = new(VMFusion)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}
