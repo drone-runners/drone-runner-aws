@@ -534,7 +534,7 @@ func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) er
 		return nil
 	}
 
-	// TODO: Use health check for time to wait before hibernating the instance
+	// TODO: Use health check to determine wait time before hibernating the instance
 	time.Sleep(600 * time.Second) // nolint:gomnd
 
 	pool.Lock()
