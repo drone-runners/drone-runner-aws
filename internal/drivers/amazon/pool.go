@@ -203,7 +203,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("amazon: [provision] complete")
 
-	return
+	return // nolint:nakedret
 }
 
 // Destroy destroys the server AWS EC2 instances.
@@ -272,6 +272,7 @@ func (p *provider) Start(ctx context.Context, instanceID string) (string, error)
 	if state == ec2.InstanceStateNameRunning {
 		return p.getIP(amazonInstance), nil
 	} else if state == ec2.InstanceStateNameStopping {
+		logr.Traceln("aws: waiting for instance to stop")
 		waitErr := client.WaitUntilInstanceStoppedWithContext(ctx, &ec2.DescribeInstancesInput{InstanceIds: []*string{aws.String(instanceID)}})
 		if waitErr != nil {
 			logr.WithError(waitErr).Warnln("aws: instance failed to stop. Proceeding with starting the instance")
@@ -312,6 +313,10 @@ func (p *provider) getIP(amazonInstance *ec2.Instance) string {
 
 func (p *provider) getState(amazonInstance *ec2.Instance) string {
 	if amazonInstance.State == nil {
+		return ""
+	}
+
+	if amazonInstance.State.Name == nil {
 		return ""
 	}
 
@@ -379,20 +384,6 @@ func (p *provider) pollInstanceIPAddr(ctx context.Context, instanceID string, lo
 			return instance, nil
 		}
 	}
-}
-
-func (p *provider) getInstanceStatus(ctx context.Context, instanceID string) (*ec2.InstanceState, error) {
-	client := p.service
-	response, err := client.DescribeInstanceStatusWithContext(ctx, &ec2.DescribeInstanceStatusInput{InstanceIds: []*string{aws.String(instanceID)}})
-	if err != nil {
-		return nil, err
-	}
-
-	if len(response.InstanceStatuses) == 0 {
-		return nil, errors.New("amazon: failed to find instance status")
-	}
-
-	return response.InstanceStatuses[0].InstanceState, nil
 }
 
 func (p *provider) getInstance(ctx context.Context, instanceID string) (*ec2.Instance, error) {
