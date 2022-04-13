@@ -18,5 +18,6 @@ CREATE TABLE IF NOT EXISTS instances (
     ,instance_tls_cert  TEXT
     ,instance_updated   INTEGER
     ,instance_started   INTEGER
+    ,is_hibernated      BOOLEAN
 ,UNIQUE(instance_name)
 );

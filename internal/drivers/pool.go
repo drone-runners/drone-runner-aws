@@ -21,7 +21,12 @@ type Pool interface {
 	GetMaxSize() int
 	GetMinSize() int
 
+	// CanHibernate returns whether VMs of the pool can be hibernated or not.
+	CanHibernate() bool
+
 	PingProvider(ctx context.Context) error
 	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
+	Hibernate(ctx context.Context, instanceID string) error
+	Start(ctx context.Context, instanceID string) (ipAddress string, err error)
 }

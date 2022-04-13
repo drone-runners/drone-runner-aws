@@ -41,6 +41,7 @@ type provider struct {
 	volumeIops    int64
 	deviceName    string
 	iamProfileArn string
+	hibernate     bool
 
 	// pool size data
 	pool  int

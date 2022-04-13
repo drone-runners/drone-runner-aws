@@ -74,6 +74,14 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 
+	if instance.IsHibernated {
+		instance, err = manager.StartInstance(ctx, poolName, instance.ID)
+		if err != nil {
+			logr.WithError(err).Errorln("failed to start an instance")
+			return err
+		}
+	}
+
 	logr = logr.
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
@@ -179,11 +187,6 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 
 	if err := poolMngr.Destroy(ctx, poolName, instanceID); err != nil {
 		logr.WithError(err).Errorln("cannot destroy the instance")
-		return err
-	}
-	err := eng.poolManager.Delete(ctx, instanceID)
-	if err != nil {
-		logr.WithError(err).Errorln("cannot delete the instance from store")
 		return err
 	}
 	logr.Traceln("destroyed instance")

@@ -60,7 +60,7 @@ func RegisterDelegate(app *kingpin.Application) {
 	cmd := app.Command("delegate", "starts the delegate").
 		Action(c.run)
 	cmd.Flag("envfile", "load the environment variable file").
-		Default("").
+		Default(".env").
 		StringVar(&c.envfile)
 	cmd.Flag("pool", "file to seed the amazon pool").
 		Default("pool.yml").
@@ -89,7 +89,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	envError := godotenv.Load(c.envfile)
 	if envError != nil {
 		logrus.WithError(envError).
-			Errorln("delegate: failed to load environment variables")
+			Warnf("delegate: failed to load environment variables from file: %s", c.envfile)
 	}
 	// load the configuration from the environment
 	var env Config
@@ -354,6 +354,14 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if instance.IsHibernated {
+		instance, err = c.poolManager.StartInstance(ctx, poolName, instance.ID)
+		if err != nil {
+			httprender.InternalError(w, "failed to start the instance up", err, logr)
+			return
+		}
+	}
+
 	logr = logr.
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
@@ -556,14 +564,6 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	logr.Traceln("destroyed instance")
-
-	err := c.poolManager.Delete(ctx, instanceID)
-	if err != nil {
-		logr.WithError(err).Errorln("cannot delete the instance from store")
-		return
-	}
-	logr.Traceln("instance remove from store")
-
 	w.WriteHeader(http.StatusOK)
 }
 

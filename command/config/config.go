@@ -68,6 +68,7 @@ type (
 		IamProfileArn string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
 		MarketType    string            `json:"market_type,omitempty" yaml:"market_type"`
 		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory"`
+		Hibernate     bool              `json:"hibernate,omitempty"`
 	}
 
 	// platform specifies the configuration for a platform instance.

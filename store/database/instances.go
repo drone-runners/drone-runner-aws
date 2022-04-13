@@ -102,6 +102,7 @@ SELECT
 ,instance_tls_cert
 ,instance_started
 ,instance_updated
+,is_hibernated
 FROM instances
 `
 
@@ -130,6 +131,7 @@ INSERT INTO instances (
 ,instance_tls_cert
 ,instance_started
 ,instance_updated
+,is_hibernated
 ) values (
  :instance_id
 ,:instance_name
@@ -150,6 +152,7 @@ INSERT INTO instances (
 ,:instance_tls_cert
 ,:instance_started
 ,:instance_updated
+,:is_hibernated
 ) RETURNING instance_id
 `
 
@@ -164,5 +167,7 @@ SET
   instance_state    = :instance_state
  ,instance_stage	= :instance_stage
  ,instance_updated  = :instance_updated
+ ,is_hibernated 	= :is_hibernated
+ ,instance_address  = :instance_address
 WHERE instance_id   = :instance_id
 `
