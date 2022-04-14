@@ -28,7 +28,7 @@ type Config struct {
 	}
 
 	Settings struct {
-		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.0.1.15/"`
+		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.0.2/"`
 		BusyMaxAge     int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
 		FreeMaxAge     int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
 		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
