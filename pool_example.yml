@@ -35,3 +35,21 @@ instances:
       machine_type: e2-small
       zone:
         - europe-west1-b
+  - name: osx
+    default: true
+    type: vmfusion   # type of instance.  amazon | gcp | vmfusion | virtualbox | mac
+    pool: 1    # total number of warm instances in the pool at all times
+    limit: 100  # limit the total number of running servers. If exceeded block or error.
+    platform:
+      os: darwin
+      arch: amd64
+      version: darwin20-64
+    spec:
+      account:
+        username: xxxxxxxx
+        password: xxxxxxxx
+      iso: path/to/osx.iso
+      memory: 8192
+      cpu: 4
+      v_disk_path: path/to/v_disk.vmdx  # path to master vmdx image
+      store_path: path/to/vmware_store  # path where vm images are stored on system

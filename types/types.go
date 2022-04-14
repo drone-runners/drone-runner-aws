@@ -17,8 +17,9 @@ func (s ProviderType) Value() (driver.Value, error) {
 }
 
 const (
-	ProviderAmazon = ProviderType("amazon")
-	ProviderGoogle = ProviderType("google")
+	ProviderAmazon   = ProviderType("amazon")
+	ProviderGoogle   = ProviderType("google")
+	ProviderVMFusion = ProviderType("vmFusion")
 )
 
 // InstanceState type enumeration.
