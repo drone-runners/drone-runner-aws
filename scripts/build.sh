@@ -10,6 +10,6 @@ set -e
 set -x
 
 # linux
-GOOS=linux GOARCH=amd64 go build -o release/linux/amd64/drone-runner-aws
+GOOS=linux GOARCH=amd64 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws
 #GOOS=linux GOARCH=arm64 go build -o release/linux/arm64/drone-runner-aws
 #GOOS=linux GOARCH=arm   go build -o release/linux/arm/drone-runner-aws
