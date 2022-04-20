@@ -1,26 +1,12 @@
 package google
 
 import (
-	"net/http"
 	"os"
 
 	"github.com/sirupsen/logrus"
-	"google.golang.org/api/compute/v1"
 )
 
 type Option func(*provider)
-
-// WithClient returns an option to set the default http
-// Client used with the Google Compute provider.
-func WithClient(client *http.Client) Option {
-	return func(p *provider) {
-		service, err := compute.New(client) //nolint:staticcheck
-		if err != nil {
-			panic(err)
-		}
-		p.service = service
-	}
-}
 
 // WithRunnerName returns an option to set the runner name
 func WithRunnerName(name string) Option {
@@ -60,13 +46,6 @@ func WithArch(arch string) Option {
 func WithDiskSize(diskSize int64) Option {
 	return func(p *provider) {
 		p.diskSize = diskSize
-	}
-}
-
-// WithName returns an option to set the instance name.
-func WithName(name string) Option {
-	return func(p *provider) {
-		p.name = name
 	}
 }
 
@@ -176,5 +155,11 @@ func WithScopes(scopes ...string) Option {
 func WithServiceAccountEmail(email string) Option {
 	return func(p *provider) {
 		p.serviceAccountEmail = email
+	}
+}
+
+func WithName(name string) Option {
+	return func(p *provider) {
+		p.name = name
 	}
 }

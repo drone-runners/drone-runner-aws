@@ -145,10 +145,13 @@ func Test_checkPools(t *testing.T) {
 }
 
 func DummyPool(name, runnerName string) drivers.Pool {
-	var pool, err = amazon.New(
+	var pool drivers.Pool
+	pool.Name = name
+	var driver, err = amazon.New(
 		amazon.WithRunnerName(runnerName),
 		amazon.WithName(name), // pool name
 	)
+	pool.Driver = driver
 	if err != nil {
 		return pool
 	}

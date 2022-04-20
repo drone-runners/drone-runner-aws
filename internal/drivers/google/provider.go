@@ -26,8 +26,7 @@ var (
 )
 
 type provider struct {
-	init sync.Once
-
+	init       sync.Once
 	name       string
 	runnerName string
 
@@ -60,7 +59,7 @@ type provider struct {
 	service *compute.Service
 }
 
-func New(opts ...Option) (drivers.Pool, error) {
+func New(opts ...Option) (drivers.Driver, error) {
 	p := new(provider)
 	for _, opt := range opts {
 		opt(p)

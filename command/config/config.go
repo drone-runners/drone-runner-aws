@@ -122,9 +122,9 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch s.Type {
-	case "amazon":
+	case "amazon", "aws":
 		s.Spec = new(Amazon)
-	case "gcp":
+	case "google", "gcp":
 		s.Spec = new(Google)
 	case "vmfusion":
 		s.Spec = new(VMFusion)

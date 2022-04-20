@@ -10,24 +10,23 @@ import (
 var ErrorNoInstanceAvailable = errors.New("no free instances available")
 var ErrHostIsNotRunning = errors.New("host is not running")
 
-type Pool interface {
-	// GetProviderName returns VM provider name. It should be a fixed string for each implementation. The value is used for logging.
-	GetProviderName() string
-
-	GetName() string
-	GetOS() string
-	GetRootDir() string
-
+type Pool struct {
+	Name string
 	// GetMaxSize and GetMinSize should be used for managing pool size: Number of VM instances available in the pool.
-	GetMaxSize() int
-	GetMinSize() int
+	MaxSize int
+	MinSize int
 
-	// CanHibernate returns whether VMs of the pool can be hibernated or not.
-	CanHibernate() bool
+	Driver Driver
+}
 
-	PingProvider(ctx context.Context) error
+type Driver interface {
 	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
 	Hibernate(ctx context.Context, instanceID string) error
 	Start(ctx context.Context, instanceID string) (ipAddress string, err error)
+	Ping(ctx context.Context) error
+
+	ProviderName() string
+	RootDir() string
+	OS() string
 }

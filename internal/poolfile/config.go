@@ -3,13 +3,11 @@ package poolfile
 import (
 	"fmt"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
-
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,7 +21,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				logrus.Errorln("daemon: unable to parse pool file")
 			}
-			pool, err := vmfusion.New(
+			driver, err := vmfusion.New(
 				vmfusion.WithRunnerName(runnerName),
 				vmfusion.WithPool(i.Pool),
 				vmfusion.WithLimit(i.Limit),
@@ -44,13 +42,16 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("daemon: unable to create vmfusion config")
 			}
+			pool := mapPool(&i)
+			pool.Driver = driver
 			pools = append(pools, pool)
 		case "amazon":
 			var a, ok = i.Spec.(*config.Amazon)
 			if !ok {
 				logrus.Errorln("daemon: unable to parse pool file")
 			}
-			var pool, err = amazon.New(
+			var driver, err = amazon.New(
+				amazon.WithName(i.Name), // pool name
 				amazon.WithLimit(i.Limit),
 				amazon.WithPool(i.Pool),
 				amazon.WithArch(i.Platform.Arch),
@@ -60,7 +61,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithZone(a.Account.AvailabilityZone),
 				amazon.WithRunnerName(runnerName),
 				amazon.WithKeyPair(a.Account.KeyPairName),
-				amazon.WithName(i.Name), // pool name
 				amazon.WithDeviceName(a.DeviceName),
 				amazon.WithRootDirectory(a.RootDirectory),
 				amazon.WithAMI(a.AMI),
@@ -82,19 +82,19 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("daemon: unable to create google config")
 			}
+			pool := mapPool(&i)
+			pool.Driver = driver
 			pools = append(pools, pool)
 		case "gcp":
 			var g, ok = i.Spec.(*config.Google)
 			if !ok {
 				logrus.Errorln("daemon: unable to parse pool file")
 			}
-			var pool, err = google.New(
+			var driver, err = google.New(
 				google.WithRunnerName(runnerName),
+				google.WithName(i.Name), // pool name
 				google.WithArch(i.Platform.Arch),
 				google.WithOs(i.Platform.OS),
-				google.WithLimit(i.Limit),
-				google.WithPool(i.Pool),
-				google.WithName(i.Name),
 				google.WithDiskSize(g.Disk.Size),
 				google.WithDiskType(g.Disk.Type),
 				google.WithMachineImage(g.Image),
@@ -114,10 +114,21 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("daemon: unable to create google config")
 			}
+			pool := mapPool(&i)
+			pool.Driver = driver
 			pools = append(pools, pool)
 		default:
 			return nil, fmt.Errorf("unknown instance type %s", i.Type)
 		}
 	}
 	return pools, nil
+}
+
+func mapPool(i *config.Instance) drivers.Pool {
+	var pool = drivers.Pool{
+		Name:    i.Name,
+		MaxSize: i.Limit,
+		MinSize: i.Pool,
+	}
+	return pool
 }

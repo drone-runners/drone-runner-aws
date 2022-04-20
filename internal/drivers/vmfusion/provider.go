@@ -30,7 +30,7 @@ type provider struct {
 	userData string
 }
 
-func New(opts ...Option) (drivers.Pool, error) {
+func New(opts ...Option) (drivers.Driver, error) {
 	p := new(provider)
 	for _, opt := range opts {
 		opt(p)

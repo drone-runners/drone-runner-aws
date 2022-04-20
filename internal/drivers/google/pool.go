@@ -18,36 +18,20 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-func (p *provider) GetName() string {
-	return p.name
-}
-
-func (p *provider) GetOS() string {
-	return p.os
-}
-
-func (p *provider) GetRootDir() string {
+func (p *provider) RootDir() string {
 	return "/"
 }
 
-func (p *provider) GetMaxSize() int {
-	return p.limit
-}
-
-func (p *provider) GetMinSize() int {
-	return p.pool
-}
-
-func (p *provider) GetZone() string {
+func (p *provider) Zone() string {
 	/* #nosec */
 	return p.zones[rand.Intn(len(p.zones))]
 }
 
-func (p *provider) GetProviderName() string {
+func (p *provider) ProviderName() string {
 	return string(types.ProviderGoogle)
 }
 
-func (p *provider) GetInstanceType() string {
+func (p *provider) InstanceType() string {
 	return p.image
 }
 
@@ -55,7 +39,11 @@ func (p *provider) CanHibernate() bool {
 	return false
 }
 
-func (p *provider) PingProvider(ctx context.Context) error {
+func (p *provider) OS() string {
+	return p.os
+}
+
+func (p *provider) Ping(ctx context.Context) error {
 	client := p.service
 	healthCheck := client.Regions.List(p.projectID).Context(ctx)
 	response, err := healthCheck.Do()
@@ -74,12 +62,12 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	})
 
 	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
-	zone := p.GetZone()
+	zone := p.Zone()
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.ProviderGoogle).
 		WithField("name", name).
-		WithField("image", p.GetInstanceType()).
+		WithField("image", p.InstanceType()).
 		WithField("pool", p.name).
 		WithField("zone", zone).
 		WithField("image", p.image).
@@ -199,7 +187,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 		WithField("cloud", types.ProviderGoogle)
 
 	for _, instanceID := range instanceIDs {
-		_, err = client.Instances.Delete(p.projectID, p.GetZone(), instanceID).Context(ctx).Do()
+		_, err = client.Instances.Delete(p.projectID, p.Zone(), instanceID).Context(ctx).Do()
 		if err != nil {
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 			if gerr, ok := err.(*googleapi.Error); ok &&
@@ -207,16 +195,16 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 				logr.WithError(err).Errorln("gcp: VM not found")
 			}
 		}
-		_ = p.waitZoneOperation(ctx, instanceID, p.GetZone())
+		_ = p.waitZoneOperation(ctx, instanceID, p.Zone())
 	}
 	return
 }
 
-func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
+func (p *provider) Hibernate(_ context.Context, _ string) error {
 	return errors.New("Unimplemented")
 }
 
-func (p *provider) Start(ctx context.Context, instanceID string) (string, error) {
+func (p *provider) Start(_ context.Context, _ string) (string, error) {
 	return "", errors.New("Unimplemented")
 }
 
@@ -233,7 +221,7 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 		State:        types.StateCreated,
 		Pool:         p.name,
 		Image:        p.image,
-		Zone:         p.GetZone(),
+		Zone:         p.Zone(),
 		Size:         p.size,
 		Platform:     p.os,
 		Arch:         p.arch,

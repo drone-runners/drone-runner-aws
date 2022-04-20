@@ -50,7 +50,7 @@ type provider struct {
 	service *ec2.EC2
 }
 
-func New(opts ...Option) (drivers.Pool, error) {
+func New(opts ...Option) (drivers.Driver, error) {
 	p := new(provider)
 	for _, opt := range opts {
 		opt(p)

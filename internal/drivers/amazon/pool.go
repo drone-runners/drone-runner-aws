@@ -16,31 +16,31 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-func (p *provider) GetProviderName() string {
+func (p *provider) ProviderName() string {
 	return string(types.ProviderAmazon)
 }
 
-func (p *provider) GetName() string {
+func (p *provider) Name() string {
 	return p.name
 }
 
-func (p *provider) GetInstanceType() string {
+func (p *provider) InstanceType() string {
 	return p.image
 }
 
-func (p *provider) GetOS() string {
+func (p *provider) OS() string {
 	return p.os
 }
 
-func (p *provider) GetRootDir() string {
+func (p *provider) RootDir() string {
 	return p.rootDir
 }
 
-func (p *provider) GetMaxSize() int {
+func (p *provider) MaxSize() int {
 	return p.limit
 }
 
-func (p *provider) GetMinSize() int {
+func (p *provider) MinSize() int {
 	return p.pool
 }
 
@@ -48,8 +48,8 @@ func (p *provider) CanHibernate() bool {
 	return p.hibernate
 }
 
-// PingProvider checks that we can log into EC2, and the regions respond
-func (p *provider) PingProvider(ctx context.Context) error {
+// Ping checks that we can log into EC2, and the regions respond
+func (p *provider) Ping(ctx context.Context) error {
 	client := p.service
 
 	allRegions := true
@@ -67,7 +67,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	logr := logger.FromContext(ctx).
 		WithField("provider", types.ProviderAmazon).
-		WithField("ami", p.GetInstanceType()).
+		WithField("ami", p.InstanceType()).
 		WithField("pool", p.name).
 		WithField("region", p.region).
 		WithField("image", p.image).

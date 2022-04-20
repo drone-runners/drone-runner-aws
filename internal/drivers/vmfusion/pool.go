@@ -27,31 +27,31 @@ var (
 	ErrVMRUNNotFound = errors.New("VMRUN not found")
 )
 
-func (p *provider) GetProviderName() string {
+func (p *provider) ProviderName() string {
 	return p.runnerName
 }
 
-func (p *provider) GetRootDir() string {
+func (p *provider) RootDir() string {
 	return p.rootDir
 }
 
-func (p *provider) GetName() string {
+func (p *provider) Name() string {
 	return p.name
 }
 
-func (p *provider) GetOS() string {
+func (p *provider) OS() string {
 	return p.os
 }
 
-func (p *provider) GetMaxSize() int {
+func (p *provider) MaxSize() int {
 	return p.limit
 }
 
-func (p *provider) GetMinSize() int {
+func (p *provider) MinSize() int {
 	return p.pool
 }
 
-func (p *provider) PingProvider(ctx context.Context) error {
+func (p *provider) Ping(_ context.Context) error {
 	return nil
 }
 

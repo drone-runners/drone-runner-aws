@@ -163,13 +163,6 @@ func WithMarketType(t string) Option {
 	}
 }
 
-// WithName returns an option to set the instance name.
-func WithName(name string) Option {
-	return func(p *provider) {
-		p.name = name
-	}
-}
-
 // WithLimit the total number of running servers. If exceeded block or error.
 func WithLimit(limit int) Option {
 	return func(p *provider) {
@@ -201,5 +194,11 @@ func WithKeyPair(keyPair string) Option {
 func WithHibernate(hibernate bool) Option {
 	return func(p *provider) {
 		p.hibernate = hibernate
+	}
+}
+
+func WithName(name string) Option {
+	return func(p *provider) {
+		p.name = name
 	}
 }
