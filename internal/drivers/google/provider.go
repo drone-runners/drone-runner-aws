@@ -5,8 +5,6 @@ import (
 	"sync"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
-
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
@@ -28,15 +26,9 @@ var (
 type provider struct {
 	init sync.Once
 
-	name       string
-	runnerName string
-
 	projectID string
 	JSONPath  string
 	JSON      []byte
-
-	os   string
-	arch string
 
 	// vm instance data
 	diskSize            int64
@@ -52,37 +44,15 @@ type provider struct {
 	zones               []string
 	userData            string
 	userDataKey         string
-
-	// pool size data
-	pool  int
-	limit int
-
-	service *compute.Service
+	service             *compute.Service
 }
 
-func New(opts ...Option) (drivers.Pool, error) {
+func New(opts ...Option) (drivers.Driver, error) {
 	p := new(provider)
 	for _, opt := range opts {
 		opt(p)
 	}
-	if p.pool < 0 {
-		p.pool = 0
-	}
-	if p.limit <= 0 {
-		p.limit = 100
-	}
 
-	if p.pool > p.limit {
-		p.limit = p.pool
-	}
-
-	// apply defaults to Platform
-	if p.os == "" {
-		p.os = oshelp.OSLinux
-	}
-	if p.arch == "" {
-		p.arch = "amd64"
-	}
 	// apply defaults to instance
 	if p.diskSize == 0 {
 		p.diskSize = 50
@@ -110,11 +80,6 @@ func New(opts ...Option) (drivers.Pool, error) {
 	}
 	if p.serviceAccountEmail == "" {
 		p.serviceAccountEmail = "default"
-	}
-	if p.userDataKey == "" && p.os == oshelp.OSLinux {
-		p.userDataKey = "user-data"
-	} else {
-		p.userDataKey = "windows-startup-script-ps1"
 	}
 	if p.service == nil {
 		if p.JSONPath != "" {

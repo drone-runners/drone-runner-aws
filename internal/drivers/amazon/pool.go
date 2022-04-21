@@ -16,40 +16,24 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-func (p *provider) GetProviderName() string {
+func (p *provider) ProviderName() string {
 	return string(types.ProviderAmazon)
 }
 
-func (p *provider) GetName() string {
-	return p.name
-}
-
-func (p *provider) GetInstanceType() string {
+func (p *provider) InstanceType() string {
 	return p.image
 }
 
-func (p *provider) GetOS() string {
-	return p.os
-}
-
-func (p *provider) GetRootDir() string {
+func (p *provider) RootDir() string {
 	return p.rootDir
-}
-
-func (p *provider) GetMaxSize() int {
-	return p.limit
-}
-
-func (p *provider) GetMinSize() int {
-	return p.pool
 }
 
 func (p *provider) CanHibernate() bool {
 	return p.hibernate
 }
 
-// PingProvider checks that we can log into EC2, and the regions respond
-func (p *provider) PingProvider(ctx context.Context) error {
+// Ping checks that we can log into EC2, and the regions respond
+func (p *provider) Ping(ctx context.Context) error {
 	client := p.service
 
 	allRegions := true
@@ -67,12 +51,12 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	logr := logger.FromContext(ctx).
 		WithField("provider", types.ProviderAmazon).
-		WithField("ami", p.GetInstanceType()).
-		WithField("pool", p.name).
+		WithField("ami", p.InstanceType()).
+		WithField("pool", opts.PoolName).
 		WithField("region", p.region).
 		WithField("image", p.image).
 		WithField("size", p.size)
-	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
+	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", time.Now().Unix())
 
 	var tags = map[string]string{
 		"Name": name,
@@ -98,7 +82,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		IamInstanceProfile: iamProfile,
 		UserData: aws.String(
 			base64.StdEncoding.EncodeToString(
-				[]byte(userdata.Generate(p.userData, p.os, p.arch, opts)),
+				[]byte(userdata.Generate(p.userData, opts)),
 			),
 		),
 		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
@@ -182,13 +166,13 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		Name:         instanceID,
 		Provider:     types.ProviderAmazon,
 		State:        types.StateCreated,
-		Pool:         p.name,
+		Pool:         opts.PoolName,
 		Image:        p.image,
 		Zone:         p.availabilityZone,
 		Region:       p.region,
 		Size:         p.size,
-		Platform:     p.os,
-		Arch:         p.arch,
+		Platform:     opts.OS,
+		Arch:         opts.Arch,
 		Address:      instanceIP,
 		CACert:       opts.CACert,
 		CAKey:        opts.CAKey,
@@ -234,10 +218,10 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
+func (p *provider) Hibernate(ctx context.Context, instanceID, poolName string) error {
 	logr := logger.FromContext(ctx).
 		WithField("provider", types.ProviderAmazon).
-		WithField("pool", p.name).
+		WithField("pool", poolName).
 		WithField("instanceID", instanceID)
 
 	client := p.service
@@ -255,12 +239,12 @@ func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
 	return nil
 }
 
-func (p *provider) Start(ctx context.Context, instanceID string) (string, error) {
+func (p *provider) Start(ctx context.Context, instanceID, poolName string) (string, error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
 		WithField("provider", types.ProviderAmazon).
-		WithField("pool", p.name).
+		WithField("pool", poolName).
 		WithField("instanceID", instanceID)
 
 	amazonInstance, err := p.getInstance(ctx, instanceID)

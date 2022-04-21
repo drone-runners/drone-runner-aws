@@ -18,9 +18,10 @@ func Generate(runnerName string) (*types.InstanceCreateOpts, error) {
 		return nil, fmt.Errorf("failed to generate tls certificate: %w", err)
 	}
 	return &types.InstanceCreateOpts{
-		CACert:  ca.Cert,
-		CAKey:   ca.Key,
-		TLSCert: tlsCert.Cert,
-		TLSKey:  tlsCert.Key,
+		CACert:     ca.Cert,
+		CAKey:      ca.Key,
+		TLSCert:    tlsCert.Cert,
+		TLSKey:     tlsCert.Key,
+		RunnerName: runnerName,
 	}, nil
 }

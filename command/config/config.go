@@ -69,6 +69,7 @@ type (
 		MarketType    string            `json:"market_type,omitempty" yaml:"market_type"`
 		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory"`
 		Hibernate     bool              `json:"hibernate,omitempty"`
+		User          string            `json:"user,omitempty"`
 	}
 
 	VMFusion struct {
@@ -122,9 +123,9 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch s.Type {
-	case "amazon":
+	case "amazon", "aws":
 		s.Spec = new(Amazon)
-	case "gcp":
+	case "google", "gcp":
 		s.Spec = new(Google)
 	case "vmfusion":
 		s.Spec = new(VMFusion)

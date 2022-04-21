@@ -1,72 +1,20 @@
 package google
 
 import (
-	"net/http"
 	"os"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+
 	"github.com/sirupsen/logrus"
-	"google.golang.org/api/compute/v1"
 )
 
 type Option func(*provider)
-
-// WithClient returns an option to set the default http
-// Client used with the Google Compute provider.
-func WithClient(client *http.Client) Option {
-	return func(p *provider) {
-		service, err := compute.New(client) //nolint:staticcheck
-		if err != nil {
-			panic(err)
-		}
-		p.service = service
-	}
-}
-
-// WithRunnerName returns an option to set the runner name
-func WithRunnerName(name string) Option {
-	return func(p *provider) {
-		p.runnerName = name
-	}
-}
-
-// WithLimit the total number of running servers. If exceeded block or error.
-func WithLimit(limit int) Option {
-	return func(p *provider) {
-		p.limit = limit
-	}
-}
-
-// WithPool total number of warm instances in the pool at all times
-func WithPool(pool int) Option {
-	return func(p *provider) {
-		p.pool = pool
-	}
-}
-
-func WithOs(machineOs string) Option {
-	return func(p *provider) {
-		p.os = machineOs
-	}
-}
-
-func WithArch(arch string) Option {
-	return func(p *provider) {
-		p.arch = arch
-	}
-}
 
 // WithDiskSize returns an option to set the instance disk
 // size in gigabytes.
 func WithDiskSize(diskSize int64) Option {
 	return func(p *provider) {
 		p.diskSize = diskSize
-	}
-}
-
-// WithName returns an option to set the instance name.
-func WithName(name string) Option {
-	return func(p *provider) {
-		p.name = name
 	}
 }
 
@@ -150,10 +98,13 @@ func WithUserData(text string) Option {
 
 // WithUserDataKey allows to set the user data key for Google Cloud Platform
 // This allows user to set either user-data or a startup script
-func WithUserDataKey(text string) Option {
+func WithUserDataKey(text, platform string) Option {
 	return func(p *provider) {
-		if text != "" {
-			p.userDataKey = text
+		p.userDataKey = text
+		if p.userDataKey == "" && platform == oshelp.OSLinux {
+			p.userDataKey = "user-data"
+		} else {
+			p.userDataKey = "windows-startup-script-ps1"
 		}
 	}
 }

@@ -27,31 +27,25 @@ var (
 	ErrVMRUNNotFound = errors.New("VMRUN not found")
 )
 
-func (p *provider) GetProviderName() string {
-	return p.runnerName
+type VmxTemplateData struct {
+	ISO         string
+	MachineName string
+	CPU         int64
+	Memory      int64
+	VDiskPath   string
+	StorePath   string
+	Version     string
 }
 
-func (p *provider) GetRootDir() string {
+func (p *provider) RootDir() string {
 	return p.rootDir
 }
 
-func (p *provider) GetName() string {
-	return p.name
+func (p *provider) ProviderName() string {
+	return string(types.ProviderVMFusion)
 }
 
-func (p *provider) GetOS() string {
-	return p.os
-}
-
-func (p *provider) GetMaxSize() int {
-	return p.limit
-}
-
-func (p *provider) GetMinSize() int {
-	return p.pool
-}
-
-func (p *provider) PingProvider(ctx context.Context) error {
+func (p *provider) Ping(_ context.Context) error {
 	return nil
 }
 
@@ -60,14 +54,14 @@ func (p *provider) CanHibernate() bool {
 }
 
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	uData := userdata.Generate(p.userData, p.os, p.arch, opts)
-	machineName := fmt.Sprintf(p.runnerName+"-"+"-%d", time.Now().Unix())
+	uData := userdata.Generate(p.userData, opts)
+	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
 	p.MachineName = machineName
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.ProviderVMFusion).
 		WithField("name", machineName).
-		WithField("pool", p.name)
+		WithField("pool", opts.PoolName)
 
 	if err = os.MkdirAll(p.ResolveStorePath("."), 0755); err != nil { //nolint
 		return nil, err
@@ -78,7 +72,15 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	if err != nil {
 		return nil, err
 	}
-	err = vmxt.Execute(vmxFile, p)
+	err = vmxt.Execute(vmxFile, VmxTemplateData{
+		ISO:         p.ISO,
+		MachineName: p.MachineName,
+		CPU:         p.CPU,
+		Memory:      p.Memory,
+		VDiskPath:   p.VDiskPath,
+		StorePath:   p.StorePath,
+		Version:     opts.Version,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -158,10 +160,10 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		Name:     machineName,
 		Provider: types.ProviderVMFusion,
 		State:    types.StateCreated,
-		Pool:     p.name,
+		Pool:     opts.PoolName,
 		Image:    p.ISO,
-		Platform: p.os,
-		Arch:     p.arch,
+		Platform: opts.OS,
+		Arch:     opts.Arch,
 		Address:  instanceIP,
 		CACert:   opts.CACert,
 		CAKey:    opts.CAKey,
@@ -198,12 +200,12 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Hibernate(ctx context.Context, instanceID string) error {
-	return errors.New("Unimplemented")
+func (p *provider) Hibernate(_ context.Context, _, _ string) error {
+	return errors.New("unimplemented")
 }
 
-func (p *provider) Start(ctx context.Context, instanceID string) (string, error) {
-	return "", errors.New("Unimplemented")
+func (p *provider) Start(_ context.Context, _, _ string) (string, error) {
+	return "", errors.New("unimplemented")
 }
 
 func commandCopyFileToGuest(src, dest, username, password, path string) *exec.Cmd {

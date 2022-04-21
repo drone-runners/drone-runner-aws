@@ -48,15 +48,15 @@ func New(
 	}
 }
 
-// Inspect returns a OS and root directory for a pool.
+// Inspect returns OS and root directory for a pool.
 func (m *Manager) Inspect(name string) (os, rootDir string) {
 	entry := m.poolMap[name]
 	if entry == nil {
 		return
 	}
 
-	os = entry.GetOS()
-	rootDir = entry.GetRootDir()
+	os = entry.OS
+	rootDir = entry.Driver.RootDir()
 
 	return
 }
@@ -77,7 +77,7 @@ func (m *Manager) Find(ctx context.Context, instanceID string) (*types.Instance,
 func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	query := types.QueryParams{Status: types.StateInUse, Stage: stage}
-	list, err := m.instanceStore.List(ctx, pool.GetName(), &query)
+	list, err := m.instanceStore.List(ctx, pool.Name, &query)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
 			Errorln("manager: failed to list instances")
@@ -91,7 +91,7 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 }
 
 func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free []*types.Instance, err error) {
-	list, err := m.instanceStore.List(ctx, pool.GetName(), nil)
+	list, err := m.instanceStore.List(ctx, pool.Name, nil)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
 			Errorln("manager: failed to list instances")
@@ -129,7 +129,7 @@ func (m *Manager) Add(pools ...Pool) error {
 	}
 
 	for _, pool := range pools {
-		name := pool.GetName()
+		name := pool.Name
 		if name == "" {
 			return errors.New("pool must have a name")
 		}
@@ -184,15 +184,15 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 					err := m.forEach(ctx, func(ctx context.Context, pool *poolEntry) error {
 						logr := logger.FromContext(ctx).
-							WithField("provider", pool.GetProviderName()).
-							WithField("pool", pool.GetName())
+							WithField("provider", pool.Driver.ProviderName()).
+							WithField("pool", pool.Name)
 
 						pool.Lock()
 						defer pool.Unlock()
 
 						busy, free, err := m.List(ctx, pool)
 						if err != nil {
-							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.GetName(), err)
+							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 						}
 
 						var ids []string
@@ -215,9 +215,9 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 						logr.Infof("purger: Terminating %d stale instances\n", len(ids))
 
-						err = pool.Destroy(ctx, ids...)
+						err = pool.Driver.Destroy(ctx, ids...)
 						if err != nil {
-							return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.GetName(), err)
+							return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
 						}
 						for _, id := range ids {
 							derr := m.Delete(ctx, id)
@@ -228,7 +228,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 						err = m.buildPool(ctx, pool)
 						if err != nil {
-							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.GetName(), err)
+							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
 						}
 
 						return nil
@@ -270,7 +270,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 	}
 
 	if len(free) == 0 {
-		if canCreate := strategy.CanCreate(pool.GetMinSize(), pool.GetMaxSize(), len(busy), len(free)); !canCreate {
+		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
@@ -313,7 +313,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 	pool.Lock()
 	defer pool.Unlock()
 
-	err := pool.Destroy(ctx, instanceID)
+	err := pool.Driver.Destroy(ctx, instanceID)
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
@@ -354,7 +354,7 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 			}
 		}
 
-		err = pool.Destroy(ctx, instanceIDs...)
+		err = pool.Driver.Destroy(ctx, instanceIDs...)
 		if err != nil {
 			return err
 		}
@@ -371,7 +371,7 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 
 func (m *Manager) PingProvider(ctx context.Context) error {
 	for _, pool := range m.poolMap {
-		err := pool.PingProvider(ctx)
+		err := pool.Driver.Ping(ctx)
 		if err != nil {
 			return err
 		}
@@ -396,11 +396,11 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 	}
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", pool.GetProviderName()).
-		WithField("pool", pool.GetName())
+		WithField("provider", pool.Driver.ProviderName()).
+		WithField("pool", pool.Name)
 
 	shouldCreate, shouldRemove := strategy.CountCreateRemove(
-		pool.GetMinSize(), pool.GetMaxSize(),
+		pool.MinSize, pool.MaxSize,
 		len(instBusy), len(instFree))
 
 	if shouldRemove > 0 {
@@ -409,7 +409,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 			ids[i] = instFree[i].ID
 		}
 
-		err := pool.Destroy(ctx, ids...)
+		err := pool.Driver.Destroy(ctx, ids...)
 		if err != nil {
 			logr.WithError(err).Errorln("build pool: failed to destroy excess instances")
 		}
@@ -433,12 +433,12 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				return
 			}
 			logr.
-				WithField("pool", pool.GetName()).
+				WithField("pool", pool.Name).
 				WithField("id", inst.ID).
 				Infoln("build pool: created new instance")
 
 			go func() {
-				herr := m.hibernate(ctx, pool.GetName(), inst.ID)
+				herr := m.hibernate(ctx, pool.Name, inst.ID)
 				if herr != nil {
 					logr.WithError(herr).Errorln("failed to hibernate the vm")
 				}
@@ -464,8 +464,14 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	var inst *types.Instance
 
 	// generate certs
-	certOptions, err := certs.Generate(m.runnerName)
-	certOptions.LiteEnginePath = m.liteEnginePath
+	createOptions, err := certs.Generate(m.runnerName)
+	createOptions.LiteEnginePath = m.liteEnginePath
+	createOptions.OS = pool.OS
+	createOptions.Arch = pool.Arch
+	createOptions.Version = pool.Version
+	createOptions.PoolName = pool.Name
+	createOptions.Limit = pool.MaxSize
+	createOptions.Pool = pool.MinSize
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
@@ -473,7 +479,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	}
 
 	// create instance
-	inst, err = pool.Create(ctx, certOptions)
+	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to create instance")
@@ -488,7 +494,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed store instance")
-		_ = pool.Destroy(ctx, inst.ID)
+		_ = pool.Driver.Destroy(ctx, inst.ID)
 	}
 	return inst, nil
 }
@@ -508,7 +514,7 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 		return inst, nil
 	}
 
-	ipAddress, err := pool.Start(ctx, instanceID)
+	ipAddress, err := pool.Driver.Start(ctx, instanceID, poolName)
 	if err != nil {
 		return nil, fmt.Errorf("start_instance: failed to start the instance %s of %q pool: %w", instanceID, poolName, err)
 	}
@@ -530,7 +536,7 @@ func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) er
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if !pool.CanHibernate() {
+	if pool.Driver.ProviderName() != string(types.ProviderAmazon) {
 		return nil
 	}
 
@@ -549,7 +555,7 @@ func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) er
 		return nil
 	}
 
-	err = pool.Hibernate(ctx, instanceID)
+	err = pool.Driver.Hibernate(ctx, instanceID, poolName)
 	if err != nil {
 		return fmt.Errorf("hibernate: failed to hibernated an instance %s of %q pool: %w", instanceID, poolName, err)
 	}

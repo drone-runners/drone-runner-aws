@@ -1,20 +1,15 @@
 package amazon
 
 import (
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 )
 
 // provider is a struct that implements drivers.Pool interface
 type provider struct {
-	name       string
-	runnerName string
-
 	spotInstance     bool
 	region           string
 	availabilityZone string
@@ -24,8 +19,6 @@ type provider struct {
 	secretAccessKey string
 	keyPairName     string
 
-	os      string
-	arch    string
 	rootDir string
 
 	image         string
@@ -43,14 +36,10 @@ type provider struct {
 	iamProfileArn string
 	hibernate     bool
 
-	// pool size data
-	pool  int
-	limit int
-
 	service *ec2.EC2
 }
 
-func New(opts ...Option) (drivers.Pool, error) {
+func New(opts ...Option) (drivers.Driver, error) {
 	p := new(provider)
 	for _, opt := range opts {
 		opt(p)
@@ -58,33 +47,10 @@ func New(opts ...Option) (drivers.Pool, error) {
 	if p.retries == 0 {
 		p.retries = 10
 	}
-	if p.pool < 0 {
-		p.pool = 0
-	}
-	if p.limit <= 0 {
-		p.limit = 100
-	}
-	if p.pool > p.limit {
-		p.limit = p.pool
-	}
 	if p.region == "" {
 		p.region = "us-east-1"
 		if p.availabilityZone == "" {
 			p.availabilityZone = "us-east-1a"
-		}
-	}
-	if p.os == "" {
-		p.os = oshelp.OSLinux
-	}
-	if p.arch == "" {
-		p.arch = "amd64"
-	}
-	// set default instance type if not provided
-	if p.size == "" {
-		if p.arch == "arm64" {
-			p.size = "a1.medium"
-		} else {
-			p.size = "t3.nano"
 		}
 	}
 	// set the default disk size if not provided
@@ -102,14 +68,6 @@ func New(opts ...Option) (drivers.Pool, error) {
 	// set the default device
 	if p.deviceName == "" {
 		p.deviceName = "/dev/sda1"
-	}
-	// set the default ssh user. this user account is responsible for executing the pipeline script.
-	if p.user == "" {
-		if p.os == oshelp.OSWindows {
-			p.user = "Administrator"
-		} else {
-			p.user = "root"
-		}
 	}
 	// setup service if not provided
 	if p.service == nil {
