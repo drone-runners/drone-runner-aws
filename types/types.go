@@ -19,7 +19,7 @@ func (s ProviderType) Value() (driver.Value, error) {
 const (
 	ProviderAmazon   = ProviderType("amazon")
 	ProviderGoogle   = ProviderType("google")
-	ProviderVMFusion = ProviderType("vmFusion")
+	ProviderVMFusion = ProviderType("vmwareFusion")
 )
 
 // InstanceState type enumeration.
@@ -57,6 +57,13 @@ type InstanceCreateOpts struct {
 	TLSKey         []byte
 	TLSCert        []byte
 	LiteEnginePath string
+	OS             string
+	Arch           string
+	Version        string
+	PoolName       string
+	RunnerName     string
+	Limit          int
+	Pool           int
 }
 
 // Platform defines the target platform.

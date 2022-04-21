@@ -3,29 +3,12 @@ package amazon
 import (
 	"os"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+
 	"github.com/sirupsen/logrus"
 )
 
 type Option func(*provider)
-
-// WithRunnerName returns an option to set the runner name
-func WithRunnerName(name string) Option {
-	return func(p *provider) {
-		p.runnerName = name
-	}
-}
-
-func WithOs(machineOs string) Option {
-	return func(p *provider) {
-		p.os = machineOs
-	}
-}
-
-func WithArch(arch string) Option {
-	return func(p *provider) {
-		p.arch = arch
-	}
-}
 
 func WithAccessKeyID(accessKeyID string) Option {
 	return func(p *provider) {
@@ -90,9 +73,17 @@ func WithSecurityGroup(group ...string) Option {
 }
 
 // WithSize returns an option to set the instance size.
-func WithSize(size string) Option {
+func WithSize(size, arch string) Option {
 	return func(p *provider) {
 		p.size = size
+		// set default instance type if not provided
+		if p.size == "" {
+			if arch == "arm64" {
+				p.size = "a1.medium"
+			} else {
+				p.size = "t3.nano"
+			}
+		}
 	}
 }
 
@@ -163,20 +154,6 @@ func WithMarketType(t string) Option {
 	}
 }
 
-// WithLimit the total number of running servers. If exceeded block or error.
-func WithLimit(limit int) Option {
-	return func(p *provider) {
-		p.limit = limit
-	}
-}
-
-// WithPool total number of warm instances in the pool at all times
-func WithPool(pool int) Option {
-	return func(p *provider) {
-		p.pool = pool
-	}
-}
-
 // WithZone returns an option to set the zone.
 func WithZone(zone string) Option {
 	return func(p *provider) {
@@ -197,8 +174,16 @@ func WithHibernate(hibernate bool) Option {
 	}
 }
 
-func WithName(name string) Option {
+func WithUser(user, platform string) Option {
 	return func(p *provider) {
-		p.name = name
+		p.user = user
+		// set the default ssh user. this user account is responsible for executing the pipeline script.
+		if p.user == "" {
+			if platform == oshelp.OSWindows {
+				p.user = "Administrator"
+			} else {
+				p.user = "root"
+			}
+		}
 	}
 }

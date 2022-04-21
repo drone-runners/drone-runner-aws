@@ -55,7 +55,7 @@ func (m *Manager) Inspect(name string) (os, rootDir string) {
 		return
 	}
 
-	os = entry.Driver.OS()
+	os = entry.OS
 	rootDir = entry.Driver.RootDir()
 
 	return
@@ -159,7 +159,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 	}
 
 	if m.cleanupTimer != nil {
-		panic("cleanup timer already started")
+		panic("purger already started")
 	}
 
 	d := time.Duration(maxAgeBusy.Minutes() * 0.9 * float64(time.Minute))
@@ -464,8 +464,14 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	var inst *types.Instance
 
 	// generate certs
-	certOptions, err := certs.Generate(m.runnerName)
-	certOptions.LiteEnginePath = m.liteEnginePath
+	createOptions, err := certs.Generate(m.runnerName)
+	createOptions.LiteEnginePath = m.liteEnginePath
+	createOptions.OS = pool.OS
+	createOptions.Arch = pool.Arch
+	createOptions.Version = pool.Version
+	createOptions.PoolName = pool.Name
+	createOptions.Limit = pool.MaxSize
+	createOptions.Pool = pool.MinSize
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
@@ -473,7 +479,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	}
 
 	// create instance
-	inst, err = pool.Driver.Create(ctx, certOptions)
+	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to create instance")
@@ -508,7 +514,7 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 		return inst, nil
 	}
 
-	ipAddress, err := pool.Driver.Start(ctx, instanceID)
+	ipAddress, err := pool.Driver.Start(ctx, instanceID, poolName)
 	if err != nil {
 		return nil, fmt.Errorf("start_instance: failed to start the instance %s of %q pool: %w", instanceID, poolName, err)
 	}
@@ -549,7 +555,7 @@ func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) er
 		return nil
 	}
 
-	err = pool.Driver.Hibernate(ctx, instanceID)
+	err = pool.Driver.Hibernate(ctx, instanceID, poolName)
 	if err != nil {
 		return fmt.Errorf("hibernate: failed to hibernated an instance %s of %q pool: %w", instanceID, poolName, err)
 	}

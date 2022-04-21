@@ -69,6 +69,7 @@ type (
 		MarketType    string            `json:"market_type,omitempty" yaml:"market_type"`
 		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory"`
 		Hibernate     bool              `json:"hibernate,omitempty"`
+		User          string            `json:"user,omitempty"`
 	}
 
 	VMFusion struct {

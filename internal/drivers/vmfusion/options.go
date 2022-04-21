@@ -8,46 +8,6 @@ import (
 
 type Option func(*provider)
 
-// WithRunnerName returns an option to set the runner name
-func WithRunnerName(name string) Option {
-	return func(p *provider) {
-		p.runnerName = name
-	}
-}
-
-// WithLimit the total number of running servers. If exceeded block or error.
-func WithLimit(limit int) Option {
-	return func(p *provider) {
-		p.limit = limit
-	}
-}
-
-// WithPool total number of warm instances in the pool at all times
-func WithPool(pool int) Option {
-	return func(p *provider) {
-		p.pool = pool
-	}
-}
-
-func WithOs(machineOs string) Option {
-	return func(p *provider) {
-		p.os = machineOs
-	}
-}
-
-func WithArch(arch string) Option {
-	return func(p *provider) {
-		p.arch = arch
-	}
-}
-
-// WithName sets pool name
-func WithName(name string) Option {
-	return func(p *provider) {
-		p.name = name
-	}
-}
-
 func WithUsername(username string) Option {
 	return func(p *provider) {
 		p.username = username
@@ -81,12 +41,6 @@ func WithMemory(memory int64) Option {
 func WithVDiskPath(vDiskPath string) Option {
 	return func(p *provider) {
 		p.VDiskPath = vDiskPath
-	}
-}
-
-func WithVersion(version string) Option {
-	return func(p *provider) {
-		p.Version = version
 	}
 }
 

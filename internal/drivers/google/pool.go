@@ -39,10 +39,6 @@ func (p *provider) CanHibernate() bool {
 	return false
 }
 
-func (p *provider) OS() string {
-	return p.os
-}
-
 func (p *provider) Ping(ctx context.Context) error {
 	client := p.service
 	healthCheck := client.Regions.List(p.projectID).Context(ctx)
@@ -61,14 +57,14 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		_ = p.setup(ctx)
 	})
 
-	var name = fmt.Sprintf(p.runnerName+"-"+p.name+"-%d", time.Now().Unix())
+	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", time.Now().Unix())
 	zone := p.Zone()
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.ProviderGoogle).
 		WithField("name", name).
 		WithField("image", p.InstanceType()).
-		WithField("pool", p.name).
+		WithField("pool", opts.PoolName).
 		WithField("zone", zone).
 		WithField("image", p.image).
 		WithField("size", p.size)
@@ -98,7 +94,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 			Items: []*compute.MetadataItems{
 				{
 					Key:   p.userDataKey,
-					Value: googleapi.String(userdata.Generate(p.userData, p.os, p.arch, opts)),
+					Value: googleapi.String(userdata.Generate(p.userData, opts)),
 				},
 			},
 		},
@@ -108,7 +104,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 				Boot:       true,
 				Mode:       "READ_WRITE",
 				AutoDelete: true,
-				DeviceName: p.name,
+				DeviceName: opts.PoolName,
 				InitializeParams: &compute.AttachedDiskInitializeParams{
 					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", p.image),
 					DiskType:    fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, p.diskType),
@@ -200,12 +196,12 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Hibernate(_ context.Context, _ string) error {
-	return errors.New("Unimplemented")
+func (p *provider) Hibernate(_ context.Context, _, _ string) error {
+	return errors.New("unimplemented")
 }
 
-func (p *provider) Start(_ context.Context, _ string) (string, error) {
-	return "", errors.New("Unimplemented")
+func (p *provider) Start(_ context.Context, _, _ string) (string, error) {
+	return "", errors.New("unimplemented")
 }
 
 func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
@@ -219,12 +215,12 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 		Name:         vm.Name,
 		Provider:     types.ProviderGoogle,
 		State:        types.StateCreated,
-		Pool:         p.name,
+		Pool:         opts.PoolName,
 		Image:        p.image,
 		Zone:         p.Zone(),
 		Size:         p.size,
-		Platform:     p.os,
-		Arch:         p.arch,
+		Platform:     opts.OS,
+		Arch:         opts.Arch,
 		Address:      instanceIP,
 		CACert:       opts.CACert,
 		CAKey:        opts.CAKey,
