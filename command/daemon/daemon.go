@@ -202,8 +202,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		Client:   cli,
 		Dispatch: runner.Run,
 		Filter: &client.Filter{
-			Kind: resource.Kind,
-			Type: resource.Type,
+			Kind:   resource.Kind,
+			Type:   resource.Type,
+			Labels: env.Runner.Labels,
 		},
 	}
 
