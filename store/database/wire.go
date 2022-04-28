@@ -36,3 +36,15 @@ func ProvideInstanceStore(db *sqlx.DB) store.InstanceStore {
 		)
 	}
 }
+
+// ProvideInstanceStore provides an instance store.
+func ProvideStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
+	switch db.DriverName() {
+	case "postgres":
+		return NewStageOwnerStore(db)
+	default:
+		return NewStageOwnerStoreSync(
+			NewStageOwnerStore(db),
+		)
+	}
+}
