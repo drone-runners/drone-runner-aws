@@ -13,12 +13,11 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
 	leapi "github.com/harness/lite-engine/api"
-	lehttp "github.com/harness/lite-engine/cli/client"
 )
 
 var (
@@ -120,7 +119,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 
-	client, err := eng.getLEClient(instance)
+	client, err := lehelper.GetClient(instance, eng.runnerName)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		go cleanUpFn()
@@ -215,7 +214,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		logr.WithError(err).Errorln("cannot find instance")
 		return nil, err
 	}
-	client, err := eng.getLEClient(instance)
+	client, err := lehelper.GetClient(instance, eng.runnerName)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return nil, err
@@ -332,12 +331,4 @@ type counterWriter int
 func (q *counterWriter) Write(data []byte) (int, error) {
 	*q += counterWriter(len(data))
 	return len(data), nil
-}
-
-func (eng *Engine) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
-
-	return lehttp.NewHTTPClient(leURL,
-		eng.runnerName, string(instance.CACert),
-		string(instance.TLSCert), string(instance.TLSKey))
 }

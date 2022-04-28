@@ -147,6 +147,13 @@ func WithIamProfileArn(t string) Option {
 	}
 }
 
+// WithVpc returns an option to set the vpc.
+func WithVpc(t string) Option {
+	return func(p *provider) {
+		p.vpc = t
+	}
+}
+
 // WithMarketType returns an option to set the instance market type.
 func WithMarketType(t string) Option {
 	return func(p *provider) {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -32,6 +32,10 @@ func (p *provider) CanHibernate() bool {
 	return p.hibernate
 }
 
+const (
+	defaultSecurityGroupName = "harness-runner"
+)
+
 // Ping checks that we can log into EC2, and the regions respond
 func (p *provider) Ping(ctx context.Context) error {
 	client := p.service
@@ -45,10 +49,76 @@ func (p *provider) Ping(ctx context.Context) error {
 	return err
 }
 
+func lookupCreateSecurityGroupID(ctx context.Context, client *ec2.EC2, vpc string) (string, error) {
+	input := &ec2.DescribeSecurityGroupsInput{
+		GroupNames: []*string{aws.String(defaultSecurityGroupName)},
+	}
+	securityGroupResponse, lookupErr := client.DescribeSecurityGroupsWithContext(ctx, input)
+	if lookupErr != nil || len(securityGroupResponse.SecurityGroups) == 0 {
+		// create the security group
+		inputGroup := &ec2.CreateSecurityGroupInput{
+			GroupName:   aws.String(defaultSecurityGroupName),
+			Description: aws.String("Harnress Runner Security Group"),
+		}
+		// if we have a vpc, we need to use it
+		if vpc != "" {
+			inputGroup.VpcId = aws.String(vpc)
+		}
+		createdGroup, createGroupErr := client.CreateSecurityGroupWithContext(ctx, inputGroup)
+		if createGroupErr != nil {
+			return "", fmt.Errorf("failed to create security group: %s. %s", defaultSecurityGroupName, createGroupErr)
+		}
+		ingress := &ec2.AuthorizeSecurityGroupIngressInput{
+			GroupId: aws.String(*createdGroup.GroupId),
+			IpPermissions: []*ec2.IpPermission{
+				{
+					IpProtocol: aws.String("tcp"),
+					FromPort:   aws.Int64(lehelper.LiteEnginePort),
+					ToPort:     aws.Int64(lehelper.LiteEnginePort),
+					IpRanges: []*ec2.IpRange{
+						{
+							CidrIp: aws.String("0.0.0.0/0"),
+						},
+					},
+				},
+			},
+		}
+		_, ingressErr := client.AuthorizeSecurityGroupIngressWithContext(ctx, ingress)
+		if ingressErr != nil {
+			return "", fmt.Errorf("failed to create ingress rules for security group: %s. %s", defaultSecurityGroupName, ingressErr)
+		}
+		return *createdGroup.GroupId, nil
+	}
+	return *securityGroupResponse.SecurityGroups[0].GroupId, nil
+}
+
+// lookup Security Group ID and check it has the correct ingress rules
+func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) error {
+	input := &ec2.DescribeSecurityGroupsInput{
+		GroupIds: []*string{aws.String(groupID)},
+	}
+	securityGroupResponse, lookupErr := client.DescribeSecurityGroupsWithContext(ctx, input)
+	if lookupErr != nil || len(securityGroupResponse.SecurityGroups) == 0 {
+		return fmt.Errorf("failed to lookup security group: %s. %s", groupID, lookupErr)
+	}
+	securityGroup := securityGroupResponse.SecurityGroups[0]
+	found := false
+	for _, permission := range securityGroup.IpPermissions {
+		if *permission.IpProtocol == "tcp" && *permission.FromPort == lehelper.LiteEnginePort && *permission.ToPort == lehelper.LiteEnginePort {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("security group %s does not have the correct ingress rules There is no rule for port %d", *securityGroup.GroupName, lehelper.LiteEnginePort)
+	}
+	return nil
+}
+
 // Create an AWS instance for the pool, it will not perform build specific setup.
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
-
+	startTime := time.Now()
 	logr := logger.FromContext(ctx).
 		WithField("provider", types.ProviderAmazon).
 		WithField("ami", p.InstanceType()).
@@ -57,13 +127,30 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("image", p.image).
 		WithField("size", p.size).
 		WithField("hibernate", p.CanHibernate())
-	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", time.Now().Unix())
-
+	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", startTime.Unix())
 	var tags = map[string]string{
 		"Name": name,
 	}
-	// create the instance
-	startTime := time.Now()
+	if p.vpc == "" {
+		logr.Traceln("amazon: using default vpc, checking security groups")
+	} else {
+		logr.Tracef("amazon: using vpc %s, checking security groups", p.vpc)
+	}
+	// check security group exists
+	if p.groups == nil || len(p.groups) == 0 {
+		logr.Warnf("aws: no security group specified assuming '%s'", defaultSecurityGroupName)
+		// lookup/create group
+		returnedGroupID, lookupErr := lookupCreateSecurityGroupID(ctx, client, p.vpc)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		p.groups = append(p.groups, returnedGroupID)
+	}
+	// check the security group ingress rules
+	rulesErr := checkIngressRules(ctx, client, p.groups[0])
+	if rulesErr != nil {
+		return nil, rulesErr
+	}
 
 	logr.Traceln("amazon: provisioning VM")
 
@@ -83,7 +170,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		IamInstanceProfile: iamProfile,
 		UserData: aws.String(
 			base64.StdEncoding.EncodeToString(
-				[]byte(userdata.Generate(p.userData, opts)),
+				[]byte(lehelper.GenerateUserdata(p.userData, opts)),
 			),
 		),
 		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
@@ -150,8 +237,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	logr.Debugln("amazon: [provision] created instance")
 
-	// poll the amazon endpoint for server updates
-	// and exit when a network address is allocated.
+	// poll the amazon endpoint for server updates and exit when a network address is allocated.
 	var amazonInstance *ec2.Instance
 	amazonInstance, err = p.pollInstanceIPAddr(ctx, *awsInstanceID, logr)
 	if err != nil {
@@ -217,6 +303,22 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr.Traceln("amazon: VM terminated")
 	return
+}
+
+func (p *provider) Logs(ctx context.Context, instanceID string) (string, error) {
+	client := p.service
+
+	output, err := client.GetConsoleOutputWithContext(ctx, &ec2.GetConsoleOutputInput{
+		InstanceId: aws.String(instanceID),
+	})
+	if err != nil {
+		return "", fmt.Errorf("amazon: failed to get console output: %s", err)
+	}
+	if output.Output == nil {
+		return "'console output is empty'", nil
+	}
+	decoded, _ := base64.StdEncoding.DecodeString(*output.Output)
+	return string(decoded), nil
 }
 
 func (p *provider) Hibernate(ctx context.Context, instanceID, poolName string) error {

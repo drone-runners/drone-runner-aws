@@ -532,6 +532,15 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 	return inst, nil
 }
 
+func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string) (string, error) {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return "", fmt.Errorf("instance_logs: pool name %q not found", poolName)
+	}
+
+	return pool.Driver.Logs(ctx, instanceID)
+}
+
 func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {

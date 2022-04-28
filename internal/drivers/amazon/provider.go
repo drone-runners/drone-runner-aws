@@ -27,6 +27,7 @@ type provider struct {
 	user          string
 	userData      string
 	subnet        string
+	vpc           string
 	groups        []string
 	allocPublicIP bool
 	volumeType    string

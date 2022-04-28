@@ -21,15 +21,14 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
 	leapi "github.com/harness/lite-engine/api"
-	lehttp "github.com/harness/lite-engine/cli/client"
 	lespec "github.com/harness/lite-engine/engine/spec"
 	lelivelog "github.com/harness/lite-engine/livelog"
 	lestream "github.com/harness/lite-engine/logstream/remote"
@@ -383,7 +382,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := c.getLEClient(instance)
+	client, err := lehelper.GetClient(instance, c.runnerName)
 	if err != nil {
 		httprender.InternalError(w, "failed to create LE client", err, logr)
 		go cleanUpFn()
@@ -477,7 +476,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	logr = logr.
 		WithField("ip", inst.Address)
 
-	client, err := c.getLEClient(inst)
+	client, err := lehelper.GetClient(inst, c.runnerName)
 	if err != nil {
 		httprender.InternalError(w, "failed to create client", err, logr)
 		return
@@ -565,14 +564,6 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	}
 	logr.Traceln("destroyed instance")
 	w.WriteHeader(http.StatusOK)
-}
-
-func (c *delegateCommand) getLEClient(instance *types.Instance) (*lehttp.HTTPClient, error) {
-	leURL := fmt.Sprintf("https://%s:9079/", instance.Address)
-
-	return lehttp.NewHTTPClient(leURL,
-		c.runnerName, string(instance.CACert),
-		string(instance.TLSCert), string(instance.TLSKey))
 }
 
 func getJSONDataFromReader(r io.Reader, data interface{}) error {

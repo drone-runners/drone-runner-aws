@@ -3,13 +3,12 @@ package poolfile
 import (
 	"fmt"
 
-	"github.com/drone-runners/drone-runner-aws/oshelp"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
+	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/sirupsen/logrus"
 )
 
@@ -54,6 +53,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithDeviceName(a.DeviceName),
 				amazon.WithRootDirectory(a.RootDirectory),
 				amazon.WithAMI(a.AMI),
+				amazon.WithVpc(a.VPC),
 				amazon.WithUser(a.User, i.Platform.OS),
 				amazon.WithRegion(a.Account.Region),
 				amazon.WithRetries(a.Account.Retries),
@@ -141,4 +141,33 @@ func mapPool(i *config.Instance, runnerName string) drivers.Pool {
 		Version:    i.Platform.Version,
 	}
 	return pool
+}
+
+func CreateAmazonPool(accessKeyID, accessKeySecret string) config.PoolFile {
+	instance := config.Instance{
+		Name:    "test_pool",
+		Default: true,
+		Type:    "amazon",
+		Pool:    1,
+		Limit:   2,
+		Platform: config.Platform{
+			Arch: "amd64",
+			OS:   "linux",
+		},
+		Spec: &config.Amazon{
+			Account: config.AmazonAccount{
+				Region:          "us-east-2",
+				AccessKeyID:     accessKeyID,
+				AccessKeySecret: accessKeySecret,
+			},
+			AMI:  "ami-051197ce9cbb023ea",
+			Size: "t2.micro",
+		},
+	}
+	poolfile := config.PoolFile{
+		Version:   "1",
+		Instances: []config.Instance{instance},
+	}
+
+	return poolfile
 }
