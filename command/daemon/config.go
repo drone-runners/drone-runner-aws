@@ -99,7 +99,7 @@ var legacy = map[string]string{
 	// "DRONE_VARIABLE_OLD": "DRONE_VARIABLE_NEW"
 }
 
-func fromEnviron() (Config, error) {
+func FromEnviron() (Config, error) {
 	// loop through legacy environment variable and, if set
 	// rewrite to the new variable name.
 	for k, v := range legacy {

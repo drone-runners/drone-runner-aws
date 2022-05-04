@@ -5,16 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
-	"github.com/drone/runner-go/logger"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone/runner-go/logger"
+
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -46,7 +47,7 @@ func (p *provider) CanHibernate() bool {
 }
 
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	uData := userdata.Generate(p.userData, opts)
+	uData := lehelper.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
 
 	logr := logger.FromContext(ctx).
@@ -55,8 +56,8 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("pool", opts.PoolName)
 
 	var result []byte
-	cmdCloneVM := commandCloneVM(p.vmId, machineName)
-	result, err = cmdCloneVM.CombinedOutput()
+	cmdCloneVM := commandCloneVM(p.vmID, machineName)
+	_, err = cmdCloneVM.CombinedOutput()
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		return nil, err
 	}
 
-	cmdCopy := commandCP(createdVM.Body.UUID, f.Name(), f.Name())
+	cmdCopy := commandCP(f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.IP, f.Name()))
 	_, err = cmdCopy.CombinedOutput()
 	if err != nil {
 		return nil, err
@@ -117,7 +118,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	logr.Info("Running script in VM")
 
-	cmdRunScript := commandRunScript(createdVM.Body.UUID, fmt.Sprintf(f.Name()))
+	cmdRunScript := commandRunScript(f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.UUID, f.Name()))
 	_, err = cmdRunScript.CombinedOutput()
 	if err != nil {
 		return nil, err
@@ -177,56 +178,60 @@ func (p *provider) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
-func commandCloneVM(vmId, newVMName string) *exec.Cmd {
+func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
+	return "", errors.New("Unimplemented")
+}
+
+func commandCloneVM(vmID, newVMName string) *exec.Cmd {
 	return exec.Command(
 		ankabin, "clone",
-		vmId,
+		vmID,
 		newVMName,
 	)
 }
 
-func commandAnka(vmId, command string) *exec.Cmd {
+func commandAnka(vmID, command string) *exec.Cmd {
 	return exec.Command(
 		ankabin,
 		"--machine-readable",
 		command,
-		vmId,
+		vmID,
 	)
 }
 
-func commandIP(vmId, command string) *exec.Cmd {
+func commandIP(vmID, command string) *exec.Cmd {
 	return exec.Command(
 		ankabin,
 		command,
-		vmId,
+		vmID,
 		"ip",
 	)
 }
 
-func commandCP(vmId, src, dest string) *exec.Cmd {
+func commandCP(src, dest string) *exec.Cmd {
 	return exec.Command(
 		ankabin,
 		"cp",
 		src,
-		fmt.Sprintf("%s:%s", vmId, dest),
+		dest,
 	)
 }
 
-func commandRunScript(vmId, command string) *exec.Cmd {
+func commandRunScript(vmID, command string) *exec.Cmd {
 	return exec.Command(
 		ankabin,
 		"run",
-		vmId,
+		vmID,
 		"bash",
 		command,
 	)
 }
 
-func commandDeleteVM(vmId string) *exec.Cmd {
+func commandDeleteVM(vmID string) *exec.Cmd {
 	return exec.Command(
 		ankabin,
 		"delete",
 		"--yes",
-		vmId,
+		vmID,
 	)
 }

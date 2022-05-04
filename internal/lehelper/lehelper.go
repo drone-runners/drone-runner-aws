@@ -1,12 +1,19 @@
-package userdata
+package lehelper
 
 import (
+	"fmt"
+
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
+	lehttp "github.com/harness/lite-engine/cli/client"
 )
 
-func Generate(userdata string, opts *types.InstanceCreateOpts) string {
+var (
+	LiteEnginePort = int64(9079) //nolint:gomnd
+)
+
+func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	var params = cloudinit.Params{
 		Architecture:   opts.Arch,
 		Platform:       opts.OS,
@@ -28,4 +35,12 @@ func Generate(userdata string, opts *types.InstanceCreateOpts) string {
 		userdata, _ = cloudinit.Custom(userdata, &params)
 	}
 	return userdata
+}
+
+func GetClient(instance *types.Instance, runnerName string) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:%d/", instance.Address, LiteEnginePort)
+
+	return lehttp.NewHTTPClient(leURL,
+		runnerName, string(instance.CACert),
+		string(instance.TLSCert), string(instance.TLSKey))
 }

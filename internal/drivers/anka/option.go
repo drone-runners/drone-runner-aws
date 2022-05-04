@@ -1,8 +1,9 @@
 package anka
 
 import (
-	"github.com/sirupsen/logrus"
 	"os"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Option func(*provider)
@@ -19,9 +20,9 @@ func WithPassword(password string) Option {
 	}
 }
 
-func WithVmID(vmID string) Option {
+func WithVMID(vmID string) Option {
 	return func(p *provider) {
-		p.vmId = vmID
+		p.vmID = vmID
 	}
 }
 

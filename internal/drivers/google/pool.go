@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -37,6 +37,10 @@ func (p *provider) InstanceType() string {
 
 func (p *provider) CanHibernate() bool {
 	return false
+}
+
+func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
+	return "", errors.New("Unimplemented")
 }
 
 func (p *provider) Ping(ctx context.Context) error {
@@ -94,7 +98,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 			Items: []*compute.MetadataItems{
 				{
 					Key:   p.userDataKey,
-					Value: googleapi.String(userdata.Generate(p.userData, opts)),
+					Value: googleapi.String(lehelper.GenerateUserdata(p.userData, opts)),
 				},
 			},
 		},
@@ -275,7 +279,7 @@ func (p *provider) setupFirewall(ctx context.Context) error {
 		Allowed: []*compute.FirewallAllowed{
 			{
 				IPProtocol: "tcp",
-				Ports:      []string{"2376", "9079"},
+				Ports:      []string{"2376", fmt.Sprint(lehelper.LiteEnginePort)},
 			},
 		},
 		Direction:    "INGRESS",

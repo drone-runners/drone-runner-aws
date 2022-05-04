@@ -14,6 +14,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/encoder"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -171,7 +172,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			RunPolicy: runtime.RunAlways,
 		})
 	}
-
 	// match object is used to determine is a step should be executed or not
 	match := manifest.Match{
 		Action:   args.Build.Action,
@@ -183,7 +183,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		Event:    args.Build.Event,
 		Branch:   args.Build.Target,
 	}
-
 	// create steps
 	containerSourcePath := getContainerSourcePath(pipelineOS)
 	haveImageSteps := false // should be true if there is at least one step that uses an image
@@ -250,7 +249,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		} else {
 			workingDir = sourceDir
 		}
-
 		// appends the devices to the container def.
 		var devices []*lespec.VolumeDevice
 		for _, vol := range src.Devices {
@@ -259,7 +257,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				DevicePath: vol.DevicePath,
 			})
 		}
-
 		// appends the settings variables to the container definition.
 		for key, value := range src.Settings {
 			if value == nil {
@@ -339,14 +336,13 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			RunPolicy: runPolicy,
 		})
 	}
-
+	var creds = []*drone.Registry{}
 	// get registry credentials from registry plugins
-	creds, err := c.Registry.List(ctx, &registry.Request{
-		Repo:  args.Repo,
-		Build: args.Build,
-	})
-	if err != nil { //nolint:staticcheck
-		// TODO (bradrydzewski) return an error to the caller if the provider returns an error.
+	if c.Registry != nil {
+		creds, _ = c.Registry.List(ctx, &registry.Request{
+			Repo:  args.Repo,
+			Build: args.Build,
+		})
 	}
 	// get registry credentials from pull secrets
 	for _, name := range pipeline.PullSecrets {
@@ -357,6 +353,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			}
 		}
 	}
+
 	for _, step := range spec.Steps {
 		if step.Image == "" {
 			continue
