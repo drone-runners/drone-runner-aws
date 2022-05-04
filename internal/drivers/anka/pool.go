@@ -110,7 +110,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		return nil, err
 	}
 
-	cmdCopy := commandCP(f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.IP, f.Name()))
+	cmdCopy := commandCP(f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.UUID, f.Name()))
 	_, err = cmdCopy.CombinedOutput()
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	logr.Info("Running script in VM")
 
-	cmdRunScript := commandRunScript(f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.UUID, f.Name()))
+	cmdRunScript := commandRunScript(createdVM.Body.UUID, f.Name())
 	_, err = cmdRunScript.CombinedOutput()
 	if err != nil {
 		return nil, err
