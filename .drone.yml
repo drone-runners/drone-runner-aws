@@ -20,7 +20,7 @@ steps:
   - name: golangci-lint
     image: golangci/golangci-lint
     commands:
-      - golangci-lint run --timeout 300s
+      - golangci-lint run --timeout 500s
     volumes:
       - name: cache
         path: /go

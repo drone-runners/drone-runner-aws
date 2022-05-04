@@ -596,11 +596,11 @@ func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID st
 			logrus.WithField("instanceID", instanceID).Warnln("hibernate: connectivity check deadline exceeded")
 			return
 		case <-time.After(duration):
-			if err := m.checkInstanceConnectivity(ctx, instanceID); err == nil {
+			err := m.checkInstanceConnectivity(ctx, instanceID)
+			if err == nil {
 				return
-			} else {
-				logrus.WithError(err).WithField("instanceID", instanceID).Traceln("hibernate: instance connectivity check failed")
 			}
+			logrus.WithError(err).WithField("instanceID", instanceID).Traceln("hibernate: instance connectivity check failed")
 		}
 	}
 }
