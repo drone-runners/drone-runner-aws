@@ -11,7 +11,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/userdata"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -53,9 +53,14 @@ func (p *provider) CanHibernate() bool {
 	return false
 }
 
+func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
+	return "", errors.New("Unimplemented")
+}
+
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	uData := userdata.Generate(p.userData, opts)
+	uData := lehelper.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
+
 	p.MachineName = machineName
 
 	logr := logger.FromContext(ctx).

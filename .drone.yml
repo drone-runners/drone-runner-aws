@@ -68,6 +68,37 @@ volumes:
     
 ---
 kind: pipeline
+type: aws
+name: build and publish mac intel binaries
+
+node:
+  cluster: mac
+
+pool:
+  use: osx
+
+steps:
+  - name: build
+    image: golang:1.17
+    commands:
+      -  CGO_ENABLED=1 go build -o release/darwin/amd64/drone-runner-aws
+  # - name: release
+  #   image: plugins/github-release
+  #   settings:
+  #     files:
+  #       - release/darwin/amd64/drone-runner-aws
+  #     api_key:
+  #       from_secret: github_token
+
+depends_on:
+- default
+trigger:
+  ref:
+  - refs/heads/master
+  - refs/tags/*
+
+---
+kind: pipeline
 type: docker
 name: manifest
 

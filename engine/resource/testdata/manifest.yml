@@ -10,7 +10,7 @@ data: f0e4c2f76c58916ec25
 
 ---
 kind: pipeline
-type: aws
+type: vm
 name: default
 version: 1
 

@@ -17,7 +17,7 @@ type (
 		Type     string      `json:"type"`
 		Pool     int         `json:"pool"`
 		Limit    int         `json:"limit"`
-		Platform platform    `json:"platform,omitempty"`
+		Platform Platform    `json:"platform,omitempty" yaml:"platform,omitempty"`
 		Spec     interface{} `json:"spec,omitempty"`
 	}
 
@@ -29,7 +29,7 @@ type (
 			Scopes              []string `json:"scopes,omitempty"  yaml:"scopes"`
 			ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email"`
 		} `json:"account,omitempty"  yaml:"account"`
-		Image       string            `json:"image,omitempty" yaml:"image"`
+		Image       string            `json:"image,omitempty" yaml:"image, omitempty"`
 		Name        string            `json:"name,omitempty"`
 		Tags        []string          `json:"tags,omitempty"`
 		Size        string            `json:"size,omitempty"`
@@ -47,31 +47,42 @@ type (
 
 	// Amazon specifies the configuration for an AWS instance.
 	Amazon struct {
-		Account struct {
-			AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
-			AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
-			Region           string `json:"region,omitempty"`
-			Retries          int    `json:"retries,omitempty"`
-			AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone"`
-			KeyPairName      string `json:"key_pair_name,omitempty" yaml:"key_pair_name"`
-		} `json:"account,omitempty"`
-		Name          string            `json:"name,omitempty"`
+		Account       AmazonAccount     `json:"account,omitempty"`
+		Name          string            `json:"name,omitempty" yaml:"name,omitempty"`
 		Size          string            `json:"size,omitempty"`
-		SizeAlt       string            `json:"size_alt,omitempty"`
+		SizeAlt       string            `json:"size_alt,omitempty" yaml:"size_alt,omitempty"`
 		AMI           string            `json:"ami,omitempty"`
-		Tags          map[string]string `json:"tags,omitempty"`
-		Type          string            `json:"type,omitempty"`
-		UserData      string            `json:"user_data,omitempty"`
-		Disk          disk              `json:"disk,omitempty"`
-		Network       network           `json:"network,omitempty"`
-		DeviceName    string            `json:"device_name,omitempty"`
-		IamProfileArn string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn"`
-		MarketType    string            `json:"market_type,omitempty" yaml:"market_type"`
-		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory"`
+		VPC           string            `json:"vpc,omitempty" yaml:"vpc,omitempty"`
+		Tags          map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Type          string            `json:"type,omitempty" yaml:"type,omitempty"`
+		UserData      string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		Disk          disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
+		Network       AmazonNetwork     `json:"network,omitempty" yaml:"network,omitempty"`
+		DeviceName    string            `json:"device_name,omitempty" yaml:"device_name,omitempty"`
+		IamProfileArn string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn,omitempty"`
+		MarketType    string            `json:"market_type,omitempty" yaml:"market_type,omitempty"`
+		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
 		Hibernate     bool              `json:"hibernate,omitempty"`
-		User          string            `json:"user,omitempty"`
+		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
+	}
+	AmazonAccount struct {
+		AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
+		AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
+		Region           string `json:"region,omitempty"`
+		Retries          int    `json:"retries,omitempty" yaml:"retries,omitempty"`
+		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"`
+		KeyPairName      string `json:"key_pair_name,omitempty" yaml:"key_pair_name,omitempty"`
+	}
+	// AmazonNetwork provides AmazonNetwork settings.
+	AmazonNetwork struct {
+		VPC               string   `json:"vpc,omitempty"`
+		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
+		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
+		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
+		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
 	}
 
+	// VMware specifies the configuration for a VMware instance.
 	VMFusion struct {
 		Account struct {
 			Username string `json:"username,omitempty"  yaml:"username"`
@@ -87,11 +98,11 @@ type (
 		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
 	}
 
-	// platform specifies the configuration for a platform instance.
-	platform struct {
+	// Platform specifies the configuration for a Platform instance.
+	Platform struct {
 		OS      string `json:"os,omitempty"`
 		Arch    string `json:"arch,omitempty"`
-		Version string `json:"version,omitempty"`
+		Version string `json:"version,omitempty" yaml:"version,omitempty"`
 	}
 
 	// disk provides disk size and type.
@@ -99,15 +110,6 @@ type (
 		Size int64  `json:"size,omitempty"`
 		Type string `json:"type,omitempty"`
 		Iops int64  `json:"iops,omitempty"`
-	}
-
-	// network provides network settings.
-	network struct {
-		VPC               string   `json:"vpc,omitempty"`
-		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
-		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
-		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
-		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
 	}
 )
 

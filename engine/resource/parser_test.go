@@ -32,7 +32,7 @@ func TestParse(t *testing.T) {
 		},
 		&Pipeline{
 			Kind:    "pipeline",
-			Type:    "aws",
+			Type:    "vm",
 			Name:    "default",
 			Version: "1",
 			Environment: map[string]string{
@@ -118,7 +118,7 @@ func TestParseNoMatch(t *testing.T) {
 func TestMatch(t *testing.T) {
 	r := &manifest.RawResource{
 		Kind: "pipeline",
-		Type: "aws",
+		Type: "vm",
 	}
 	if match(r) == false {
 		t.Errorf("Expect match, got false")
@@ -126,7 +126,7 @@ func TestMatch(t *testing.T) {
 
 	r = &manifest.RawResource{
 		Kind: "approval",
-		Type: "aws",
+		Type: "vm",
 	}
 	if match(r) == true {
 		t.Errorf("Expect kind mismatch, got true")

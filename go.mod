@@ -6,7 +6,7 @@ replace github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.2
 
 require (
 	github.com/Masterminds/squirrel v1.5.2
-	github.com/aws/aws-sdk-go v1.42.10
+	github.com/aws/aws-sdk-go v1.44.2
 	github.com/buildkite/yaml v2.1.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
@@ -34,6 +34,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/api v0.30.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -62,14 +63,13 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.22.4 // indirect
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e // indirect
-	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d // indirect
+	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4 // indirect
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
-	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987 // indirect
 	google.golang.org/grpc v1.31.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )

@@ -279,7 +279,7 @@ func registerExec(app *kingpin.Application) {
 		Default(".drone.yml").
 		FileVar(&c.Source)
 
-	cmd.Arg("pool", "file to seed the aws pool").
+	cmd.Arg("pool", "file to seed the pool").
 		Default("pool.yml").
 		StringVar(&c.Pool)
 
