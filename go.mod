@@ -8,6 +8,7 @@ require (
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/aws/aws-sdk-go v1.42.10
 	github.com/buildkite/yaml v2.1.0+incompatible
+	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
 	github.com/drone/drone-go v1.7.1
 	github.com/drone/envsubst v1.0.3
@@ -25,6 +26,7 @@ require (
 	github.com/maragudk/migrate v0.4.1
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mattn/go-sqlite3 v1.14.7
+	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.26.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.6.1
@@ -41,7 +43,6 @@ require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20210927113745-59d0afb8317a // indirect
 	github.com/bmatcuk/doublestar v1.1.1 // indirect
-	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
@@ -58,7 +59,6 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/natessilva/dag v0.0.0-20180124060714-7194b8dcc5c4 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.22.4 // indirect
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e // indirect

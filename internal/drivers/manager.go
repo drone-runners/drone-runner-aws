@@ -2,17 +2,19 @@ package drivers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
+	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/pkg/errors"
 
 	"github.com/sirupsen/logrus"
 )
@@ -438,7 +440,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				Infoln("build pool: created new instance")
 
 			go func() {
-				herr := m.hibernate(ctx, pool.Name, inst.ID)
+				herr := m.hibernate(context.Background(), pool.Name, inst.ID)
 				if herr != nil {
 					logr.WithError(herr).Errorln("failed to hibernate the vm")
 				}
@@ -540,8 +542,12 @@ func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) er
 		return nil
 	}
 
+	if !pool.Driver.CanHibernate() {
+		return nil
+	}
+
 	// TODO: Use health check to determine wait time before hibernating the instance
-	time.Sleep(600 * time.Second) // nolint:gomnd
+	m.waitForInstanceConnectivity(ctx, instanceID) // nolint:gomnd
 
 	pool.Lock()
 	defer pool.Unlock()
@@ -573,6 +579,56 @@ func (m *Manager) forEach(ctx context.Context, f func(ctx context.Context, pool 
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID string) {
+	bf := backoff.NewExponentialBackOff()
+	for {
+		duration := bf.NextBackOff()
+		if duration == bf.Stop {
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			logrus.WithField("instanceID", instanceID).Warnln("hibernate: connectivity check deadline exceeded")
+			return
+		case <-time.After(duration):
+			if err := m.checkInstanceConnectivity(ctx, instanceID); err == nil {
+				return
+			} else {
+				logrus.WithError(err).WithField("instanceID", instanceID).Traceln("hibernate: instance connectivity check failed")
+			}
+		}
+	}
+}
+
+func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID string) error {
+	instance, err := m.Find(ctx, instanceID)
+	if err != nil {
+		return errors.Wrap(err, "failed to find the instance in db")
+	}
+
+	if instance.Address == "" {
+		return errors.New("instance has not received IP address")
+	}
+
+	endpoint := fmt.Sprintf("https://%s:9079/", instance.Address)
+	client, err := lehttp.NewHTTPClient(endpoint, m.runnerName, string(instance.CACert), string(instance.TLSCert), string(instance.TLSKey))
+	if err != nil {
+		return errors.Wrap(err, "failed to create client")
+	}
+
+	response, err := client.Health(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !response.OK {
+		return errors.New("health check call failed")
 	}
 
 	return nil
