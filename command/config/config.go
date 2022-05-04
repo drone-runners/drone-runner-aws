@@ -87,6 +87,16 @@ type (
 		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
 	}
 
+	Anka struct {
+		Account struct {
+			Username string `json:"username,omitempty"  yaml:"username"`
+			Password string `json:"password,omitempty"  yaml:"password"`
+		}
+		VmID          string `json:"vm_id,omitempty" yaml:"vm_id"`
+		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
+	}
+
 	// platform specifies the configuration for a platform instance.
 	platform struct {
 		OS      string `json:"os,omitempty"`
@@ -129,6 +139,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Google)
 	case "vmfusion":
 		s.Spec = new(VMFusion)
+	case "anka":
+		s.Spec = new(Anka)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}
