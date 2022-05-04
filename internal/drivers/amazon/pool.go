@@ -55,7 +55,8 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("pool", opts.PoolName).
 		WithField("region", p.region).
 		WithField("image", p.image).
-		WithField("size", p.size)
+		WithField("size", p.size).
+		WithField("hibernate", p.CanHibernate())
 	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", time.Now().Unix())
 
 	var tags = map[string]string{

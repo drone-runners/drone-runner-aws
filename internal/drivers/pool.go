@@ -30,6 +30,7 @@ type Driver interface {
 	Hibernate(ctx context.Context, instanceID, poolName string) error
 	Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error)
 	Ping(ctx context.Context) error
+	CanHibernate() bool
 
 	RootDir() string
 	ProviderName() string
