@@ -81,22 +81,20 @@ steps:
   - name: build
     commands:
       - brew install golang
-      - CGO_ENABLED=1 go build -o lite-engine-darwin-amd64
-      - ls 
-  # - name: release
-  #   image: plugins/github-release
-  #   settings:
-  #     files:
-  #       - lite-engine-darwin-amd64
-  #     api_key:
-  #       from_secret: github_token
+      - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-amd64
+  - name: release
+    image: plugins/github-release
+    settings:
+      files:
+        - drone-runner-aws-darwin-amd64
+      api_key:
+        from_secret: github_token
 
-#depends_on:
-#- default
-#trigger:
-#  ref:
-#  - refs/heads/master
-#  - refs/tags/*
+depends_on:
+- default
+trigger:
+  ref:
+  - refs/tags/*
 
 ---
 kind: pipeline
