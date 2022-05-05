@@ -79,23 +79,24 @@ pool:
 
 steps:
   - name: build
-    image: golang:1.17
     commands:
-      -  CGO_ENABLED=1 go build -o release/darwin/amd64/drone-runner-aws
+      - brew install golang
+      - CGO_ENABLED=1 go build -o lite-engine-darwin-amd64
+      - ls 
   # - name: release
   #   image: plugins/github-release
   #   settings:
   #     files:
-  #       - release/darwin/amd64/drone-runner-aws
+  #       - lite-engine-darwin-amd64
   #     api_key:
   #       from_secret: github_token
 
-depends_on:
-- default
-trigger:
-  ref:
-  - refs/heads/master
-  - refs/tags/*
+#depends_on:
+#- default
+#trigger:
+#  ref:
+#  - refs/heads/master
+#  - refs/tags/*
 
 ---
 kind: pipeline
