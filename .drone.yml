@@ -39,8 +39,8 @@ steps:
   - name: compiler checks
     image: golang:1
     commands:
-      - release/linux/amd64/drone-runner-aws compile --source='./test_files/drone_ubuntu.yml' test_files/drone_pool.yml
-      - release/linux/amd64/drone-runner-aws compile --source='./test_files/drone_windows.yml' test_files/drone_pool.yml
+      - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_ubuntu.yml' test_files/compiler/drone_pool.yml
+      - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
     depends_on:
       - build
   - name: publish
