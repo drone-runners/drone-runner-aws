@@ -6,6 +6,7 @@ package database
 
 import (
 	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/store/singleinstance"
 
 	"github.com/google/wire"
 	"github.com/jmoiron/sqlx"
@@ -17,12 +18,22 @@ var WireSet = wire.NewSet(
 	ProvideInstanceStore,
 )
 
+const SingleInstance = "singleinstance"
+
 // ProvideDatabase provides a database connection.
 func ProvideDatabase(driver, datasource string) (*sqlx.DB, error) {
-	return Connect(
-		driver,
-		datasource,
-	)
+	switch driver {
+	case SingleInstance:
+		// use a single instance db, as we only need one machine
+		empty := sqlx.NewDb(nil, SingleInstance)
+
+		return empty, nil
+	default:
+		return Connect(
+			driver,
+			datasource,
+		)
+	}
 }
 
 // ProvideInstanceStore provides an instance store.
@@ -30,6 +41,9 @@ func ProvideInstanceStore(db *sqlx.DB) store.InstanceStore {
 	switch db.DriverName() {
 	case "postgres":
 		return NewInstanceStore(db)
+	case SingleInstance:
+		// this is a store with a single instance, used by exec and setup commands
+		return singleinstance.NewSingleInstanceStore(db)
 	default:
 		return NewInstanceStoreSync(
 			NewInstanceStore(db),

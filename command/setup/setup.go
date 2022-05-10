@@ -52,8 +52,8 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
-
-	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
+	// use a single instance db, as we only need one machine
+	db, err := database.ProvideDatabase(database.SingleInstance, "")
 	if err != nil {
 		logrus.WithError(err).
 			Fatalln("Invalid or missing hosting provider")
@@ -123,11 +123,9 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	// provision
 	instance, provisionErr := poolManager.Provision(ctx, testPoolName, env.Runner.Name, env.Settings.LiteEnginePath)
 	if provisionErr != nil {
-		cleanErr := poolManager.CleanPools(ctx, true, true)
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
 		logrus.WithError(provisionErr).
-			WithError(cleanErr).
 			WithError(consoleErr).
 			Errorln("setup: unable to provision instance")
 		os.Exit(1)
@@ -140,7 +138,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	}
 	logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
 	// start the instance
-	instance, startErr := poolManager.StartInstance(ctx, testPoolName, instance.ID)
+	_, startErr := poolManager.StartInstance(ctx, testPoolName, instance.ID)
 	if startErr != nil {
 		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)

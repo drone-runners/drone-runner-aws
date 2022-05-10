@@ -54,11 +54,9 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 
 	poolName := spec.CloudInstance.PoolName
 	manager := eng.poolManager
-	stageID := "" // TODO: Check how to obtain this value. Or create value here is it's not yet defined...
 
 	logr := logger.FromContext(ctx).
 		WithField("func", "engine.Setup").
-		WithField("stage", stageID).
 		WithField("pool", spec.CloudInstance.PoolName)
 
 	if poolName == "" {
@@ -103,15 +101,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		}
 	}
 
-	if err != nil {
-		logr.WithError(err).Errorln("failed to unmarshal tags")
-		return err
-	}
-	instance.Stage = stageID
-	if err != nil {
-		logr.WithError(err).Errorln("failed to marshal tags")
-		return err
-	}
 	err = manager.Update(ctx, instance)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to tag")

@@ -21,6 +21,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -40,18 +41,19 @@ import (
 
 type execCommand struct {
 	*internal.Flags
-	Source  *os.File
-	Pool    string
-	Include []string
-	Exclude []string
-	Environ map[string]string
-	Secrets map[string]string
-	Volumes []string
-	Pretty  bool
-	Procs   int64
-	Debug   bool
-	Trace   bool
-	Dump    bool
+	Source        *os.File
+	Pool          string
+	LiteEngineURL string
+	Include       []string
+	Exclude       []string
+	Environ       map[string]string
+	Secrets       map[string]string
+	Volumes       []string
+	Pretty        bool
+	Procs         int64
+	Debug         bool
+	Trace         bool
+	Dump          bool
 }
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its complex but not too bad.
@@ -103,6 +105,17 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return err
 	}
 
+	// configures the pipeline timeout.
+	timeout := time.Duration(c.Repo.Timeout) * time.Minute
+	ctx, cancel := context.WithTimeout(nocontext, timeout)
+	defer cancel()
+
+	// listen for operating system signals and cancel execution when received.
+	ctx = signal.WithContextFunc(ctx, func() {
+		println("received signal, terminating process")
+		cancel()
+	})
+
 	poolFile, err := config.ParseFile(c.Pool)
 	if err != nil {
 		logrus.WithError(err).
@@ -117,7 +130,15 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return err
 	}
 
-	poolManager := &drivers.Manager{}
+	// use a single instance db, as we only need one machine
+	db, err := database.ProvideDatabase(database.SingleInstance, "")
+	if err != nil {
+		logrus.WithError(err).
+			Fatalln("Invalid or missing hosting provider")
+	}
+	store := database.ProvideInstanceStore(db)
+
+	poolManager := drivers.New(ctx, store, c.LiteEngineURL, runnerName)
 	err = poolManager.Add(pools...)
 	if err != nil {
 		return err
@@ -186,7 +207,6 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 			}
 		}
 	}
-
 	// create a step object for each pipeline step.
 	for _, step := range spec.Steps {
 		if step.RunPolicy == runtime.RunNever {
@@ -200,17 +220,6 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 			ErrIgnore: step.ErrPolicy == runtime.ErrIgnore,
 		})
 	}
-
-	// configures the pipeline timeout.
-	timeout := time.Duration(c.Repo.Timeout) * time.Minute
-	ctx, cancel := context.WithTimeout(nocontext, timeout)
-	defer cancel()
-
-	// listen for operating system signals and cancel execution when received.
-	ctx = signal.WithContextFunc(ctx, func() {
-		println("received signal, terminating process")
-		cancel()
-	})
 
 	state := &pipeline.State{
 		Build:  c.Build,
@@ -235,7 +244,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 
 	engineInstance, err := engine.New(engine.Opts{
 		Repopulate: false,
-	}, poolManager, runnerName, "")
+	}, poolManager, runnerName, c.LiteEngineURL)
 	if err != nil {
 		return err
 	}
@@ -308,6 +317,10 @@ func registerExec(app *kingpin.Application) {
 
 	cmd.Flag("dump", "dump the pipeline state to stdout").
 		BoolVar(&c.Dump)
+
+	cmd.Flag("lite-engine-url", "web url for the lite-engine binaries ").
+		Default("https://github.com/harness/lite-engine/releases/download/v0.1.0/").
+		StringVar(&c.LiteEngineURL)
 
 	cmd.Flag("pretty", "pretty print the output").
 		Default(

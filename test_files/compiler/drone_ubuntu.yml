@@ -9,20 +9,25 @@ steps:
   - name: check install
     commands:
       - cat /var/log/cloud-init-output.log
-  - name: build binary with golang image
-    image: golang:1.16
-    commands:
-      - GOPATH="" CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o release/linux/amd64/drone-runner-aws
+      - hostname -f
+      - ifconfig
+      - touch /tmp/blaaaa
+      - env
   - name: plugin
     image: plugins/docker
     settings:
       dry_run: true
       repo: foo/bar
-      tags: latest
-      dockerfile: docker/Dockerfile.linux.amd64
+      default_suffix: marko
     volumes:
       - name: cache
         path: /go
+  - name: imagey + commands
+    image: golang
+    commands:
+      - go version
+      - go help
+      - ls -al /tmp
   - name: docker status
     commands:
       - docker ps -a
@@ -30,11 +35,14 @@ steps:
     image: redis
     commands:
       - redis-cli -h red ping
-
+  - name: check host volume
+    commands:
+      - ls /tmp
+      
 services:
   - name: red
     image: redis
 
 volumes:
-  - name: cache
-    temp: {}
+- name: cache
+  temp: {}
