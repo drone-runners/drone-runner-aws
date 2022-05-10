@@ -18,9 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var (
-	ankabin = "/usr/local/bin/anka"
-)
+const BIN = "/usr/local/bin/anka"
 
 type ankaShow struct {
 	UUID    string `json:"uuid"`
@@ -47,8 +45,9 @@ func (p *provider) CanHibernate() bool {
 }
 
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+	startTime := time.Now()
 	uData := lehelper.GenerateUserdata(p.userData, opts)
-	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
+	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", startTime.Unix())
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.ProviderAnka).
@@ -59,12 +58,14 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	cmdCloneVM := commandCloneVM(p.vmID, machineName)
 	_, err = cmdCloneVM.CombinedOutput()
 	if err != nil {
+		logr.WithError(err).Error("Failed to clone VM")
 		return nil, err
 	}
 
 	cmdStartVM := commandAnka(machineName, "start")
 	_, err = cmdStartVM.CombinedOutput()
 	if err != nil {
+		logr.WithError(err).Error("Failed to start VM")
 		return nil, err
 	}
 	var ip string
@@ -87,10 +88,12 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	cmdShow := commandAnka(machineName, "show")
 	result, err = cmdShow.CombinedOutput()
 	if err != nil {
+		logr.WithError(err).Errorf("Failed to get VM info")
 		return nil, err
 	}
 	err = json.Unmarshal(result, &createdVM)
 	if err != nil {
+		logr.WithError(err).Errorf("Failed to parse VM info")
 		return nil, err
 	}
 	createdVM.Body.IP = ip
@@ -113,6 +116,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	cmdCopy := commandCP(f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.UUID, f.Name()))
 	_, err = cmdCopy.CombinedOutput()
 	if err != nil {
+		logr.WithError(err).Errorf("Failed to copy userdata to VM")
 		return nil, err
 	}
 
@@ -121,10 +125,9 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	cmdRunScript := commandRunScript(createdVM.Body.UUID, f.Name())
 	_, err = cmdRunScript.CombinedOutput()
 	if err != nil {
+		logr.WithError(err).Errorf("Failed to run script in VM")
 		return nil, err
 	}
-
-	startTime := time.Now()
 
 	instance = &types.Instance{
 		ID:       createdVM.Body.UUID,
@@ -184,7 +187,7 @@ func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
 
 func commandCloneVM(vmID, newVMName string) *exec.Cmd {
 	return exec.Command(
-		ankabin, "clone",
+		BIN, "clone",
 		vmID,
 		newVMName,
 	)
@@ -192,7 +195,7 @@ func commandCloneVM(vmID, newVMName string) *exec.Cmd {
 
 func commandAnka(vmID, command string) *exec.Cmd {
 	return exec.Command(
-		ankabin,
+		BIN,
 		"--machine-readable",
 		command,
 		vmID,
@@ -201,7 +204,7 @@ func commandAnka(vmID, command string) *exec.Cmd {
 
 func commandIP(vmID, command string) *exec.Cmd {
 	return exec.Command(
-		ankabin,
+		BIN,
 		command,
 		vmID,
 		"ip",
@@ -210,7 +213,7 @@ func commandIP(vmID, command string) *exec.Cmd {
 
 func commandCP(src, dest string) *exec.Cmd {
 	return exec.Command(
-		ankabin,
+		BIN,
 		"cp",
 		src,
 		dest,
@@ -219,7 +222,7 @@ func commandCP(src, dest string) *exec.Cmd {
 
 func commandRunScript(vmID, command string) *exec.Cmd {
 	return exec.Command(
-		ankabin,
+		BIN,
 		"run",
 		vmID,
 		"bash",
@@ -229,7 +232,7 @@ func commandRunScript(vmID, command string) *exec.Cmd {
 
 func commandDeleteVM(vmID string) *exec.Cmd {
 	return exec.Command(
-		ankabin,
+		BIN,
 		"delete",
 		"--yes",
 		vmID,
