@@ -60,7 +60,7 @@ type Config struct {
 	}
 
 	Settings struct {
-		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.0.2/"`
+		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.1.0/"`
 		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 	}
 

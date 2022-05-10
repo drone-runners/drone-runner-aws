@@ -39,8 +39,8 @@ steps:
   - name: compiler checks
     image: golang:1
     commands:
-      - release/linux/amd64/drone-runner-aws compile --source='./test_files/drone_ubuntu.yml' test_files/drone_pool.yml
-      - release/linux/amd64/drone-runner-aws compile --source='./test_files/drone_windows.yml' test_files/drone_pool.yml
+      - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_ubuntu.yml' test_files/compiler/drone_pool.yml
+      - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
     depends_on:
       - build
   - name: publish
@@ -79,22 +79,21 @@ pool:
 
 steps:
   - name: build
-    image: golang:1.17
     commands:
-      -  CGO_ENABLED=1 go build -o release/darwin/amd64/drone-runner-aws
-  # - name: release
-  #   image: plugins/github-release
-  #   settings:
-  #     files:
-  #       - release/darwin/amd64/drone-runner-aws
-  #     api_key:
-  #       from_secret: github_token
+      - brew install golang
+      - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-amd64
+  - name: release
+    image: plugins/github-release
+    settings:
+      files:
+        - drone-runner-aws-darwin-amd64
+      api_key:
+        from_secret: github_token
 
 depends_on:
 - default
 trigger:
   ref:
-  - refs/heads/master
   - refs/tags/*
 
 ---
