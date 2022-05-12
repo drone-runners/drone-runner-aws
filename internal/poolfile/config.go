@@ -6,9 +6,11 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/anka"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -100,6 +102,24 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			)
 			if err != nil {
 				logrus.WithError(err).Errorln("daemon: unable to create google config")
+			}
+			pool := mapPool(&i, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
+		case "anka":
+			var ak, ok = i.Spec.(*config.Anka)
+			if !ok {
+				logrus.Errorln("daemon: unable to parse pool file")
+			}
+			driver, err := anka.New(
+				anka.WithUsername(ak.Account.Username),
+				anka.WithPassword(ak.Account.Password),
+				anka.WithRootDirectory(ak.RootDirectory),
+				anka.WithUserData(ak.UserData),
+				anka.WithVMID(ak.VMID),
+			)
+			if err != nil {
+				logrus.WithError(err).Errorln("daemon: unable to create anka config")
 			}
 			pool := mapPool(&i, runnerName)
 			pool.Driver = driver

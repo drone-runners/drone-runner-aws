@@ -82,7 +82,7 @@ type (
 		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
 	}
 
-	// VMware specifies the configuration for a VMware instance.
+	// VMFusion specifies the configuration for a VMware instance.
 	VMFusion struct {
 		Account struct {
 			Username string `json:"username,omitempty"  yaml:"username"`
@@ -97,8 +97,18 @@ type (
 		StorePath     string `json:"store_path,omitempty" yaml:"store_path"`
 		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
 	}
+	// Anka specifies the configuration for an Anka instance.
+	Anka struct {
+		Account struct {
+			Username string `json:"username,omitempty"  yaml:"username"`
+			Password string `json:"password,omitempty"  yaml:"password"`
+		}
+		VMID          string `json:"vm_id,omitempty" yaml:"vm_id"`
+		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
+	}
 
-	// Platform specifies the configuration for a Platform instance.
+	// Platform specifies the configuration for a platform instance.
 	Platform struct {
 		OS      string `json:"os,omitempty"`
 		Arch    string `json:"arch,omitempty"`
@@ -131,6 +141,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Google)
 	case "vmfusion":
 		s.Spec = new(VMFusion)
+	case "anka":
+		s.Spec = new(Anka)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}

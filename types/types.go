@@ -20,6 +20,7 @@ const (
 	ProviderAmazon   = ProviderType("amazon")
 	ProviderGoogle   = ProviderType("google")
 	ProviderVMFusion = ProviderType("vmwareFusion")
+	ProviderAnka     = ProviderType("anka")
 )
 
 // InstanceState type enumeration.
