@@ -37,6 +37,10 @@ func (p *provider) ProviderName() string {
 }
 
 func (p *provider) Ping(_ context.Context) error {
+	_, err := exec.LookPath(BIN)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -69,7 +73,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		return nil, err
 	}
 	var ip string
-	for i := 1; i <= 60; i++ {
+	for i := 1; i <= 60; i++ { //loop for 60s until we get an IP
 		cmdIP := commandIP(machineName, "show")
 		result, err = cmdIP.CombinedOutput()
 		if err != nil {
