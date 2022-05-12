@@ -52,7 +52,7 @@ func (p *provider) CanHibernate() bool {
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := lehelper.GenerateUserdata(p.userData, opts)
-	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", rand.Int())
+	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", rand.Int()) //nolint
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.ProviderAnka).
@@ -74,7 +74,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		return nil, err
 	}
 	var ip string
-	for i := 1; i <= 60; i++ { //loop for 60s until we get an IP
+	for i := 1; i <= 60; i++ { // loop for 60s until we get an IP
 		cmdIP := commandIP(machineName, "show")
 		result, err = cmdIP.CombinedOutput()
 		if err != nil {
