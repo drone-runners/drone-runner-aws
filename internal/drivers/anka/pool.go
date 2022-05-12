@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
@@ -51,7 +52,7 @@ func (p *provider) CanHibernate() bool {
 func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := lehelper.GenerateUserdata(p.userData, opts)
-	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", startTime.Unix())
+	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", rand.Int())
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.ProviderAnka).
