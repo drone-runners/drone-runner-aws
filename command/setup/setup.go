@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
@@ -48,7 +47,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// load the configuration from the environment
-	env, err := daemon.FromEnviron()
+	env, err := config.FromEnviron()
 	if err != nil {
 		return err
 	}
@@ -97,17 +96,17 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	store := database.ProvideInstanceStore(db)
 	poolManager := drivers.New(ctx, store, env.Settings.LiteEnginePath, env.Runner.Name)
 
-	var poolFile config.PoolFile
+	var pool *config.PoolFile
 	switch c.vmType {
 	case aws:
-		poolFile = poolfile.CreateAmazonPool(c.awsAccessKeyID, c.awsAccessKeySecret)
+		pool = poolfile.CreateAmazonPool(c.awsAccessKeyID, c.awsAccessKeySecret)
 	default:
 		logrus.WithError(err).
 			Errorln("setup: unable to parse pool file")
 		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
 	}
 	// process the pool file
-	pools, processErr := poolfile.ProcessPool(&poolFile, env.Runner.Name)
+	pools, processErr := poolfile.ProcessPool(pool, env.Runner.Name)
 	if processErr != nil {
 		logrus.WithError(processErr).
 			Errorln("setup: unable to process pool file")
@@ -181,7 +180,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	}
 	logrus.WithField("response", fmt.Sprintf("%+v", healthResponse)).Traceln("LE.RetryHealth check complete")
 	// print the pool file
-	marshalledPool, marshalErr := yaml.Marshal(poolFile)
+	marshalledPool, marshalErr := yaml.Marshal(pool)
 	if marshalErr != nil {
 		logrus.WithError(marshalErr).
 			Errorln("setup: unable to marshal pool file")
@@ -192,7 +191,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	return destroyErr
 }
 
-func setupLogger(c *daemon.Config) {
+func setupLogger(c *config.EnvConfig) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),

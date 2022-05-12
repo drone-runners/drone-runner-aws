@@ -3,7 +3,7 @@ type: vm
 name: default
 
 pool:
-  use: ubuntu
+  use: test_pool
 
 steps:
   - name: check install

@@ -42,7 +42,8 @@ import (
 type execCommand struct {
 	*internal.Flags
 	Source        *os.File
-	Pool          string
+	vmType        string
+	PoolFile      string
 	LiteEngineURL string
 	Include       []string
 	Exclude       []string
@@ -60,6 +61,12 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	const runnerName = "exec"
 
 	rawsource, err := io.ReadAll(c.Source)
+	if err != nil {
+		return err
+	}
+
+	// load the environment configuration from the environment
+	envConfig, err := config.FromEnviron()
 	if err != nil {
 		return err
 	}
@@ -85,8 +92,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return v
 	}
 
-	// evaluates string replacement expressions and returns an
-	// update configuration.
+	// evaluates string replacement expressions and returns an update configuration.
 	env, err := envsubst.Eval(string(rawsource), subf)
 	if err != nil {
 		return err
@@ -116,20 +122,37 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		cancel()
 	})
 
-	poolFile, err := config.ParseFile(c.Pool)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("exec: unable to parse pool file")
-		return err
+	var pool *config.PoolFile
+	if c.PoolFile == "" {
+		logrus.Infoln("no pool file provided, using default")
+		// generate a pool file
+		switch c.vmType {
+		case "aws":
+			// do we have the creds?
+			if envConfig.AWS.AccessKeyID == "" || envConfig.AWS.AccessKeySecret == "" {
+				return fmt.Errorf("exec: missing aws credentials in env variables 'DRONE_AWS_ACCESS_KEY_ID' and 'DRONE_AWS_ACCESS_KEY_SECRET'")
+			}
+			pool = poolfile.CreateAmazonPool(envConfig.AWS.AccessKeyID, envConfig.AWS.AccessKeySecret)
+		default:
+			logrus.WithError(err).
+				Errorln("exec: unable to create pool file")
+			os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+		}
+	} else {
+		pool, err = config.ParseFile(c.PoolFile)
+		if err != nil {
+			logrus.WithError(err).
+				Errorln("exec: unable to parse pool file")
+			return err
+		}
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, runnerName)
+	pools, err := poolfile.ProcessPool(pool, runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("exec: unable to process pool file")
 		return err
 	}
-
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
 	if err != nil {
@@ -265,7 +288,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	}
 	switch state.Stage.Status {
 	case drone.StatusError, drone.StatusFailing, drone.StatusKilled:
-		os.Exit(1) //nolint:gocritic // failing out if something goes wrong
+		os.Exit(1)
 	}
 	return nil
 }
@@ -289,8 +312,11 @@ func registerExec(app *kingpin.Application) {
 		FileVar(&c.Source)
 
 	cmd.Arg("pool", "file to seed the pool").
-		Default("pool.yml").
-		StringVar(&c.Pool)
+		StringVar(&c.PoolFile)
+
+	cmd.Flag("type", "which vm provider aws/gcp/osx, default is aws").
+		Default("aws").
+		StringVar(&c.vmType)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)

@@ -1,6 +1,6 @@
 version: "1"
 instances:
-  - name: ubuntu
+  - name: test_pool
     default: true
     type: amazon
     pool: 1

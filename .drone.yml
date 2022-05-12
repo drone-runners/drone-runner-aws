@@ -34,8 +34,7 @@ steps:
       - name: cache
         path: /go
     depends_on:
-      - go vet and unit tests
-      - golangci-lint
+      - clone
   - name: compiler checks
     image: golang:1
     commands:
@@ -43,6 +42,17 @@ steps:
       - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
     depends_on:
       - build
+  - name: exec checks
+    image: golang:1
+    commands:
+      - DRONE_RPC_HOST=not_used DRONE_RPC_SECRET=not_used release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+    environment:
+      DRONE_AWS_ACCESS_KEY_ID:
+        from_secret: aws_access_key_id
+      DRONE_AWS_ACCESS_KEY_SECRET:
+        from_secret: aws_secret_access_key
+    depends_on:
+      - compiler checks
   - name: publish
     image: plugins/docker
     pull: if-not-exists
@@ -61,11 +71,12 @@ steps:
         - refs/tags/*
     depends_on:
       - compiler checks
+      - exec checks
 
 volumes:
   - name: cache
     temp: {}
-    
+
 ---
 kind: pipeline
 type: aws

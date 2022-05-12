@@ -163,13 +163,13 @@ func mapPool(i *config.Instance, runnerName string) drivers.Pool {
 	return pool
 }
 
-func CreateAmazonPool(accessKeyID, accessKeySecret string) config.PoolFile {
+func CreateAmazonPool(accessKeyID, accessKeySecret string) *config.PoolFile {
 	instance := config.Instance{
 		Name:    "test_pool",
 		Default: true,
 		Type:    "amazon",
 		Pool:    1,
-		Limit:   2,
+		Limit:   1,
 		Platform: config.Platform{
 			Arch: "amd64",
 			OS:   "linux",
@@ -189,5 +189,5 @@ func CreateAmazonPool(accessKeyID, accessKeySecret string) config.PoolFile {
 		Instances: []config.Instance{instance},
 	}
 
-	return poolfile
+	return &poolfile
 }
