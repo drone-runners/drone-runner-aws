@@ -22,6 +22,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -122,32 +123,13 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		cancel()
 	})
 
-	var pool *config.PoolFile
-	if c.PoolFile == "" {
-		logrus.Infoln("no pool file provided, using default")
-		// generate a pool file
-		switch c.vmType {
-		case "aws":
-			// do we have the creds?
-			if envConfig.AWS.AccessKeyID == "" || envConfig.AWS.AccessKeySecret == "" {
-				return fmt.Errorf("exec: missing aws credentials in env variables 'DRONE_AWS_ACCESS_KEY_ID' and 'DRONE_AWS_ACCESS_KEY_SECRET'")
-			}
-			pool = poolfile.CreateAmazonPool(envConfig.AWS.AccessKeyID, envConfig.AWS.AccessKeySecret)
-		default:
-			logrus.WithError(err).
-				Errorln("exec: unable to create pool file")
-			os.Exit(1) //nolint:gocritic // failing fast before we do any work.
-		}
-	} else {
-		pool, err = config.ParseFile(c.PoolFile)
-		if err != nil {
-			logrus.WithError(err).
-				Errorln("exec: unable to parse pool file")
-			return err
-		}
+	configPool, confErr := poolfile.ConfigPoolFile(c.PoolFile, c.vmType, &envConfig)
+	if confErr != nil {
+		logrus.WithError(err).
+			Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 
-	pools, err := poolfile.ProcessPool(pool, runnerName)
+	pools, err := poolfile.ProcessPool(configPool, runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("exec: unable to process pool file")
@@ -288,7 +270,8 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	}
 	switch state.Stage.Status {
 	case drone.StatusError, drone.StatusFailing, drone.StatusKilled:
-		os.Exit(1)
+		logrus.WithError(err).
+			Fatalln("exec: pipeline errored/failed/killed")
 	}
 	return nil
 }
@@ -314,15 +297,13 @@ func registerExec(app *kingpin.Application) {
 	cmd.Arg("pool", "file to seed the pool").
 		StringVar(&c.PoolFile)
 
-	cmd.Flag("type", "which vm provider aws/gcp/osx, default is aws").
-		Default("aws").
+	cmd.Flag("type", "which vm provider amazon/anka/google/vmfusion, default is amazon").
+		Default(string(types.ProviderAmazon)).
 		StringVar(&c.vmType)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)
-
-	// Check documentation of DRONE_RUNNER_VOLUMES to see how to
-	// use this param.
+	// Check documentation of DRONE_RUNNER_VOLUMES to see how to use this param.
 	cmd.Flag("volumes", "drone runner volumes").
 		StringsVar(&c.Volumes)
 

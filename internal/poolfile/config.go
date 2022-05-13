@@ -10,6 +10,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/sirupsen/logrus"
 )
@@ -20,10 +21,10 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 	for _, i := range poolFile.Instances {
 		i := i
 		switch i.Type {
-		case "vmfusion":
+		case string(types.ProviderVMFusion):
 			var v, ok = i.Spec.(*config.VMFusion)
 			if !ok {
-				logrus.Errorln("daemon: unable to parse pool file")
+				logrus.Errorln("unable to parse pool file")
 			}
 			driver, err := vmfusion.New(
 				vmfusion.WithStorePath(v.StorePath),
@@ -37,15 +38,15 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				vmfusion.WithRootDirectory(v.RootDirectory),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("daemon: unable to create vmfusion config")
+				logrus.WithError(err).Errorln("unable to create vmfusion config")
 			}
 			pool := mapPool(&i, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-		case "amazon":
+		case string(types.ProviderAmazon):
 			var a, ok = i.Spec.(*config.Amazon)
 			if !ok {
-				logrus.Errorln("daemon: unable to parse pool file")
+				logrus.Errorln("unable to parse pool file")
 			}
 			var driver, err = amazon.New(
 				amazon.WithAccessKeyID(a.Account.AccessKeyID),
@@ -73,15 +74,15 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithHibernate(a.Hibernate),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("daemon: unable to create google config")
+				logrus.WithError(err).Errorln("unable to create google config")
 			}
 			pool := mapPool(&i, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-		case "gcp":
+		case string(types.ProviderGoogle):
 			var g, ok = i.Spec.(*config.Google)
 			if !ok {
-				logrus.Errorln("daemon: unable to parse pool file")
+				logrus.Errorln("unable to parse pool file")
 			}
 			var driver, err = google.New(
 				google.WithDiskSize(g.Disk.Size),
@@ -101,15 +102,15 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				google.WithUserDataKey(g.UserDataKey, i.Platform.OS),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("daemon: unable to create google config")
+				logrus.WithError(err).Errorln("unable to create google config")
 			}
 			pool := mapPool(&i, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-		case "anka":
+		case string(types.ProviderAnka):
 			var ak, ok = i.Spec.(*config.Anka)
 			if !ok {
-				logrus.Errorln("daemon: unable to parse pool file")
+				logrus.Errorln("unable to parse pool file")
 			}
 			driver, err := anka.New(
 				anka.WithUsername(ak.Account.Username),
@@ -119,7 +120,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				anka.WithVMID(ak.VMID),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("daemon: unable to create anka config")
+				logrus.WithError(err).Errorln("unable to create anka config")
 			}
 			pool := mapPool(&i, runnerName)
 			pool.Driver = driver
@@ -142,7 +143,7 @@ func mapPool(i *config.Instance, runnerName string) drivers.Pool {
 		i.Limit = i.Pool
 	}
 	if i.Platform.OS == "" {
-		if i.Type == "vmfusion" {
+		if i.Type == string(types.ProviderVMFusion) || i.Type == string(types.ProviderAnka) {
 			i.Platform.OS = oshelp.OSMac
 		} else {
 			i.Platform.OS = oshelp.OSLinux
@@ -163,11 +164,35 @@ func mapPool(i *config.Instance, runnerName string) drivers.Pool {
 	return pool
 }
 
-func CreateAmazonPool(accessKeyID, accessKeySecret string) *config.PoolFile {
+func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {
+	if filepath == "" {
+		logrus.Infoln("no pool file provided, creating in memmory")
+		// generate a pool file
+		switch providerType {
+		case string(types.ProviderAmazon):
+			// do we have the creds?
+			if conf.AWS.AccessKeyID == "" || conf.AWS.AccessKeySecret == "" {
+				return pool, fmt.Errorf("exec: missing aws credentials in env variables 'DRONE_AWS_ACCESS_KEY_ID' and 'DRONE_AWS_ACCESS_KEY_SECRET'")
+			}
+			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret), nil
+
+		default:
+			err = fmt.Errorf("unknown provider type %s, unable to create pool file in memory", providerType)
+			return pool, err
+		}
+	}
+	pool, err = config.ParseFile(filepath)
+	if err != nil {
+		logrus.WithError(err).Errorln("exec: unable to parse pool file")
+	}
+	return pool, err
+}
+
+func createAmazonPool(accessKeyID, accessKeySecret string) *config.PoolFile {
 	instance := config.Instance{
 		Name:    "test_pool",
 		Default: true,
-		Type:    "amazon",
+		Type:    string(types.ProviderAmazon),
 		Pool:    1,
 		Limit:   1,
 		Platform: config.Platform{

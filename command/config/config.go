@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 )
@@ -276,13 +277,13 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch s.Type {
-	case "amazon", "aws":
+	case string(types.ProviderAmazon), "aws":
 		s.Spec = new(Amazon)
-	case "google", "gcp":
+	case string(types.ProviderGoogle), "gcp":
 		s.Spec = new(Google)
-	case "vmfusion":
+	case string(types.ProviderVMFusion):
 		s.Spec = new(VMFusion)
-	case "anka":
+	case string(types.ProviderAnka):
 		s.Spec = new(Anka)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)

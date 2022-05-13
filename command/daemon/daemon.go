@@ -324,6 +324,5 @@ func Register(app *kingpin.Application) {
 		Default("").
 		StringVar(&c.envFile)
 	cmd.Flag("pool", "file to seed the pool").
-		Default("pool.yml").
 		StringVar(&c.pool)
 }

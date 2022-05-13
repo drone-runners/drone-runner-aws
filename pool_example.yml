@@ -21,7 +21,7 @@ instances:
           - XXXXXXXXXXXXXXXX
   - name: ubuntu-gcp
     default: true
-    type: gcp
+    type: google
     pool: 1
     limit:
     platform:
@@ -37,7 +37,7 @@ instances:
         - europe-west1-b
   - name: osx
     default: true
-    type: vmfusion   # type of instance.  amazon | gcp | vmfusion | virtualbox | mac
+    type: vmfusion   # type of instance.  amazon | google | vmfusion | anka
     pool: 1    # total number of warm instances in the pool at all times
     limit: 100  # limit the total number of running servers. If exceeded block or error.
     platform:
@@ -55,7 +55,7 @@ instances:
       store_path: path/to/vmware_store  # path where vm images are stored on system
   - name: osx-anka
     default: true
-    type: anka   # type of instance.  amazon | gcp | vmfusion | virtualbox | mac
+    type: anka   # type of instance.  amazon | google | vmfusion | anka
     pool: 1    # total number of warm instances in the pool at all times
     limit: 100  # limit the total number of running servers. If exceeded block or error.
     platform:

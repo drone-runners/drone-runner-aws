@@ -4,17 +4,9 @@ Thank you for creating a pull request! To help us review / merge this can you ma
 
 ## The Basics
 
-Please show screen grabs of running the accepance tests. Testing is currently manual, but we will be adding automated testing soon.
+The exec commmand is tested automatically. You will need to run the delegate tests manually, please paste the output of the tests below.
 
-### Testing a drone build command
-
-- Tested the drone runner by running:
-
-```bash
-drone exec ?? more to come soon ...
-```
-
-### Testing the delegate command
+### Testing the delegate command manually
 
 ```BASH
 curl -d '{"id": "unique-stage-id","correlation_id":"abc1","pool_id":"ubuntu", "setup_request": {"network": {"id":"drone"}, "platform": { "os":"ubuntu" }}}' -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/setup
