@@ -12,6 +12,8 @@ import (
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/cenkalti/backoff/v4"
 )
@@ -225,7 +227,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	runResult, err := client.RunInstancesWithContext(ctx, in)
 	if err != nil {
 		logr.WithError(err).
-			Errorln("amazon: [provision] failed to list VMs")
+			Errorln("amazon: [provision] failed to create VMs")
 		return
 	}
 
@@ -338,11 +340,30 @@ func (p *provider) Hibernate(ctx context.Context, instanceID, poolName string) e
 	if err != nil {
 		logr.WithError(err).
 			Errorln("aws: failed to hibernate the VM")
+		if isHibernateRetryable(err) {
+			return &types.RetryableError{Msg: err.Error()}
+		}
 		return err
 	}
 
 	logr.Traceln("amazon: VM hibernated")
 	return nil
+}
+
+func isHibernateRetryable(origErr error) bool {
+	if request.IsErrorRetryable(origErr) {
+		return true
+	}
+
+	switch err := origErr.(type) {
+	case awserr.Error:
+		// Amazon linux 2 instance return error message on first try:
+		// UnsupportedOperation: Instance is not ready to hibernate yet, retry in a few minutes
+		if err.Code() == "UnsupportedOperation" {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *provider) Start(ctx context.Context, instanceID, poolName string) (string, error) {
