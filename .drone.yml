@@ -7,6 +7,15 @@ platform:
   arch: amd64
 
 steps:
+  - name: build
+    image: golang:1
+    commands:
+      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws
+    volumes:
+      - name: cache
+        path: /root/.cache/go-build
+    depends_on:
+      - clone
   - name: go vet and unit tests
     image: golang:1
     commands:
@@ -14,28 +23,18 @@ steps:
       - go test -cover ./...
     volumes:
       - name: cache
-        path: /go
+        path: /root/.cache/go-build
     depends_on:
-      - clone
+      - build
   - name: golangci-lint
     image: golangci/golangci-lint
     commands:
       - golangci-lint run --timeout 500s
     volumes:
       - name: cache
-        path: /go
+        path: /root/.cache/go-build
     depends_on:
-      - clone
-  - name: build
-    image: golang:1
-    commands:
-      - sh scripts/build.sh
-    volumes:
-      - name: cache
-        path: /go
-    depends_on:
-      - go vet and unit tests
-      - golangci-lint
+      - build
   - name: compiler checks
     image: golang:1
     commands:
@@ -43,6 +42,22 @@ steps:
       - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
     depends_on:
       - build
+  - name: exec checks
+    image: golang:1
+    commands:
+      - DRONE_RPC_HOST=not_used DRONE_RPC_SECRET=not_used release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+    environment:
+      DRONE_AWS_ACCESS_KEY_ID:
+        from_secret: aws_access_key_id
+      DRONE_AWS_ACCESS_KEY_SECRET:
+        from_secret: aws_secret_access_key
+    depends_on:
+      - compiler checks
+    when:
+      event:
+        exclude:
+          - pull_request
+
   - name: publish
     image: plugins/docker
     pull: if-not-exists
@@ -61,14 +76,15 @@ steps:
         - refs/tags/*
     depends_on:
       - compiler checks
+      - exec checks
 
 volumes:
   - name: cache
     temp: {}
-    
+
 ---
 kind: pipeline
-type: aws
+type: amazon
 name: build and publish mac intel binaries
 
 node:
@@ -91,10 +107,10 @@ steps:
         from_secret: github_token
 
 depends_on:
-- default
+  - default
 trigger:
   ref:
-  - refs/tags/*
+    - refs/tags/*
 
 ---
 kind: pipeline
@@ -102,20 +118,20 @@ type: docker
 name: manifest
 
 steps:
-- name: manifest
-  image: plugins/manifest
-  settings:
-    spec: docker/manifest.tmpl
-    auto_tag: true
-    ignore_missing: true
-    password:
-      from_secret: docker_password
-    username:
-      from_secret: docker_username
+  - name: manifest
+    image: plugins/manifest
+    settings:
+      spec: docker/manifest.tmpl
+      auto_tag: true
+      ignore_missing: true
+      password:
+        from_secret: docker_password
+      username:
+        from_secret: docker_username
 
 depends_on:
-- default
+  - default
 trigger:
   ref:
-  - refs/heads/master
-  - refs/tags/*
+    - refs/heads/master
+    - refs/tags/*

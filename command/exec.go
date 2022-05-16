@@ -22,6 +22,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -42,7 +43,8 @@ import (
 type execCommand struct {
 	*internal.Flags
 	Source        *os.File
-	Pool          string
+	vmType        string
+	PoolFile      string
 	LiteEngineURL string
 	Include       []string
 	Exclude       []string
@@ -60,6 +62,12 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	const runnerName = "exec"
 
 	rawsource, err := io.ReadAll(c.Source)
+	if err != nil {
+		return err
+	}
+
+	// load the environment configuration from the environment
+	envConfig, err := config.FromEnviron()
 	if err != nil {
 		return err
 	}
@@ -85,8 +93,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return v
 	}
 
-	// evaluates string replacement expressions and returns an
-	// update configuration.
+	// evaluates string replacement expressions and returns an update configuration.
 	env, err := envsubst.Eval(string(rawsource), subf)
 	if err != nil {
 		return err
@@ -116,20 +123,18 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		cancel()
 	})
 
-	poolFile, err := config.ParseFile(c.Pool)
-	if err != nil {
+	configPool, confErr := poolfile.ConfigPoolFile(c.PoolFile, c.vmType, &envConfig)
+	if confErr != nil {
 		logrus.WithError(err).
-			Errorln("exec: unable to parse pool file")
-		return err
+			Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, runnerName)
+	pools, err := poolfile.ProcessPool(configPool, runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("exec: unable to process pool file")
 		return err
 	}
-
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
 	if err != nil {
@@ -265,7 +270,8 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	}
 	switch state.Stage.Status {
 	case drone.StatusError, drone.StatusFailing, drone.StatusKilled:
-		os.Exit(1) //nolint:gocritic // failing out if something goes wrong
+		logrus.WithError(err).
+			Fatalln("exec: pipeline errored/failed/killed")
 	}
 	return nil
 }
@@ -289,14 +295,15 @@ func registerExec(app *kingpin.Application) {
 		FileVar(&c.Source)
 
 	cmd.Arg("pool", "file to seed the pool").
-		Default("pool.yml").
-		StringVar(&c.Pool)
+		StringVar(&c.PoolFile)
+
+	cmd.Flag("type", "which vm provider amazon/anka/google/vmfusion, default is amazon").
+		Default(string(types.ProviderAmazon)).
+		StringVar(&c.vmType)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)
-
-	// Check documentation of DRONE_RUNNER_VOLUMES to see how to
-	// use this param.
+	// Check documentation of DRONE_RUNNER_VOLUMES to see how to use this param.
 	cmd.Flag("volumes", "drone runner volumes").
 		StringsVar(&c.Volumes)
 

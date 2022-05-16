@@ -55,7 +55,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// load the configuration from the environment
-	env, err := FromEnviron()
+	env, err := config.FromEnviron()
 	if err != nil {
 		return err
 	}
@@ -299,7 +299,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	return err
 }
 
-func setupLogger(c *Config) {
+func setupLogger(c *config.EnvConfig) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),
@@ -324,6 +324,5 @@ func Register(app *kingpin.Application) {
 		Default("").
 		StringVar(&c.envFile)
 	cmd.Flag("pool", "file to seed the pool").
-		Default("pool.yml").
 		StringVar(&c.pool)
 }

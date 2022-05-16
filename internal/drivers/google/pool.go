@@ -76,7 +76,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	// create the instance
 	startTime := time.Now()
 
-	logr.Traceln("gcp: creating VM")
+	logr.Traceln("google: creating VM")
 
 	networkConfig := []*compute.AccessConfig{}
 
@@ -143,7 +143,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	op, err := p.service.Instances.Insert(p.projectID, zone, in).Context(ctx).Do()
 	if err != nil {
-		logr.WithError(err).Errorln("gcp: failed to provision VM")
+		logr.WithError(err).Errorln("google: failed to provision VM")
 		return nil, err
 	}
 
@@ -162,7 +162,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	vm, err := p.service.Instances.Get(p.projectID, zone, name).Context(ctx).Do()
 	if err != nil {
-		logr.WithError(err).Errorln("gcp: failed to get VM")
+		logr.WithError(err).Errorln("google: failed to get VM")
 		return nil, err
 	}
 
@@ -170,7 +170,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
-		Debugln("gcp: [provision] complete")
+		Debugln("google: [provision] complete")
 
 	return &instanceMap, nil
 }
@@ -192,7 +192,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 			if gerr, ok := err.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
-				logr.WithError(err).Errorln("gcp: VM not found")
+				logr.WithError(err).Errorln("google: VM not found")
 			}
 		}
 		_ = p.waitZoneOperation(ctx, instanceID, p.Zone())

@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/signal"
@@ -37,7 +37,6 @@ type setupCommand struct {
 }
 
 const (
-	aws          = "aws"
 	testPoolName = "test_pool"
 )
 
@@ -48,10 +47,13 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// load the configuration from the environment
-	env, err := daemon.FromEnviron()
+	env, err := config.FromEnviron()
 	if err != nil {
 		return err
 	}
+	// map arguments to configuration
+	env.AWS.AccessKeyID = c.awsAccessKeyID
+	env.AWS.AccessKeySecret = c.awsAccessKeySecret
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
 	if err != nil {
@@ -86,10 +88,10 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	)
 	// check cli options
 	switch c.vmType {
-	case aws:
-		logrus.Infoln("setup: using aws")
+	case string(types.ProviderAmazon):
+		logrus.Infoln("setup: using amazon")
 		if c.awsAccessKeyID == "" || c.awsAccessKeySecret == "" {
-			logrus.Fatalln("missing AWS access key ID or secret")
+			logrus.Fatalln("missing Amazon access key ID or secret")
 		}
 	default:
 		logrus.Fatalln("unsupported vm provider")
@@ -97,28 +99,22 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	store := database.ProvideInstanceStore(db)
 	poolManager := drivers.New(ctx, store, env.Settings.LiteEnginePath, env.Runner.Name)
 
-	var poolFile config.PoolFile
-	switch c.vmType {
-	case aws:
-		poolFile = poolfile.CreateAmazonPool(c.awsAccessKeyID, c.awsAccessKeySecret)
-	default:
+	configPool, confErr := poolfile.ConfigPoolFile("", c.vmType, &env)
+	if confErr != nil {
 		logrus.WithError(err).
-			Errorln("setup: unable to parse pool file")
-		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+			Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 	// process the pool file
-	pools, processErr := poolfile.ProcessPool(&poolFile, env.Runner.Name)
+	pools, processErr := poolfile.ProcessPool(configPool, env.Runner.Name)
 	if processErr != nil {
 		logrus.WithError(processErr).
-			Errorln("setup: unable to process pool file")
-		os.Exit(1)
+			Fatalln("setup: unable to process pool file")
 	}
 	// there is only one instance
 	addErr := poolManager.Add(pools[0])
 	if addErr != nil {
 		logrus.WithError(addErr).
-			Errorln("setup: unable to add pool")
-		os.Exit(1)
+			Fatalln("setup: unable to add pool")
 	}
 	// provision
 	instance, provisionErr := poolManager.Provision(ctx, testPoolName, env.Runner.Name, env.Settings.LiteEnginePath)
@@ -127,8 +123,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
 		logrus.WithError(provisionErr).
 			WithError(consoleErr).
-			Errorln("setup: unable to provision instance")
-		os.Exit(1)
+			Fatalln("setup: unable to provision instance")
 	}
 	// display the console logs
 	consoleLogs, err := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
@@ -147,8 +142,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 			WithError(cleanErr).
 			WithError(consoleErr).
 			WithField("instance", instance.ID).
-			Errorln("setup: unable to start instance")
-		os.Exit(1)
+			Fatalln("setup: unable to start instance")
 	}
 	// create an LE client so we can test the instance
 	leClient, leErr := lehelper.GetClient(instance, env.Runner.Name)
@@ -160,8 +154,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 			WithError(cleanErr).
 			WithError(consoleErr).
 			WithField("instance", instance.ID).
-			Errorln("setup: unable to start lite engine")
-		os.Exit(1)
+			Fatalln("setup: unable to start lite engine")
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
 	const timeoutSetup = 10 * time.Minute
@@ -176,12 +169,11 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 			WithError(cleanErr).
 			WithError(consoleErr).
 			WithField("instance", instance.ID).
-			Errorln("setup: unable to start instance")
-		os.Exit(1)
+			Fatalln("setup: unable to start instance")
 	}
 	logrus.WithField("response", fmt.Sprintf("%+v", healthResponse)).Traceln("LE.RetryHealth check complete")
 	// print the pool file
-	marshalledPool, marshalErr := yaml.Marshal(poolFile)
+	marshalledPool, marshalErr := yaml.Marshal(configPool)
 	if marshalErr != nil {
 		logrus.WithError(marshalErr).
 			Errorln("setup: unable to marshal pool file")
@@ -192,7 +184,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	return destroyErr
 }
 
-func setupLogger(c *daemon.Config) {
+func setupLogger(c *config.EnvConfig) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),
@@ -212,8 +204,8 @@ func Register(app *kingpin.Application) {
 
 	cmd := app.Command("setup", "sets up the runner").
 		Action(c.run)
-	cmd.Flag("type", "which vm provider aws/gcp/osx, default is aws").
-		Default("aws").
+	cmd.Flag("type", "which vm provider amazon/anka/google/vmfusion, default is amazon").
+		Default(string(types.ProviderAmazon)).
 		StringVar(&c.vmType)
 	cmd.Flag("envfile", "load the environment variable file").
 		Default(".env").
