@@ -11,6 +11,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"gopkg.in/yaml.v2"
 
 	"github.com/sirupsen/logrus"
 )
@@ -166,13 +167,13 @@ func mapPool(i *config.Instance, runnerName string) drivers.Pool {
 
 func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {
 	if filepath == "" {
-		logrus.Infoln("no pool file provided, creating in memmory")
+		logrus.Infof("no pool file provided, creating in memmory pool for %s", providerType)
 		// generate a pool file
 		switch providerType {
 		case string(types.ProviderAmazon):
 			// do we have the creds?
 			if conf.AWS.AccessKeyID == "" || conf.AWS.AccessKeySecret == "" {
-				return pool, fmt.Errorf("exec: missing aws credentials in env variables 'DRONE_AWS_ACCESS_KEY_ID' and 'DRONE_AWS_ACCESS_KEY_SECRET'")
+				return pool, fmt.Errorf("%s:missing credentials in env variables 'DRONE_AWS_ACCESS_KEY_ID' and 'DRONE_AWS_ACCESS_KEY_SECRET'", providerType)
 			}
 			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret), nil
 
@@ -186,6 +187,15 @@ func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool
 		logrus.WithError(err).Errorln("exec: unable to parse pool file")
 	}
 	return pool, err
+}
+
+func PrintPoolFile(pool *config.PoolFile) {
+	marshalledPool, marshalErr := yaml.Marshal(pool)
+	if marshalErr != nil {
+		logrus.WithError(marshalErr).
+			Errorln("unable to marshal pool file, cannot print")
+	}
+	fmt.Printf("Pool file:\n%s\n", marshalledPool)
 }
 
 func createAmazonPool(accessKeyID, accessKeySecret string) *config.PoolFile {

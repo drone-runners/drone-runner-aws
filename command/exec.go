@@ -125,8 +125,8 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 
 	configPool, confErr := poolfile.ConfigPoolFile(c.PoolFile, c.vmType, &envConfig)
 	if confErr != nil {
-		logrus.WithError(err).
-			Fatalln("Unable to load pool file, or use an in memory pool")
+		logrus.WithError(confErr).
+			Fatalln("exec: unable to load pool file, or use an in memory pool file")
 	}
 
 	pools, err := poolfile.ProcessPool(configPool, runnerName)
