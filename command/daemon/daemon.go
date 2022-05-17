@@ -128,6 +128,15 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
+	busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
+	freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
+	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("delegate: failed to start instance purger")
+		return err
+	}
+
 	opts := engine.Opts{
 		Repopulate: true,
 	}

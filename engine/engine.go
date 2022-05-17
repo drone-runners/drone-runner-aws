@@ -93,25 +93,15 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return ErrorPoolNotDefined
 	}
 
-	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
-	cleanUpFn := func() {
-		errCleanUp := manager.Destroy(context.Background(), poolName, instance.ID)
-		if errCleanUp != nil {
-			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
-		}
-	}
-
 	err = manager.Update(ctx, instance)
 	if err != nil {
-		logr.WithError(err).Errorln("failed to tag")
-		go cleanUpFn()
+		logr.WithError(err).Errorln("failed to update instance")
 		return err
 	}
 
 	client, err := lehelper.GetClient(instance, eng.runnerName)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
-		go cleanUpFn()
 		return err
 	}
 
@@ -122,7 +112,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	healthResponse, err := client.RetryHealth(ctx, timeoutSetup)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to call LE.RetryHealth")
-		go cleanUpFn()
 		return err
 	}
 
@@ -142,7 +131,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	setupResponse, err := client.Setup(ctx, setupRequest)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to call LE.Setup")
-		go cleanUpFn()
 		return err
 	}
 
