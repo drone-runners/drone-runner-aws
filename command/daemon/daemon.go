@@ -18,6 +18,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/handler/router"
@@ -43,8 +44,8 @@ import (
 var nocontext = context.Background()
 
 type daemonCommand struct {
-	envFile string
-	pool    string
+	envFile  string
+	poolFile string
 }
 
 func (c *daemonCommand) run(*kingpin.ParseContext) error {
@@ -71,8 +72,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	ctx, cancel := context.WithCancel(nocontext)
 	defer cancel()
 
-	// listen for termination signals to gracefully shutdown
-	// the runner daemon.
+	// listen for termination signals to gracefully shutdown the runner daemon.
 	ctx = signal.WithContextFunc(ctx, func() {
 		println("daemon: received signal, terminating process")
 		cancel()
@@ -96,29 +96,25 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	store := database.ProvideInstanceStore(db)
 	poolManager := drivers.New(ctx, store, env.Settings.LiteEnginePath, env.Runner.Name)
 
-	poolFile, err := config.ParseFile(c.pool)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("daemon: unable to parse pool file")
-		os.Exit(1) //nolint:gocritic // failing fast before we do any work.
+	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, string(types.ProviderAmazon), &env)
+	if confErr != nil {
+		logrus.WithError(confErr).
+			Fatalln("daemon: unable to load pool file, or use an in memory pool file")
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, env.Runner.Name)
+	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to process pool file")
-		os.Exit(1)
+			Fatalln("daemon: unable to process pool file")
 	}
 	err = poolManager.Add(pools...)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to add to the pool")
-		os.Exit(1)
+			Fatalln("daemon: unable to add to the pool")
 	}
 
 	if poolManager.Count() == 0 {
-		logrus.Infoln("daemon: no instance pools found... aborting")
-		os.Exit(1)
+		logrus.Fatalln("daemon: no instance pools found... aborting")
 	}
 
 	err = poolManager.PingProvider(ctx)
@@ -265,7 +261,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		pollerInstance.Poll(ctx, env.Runner.Capacity)
 		return nil
 	})
-
 	// if there is no keyfiles lets remove any old instances.
 	if !env.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
@@ -280,8 +275,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	err = poolManager.BuildPools(ctx)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: unable to build pool")
-		os.Exit(1)
+			Fatalln("daemon: unable to build pool")
 	}
 	logrus.Infoln("daemon: pool created")
 
@@ -333,5 +327,6 @@ func Register(app *kingpin.Application) {
 		Default("").
 		StringVar(&c.envFile)
 	cmd.Flag("pool", "file to seed the pool").
-		StringVar(&c.pool)
+		Default("").
+		StringVar(&c.poolFile)
 }

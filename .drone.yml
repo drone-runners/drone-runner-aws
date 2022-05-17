@@ -45,7 +45,7 @@ steps:
   - name: exec checks
     image: golang:1
     commands:
-      - DRONE_RPC_HOST=not_used DRONE_RPC_SECRET=not_used release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+      - DRONE_MAX_POOL_SIZE=1 DRONE_RPC_HOST=not_used DRONE_RPC_SECRET=not_used release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     environment:
       DRONE_AWS_ACCESS_KEY_ID:
         from_secret: aws_access_key_id

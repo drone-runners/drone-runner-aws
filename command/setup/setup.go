@@ -23,7 +23,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
-	"gopkg.in/yaml.v2"
 )
 
 // empty context.
@@ -173,12 +172,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	}
 	logrus.WithField("response", fmt.Sprintf("%+v", healthResponse)).Traceln("LE.RetryHealth check complete")
 	// print the pool file
-	marshalledPool, marshalErr := yaml.Marshal(configPool)
-	if marshalErr != nil {
-		logrus.WithError(marshalErr).
-			Errorln("setup: unable to marshal pool file")
-	}
-	fmt.Printf("setup: everything looks good !\npool file:\n%s", marshalledPool)
+	poolfile.PrintPoolFile(configPool)
 	// finally clean the instance
 	destroyErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
 	return destroyErr

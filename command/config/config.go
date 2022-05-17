@@ -185,6 +185,8 @@ type EnvConfig struct {
 		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge     int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
 		FreeMaxAge     int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
+		MinPoolSize    int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
+		MaxPoolSize    int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 	}
 
 	Environ struct {
