@@ -95,14 +95,14 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 			return nil, err
 		}
 		vDiskCopy := fmt.Sprintf("%s/%s.vmdk", filepath.Dir(p.VDiskPath), p.MachineName)
-		cpCmd := commandCp(p.VDiskPath, vDiskCopy)
+		cpCmd := commandCp(ctx, p.VDiskPath, vDiskCopy)
 		var raw []byte
 		raw, err = cpCmd.CombinedOutput()
 		if err != nil {
 			logrus.Debug(string(raw))
 			return nil, err
 		}
-		copyVDiskCmd := commandCopyVDisk(vDiskCopy, p.ResolveStorePath(fmt.Sprintf("%s.vmdk", p.MachineName)))
+		copyVDiskCmd := commandCopyVDisk(ctx, vDiskCopy, p.ResolveStorePath(fmt.Sprintf("%s.vmdk", p.MachineName)))
 		raw, err = copyVDiskCmd.CombinedOutput()
 		if err != nil {
 			logrus.Debug(string(raw))
@@ -142,18 +142,18 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		return nil, err
 	}
 
-	cmdCopyFile := commandCopyFileToGuest(f.Name(), f.Name(), p.username, p.password, p.vmxPath())
+	cmdCopyFile := commandCopyFileToGuest(ctx, f.Name(), f.Name(), p.username, p.password, p.vmxPath())
 	_, err = cmdCopyFile.CombinedOutput()
 	if err != nil {
 		return nil, err
 	}
 
-	cmdCheckFileExists := commandCheckFileExists(p.username, p.password, p.vmxPath(), f.Name())
+	cmdCheckFileExists := commandCheckFileExists(ctx, p.username, p.password, p.vmxPath(), f.Name())
 	_, err = cmdCheckFileExists.CombinedOutput()
 	if err != nil {
 		return nil, err
 	}
-	cmdRunScript := commandRunScriptInGuest(p.username, p.password, p.vmxPath(), fmt.Sprintf("bash %s", f.Name()))
+	cmdRunScript := commandRunScriptInGuest(ctx, p.username, p.password, p.vmxPath(), fmt.Sprintf("bash %s", f.Name()))
 	_, err = cmdRunScript.CombinedOutput()
 	if err != nil {
 		return nil, err
@@ -213,28 +213,30 @@ func (p *provider) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
-func commandCopyFileToGuest(src, dest, username, password, path string) *exec.Cmd {
-	return exec.Command(vmrunbin, "-gu", username, "-gp", password, "copyFileFromHostToGuest", path, src, dest)
+func commandCopyFileToGuest(ctx context.Context, src, dest, username, password, path string) *exec.Cmd {
+	return exec.CommandContext(ctx, vmrunbin, "-gu", username, "-gp", password, "copyFileFromHostToGuest", path, src, dest)
 }
 
-func commandRunScriptInGuest(username, password, path, script string) *exec.Cmd {
-	return exec.Command(vmrunbin, "-gu", username, "-gp", password, "runScriptInGuest", path, "-noWait", "/bin/bash", script)
+func commandRunScriptInGuest(ctx context.Context, username, password, path, script string) *exec.Cmd {
+	return exec.CommandContext(ctx, vmrunbin, "-gu", username, "-gp", password, "runScriptInGuest", path, "-noWait", "/bin/bash", script)
 }
 
-func commandCheckFileExists(username, password, vmxPath, path string) *exec.Cmd {
-	return exec.Command(vmrunbin, "-gu", username, "-gp", password, "fileExistsInGuest", vmxPath, path)
+func commandCheckFileExists(ctx context.Context, username, password, vmxPath, path string) *exec.Cmd {
+	return exec.CommandContext(ctx, vmrunbin, "-gu", username, "-gp", password, "fileExistsInGuest", vmxPath, path)
 }
 
-func commandCopyVDisk(src, dest string) *exec.Cmd {
-	return exec.Command(
+func commandCopyVDisk(ctx context.Context, src, dest string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		vdiskmanbin, "-n",
 		src,
 		dest,
 	)
 }
 
-func commandCp(src, dest string) *exec.Cmd {
-	return exec.Command(
+func commandCp(ctx context.Context, src, dest string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		"cp",
 		src,
 		dest,

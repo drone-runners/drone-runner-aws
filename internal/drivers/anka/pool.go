@@ -60,14 +60,14 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		WithField("pool", opts.PoolName)
 
 	var result []byte
-	cmdCloneVM := commandCloneVM(p.vmID, machineName)
+	cmdCloneVM := commandCloneVM(ctx, p.vmID, machineName)
 	_, err = cmdCloneVM.CombinedOutput()
 	if err != nil {
 		logr.WithError(err).Error("Failed to clone VM")
 		return nil, err
 	}
 
-	cmdStartVM := commandAnka(machineName, "start")
+	cmdStartVM := commandAnka(ctx, machineName, "start")
 	_, err = cmdStartVM.CombinedOutput()
 	if err != nil {
 		logr.WithError(err).Error("Failed to start VM")
@@ -75,7 +75,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	}
 	var ip string
 	for i := 1; i <= 60; i++ { // loop for 60s until we get an IP
-		cmdIP := commandIP(machineName, "show")
+		cmdIP := commandIP(ctx, machineName, "show")
 		result, err = cmdIP.CombinedOutput()
 		if err != nil {
 			logrus.Debugf("Not there yet %d/%d, error: %s", i, 60, err) //nolint
@@ -90,7 +90,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		Status string   `json:"status"`
 		Body   ankaShow `json:"body"`
 	}
-	cmdShow := commandAnka(machineName, "show")
+	cmdShow := commandAnka(ctx, machineName, "show")
 	result, err = cmdShow.CombinedOutput()
 	if err != nil {
 		logr.WithError(err).Errorf("Failed to get VM info")
@@ -118,7 +118,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 		return nil, err
 	}
 
-	cmdCopy := commandCP(f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.UUID, f.Name()))
+	cmdCopy := commandCP(ctx, f.Name(), fmt.Sprintf("%s:%s", createdVM.Body.UUID, f.Name()))
 	_, err = cmdCopy.CombinedOutput()
 	if err != nil {
 		logr.WithError(err).Errorf("Failed to copy userdata to VM")
@@ -127,7 +127,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 
 	logr.Info("Running script in VM")
 
-	cmdRunScript := commandRunScript(createdVM.Body.UUID, f.Name())
+	cmdRunScript := commandRunScript(ctx, createdVM.Body.UUID, f.Name())
 	_, err = cmdRunScript.CombinedOutput()
 	if err != nil {
 		logr.WithError(err).Errorf("Failed to run script in VM")
@@ -168,7 +168,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	for _, id := range instanceIDs {
 		// stop & delete VM
-		cmdDelete := commandDeleteVM(id)
+		cmdDelete := commandDeleteVM(ctx, id)
 		_, err = cmdDelete.CombinedOutput()
 		if err != nil {
 			logr.WithError(err).Errorln("Anka: error deleting VM")
@@ -190,16 +190,18 @@ func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
 	return "", errors.New("Unimplemented")
 }
 
-func commandCloneVM(vmID, newVMName string) *exec.Cmd {
-	return exec.Command(
+func commandCloneVM(ctx context.Context, vmID, newVMName string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		BIN, "clone",
 		vmID,
 		newVMName,
 	)
 }
 
-func commandAnka(vmID, command string) *exec.Cmd {
-	return exec.Command(
+func commandAnka(ctx context.Context, vmID, command string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		BIN,
 		"--machine-readable",
 		command,
@@ -207,8 +209,9 @@ func commandAnka(vmID, command string) *exec.Cmd {
 	)
 }
 
-func commandIP(vmID, command string) *exec.Cmd {
-	return exec.Command(
+func commandIP(ctx context.Context, vmID, command string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		BIN,
 		command,
 		vmID,
@@ -216,8 +219,9 @@ func commandIP(vmID, command string) *exec.Cmd {
 	)
 }
 
-func commandCP(src, dest string) *exec.Cmd {
-	return exec.Command(
+func commandCP(ctx context.Context, src, dest string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		BIN,
 		"cp",
 		src,
@@ -225,8 +229,9 @@ func commandCP(src, dest string) *exec.Cmd {
 	)
 }
 
-func commandRunScript(vmID, command string) *exec.Cmd {
-	return exec.Command(
+func commandRunScript(ctx context.Context, vmID, command string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		BIN,
 		"run",
 		vmID,
@@ -235,8 +240,9 @@ func commandRunScript(vmID, command string) *exec.Cmd {
 	)
 }
 
-func commandDeleteVM(vmID string) *exec.Cmd {
-	return exec.Command(
+func commandDeleteVM(ctx context.Context, vmID string) *exec.Cmd {
+	return exec.CommandContext(
+		ctx,
 		BIN,
 		"delete",
 		"--yes",
