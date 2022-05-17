@@ -175,7 +175,7 @@ func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool
 			if conf.AWS.AccessKeyID == "" || conf.AWS.AccessKeySecret == "" {
 				return pool, fmt.Errorf("%s:missing credentials in env variables 'DRONE_AWS_ACCESS_KEY_ID' and 'DRONE_AWS_ACCESS_KEY_SECRET'", providerType)
 			}
-			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret), nil
+			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 
 		default:
 			err = fmt.Errorf("unknown provider type %s, unable to create pool file in memory", providerType)
@@ -198,13 +198,13 @@ func PrintPoolFile(pool *config.PoolFile) {
 	fmt.Printf("Pool file:\n%s\n", marshalledPool)
 }
 
-func createAmazonPool(accessKeyID, accessKeySecret string) *config.PoolFile {
+func createAmazonPool(accessKeyID, accessKeySecret string, minPoolSize, maxPoolSize int) *config.PoolFile {
 	instance := config.Instance{
 		Name:    "test_pool",
 		Default: true,
 		Type:    string(types.ProviderAmazon),
-		Pool:    1,
-		Limit:   1,
+		Pool:    minPoolSize,
+		Limit:   maxPoolSize,
 		Platform: config.Platform{
 			Arch: "amd64",
 			OS:   "linux",
