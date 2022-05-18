@@ -173,9 +173,9 @@ type EnvConfig struct {
 	}
 
 	AWS struct {
-		AccessKeyID     string `envconfig:"DRONE_AWS_ACCESS_KEY_ID"`
-		AccessKeySecret string `envconfig:"DRONE_AWS_ACCESS_KEY_SECRET"`
-		Region          string `envconfig:"DRONE_AWS_REGION"`
+		AccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID"`
+		AccessKeySecret string `envconfig:"AWS_ACCESS_KEY_SECRET"`
+		Region          string `envconfig:"AWS_DEFAULT_REGION" default:"us-east-2"`
 	}
 
 	Limit struct {
