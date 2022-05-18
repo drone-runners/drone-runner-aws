@@ -44,14 +44,19 @@ func WithVDiskPath(vDiskPath string) Option {
 	}
 }
 
-// WithUserData returns an option to set the cloud-init
-// template from text.
-func WithUserData(text string) Option {
+// WithUserData returns an option to set the cloud-init template from a file location or passed in text.
+func WithUserData(text, path string) Option {
+	if text != "" {
+		return func(p *provider) {
+			p.userData = text
+		}
+	}
 	return func(p *provider) {
-		if text != "" {
-			data, err := os.ReadFile(text)
+		if path != "" {
+			data, err := os.ReadFile(path)
 			if err != nil {
-				logrus.Error(err)
+				logrus.WithError(err).
+					Fatalln("failed to read user_data file")
 				return
 			}
 			p.userData = string(data)
