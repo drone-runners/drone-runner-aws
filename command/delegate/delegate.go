@@ -24,6 +24,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
@@ -36,15 +37,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type delegateCommand struct {
-	envfile        string
-	env            Config
+	envFile        string
+	env            config.EnvConfig
 	pool           string
 	poolManager    *drivers.Manager
 	runnerName     string
@@ -59,16 +59,16 @@ func RegisterDelegate(app *kingpin.Application) {
 	cmd := app.Command("delegate", "starts the delegate").
 		Action(c.run)
 	cmd.Flag("envfile", "load the environment variable file").
-		Default(".env").
-		StringVar(&c.envfile)
-	cmd.Flag("pool", "file to seed the amazon pool").
-		Default("pool.yml").
+		Default("").
+		StringVar(&c.envFile)
+	cmd.Flag("pool", "file to seed the pool").
+		Default("").
 		StringVar(&c.pool)
 }
 
 // helper function configures the global logger from
 // the loaded configuration.
-func setupLogger(c *Config) {
+func setupLogger(c *config.EnvConfig) {
 	logger.Default = logger.Logrus(
 		logrus.NewEntry(
 			logrus.StandardLogger(),
@@ -85,27 +85,17 @@ func setupLogger(c *Config) {
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
-	envError := godotenv.Load(c.envfile)
+	envError := godotenv.Load(c.envFile)
 	if envError != nil {
 		logrus.WithError(envError).
-			Warnf("delegate: failed to load environment variables from file: %s", c.envfile)
+			Warnf("delegate: failed to load environment variables from file: %s", c.envFile)
 	}
 	// load the configuration from the environment
-	var env Config
-	processEnvErr := envconfig.Process("", &env)
-	if processEnvErr != nil {
-		logrus.WithError(processEnvErr).
-			Errorln("delegate: failed to load configuration")
-	}
-
-	// Pass in the environment configs
-	c.env = env
-
-	// load the configuration from the environment
-	env, err := fromEnviron()
+	env, err := config.FromEnviron()
 	if err != nil {
 		return err
 	}
+	c.env = env
 	// setup the global logrus logger.
 	setupLogger(&env)
 
@@ -130,14 +120,18 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	store := database.ProvideInstanceStore(db)
 	c.poolManager = drivers.New(ctx, store, c.liteEnginePath, c.runnerName)
 
-	poolFile, err := config.ParseFile(c.pool)
+	configPool, confErr := poolfile.ConfigPoolFile("", string(types.ProviderAmazon), &env)
+	if confErr != nil {
+		logrus.WithError(err).
+			Fatalln("Unable to load pool file, or use an in memory pool")
+	}
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to parse pool file")
 		return err
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, c.runnerName)
+	pools, err := poolfile.ProcessPool(configPool, c.runnerName)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: unable to process pool file")
