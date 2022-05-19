@@ -173,9 +173,9 @@ func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool
 		case string(types.ProviderAmazon):
 			// do we have the creds?
 			if conf.AWS.AccessKeyID == "" || conf.AWS.AccessKeySecret == "" {
-				return pool, fmt.Errorf("%s:missing credentials in env variables 'DRONE_AWS_ACCESS_KEY_ID' and 'DRONE_AWS_ACCESS_KEY_SECRET'", providerType)
+				return pool, fmt.Errorf("%s:missing credentials in env variables 'AWS_ACCESS_KEY_ID' and 'AWS_ACCESS_KEY_SECRET'", providerType)
 			}
-			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret, conf.AWS.Region, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 
 		default:
 			err = fmt.Errorf("unknown provider type %s, unable to create pool file in memory", providerType)
@@ -198,7 +198,7 @@ func PrintPoolFile(pool *config.PoolFile) {
 	fmt.Printf("Pool file:\n%s\n", marshalledPool)
 }
 
-func createAmazonPool(accessKeyID, accessKeySecret string, minPoolSize, maxPoolSize int) *config.PoolFile {
+func createAmazonPool(accessKeyID, accessKeySecret, region string, minPoolSize, maxPoolSize int) *config.PoolFile {
 	instance := config.Instance{
 		Name:    "test_pool",
 		Default: true,
@@ -211,7 +211,7 @@ func createAmazonPool(accessKeyID, accessKeySecret string, minPoolSize, maxPoolS
 		},
 		Spec: &config.Amazon{
 			Account: config.AmazonAccount{
-				Region:          "us-east-2",
+				Region:          region,
 				AccessKeyID:     accessKeyID,
 				AccessKeySecret: accessKeySecret,
 			},
