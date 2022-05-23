@@ -77,6 +77,13 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		println("daemon: received signal, terminating process")
 		cancel()
 	})
+	// we check that we have the following 2 env variables
+	if env.Client.Host == "" {
+		logrus.Fatalln("daemon: missing required environment variable DRONE_RUNNER_HOST")
+	}
+	if env.Client.Secret == "" {
+		logrus.Fatalln("daemon: Missing required environment variable DRONE_RUNNER_SECRET")
+	}
 
 	cli := client.New(
 		env.Client.Address,

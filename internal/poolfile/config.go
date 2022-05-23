@@ -184,7 +184,9 @@ func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool
 	}
 	pool, err = config.ParseFile(filepath)
 	if err != nil {
-		logrus.WithError(err).Errorln("exec: unable to parse pool file")
+		logrus.WithError(err).
+			WithField("filepath", filepath).
+			Errorln("exec: unable to parse pool file")
 	}
 	return pool, err
 }

@@ -138,9 +138,9 @@ type EnvConfig struct {
 
 	Client struct {
 		Address    string `ignored:"true"`
-		Proto      string `envconfig:"DRONE_RPC_PROTO"  default:"http"`
-		Host       string `envconfig:"DRONE_RPC_HOST" required:"true"`
-		Secret     string `envconfig:"DRONE_RPC_SECRET" required:"true"`
+		Proto      string `envconfig:"DRONE_RPC_PROTO" default:"http"`
+		Host       string `envconfig:"DRONE_RPC_HOST"`
+		Secret     string `envconfig:"DRONE_RPC_SECRET"`
 		SkipVerify bool   `envconfig:"DRONE_RPC_SKIP_VERIFY"`
 		Dump       bool   `envconfig:"DRONE_RPC_DUMP_HTTP"`
 		DumpBody   bool   `envconfig:"DRONE_RPC_DUMP_HTTP_BODY"`
