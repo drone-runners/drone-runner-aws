@@ -98,7 +98,28 @@ touch $HOME/.env
 /usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
+const macArm64Script = `
+#!/usr/bin/env bash
+mkdir /tmp/certs/
+
+echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
+chmod 0600 {{ .CaCertPath }}
+
+echo {{ .TLSCert | base64 }} | base64 -d  >> {{ .CertPath }}
+chmod 0600 {{ .CertPath }}
+
+echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
+chmod 0600 {{ .KeyPath }}
+
+/usr/local/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /usr/local/bin/lite-engine
+chmod 777 /usr/local/bin/lite-engine
+touch $HOME/.env
+echo -e "SkipPrepareServer=true" >> .env;
+/usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+`
+
 var macTemplate = template.Must(template.New("mac").Funcs(funcs).Parse(macScript))
+var macArm64Template = template.Must(template.New("mac-arm64").Funcs(funcs).Parse(macArm64Script))
 
 func Mac(params *Params) (payload string) {
 	sb := &strings.Builder{}
@@ -107,7 +128,7 @@ func Mac(params *Params) (payload string) {
 	certPath := filepath.Join(certsDir, "server-cert.pem")
 	keyPath := filepath.Join(certsDir, "server-key.pem")
 
-	err := macTemplate.Execute(sb, struct {
+	var p = struct {
 		Params
 		CaCertPath string
 		CertPath   string
@@ -117,11 +138,21 @@ func Mac(params *Params) (payload string) {
 		CaCertPath: caCertPath,
 		CertPath:   certPath,
 		KeyPath:    keyPath,
-	})
-	if err != nil {
-		panic(err)
 	}
 
+	if params.Architecture == "arm64" {
+		err := macArm64Template.Execute(sb, p)
+		if err != nil {
+			err = fmt.Errorf("failed to execute mac arm64 template to get init script: %w", err)
+			panic(err)
+		}
+	} else {
+		err := macTemplate.Execute(sb, p)
+		if err != nil {
+			err = fmt.Errorf("failed to execute mac amd64 template to get init script: %w", err)
+			panic(err)
+		}
+	}
 	return sb.String()
 }
 
