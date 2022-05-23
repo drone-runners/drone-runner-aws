@@ -107,6 +107,10 @@ steps:
     depends_on:
       - compiler checks
       - exec checks
+      - delegate checks
+      - golangci-lint
+      - go vet and unit tests
+
 
 volumes:
   - name: cache
