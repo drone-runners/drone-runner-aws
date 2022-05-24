@@ -122,10 +122,10 @@ type: amazon
 name: build and publish binaries
 
 node:
-  cluster: mac
+  cluster: mac1
 
 pool:
-  use: osx
+  use: osx-anka
 
 steps:
   - name: build linux binary
