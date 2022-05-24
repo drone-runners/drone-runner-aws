@@ -118,7 +118,7 @@ volumes:
 
 ---
 kind: pipeline
-type: amazon
+type: vm
 name: build and publish binaries
 
 node:
