@@ -1,5 +1,51 @@
 # Changelog
 
+## [v1.0.0-rc.5](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.5) (2022-05-25)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.4...v1.0.0-rc.5)
+
+**Implemented enhancements:**
+
+- \(dron-298\) allow env vars for delegate command [\#111](https://github.com/drone-runners/drone-runner-aws/pull/111) ([tphoney](https://github.com/tphoney))
+- \(feat\) allow custom cloud-inits contents and files for a pool [\#108](https://github.com/drone-runners/drone-runner-aws/pull/108) ([tphoney](https://github.com/tphoney))
+- \(feat\) allow min/max pool size to be set from env [\#106](https://github.com/drone-runners/drone-runner-aws/pull/106) ([tphoney](https://github.com/tphoney))
+- \(DRON-281\) daemon can start using env vars [\#104](https://github.com/drone-runners/drone-runner-aws/pull/104) ([tphoney](https://github.com/tphoney))
+- adding acceptance test and env vars [\#103](https://github.com/drone-runners/drone-runner-aws/pull/103) ([tphoney](https://github.com/tphoney))
+- \(feat\) upgrade lite-engine to v0.1.0 [\#101](https://github.com/drone-runners/drone-runner-aws/pull/101) ([tphoney](https://github.com/tphoney))
+- \(feat\) - new provider for building on osx - Anka [\#99](https://github.com/drone-runners/drone-runner-aws/pull/99) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(feat\) adding setup command [\#97](https://github.com/drone-runners/drone-runner-aws/pull/97) ([tphoney](https://github.com/tphoney))
+- \(feat\) - osx support with vmware fusion [\#92](https://github.com/drone-runners/drone-runner-aws/pull/92) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- Add support for VM hibernate [\#91](https://github.com/drone-runners/drone-runner-aws/pull/91) ([shubham149](https://github.com/shubham149))
+- Add support for DRONE\_RUNNER\_VOLUMES in the Drone AWS runner. [\#88](https://github.com/drone-runners/drone-runner-aws/pull/88) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(feat\) - store certs per pipeline & instance state [\#87](https://github.com/drone-runners/drone-runner-aws/pull/87) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(feat\) - provide ability for single pool file for all cloud providers [\#86](https://github.com/drone-runners/drone-runner-aws/pull/86) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- daemon: features that docker runner supports [\#84](https://github.com/drone-runners/drone-runner-aws/pull/84) ([marko-gacesa](https://github.com/marko-gacesa))
+- Implemented network mode for daemon command [\#81](https://github.com/drone-runners/drone-runner-aws/pull/81) ([marko-gacesa](https://github.com/marko-gacesa))
+- Added support for private repos and custom entrypoint [\#79](https://github.com/drone-runners/drone-runner-aws/pull/79) ([marko-gacesa](https://github.com/marko-gacesa))
+- \(feat\) gcp support [\#78](https://github.com/drone-runners/drone-runner-aws/pull/78) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(DRON-220\) add availability zones for aws [\#74](https://github.com/drone-runners/drone-runner-aws/pull/74) ([tphoney](https://github.com/tphoney))
+
+**Fixed bugs:**
+
+- \(fix\) fix the aws env vars [\#109](https://github.com/drone-runners/drone-runner-aws/pull/109) ([tphoney](https://github.com/tphoney))
+- \(fixes\)  dron-285 - fixes issues with anka & adds purger to daemon [\#107](https://github.com/drone-runners/drone-runner-aws/pull/107) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(feat\) have a single instance db for exec / setup. [\#102](https://github.com/drone-runners/drone-runner-aws/pull/102) ([tphoney](https://github.com/tphoney))
+- fixes build script & add label functionality for pipelines [\#95](https://github.com/drone-runners/drone-runner-aws/pull/95) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- fixes issue cause by the introduction of sqlite [\#93](https://github.com/drone-runners/drone-runner-aws/pull/93) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(DRON-255\) fix typo for reporting instance failures [\#90](https://github.com/drone-runners/drone-runner-aws/pull/90) ([tphoney](https://github.com/tphoney))
+- Handle missing pool file [\#82](https://github.com/drone-runners/drone-runner-aws/pull/82) ([marko-gacesa](https://github.com/marko-gacesa))
+- pool manager: handling cancelled context [\#80](https://github.com/drone-runners/drone-runner-aws/pull/80) ([marko-gacesa](https://github.com/marko-gacesa))
+- \(fix\) readd aws keypair [\#77](https://github.com/drone-runners/drone-runner-aws/pull/77) ([tphoney](https://github.com/tphoney))
+
+**Merged pull requests:**
+
+- \(maint\) publish happens after all checks pass [\#113](https://github.com/drone-runners/drone-runner-aws/pull/113) ([tphoney](https://github.com/tphoney))
+- Build mac binary [\#100](https://github.com/drone-runners/drone-runner-aws/pull/100) ([tphoney](https://github.com/tphoney))
+- Add dynamic wait for vm hibernate [\#98](https://github.com/drone-runners/drone-runner-aws/pull/98) ([shubham149](https://github.com/shubham149))
+- \(task\) refactor pool/driver struct [\#94](https://github.com/drone-runners/drone-runner-aws/pull/94) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- delegate command uses its own config [\#83](https://github.com/drone-runners/drone-runner-aws/pull/83) ([marko-gacesa](https://github.com/marko-gacesa))
+- compiler unit tests [\#76](https://github.com/drone-runners/drone-runner-aws/pull/76) ([marko-gacesa](https://github.com/marko-gacesa))
+
 ## [v1.0.0-rc.4](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.4) (2022-02-10)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.3...v1.0.0-rc.4)
@@ -13,6 +59,10 @@
 
 - \(dron-217\) Remove SSH [\#72](https://github.com/drone-runners/drone-runner-aws/pull/72) ([marko-gacesa](https://github.com/marko-gacesa))
 - \(fix\) default to amd64 if no arch is given [\#71](https://github.com/drone-runners/drone-runner-aws/pull/71) ([tphoney](https://github.com/tphoney))
+
+**Merged pull requests:**
+
+- \(maint\) rc4 release prep [\#75](https://github.com/drone-runners/drone-runner-aws/pull/75) ([tphoney](https://github.com/tphoney))
 
 ## [v1.0.0-rc.3](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.3) (2022-02-01)
 
