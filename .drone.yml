@@ -135,7 +135,7 @@ steps:
   - name: build mac intel binary
     commands:
       - brew install golang
-      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o drone-runner-aws-darwin-amd64
+      - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-amd64
   - name: release
     image: plugins/github-release
     settings:
