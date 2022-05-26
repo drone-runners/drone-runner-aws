@@ -40,16 +40,15 @@ type Instance struct {
 	Region       string        `db:"instance_region" json:"region"`
 	Zone         string        `db:"instance_zone" json:"zone"`
 	Size         string        `db:"instance_size" json:"size"`
-	Platform     string        `db:"instance_platform" json:"platform"`
-	Arch         string        `db:"instance_arch" json:"arch"`
-	CAKey        []byte        `db:"instance_ca_key" json:"ca_key"`
-	CACert       []byte        `db:"instance_ca_cert" json:"ca_cert"`
-	TLSKey       []byte        `db:"instance_tls_key" json:"tls_key"`
-	TLSCert      []byte        `db:"instance_tls_cert" json:"tls_cert"`
-	Stage        string        `db:"instance_stage" json:"stage"`
-	Updated      int64         `db:"instance_updated" json:"updated"`
-	Started      int64         `db:"instance_started" json:"started"`
-	IsHibernated bool          `db:"is_hibernated" json:"is_hibernated"`
+	Platform     `json:"platform"`
+	CAKey        []byte `db:"instance_ca_key" json:"ca_key"`
+	CACert       []byte `db:"instance_ca_cert" json:"ca_cert"`
+	TLSKey       []byte `db:"instance_tls_key" json:"tls_key"`
+	TLSCert      []byte `db:"instance_tls_cert" json:"tls_cert"`
+	Stage        string `db:"instance_stage" json:"stage"`
+	Updated      int64  `db:"instance_updated" json:"updated"`
+	Started      int64  `db:"instance_started" json:"started"`
+	IsHibernated bool   `db:"is_hibernated" json:"is_hibernated"`
 }
 
 type InstanceCreateOpts struct {
@@ -58,21 +57,19 @@ type InstanceCreateOpts struct {
 	TLSKey         []byte
 	TLSCert        []byte
 	LiteEnginePath string
-	OS             string
-	Arch           string
-	Version        string
-	PoolName       string
-	RunnerName     string
-	Limit          int
-	Pool           int
+	Platform
+	PoolName   string
+	RunnerName string
+	Limit      int
+	Pool       int
 }
 
 // Platform defines the target platform.
 type Platform struct {
-	OS      string `json:"os,omitempty"`
-	Arch    string `json:"arch,omitempty"`
-	Variant string `json:"variant,omitempty"`
-	Version string `json:"version,omitempty"`
+	OS      string `json:"os,omitempty" db:"instance_os"`
+	Arch    string `json:"arch,omitempty" db:"instance_arch"`
+	Variant string `json:"variant,omitempty" db:"instance_variant"`
+	Version string `json:"version,omitempty" db:"instance_version"`
 }
 
 type QueryParams struct {

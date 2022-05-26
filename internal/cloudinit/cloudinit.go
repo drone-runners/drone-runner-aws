@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // Params defines parameters used to create userdata files.
@@ -21,8 +23,7 @@ type Params struct {
 	CACert         string
 	TLSCert        string
 	TLSKey         string
-	Platform       string
-	Architecture   string
+	Platform       types.Platform
 }
 
 var funcs = map[string]interface{}{
@@ -92,7 +93,7 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
-/usr/local/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /usr/local/bin/lite-engine
+/usr/local/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine
 chmod 777 /usr/local/bin/lite-engine
 touch $HOME/.env
 /usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
@@ -111,7 +112,7 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
-wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /opt/homebrew/bin/lite-engine
+wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine
 chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
 echo -e "SkipPrepareServer=true" >> .env;
@@ -140,7 +141,7 @@ func Mac(params *Params) (payload string) {
 		KeyPath:    keyPath,
 	}
 
-	if params.Architecture == "arm64" {
+	if params.Platform.Arch == "arm64" {
 		err := macArm64Template.Execute(sb, p)
 		if err != nil {
 			err = fmt.Errorf("failed to execute mac arm64 template to get init script: %w", err)
@@ -161,7 +162,7 @@ const linuxScript = `
 apt:
   sources:
     docker.list:
-      source: deb [arch={{ .Architecture }}] https://download.docker.com/linux/ubuntu $RELEASE stable
+      source: deb [arch={{ .Platform.Arch }}] https://download.docker.com/linux/ubuntu $RELEASE stable
       keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 packages:
 - wget
@@ -180,7 +181,7 @@ write_files:
   encoding: b64
   content: {{ .TLSKey | base64 }}
 runcmd:
-- 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /usr/bin/lite-engine'
+- 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 - 'touch /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
@@ -276,7 +277,7 @@ choco feature enable -n=useRememberedArgumentsForUpgrades
 choco install -y git
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
-Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
+Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "C:\Program Files\lite-engine\log.out" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 </powershell>`

@@ -17,9 +17,7 @@ type Pool struct {
 	MaxSize int
 	MinSize int
 
-	OS      string
-	Arch    string
-	Version string
+	Platform types.Platform
 
 	Driver Driver
 }

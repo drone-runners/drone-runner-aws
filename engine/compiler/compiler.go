@@ -68,11 +68,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// get OS and the root directory (where the work directory and everything else will be placed)
 	targetPool := pipeline.Pool.Use
-	pipelineOS, pipelineRoot := c.PoolManager.Inspect(targetPool)
-	if pipelineOS == "" {
-		// TODO return an error to the caller if the requested pool does not exist.
-		return spec
-	}
+	pipelinePlatform, pipelineRoot := c.PoolManager.Inspect(targetPool)
 
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
 	spec.CloudInstance.PoolName = targetPool
@@ -81,13 +77,13 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// * homeDir is home directory on the host machine where netrc file will be placed
 	// * sourceDir is directory on the host machine where source code will be pulled
 	// * scriptDir is directory on the host machine where script files (with commands) will be placed
-	directories, homeDir, sourceDir, scriptDir := createDirectories(pipelineOS, pipelineRoot)
+	directories, homeDir, sourceDir, scriptDir := createDirectories(pipelinePlatform.OS, pipelineRoot)
 	spec.Files = append(spec.Files, directories...)
 
 	// create netrc file if needed
 	if netrc := args.Netrc; netrc != nil && netrc.Password != "" {
-		netrcfile := oshelp.GetNetrc(pipelineOS)
-		netrcpath := oshelp.JoinPaths(pipelineOS, homeDir, netrcfile)
+		netrcfile := oshelp.GetNetrc(pipelinePlatform.OS)
+		netrcpath := oshelp.JoinPaths(pipelinePlatform.OS, homeDir, netrcfile)
 		netrcdata := fmt.Sprintf(
 			"machine %s login %s password %s",
 			netrc.Machine,
@@ -135,7 +131,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// create the clone step, maybe
 	if !pipeline.Clone.Disable {
-		cloneScript := oshelp.GenScript(pipelineOS,
+		cloneScript := oshelp.GenScript(pipelinePlatform.OS,
 			clone.Commands(
 				clone.Args{
 					Branch: args.Build.Target,
@@ -145,9 +141,9 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				},
 			),
 		)
-		clonePath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, "clone"))
+		clonePath := oshelp.JoinPaths(pipelinePlatform.OS, pipelineRoot, "opt", oshelp.GetExt(pipelinePlatform.OS, "clone"))
 
-		entrypoint := getEntrypoint(pipelineOS)
+		entrypoint := getEntrypoint(pipelinePlatform.OS)
 		command := []string{clonePath}
 
 		spec.Steps = append(spec.Steps, &engine.Step{
@@ -184,7 +180,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		Branch:   args.Build.Target,
 	}
 	// create steps
-	containerSourcePath := getContainerSourcePath(pipelineOS)
+	containerSourcePath := getContainerSourcePath(pipelinePlatform.OS)
 	haveImageSteps := false // should be true if there is at least one step that uses an image
 	for _, src := range pipeline.Services {
 		src.Detach = true // services are the same as steps, but are executed first and are detached
@@ -201,13 +197,13 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 		// set entrypoint if running on the host or if the container has commands
 		if src.Image == "" || (src.Image != "" && len(src.Commands) > 0) {
-			entrypoint = getEntrypoint(pipelineOS)
+			entrypoint = getEntrypoint(pipelinePlatform.OS)
 		}
 
 		// build the script of commands we will execute
 		if len(src.Commands) > 0 {
-			scriptToExecute := oshelp.GenScript(pipelineOS, src.Commands)
-			scriptPath := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt", oshelp.GetExt(pipelineOS, stepID))
+			scriptToExecute := oshelp.GenScript(pipelinePlatform.OS, src.Commands)
+			scriptPath := oshelp.JoinPaths(pipelinePlatform.OS, pipelineRoot, "opt", oshelp.GetExt(pipelinePlatform.OS, stepID))
 
 			files = []*lespec.File{
 				{

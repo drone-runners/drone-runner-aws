@@ -19,11 +19,11 @@ import (
 func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, error) {
 	var pools = []drivers.Pool{}
 
-	for _, i := range poolFile.Instances {
-		i := i
-		switch i.Type {
+	for i := range poolFile.Instances {
+		instance := poolFile.Instances[i]
+		switch instance.Type {
 		case string(types.ProviderVMFusion):
-			var v, ok = i.Spec.(*config.VMFusion)
+			var v, ok = instance.Spec.(*config.VMFusion)
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
@@ -41,11 +41,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("unable to create vmfusion config")
 			}
-			pool := mapPool(&i, runnerName)
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderAmazon):
-			var a, ok = i.Spec.(*config.Amazon)
+			var a, ok = instance.Spec.(*config.Amazon)
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
@@ -58,12 +58,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithRootDirectory(a.RootDirectory),
 				amazon.WithAMI(a.AMI),
 				amazon.WithVpc(a.VPC),
-				amazon.WithUser(a.User, i.Platform.OS),
+				amazon.WithUser(a.User, instance.Platform.OS),
 				amazon.WithRegion(a.Account.Region),
 				amazon.WithRetries(a.Account.Retries),
 				amazon.WithPrivateIP(a.Network.PrivateIP),
 				amazon.WithSecurityGroup(a.Network.SecurityGroups...),
-				amazon.WithSize(a.Size, i.Platform.Arch),
+				amazon.WithSize(a.Size, instance.Platform.Arch),
 				amazon.WithSizeAlt(a.SizeAlt),
 				amazon.WithSubnet(a.Network.SubnetID),
 				amazon.WithUserData(a.UserData, a.UserDataPath),
@@ -78,11 +78,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("unable to create google config")
 			}
-			pool := mapPool(&i, runnerName)
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderGoogle):
-			var g, ok = i.Spec.(*config.Google)
+			var g, ok = instance.Spec.(*config.Google)
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
@@ -101,16 +101,16 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				google.WithScopes(g.Scopes...),
 				google.WithUserData(g.UserData, g.UserDataPath),
 				google.WithZones(g.Zone...),
-				google.WithUserDataKey(g.UserDataKey, i.Platform.OS),
+				google.WithUserDataKey(g.UserDataKey, instance.Platform.OS),
 			)
 			if err != nil {
 				logrus.WithError(err).Errorln("unable to create google config")
 			}
-			pool := mapPool(&i, runnerName)
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderAnka):
-			var ak, ok = i.Spec.(*config.Anka)
+			var ak, ok = instance.Spec.(*config.Anka)
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
@@ -124,11 +124,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("unable to create anka config")
 			}
-			pool := mapPool(&i, runnerName)
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		default:
-			return nil, fmt.Errorf("unknown instance type %s", i.Type)
+			return nil, fmt.Errorf("unknown instance type %s", instance.Type)
 		}
 	}
 	return pools, nil
@@ -159,9 +159,7 @@ func mapPool(i *config.Instance, runnerName string) drivers.Pool {
 		Name:       i.Name,
 		MaxSize:    i.Limit,
 		MinSize:    i.Pool,
-		OS:         i.Platform.OS,
-		Arch:       i.Platform.Arch,
-		Version:    i.Platform.Version,
+		Platform:   i.Platform,
 	}
 	return pool
 }
@@ -208,7 +206,7 @@ func createAmazonPool(accessKeyID, accessKeySecret, region string, minPoolSize, 
 		Type:    string(types.ProviderAmazon),
 		Pool:    minPoolSize,
 		Limit:   maxPoolSize,
-		Platform: config.Platform{
+		Platform: types.Platform{
 			Arch: "amd64",
 			OS:   "linux",
 		},

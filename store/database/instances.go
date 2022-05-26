@@ -30,7 +30,7 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 	dst := []*types.Instance{}
 	var args []interface{}
 
-	stmt := builder.Select("*").From("instances").Where(squirrel.Eq{"instance_pool": pool})
+	stmt := builder.Select(instanceColumns).From("instances").Where(squirrel.Eq{"instance_pool": pool})
 	args = append(args, pool)
 	if params != nil {
 		if params.Stage != "" {
@@ -81,8 +81,7 @@ func (s InstanceStore) Purge(ctx context.Context) error {
 	panic("implement me")
 }
 
-const instanceBase = `
-SELECT
+const instanceColumns = `
  instance_name
 ,instance_id
 ,instance_address
@@ -93,8 +92,10 @@ SELECT
 ,instance_region
 ,instance_zone
 ,instance_size
-,instance_platform
+,instance_os
 ,instance_arch
+,instance_variant
+,instance_version
 ,instance_stage
 ,instance_ca_key
 ,instance_ca_cert
@@ -103,10 +104,10 @@ SELECT
 ,instance_started
 ,instance_updated
 ,is_hibernated
-FROM instances
 `
 
-const instanceFindByID = instanceBase + `
+const instanceFindByID = `SELECT ` + instanceColumns + `
+FROM instances
 WHERE instance_id = $1
 `
 
@@ -122,8 +123,10 @@ INSERT INTO instances (
 ,instance_region
 ,instance_zone
 ,instance_size
-,instance_platform
+,instance_os
 ,instance_arch
+,instance_variant
+,instance_version
 ,instance_stage
 ,instance_ca_key
 ,instance_ca_cert
@@ -143,8 +146,10 @@ INSERT INTO instances (
 ,:instance_region
 ,:instance_zone
 ,:instance_size
-,:instance_platform
+,:instance_os
 ,:instance_arch
+,:instance_variant
+,:instance_version
 ,:instance_stage
 ,:instance_ca_key
 ,:instance_ca_cert
