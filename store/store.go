@@ -14,3 +14,9 @@ type InstanceStore interface {
 	Update(context.Context, *types.Instance) error
 	Purge(context.Context) error
 }
+
+type StageOwnerStore interface {
+	Find(ctx context.Context, id, poolName string) (*types.StageOwner, error)
+	Create(context.Context, *types.StageOwner) error
+	Delete(context.Context, string) error
+}

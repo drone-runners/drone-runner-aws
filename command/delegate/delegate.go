@@ -23,6 +23,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -43,12 +44,13 @@ import (
 )
 
 type delegateCommand struct {
-	envFile        string
-	env            config.EnvConfig
-	poolFile       string
-	poolManager    *drivers.Manager
-	runnerName     string
-	liteEnginePath string
+	envFile         string
+	env             config.EnvConfig
+	poolFile        string
+	poolManager     *drivers.Manager
+	stageOwnerStore store.StageOwnerStore
+	runnerName      string
+	liteEnginePath  string
 }
 
 func RegisterDelegate(app *kingpin.Application) {
@@ -115,8 +117,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	store := database.ProvideInstanceStore(db)
-	c.poolManager = drivers.New(ctx, store, c.liteEnginePath, c.runnerName)
+	instanceStore := database.ProvideInstanceStore(db)
+	c.stageOwnerStore = database.NewStageOwnerStore(db)
+	c.poolManager = drivers.New(ctx, instanceStore, c.liteEnginePath, c.runnerName)
 
 	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, string(types.ProviderAmazon), &env)
 	if confErr != nil {
@@ -253,11 +256,26 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	httprender.OK(w, struct {
+	type poolOwnerResponse struct {
 		Owner bool `json:"owner"`
-	}{
-		Owner: c.poolManager.Exists(poolName),
-	})
+	}
+
+	if !c.poolManager.Exists(poolName) {
+		httprender.OK(w, poolOwnerResponse{Owner: false})
+		return
+	}
+
+	stageID := r.URL.Query().Get("stageId")
+	if stageID != "" {
+		_, err := c.stageOwnerStore.Find(context.Background(), stageID, poolName)
+		if err != nil {
+			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Trace("failed to find the stage in store")
+			httprender.OK(w, poolOwnerResponse{Owner: false})
+			return
+		}
+	}
+
+	httprender.OK(w, poolOwnerResponse{Owner: true})
 }
 
 func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -286,6 +304,12 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	if err := c.stageOwnerStore.Create(r.Context(), &types.StageOwner{StageID: reqData.ID, PoolName: reqData.PoolID}); err != nil {
+		logrus.WithError(err).Errorln("failed to create stage owner entity")
+		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty", nil)
+		return
+	}
 
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
@@ -550,6 +574,10 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	logr.Traceln("destroyed instance")
+
+	if err := c.stageOwnerStore.Delete(r.Context(), reqData.ID); err != nil {
+		logrus.WithError(err).Errorln("failed to delete stage owner entity")
+	}
 	w.WriteHeader(http.StatusOK)
 }
 

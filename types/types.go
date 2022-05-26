@@ -79,3 +79,8 @@ type QueryParams struct {
 	Status InstanceState
 	Stage  string
 }
+
+type StageOwner struct {
+	StageID  string `db:"stage_id" json:"stage_id"`
+	PoolName string `db:"pool_name" json:"pool_name"`
+}
