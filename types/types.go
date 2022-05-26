@@ -81,6 +81,6 @@ type QueryParams struct {
 }
 
 type StageOwner struct {
-	ID   string `db:"stage_id" json:"stage_id"`
-	Pool string `db:"pool_name" json:"pool_name"`
+	StageID string `db:"stage_id" json:"stage_id"`
+	Pool    string `db:"pool_name" json:"pool_name"`
 }

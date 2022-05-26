@@ -30,7 +30,7 @@ func (s StageOwnerStore) Create(_ context.Context, stageOwner *types.StageOwner)
 	if err != nil {
 		return err
 	}
-	return s.db.QueryRow(query, arg...).Scan(&stageOwner.ID)
+	return s.db.QueryRow(query, arg...).Scan(&stageOwner.StageID)
 }
 
 func (s StageOwnerStore) Delete(ctx context.Context, id string) error {
