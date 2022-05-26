@@ -305,7 +305,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	if err := c.stageOwnerStore.Create(r.Context(), &types.StageOwner{StageID: reqData.ID, Pool: reqData.PoolID}); err != nil {
+	if err := c.stageOwnerStore.Create(r.Context(), &types.StageOwner{StageID: reqData.ID, PoolName: reqData.PoolID}); err != nil {
 		logrus.WithError(err).Errorln("failed to create stage owner entity")
 		httprender.BadRequest(w, "mandatory field 'pool_id' in the request body is empty", nil)
 		return
