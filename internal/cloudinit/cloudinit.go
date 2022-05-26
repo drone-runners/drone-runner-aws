@@ -111,11 +111,11 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
-/usr/local/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /usr/local/bin/lite-engine
-chmod 777 /usr/local/bin/lite-engine
+wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform }}-{{ .Architecture }}" -O /opt/homebrew/bin/lite-engine
+chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
 echo -e "SkipPrepareServer=true" >> .env;
-/usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+/opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
 var macTemplate = template.Must(template.New("mac").Funcs(funcs).Parse(macScript))
