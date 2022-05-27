@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone/runner-go/environ"
@@ -24,8 +26,6 @@ var (
 	ErrorPoolNameEmpty  = errors.New("pool name is nil")
 	ErrorPoolNotDefined = errors.New("pool not defined")
 )
-
-const ARM64 = "arm64"
 
 // Opts configures the Engine.
 type Opts struct {
@@ -130,7 +130,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		Files:     spec.Files,
 	}
 
-	if instance.Arch == ARM64 {
+	if instance.Arch == oshelp.ArchArm64 {
 		setupRequest.MountDockerSocket = false
 	}
 

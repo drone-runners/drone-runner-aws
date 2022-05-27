@@ -14,6 +14,7 @@ import (
 const OSWindows = "windows"
 const OSLinux = "linux"
 const OSMac = "darwin"
+const ArchArm64 = "arm64"
 
 // JoinPaths helper function joins the file paths.
 func JoinPaths(os string, paths ...string) string {
