@@ -35,6 +35,7 @@ type provider struct {
 	volumeIops    int64
 	deviceName    string
 	iamProfileArn string
+	tags          map[string]string // user defined tags
 	hibernate     bool
 
 	service *ec2.EC2
