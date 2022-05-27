@@ -41,7 +41,10 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("unable to create vmfusion config")
 			}
-			pool := mapPool(&instance, runnerName)
+			pool, mapErr := mapPool(&instance, runnerName)
+			if mapErr != nil {
+				logrus.WithError(mapErr).WithField("provider", instance.Type)
+			}
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderAmazon):
@@ -78,7 +81,10 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("unable to create google config")
 			}
-			pool := mapPool(&instance, runnerName)
+			pool, mapErr := mapPool(&instance, runnerName)
+			if mapErr != nil {
+				logrus.WithError(mapErr).WithField("provider", instance.Type)
+			}
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderGoogle):
@@ -106,7 +112,10 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if err != nil {
 				logrus.WithError(err).Errorln("unable to create google config")
 			}
-			pool := mapPool(&instance, runnerName)
+			pool, mapErr := mapPool(&instance, runnerName)
+			if mapErr != nil {
+				logrus.WithError(mapErr).WithField("provider", instance.Type)
+			}
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderAnka):
@@ -122,9 +131,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				anka.WithVMID(ak.VMID),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("unable to create anka config")
+				logrus.WithError(err).Errorln("unable to create %s config", types.ProviderAnka)
 			}
-			pool := mapPool(&instance, runnerName)
+			pool, mapErr := mapPool(&instance, runnerName)
+			if mapErr != nil {
+				logrus.WithError(mapErr).WithField("provider", instance.Type)
+			}
 			pool.Driver = driver
 			pools = append(pools, pool)
 		default:
@@ -134,34 +146,43 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 	return pools, nil
 }
 
-func mapPool(i *config.Instance, runnerName string) drivers.Pool {
-	if i.Pool < 0 {
-		i.Pool = 0
+func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool, err error) {
+	if instance.Pool < 0 {
+		instance.Pool = 0
 	}
-	if i.Limit <= 0 {
-		i.Limit = 100
+	if instance.Limit <= 0 {
+		instance.Limit = 100
 	}
-	if i.Pool > i.Limit {
-		i.Limit = i.Pool
+	if instance.Pool > instance.Limit {
+		instance.Limit = instance.Pool
 	}
-	if i.Platform.OS == "" {
-		if i.Type == string(types.ProviderVMFusion) || i.Type == string(types.ProviderAnka) {
-			i.Platform.OS = oshelp.OSMac
+	// verify that we are using sane values for OS
+	if instance.Platform.OS != "" {
+		if instance.Platform.OS != "linux" && instance.Platform.OS != "windows" {
+			return pool, fmt.Errorf("invalid OS %s, has to be one of the following '%s/%s/%s'", instance.Platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
+		}
+	} else {
+		if instance.Type == string(types.ProviderVMFusion) || instance.Type == string(types.ProviderAnka) {
+			instance.Platform.OS = oshelp.OSMac
 		} else {
-			i.Platform.OS = oshelp.OSLinux
+			instance.Platform.OS = oshelp.OSLinux
 		}
 	}
-	if i.Platform.Arch == "" {
-		i.Platform.Arch = oshelp.ArchAMD64
+	if instance.Platform.OSName != oshelp.Ubuntu && instance.Platform.OSName != oshelp.AmazonLinux {
+		return pool, fmt.Errorf("invalid OS Name %s, has to be one of the following '%s/%s'", instance.Platform.OSName, oshelp.Ubuntu, oshelp.AmazonLinux)
 	}
-	var pool = drivers.Pool{
+
+	if instance.Platform.Arch == "" {
+		instance.Platform.Arch = oshelp.ArchAMD64
+	}
+	pool = drivers.Pool{
 		RunnerName: runnerName,
-		Name:       i.Name,
-		MaxSize:    i.Limit,
-		MinSize:    i.Pool,
-		Platform:   i.Platform,
+		Name:       instance.Name,
+		MaxSize:    instance.Limit,
+		MinSize:    instance.Pool,
+		Platform:   instance.Platform,
 	}
-	return pool
+	return pool, nil
 }
 
 func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {

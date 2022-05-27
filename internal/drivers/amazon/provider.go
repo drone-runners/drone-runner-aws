@@ -69,7 +69,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 	}
 	// set the default device
 	if p.deviceName == "" {
-		p.deviceName = "/dev/sda1"
+		p.deviceName = "/dev/xvda"
 	}
 	// setup service if not provided
 	if p.service == nil {

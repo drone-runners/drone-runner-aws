@@ -158,7 +158,7 @@ func Mac(params *Params) (payload string) {
 	return sb.String()
 }
 
-const linuxScript = `
+const ubuntuScript = `
 #cloud-config
 apt:
   sources:
@@ -187,7 +187,36 @@ runcmd:
 - 'touch /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
 
-var linuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(linuxScript))
+var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(ubuntuScript))
+
+const amazonLinuxScript = `
+#cloud-config
+packages:
+- wget
+- docker
+- git
+write_files:
+- path: {{ .CaCertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .CACert | base64  }}
+- path: {{ .CertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSCert | base64 }}
+- path: {{ .KeyPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSKey | base64 }}
+runcmd:
+- 'sudo service docker start'
+- 'sudo usermod -a -G docker ec2-user'
+- 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
+- 'chmod 777 /usr/bin/lite-engine'
+- 'touch /root/.env'
+- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
+
+var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(amazonLinuxScript))
 
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string) {
@@ -196,20 +225,39 @@ func Linux(params *Params) (payload string) {
 	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
 	certPath := filepath.Join(certsDir, "server-cert.pem")
 	keyPath := filepath.Join(certsDir, "server-key.pem")
-
-	err := linuxTemplate.Execute(sb, struct {
-		Params
-		CaCertPath string
-		CertPath   string
-		KeyPath    string
-	}{
-		Params:     *params,
-		CaCertPath: caCertPath,
-		CertPath:   certPath,
-		KeyPath:    keyPath,
-	})
-	if err != nil {
-		panic(err)
+	switch params.Platform.OSName {
+	case oshelp.AmazonLinux:
+		// assume Ubuntu
+		err := amazonLinuxTemplate.Execute(sb, struct {
+			Params
+			CaCertPath string
+			CertPath   string
+			KeyPath    string
+		}{
+			Params:     *params,
+			CaCertPath: caCertPath,
+			CertPath:   certPath,
+			KeyPath:    keyPath,
+		})
+		if err != nil {
+			panic(err)
+		}
+	default:
+		// assume Ubuntu
+		err := ubuntuTemplate.Execute(sb, struct {
+			Params
+			CaCertPath string
+			CertPath   string
+			KeyPath    string
+		}{
+			Params:     *params,
+			CaCertPath: caCertPath,
+			CertPath:   certPath,
+			KeyPath:    keyPath,
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return sb.String()

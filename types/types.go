@@ -70,6 +70,7 @@ type Platform struct {
 	Arch    string `json:"arch,omitempty" db:"instance_arch"`
 	Variant string `json:"variant,omitempty" db:"instance_variant"`
 	Version string `json:"version,omitempty" db:"instance_version"`
+	OSName  string `json:"os_name,omitempty" db:"instance_os_name"`
 }
 
 type QueryParams struct {

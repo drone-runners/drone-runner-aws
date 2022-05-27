@@ -96,6 +96,7 @@ const instanceColumns = `
 ,instance_arch
 ,instance_variant
 ,instance_version
+,instance_os_name
 ,instance_stage
 ,instance_ca_key
 ,instance_ca_cert
@@ -127,6 +128,7 @@ INSERT INTO instances (
 ,instance_arch
 ,instance_variant
 ,instance_version
+,instance_os_name
 ,instance_stage
 ,instance_ca_key
 ,instance_ca_cert
@@ -150,6 +152,7 @@ INSERT INTO instances (
 ,:instance_arch
 ,:instance_variant
 ,:instance_version
+,:instance_os_name
 ,:instance_stage
 ,:instance_ca_key
 ,:instance_ca_cert

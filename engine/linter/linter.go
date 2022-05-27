@@ -12,6 +12,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -54,6 +55,9 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 func checkPools(pipeline *resource.Pipeline, poolManager *drivers.Manager) error {
 	if poolManager.Count() == 0 {
 		return fmt.Errorf("linter: there are no pools defined")
+	}
+	if pipeline.Platform.OS != oshelp.OSLinux && pipeline.Platform.OS != oshelp.OSWindows && pipeline.Platform.OS != oshelp.OSMac && pipeline.Platform.OS != "" {
+		return fmt.Errorf("linter: '%s' is an invalid valid platform 'os', %s, %s, %s or empty", pipeline.Platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
 	}
 	if pipeline.Pool.Use == "" {
 		return fmt.Errorf("linter: you must specify a 'pool' to 'use'")
