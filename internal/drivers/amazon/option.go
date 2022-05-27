@@ -78,7 +78,7 @@ func WithSize(size, arch string) Option {
 		p.size = size
 		// set default instance type if not provided
 		if p.size == "" {
-			if arch == "arm64" {
+			if arch == oshelp.ArchARM64 {
 				p.size = "a1.medium"
 			} else {
 				p.size = "t3.nano"

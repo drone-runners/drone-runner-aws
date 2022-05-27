@@ -14,6 +14,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
@@ -141,7 +142,7 @@ func Mac(params *Params) (payload string) {
 		KeyPath:    keyPath,
 	}
 
-	if params.Platform.Arch == "arm64" {
+	if params.Platform.Arch == oshelp.ArchARM64 {
 		err := macArm64Template.Execute(sb, p)
 		if err != nil {
 			err = fmt.Errorf("failed to execute mac arm64 template to get init script: %w", err)
@@ -186,7 +187,7 @@ runcmd:
 - 'touch /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
 
-var linuxTemplate = template.Must(template.New("linux").Funcs(funcs).Parse(linuxScript))
+var linuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(linuxScript))
 
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string) {
@@ -282,7 +283,7 @@ New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profi
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "C:\Program Files\lite-engine\log.out" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 </powershell>`
 
-var windowsTemplate = template.Must(template.New("windows").Funcs(funcs).Parse(windowsScript))
+var windowsTemplate = template.Must(template.New(oshelp.OSWindows).Funcs(funcs).Parse(windowsScript))
 
 // Windows creates a userdata file for the Windows operating system.
 func Windows(params *Params) (payload string) {

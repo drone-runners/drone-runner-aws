@@ -7,6 +7,7 @@ package resource
 import (
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/drone/runner-go/manifest"
 
 	"github.com/google/go-cmp/cmp"
@@ -42,8 +43,8 @@ func TestParse(t *testing.T) {
 				Path: "/drone/src",
 			},
 			Platform: manifest.Platform{
-				OS:   "linux",
-				Arch: "arm64",
+				OS:   oshelp.OSLinux,
+				Arch: oshelp.ArchARM64,
 			},
 			Clone: manifest.Clone{
 				Depth: 50,

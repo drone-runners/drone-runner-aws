@@ -152,7 +152,7 @@ func mapPool(i *config.Instance, runnerName string) drivers.Pool {
 		}
 	}
 	if i.Platform.Arch == "" {
-		i.Platform.Arch = "amd64"
+		i.Platform.Arch = oshelp.ArchAMD64
 	}
 	var pool = drivers.Pool{
 		RunnerName: runnerName,
@@ -207,8 +207,8 @@ func createAmazonPool(accessKeyID, accessKeySecret, region string, minPoolSize, 
 		Pool:    minPoolSize,
 		Limit:   maxPoolSize,
 		Platform: types.Platform{
-			Arch: "amd64",
-			OS:   "linux",
+			Arch: oshelp.ArchAMD64,
+			OS:   oshelp.OSLinux,
 		},
 		Spec: &config.Amazon{
 			Account: config.AmazonAccount{
