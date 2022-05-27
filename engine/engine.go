@@ -25,6 +25,8 @@ var (
 	ErrorPoolNotDefined = errors.New("pool not defined")
 )
 
+const ARM64 = "arm64"
+
 // Opts configures the Engine.
 type Opts struct {
 	Repopulate bool
@@ -128,7 +130,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		Files:     spec.Files,
 	}
 
-	if instance.Arch == "arm64" {
+	if instance.Arch == ARM64 {
 		setupRequest.MountDockerSocket = false
 	}
 
