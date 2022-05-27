@@ -186,6 +186,13 @@ func WithHibernate(hibernate bool) Option {
 	}
 }
 
+// WithTags returns a list of tags to apply to the instance.
+func WithTags(t map[string]string) Option {
+	return func(p *provider) {
+		p.tags = t
+	}
+}
+
 func WithUser(user, platform string) Option {
 	return func(p *provider) {
 		p.user = user

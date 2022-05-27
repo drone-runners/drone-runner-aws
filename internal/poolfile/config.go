@@ -72,6 +72,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithVolumeIops(a.Disk.Iops),
 				amazon.WithIamProfileArn(a.IamProfileArn),
 				amazon.WithMarketType(a.MarketType),
+				amazon.WithTags(a.Tags),
 				amazon.WithHibernate(a.Hibernate),
 			)
 			if err != nil {

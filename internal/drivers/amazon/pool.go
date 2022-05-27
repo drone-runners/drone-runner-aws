@@ -131,6 +131,10 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	var tags = map[string]string{
 		"Name": name,
 	}
+	// add user defined tags
+	for k, v := range p.tags {
+		tags[k] = v
+	}
 	if p.vpc == "" {
 		logr.Traceln("amazon: using default vpc, checking security groups")
 	} else {
