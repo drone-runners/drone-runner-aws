@@ -128,6 +128,10 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		Files:     spec.Files,
 	}
 
+	if instance.Arch == "arm64" {
+		setupRequest.MountDockerSocket = false
+	}
+
 	setupResponse, err := client.Setup(ctx, setupRequest)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to call LE.Setup")
