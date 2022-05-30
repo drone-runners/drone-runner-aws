@@ -256,6 +256,10 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		WorkingDir: step.WorkingDir,
 	}
 
+	if instance.Platform == oshelp.OSMac && instance.Arch == oshelp.ArchArm64 {
+		req.MountDockerSocket = false
+	}
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
