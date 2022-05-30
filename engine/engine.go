@@ -130,7 +130,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		Files:     spec.Files,
 	}
 
-	if instance.Arch == oshelp.ArchArm64 {
+	if instance.Platform == oshelp.OSMac && instance.Arch == oshelp.ArchArm64 {
 		setupRequest.MountDockerSocket = false
 	}
 
