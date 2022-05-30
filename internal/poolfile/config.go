@@ -27,6 +27,13 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
+			// set platform defaults
+			platform, platformErr := vmfusion.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				logrus.WithError(platformErr).WithField("provider", instance.Type)
+			}
+			instance.Platform = *platform
+
 			driver, err := vmfusion.New(
 				vmfusion.WithStorePath(v.StorePath),
 				vmfusion.WithUsername(v.Account.Username),
@@ -39,12 +46,10 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				vmfusion.WithRootDirectory(v.RootDirectory),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("unable to create vmfusion config")
+				logrus.WithError(err).WithField("provider", instance.Type)
 			}
-			pool, mapErr := mapPool(&instance, runnerName)
-			if mapErr != nil {
-				logrus.WithError(mapErr).WithField("provider", instance.Type)
-			}
+			pool := mapPool(&instance, runnerName)
+
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderAmazon):
@@ -52,17 +57,23 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
+			// set platform defaults
+			platform, platformErr := amazon.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				logrus.WithError(platformErr).WithField("provider", instance.Type)
+			}
+			instance.Platform = *platform
 			var driver, err = amazon.New(
 				amazon.WithAccessKeyID(a.Account.AccessKeyID),
 				amazon.WithSecretAccessKey(a.Account.AccessKeySecret),
 				amazon.WithZone(a.Account.AvailabilityZone),
 				amazon.WithKeyPair(a.Account.KeyPairName),
-				amazon.WithDeviceName(a.DeviceName),
+				amazon.WithDeviceName(a.DeviceName, instance.Platform.OSName),
 				amazon.WithRootDirectory(a.RootDirectory),
 				amazon.WithAMI(a.AMI),
 				amazon.WithVpc(a.VPC),
 				amazon.WithUser(a.User, instance.Platform.OS),
-				amazon.WithRegion(a.Account.Region),
+				amazon.WithRegion(a.Account.Region, a.Account.Region),
 				amazon.WithRetries(a.Account.Retries),
 				amazon.WithPrivateIP(a.Network.PrivateIP),
 				amazon.WithSecurityGroup(a.Network.SecurityGroups...),
@@ -72,19 +83,16 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithUserData(a.UserData, a.UserDataPath),
 				amazon.WithVolumeSize(a.Disk.Size),
 				amazon.WithVolumeType(a.Disk.Type),
-				amazon.WithVolumeIops(a.Disk.Iops),
+				amazon.WithVolumeIops(a.Disk.Iops, a.Disk.Type),
 				amazon.WithIamProfileArn(a.IamProfileArn),
 				amazon.WithMarketType(a.MarketType),
 				amazon.WithTags(a.Tags),
 				amazon.WithHibernate(a.Hibernate),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("unable to create google config")
+				logrus.WithError(err).WithField("provider", instance.Type)
 			}
-			pool, mapErr := mapPool(&instance, runnerName)
-			if mapErr != nil {
-				logrus.WithError(mapErr).WithField("provider", instance.Type)
-			}
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderGoogle):
@@ -92,6 +100,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
+			// set platform defaults
+			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				logrus.WithError(platformErr).WithField("provider", instance.Type)
+			}
+			instance.Platform = *platform
 			var driver, err = google.New(
 				google.WithDiskSize(g.Disk.Size),
 				google.WithDiskType(g.Disk.Type),
@@ -110,12 +124,9 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				google.WithUserDataKey(g.UserDataKey, instance.Platform.OS),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("unable to create google config")
+				logrus.WithError(err).WithField("provider", instance.Type)
 			}
-			pool, mapErr := mapPool(&instance, runnerName)
-			if mapErr != nil {
-				logrus.WithError(mapErr).WithField("provider", instance.Type)
-			}
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		case string(types.ProviderAnka):
@@ -123,6 +134,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				logrus.Errorln("unable to parse pool file")
 			}
+			// set platform defaults
+			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				logrus.WithError(platformErr).WithField("provider", instance.Type)
+			}
+			instance.Platform = *platform
 			driver, err := anka.New(
 				anka.WithUsername(ak.Account.Username),
 				anka.WithPassword(ak.Account.Password),
@@ -131,12 +148,9 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				anka.WithVMID(ak.VMID),
 			)
 			if err != nil {
-				logrus.WithError(err).Errorln("unable to create %s config", types.ProviderAnka)
+				logrus.WithError(err).WithField("provider", instance.Type)
 			}
-			pool, mapErr := mapPool(&instance, runnerName)
-			if mapErr != nil {
-				logrus.WithError(mapErr).WithField("provider", instance.Type)
-			}
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		default:
@@ -146,7 +160,8 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 	return pools, nil
 }
 
-func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool, err error) {
+func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
+	// set pool defaults
 	if instance.Pool < 0 {
 		instance.Pool = 0
 	}
@@ -156,25 +171,7 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool, e
 	if instance.Pool > instance.Limit {
 		instance.Limit = instance.Pool
 	}
-	// verify that we are using sane values for OS
-	if instance.Platform.OS != "" {
-		if instance.Platform.OS != "linux" && instance.Platform.OS != "windows" {
-			return pool, fmt.Errorf("invalid OS %s, has to be one of the following '%s/%s/%s'", instance.Platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
-		}
-	} else {
-		if instance.Type == string(types.ProviderVMFusion) || instance.Type == string(types.ProviderAnka) {
-			instance.Platform.OS = oshelp.OSMac
-		} else {
-			instance.Platform.OS = oshelp.OSLinux
-		}
-	}
-	if instance.Platform.OSName != oshelp.Ubuntu && instance.Platform.OSName != oshelp.AmazonLinux {
-		return pool, fmt.Errorf("invalid OS Name %s, has to be one of the following '%s/%s'", instance.Platform.OSName, oshelp.Ubuntu, oshelp.AmazonLinux)
-	}
 
-	if instance.Platform.Arch == "" {
-		instance.Platform.Arch = oshelp.ArchAMD64
-	}
 	pool = drivers.Pool{
 		RunnerName: runnerName,
 		Name:       instance.Name,
@@ -182,7 +179,7 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool, e
 		MinSize:    instance.Pool,
 		Platform:   instance.Platform,
 	}
-	return pool, nil
+	return pool
 }
 
 func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {

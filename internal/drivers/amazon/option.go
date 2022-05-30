@@ -1,14 +1,42 @@
 package amazon
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/sirupsen/logrus"
 )
 
 type Option func(*provider)
+
+func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
+	if platform.Arch == "" {
+		platform.Arch = oshelp.ArchAMD64
+	}
+	if platform.Arch != oshelp.ArchAMD64 && platform.Arch != oshelp.ArchARM64 {
+		return platform, fmt.Errorf("invalid arch %s, has to be '%s/%s'", platform.Arch, oshelp.ArchAMD64, oshelp.ArchARM64)
+	}
+	// verify that we are using sane values for OS
+	if platform.OS == "" {
+		platform.OS = oshelp.OSLinux
+	}
+	if platform.OS != oshelp.OSLinux && platform.OS != oshelp.OSWindows && platform.OS != oshelp.OSMac {
+		return platform, fmt.Errorf("invalid OS %s, has to be one of the following '%s/%s/%s'", platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
+	}
+	// set osname, we dont separate different versions of windows or mac with osname yet.
+	if platform.OS == oshelp.OSLinux {
+		if platform.OSName == "" {
+			platform.OSName = oshelp.Ubuntu
+		}
+		if platform.OSName != oshelp.Ubuntu && platform.OSName != oshelp.AmazonLinux {
+			return platform, fmt.Errorf("invalid OS Name %s, has to be one of the following '%s/%s'", platform.OSName, oshelp.Ubuntu, oshelp.AmazonLinux)
+		}
+	}
+	return platform, nil
+}
 
 func WithAccessKeyID(accessKeyID string) Option {
 	return func(p *provider) {
@@ -31,9 +59,17 @@ func WithRootDirectory(dir string) Option {
 }
 
 // WithDeviceName returns an option to set the device name.
-func WithDeviceName(n string) Option {
+func WithDeviceName(deviceName, osName string) Option {
 	return func(p *provider) {
-		p.deviceName = n
+		if p.deviceName == "" {
+			if osName == oshelp.AmazonLinux {
+				p.deviceName = "/dev/xvda"
+			} else {
+				p.deviceName = "/dev/sda1"
+			}
+		} else {
+			p.deviceName = deviceName
+		}
 	}
 }
 
@@ -54,14 +90,23 @@ func WithPrivateIP(private bool) Option {
 // WithRetries returns an option to set the retry count.
 func WithRetries(retries int) Option {
 	return func(p *provider) {
-		p.retries = retries
+		if retries == 0 {
+			p.retries = 10
+		} else {
+			p.retries = retries
+		}
 	}
 }
 
 // WithRegion returns an option to set the target region.
-func WithRegion(region string) Option {
+func WithRegion(region, zone string) Option {
 	return func(p *provider) {
-		p.region = region
+		if region == "" && zone != "" {
+			// Only set region if zone not set
+			p.region = "us-east-2"
+		} else {
+			p.region = region
+		}
 	}
 }
 
@@ -123,25 +168,36 @@ func WithUserData(text, path string) Option {
 	}
 }
 
-// WithVolumeSize returns an option to set the volume size
-// in gigabytes.
+// WithVolumeSize returns an option to set the volume size in gigabytes.
 func WithVolumeSize(s int64) Option {
 	return func(p *provider) {
-		p.volumeSize = s
+		if s == 0 {
+			p.volumeSize = 32
+		} else {
+			p.volumeSize = s
+		}
 	}
 }
 
 // WithVolumeType returns an option to set the volume type.
 func WithVolumeType(t string) Option {
 	return func(p *provider) {
-		p.volumeType = t
+		if t == "" {
+			p.volumeType = "gp2"
+		} else {
+			p.volumeType = t
+		}
 	}
 }
 
 // WithVolumeIops returns an option to set the volume iops.
-func WithVolumeIops(i int64) Option {
+func WithVolumeIops(iops int64, diskType string) Option {
 	return func(p *provider) {
-		p.volumeIops = i
+		if diskType == "io1" && iops == 0 {
+			p.volumeIops = 100
+		} else {
+			p.volumeIops = iops
+		}
 	}
 }
 
