@@ -130,6 +130,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		Files:     spec.Files,
 	}
 
+	// required to support osx m1 architecture, disabling the auto mount of the docker socket
 	if instance.Platform == oshelp.OSMac && instance.Arch == oshelp.ArchArm64 {
 		setupRequest.MountDockerSocket = false
 	}
