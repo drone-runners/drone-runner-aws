@@ -1,12 +1,30 @@
 package vmfusion
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/sirupsen/logrus"
 )
 
 type Option func(*provider)
+
+func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
+	if platform.Arch == "" {
+		platform.Arch = oshelp.ArchAMD64
+	}
+	// verify that we are using sane values for OS
+	if platform.OS == "" {
+		platform.OS = oshelp.OSMac
+	}
+	if platform.OS != oshelp.OSMac {
+		return platform, fmt.Errorf("invalid OS %s, has to be '%s'", platform.OS, oshelp.OSMac)
+	}
+
+	return platform, nil
+}
 
 func WithUsername(username string) Option {
 	return func(p *provider) {

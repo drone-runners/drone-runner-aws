@@ -1,17 +1,36 @@
 package google
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/sirupsen/logrus"
 )
 
 type Option func(*provider)
 
-// WithDiskSize returns an option to set the instance disk
-// size in gigabytes.
+func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
+	if platform.Arch == "" {
+		platform.Arch = oshelp.ArchAMD64
+	}
+	if platform.Arch != oshelp.ArchAMD64 && platform.Arch != oshelp.ArchARM64 {
+		return platform, fmt.Errorf("invalid arch %s, has to be '%s/%s'", platform.Arch, oshelp.ArchAMD64, oshelp.ArchARM64)
+	}
+	// verify that we are using sane values for OS
+	if platform.OS == "" {
+		platform.OS = oshelp.OSLinux
+	}
+	if platform.OS != oshelp.OSLinux && platform.OS != oshelp.OSWindows {
+		return platform, fmt.Errorf("invalid OS %s, has to be either'%s/%s'", platform.OS, oshelp.OSLinux, oshelp.OSWindows)
+	}
+
+	return platform, nil
+}
+
+// WithDiskSize returns an option to set the instance disk size in gigabytes.
 func WithDiskSize(diskSize int64) Option {
 	return func(p *provider) {
 		p.diskSize = diskSize

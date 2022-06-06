@@ -6,6 +6,8 @@ package amazon
 
 import (
 	"testing"
+
+	"github.com/drone-runners/drone-runner-aws/oshelp"
 )
 
 func Test_tempdir(t *testing.T) {
@@ -13,11 +15,8 @@ func Test_tempdir(t *testing.T) {
 		os   string
 		path string
 	}{
-		{os: "windows", path: "C:\\Windows\\Temp\\aws"},
-		{os: "linux", path: "/tmp/aws"},
-		{os: "openbsd", path: "/tmp/aws"},
-		{os: "netbsd", path: "/tmp/aws"},
-		{os: "freebsd", path: "/tmp/aws"},
+		{os: oshelp.OSWindows, path: "C:\\Windows\\Temp\\aws"},
+		{os: oshelp.OSLinux, path: "/tmp/aws"},
 	}
 
 	for _, test := range tests {

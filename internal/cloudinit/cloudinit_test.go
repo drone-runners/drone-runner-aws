@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 const (
@@ -13,8 +14,13 @@ const (
 	caCertFile     = "qwerty123"
 	certFile       = "abcdef456"
 	keyFile        = "xyzuvw789"
-	platform       = "spectrum"
-	arch           = "z80"
+)
+
+var (
+	platform = types.Platform{
+		OS:   "spectrum",
+		Arch: "z80",
+	}
 )
 
 func TestLinux(t *testing.T) {
@@ -24,11 +30,10 @@ func TestLinux(t *testing.T) {
 		TLSCert:        certFile + "\n",
 		TLSKey:         keyFile + "\n",
 		Platform:       platform,
-		Architecture:   arch,
 	}
 
 	s := cloudinit.Linux(params)
-	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s"`, params.LiteEnginePath, params.Platform, params.Architecture)
+	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s"`, params.LiteEnginePath, params.Platform.OS, params.Platform.Arch)
 	if !strings.Contains(s, lePath) {
 		t.Error("linux init script does not contain LE path")
 	}
@@ -43,7 +48,7 @@ func TestWindows(t *testing.T) {
 	}
 
 	s := cloudinit.Windows(params)
-	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s.exe"`, params.LiteEnginePath, params.Platform, params.Architecture)
+	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s.exe"`, params.LiteEnginePath, params.Platform.OS, params.Platform.Arch)
 	if !strings.Contains(s, lePath) {
 		t.Error("windows init script does not contain LE path")
 	}

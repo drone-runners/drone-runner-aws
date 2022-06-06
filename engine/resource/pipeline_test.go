@@ -7,6 +7,7 @@ package resource
 import (
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
 	"github.com/drone/runner-go/manifest"
 
 	"github.com/google/go-cmp/cmp"
@@ -28,8 +29,8 @@ func TestGetStep(t *testing.T) {
 
 func TestGetters(t *testing.T) {
 	platform := manifest.Platform{
-		OS:   "linux",
-		Arch: "amd64",
+		OS:   oshelp.OSLinux,
+		Arch: oshelp.ArchAMD64,
 	}
 	trigger := manifest.Conditions{
 		Branch: manifest.Condition{
