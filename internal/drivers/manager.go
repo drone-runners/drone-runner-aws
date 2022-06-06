@@ -51,13 +51,13 @@ func New(
 }
 
 // Inspect returns OS and root directory for a pool.
-func (m *Manager) Inspect(name string) (os, rootDir string) {
+func (m *Manager) Inspect(name string) (platform types.Platform, rootDir string) {
 	entry := m.poolMap[name]
 	if entry == nil {
 		return
 	}
 
-	os = entry.OS
+	platform = entry.Platform
 	rootDir = entry.Driver.RootDir()
 
 	return
@@ -82,7 +82,7 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 	list, err := m.instanceStore.List(ctx, pool.Name, &query)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
-			Errorln("manager: failed to list instances")
+			Errorln("manager: GetInstanceByStageID failed to list instances")
 		return nil, err
 	}
 
@@ -130,8 +130,8 @@ func (m *Manager) Add(pools ...Pool) error {
 		m.poolMap = map[string]*poolEntry{}
 	}
 
-	for _, pool := range pools {
-		name := pool.Name
+	for i := range pools {
+		name := pools[i].Name
 		if name == "" {
 			return errors.New("pool must have a name")
 		}
@@ -142,7 +142,7 @@ func (m *Manager) Add(pools ...Pool) error {
 
 		m.poolMap[name] = &poolEntry{
 			Mutex: sync.Mutex{},
-			Pool:  pool,
+			Pool:  pools[i],
 		}
 	}
 
@@ -468,9 +468,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	// generate certs
 	createOptions, err := certs.Generate(m.runnerName)
 	createOptions.LiteEnginePath = m.liteEnginePath
-	createOptions.OS = pool.OS
-	createOptions.Arch = pool.Arch
-	createOptions.Version = pool.Version
+	createOptions.Platform = pool.Platform
 	createOptions.PoolName = pool.Name
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize

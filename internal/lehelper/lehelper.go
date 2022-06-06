@@ -15,8 +15,7 @@ var (
 
 func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	var params = cloudinit.Params{
-		Architecture:   opts.Arch,
-		Platform:       opts.OS,
+		Platform:       opts.Platform,
 		CACert:         string(opts.CACert),
 		TLSCert:        string(opts.TLSCert),
 		TLSKey:         string(opts.TLSKey),

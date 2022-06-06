@@ -294,7 +294,7 @@ func registerExec(app *kingpin.Application) {
 		Default(".drone.yml").
 		FileVar(&c.Source)
 
-	cmd.Arg("pool", "file to seed the pool").
+	cmd.Flag("pool", "file to seed the pool").
 		StringVar(&c.PoolFile)
 
 	cmd.Flag("type", "which vm provider amazon/anka/google/vmfusion, default is amazon").

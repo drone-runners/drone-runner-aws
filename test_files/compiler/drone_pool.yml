@@ -18,6 +18,25 @@ instances:
       network:
         security_groups:
           - sg-0f5aaeb48d35162a4
+  - name: amazon_linux_pool
+    default: true
+    type: amazon
+    pool: 1
+    limit: 100
+    platform:
+      os: linux
+      arch: amd64
+      os_name: amazon-linux
+    spec:
+      account:
+        region: us-east-2
+        access_key_id: asdasdasd
+        access_key_secret: asdasdasdasd
+      ami: ami-0fa49cc9dc8d62c84
+      size: t2.micro
+      network:
+        security_groups:
+          - sg-0f5aaeb48d35162a4
   - name: windows 2019
     default: true
     type: amazon

@@ -18,8 +18,8 @@ func Test_join(t *testing.T) {
 		a  []string
 		b  string
 	}{
-		{os: "windows", a: []string{"C:", "Windows", "Temp"}, b: "C:\\Windows\\Temp"},
-		{os: "linux", a: []string{"/tmp", "foo", "bar"}, b: "/tmp/foo/bar"},
+		{os: OSWindows, a: []string{"C:", "Windows", "Temp"}, b: "C:\\Windows\\Temp"},
+		{os: OSLinux, a: []string{"/tmp", "foo", "bar"}, b: "/tmp/foo/bar"},
 	}
 	for _, test := range tests {
 		if got, want := JoinPaths(test.os, test.a...), test.b; got != want {
@@ -34,8 +34,8 @@ func Test_getExt(t *testing.T) {
 		a  string
 		b  string
 	}{
-		{os: "windows", a: "clone", b: "clone.ps1"},
-		{os: "linux", a: "clone", b: "clone"},
+		{os: OSWindows, a: "clone", b: "clone.ps1"},
+		{os: OSLinux, a: "clone", b: "clone"},
 	}
 	for _, test := range tests {
 		if got, want := GetExt(test.os, test.a), test.b; got != want {
@@ -49,8 +49,8 @@ func Test_getNetrc(t *testing.T) {
 		os   string
 		name string
 	}{
-		{os: "windows", name: "_netrc"},
-		{os: "linux", name: ".netrc"},
+		{os: OSWindows, name: "_netrc"},
+		{os: OSLinux, name: ".netrc"},
 		{os: "openbsd", name: ".netrc"},
 		{os: "netbsd", name: ".netrc"},
 		{os: "freebsd", name: ".netrc"},
@@ -65,13 +65,13 @@ func Test_getNetrc(t *testing.T) {
 func Test_getScript(t *testing.T) {
 	commands := []string{"go build"}
 
-	a := GenScript("windows", commands)
+	a := GenScript(OSWindows, commands)
 	b := powershell.Script(commands)
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("Generated windows linux script")
 	}
 
-	a = GenScript("linux", commands)
+	a = GenScript(OSLinux, commands)
 	b = bash.Script(commands)
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("Generated invalid linux script")

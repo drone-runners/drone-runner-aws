@@ -17,13 +17,13 @@ type (
 	}
 
 	Instance struct {
-		Name     string      `json:"name"`
-		Default  bool        `json:"default"`
-		Type     string      `json:"type"`
-		Pool     int         `json:"pool"`
-		Limit    int         `json:"limit"`
-		Platform Platform    `json:"platform,omitempty" yaml:"platform,omitempty"`
-		Spec     interface{} `json:"spec,omitempty"`
+		Name     string         `json:"name"`
+		Default  bool           `json:"default"`
+		Type     string         `json:"type"`
+		Pool     int            `json:"pool"`
+		Limit    int            `json:"limit"`
+		Platform types.Platform `json:"platform,omitempty" yaml:"platform,omitempty"`
+		Spec     interface{}    `json:"spec,omitempty"`
 	}
 
 	// Google specifies the configuration for a GCP instance.
@@ -115,13 +115,6 @@ type (
 		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
 		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
-	}
-
-	// Platform specifies the configuration for a platform instance.
-	Platform struct {
-		OS      string `json:"os,omitempty"`
-		Arch    string `json:"arch,omitempty"`
-		Version string `json:"version,omitempty" yaml:"version,omitempty"`
 	}
 
 	// disk provides disk size and type.
