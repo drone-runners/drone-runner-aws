@@ -30,6 +30,19 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 	return platform, nil
 }
 
+// WithRootDirectory returns an OS specific temp directory
+func WithRootDirectory(platform *types.Platform) Option {
+	return func(p *provider) {
+		const dir = "gcp"
+		switch platform.OS {
+		case oshelp.OSWindows:
+			p.rootDir = oshelp.JoinPaths(platform.OS, "C:\\Windows\\Temp", dir)
+		default:
+			p.rootDir = oshelp.JoinPaths(platform.OS, "/tmp", dir)
+		}
+	}
+}
+
 // WithDiskSize returns an option to set the instance disk size in gigabytes.
 func WithDiskSize(diskSize int64) Option {
 	return func(p *provider) {

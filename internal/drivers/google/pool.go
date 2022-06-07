@@ -19,7 +19,7 @@ import (
 )
 
 func (p *provider) RootDir() string {
-	return "/"
+	return p.rootDir
 }
 
 func (p *provider) Zone() string {
