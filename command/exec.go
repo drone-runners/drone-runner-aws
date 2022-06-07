@@ -22,7 +22,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -43,7 +42,6 @@ import (
 type execCommand struct {
 	*internal.Flags
 	Source        *os.File
-	vmType        string
 	PoolFile      string
 	LiteEngineURL string
 	Include       []string
@@ -60,10 +58,6 @@ type execCommand struct {
 
 func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its complex but not too bad.
 	const runnerName = "exec"
-	// lets validate the vmtype
-	if c.vmType != string(types.ProviderAmazon) && c.vmType != string(types.ProviderGoogle) {
-		return fmt.Errorf("invalid vmtype '%s' it must be one of '%s/%s'", c.vmType, types.ProviderAmazon, types.ProviderGoogle)
-	}
 
 	rawsource, err := io.ReadAll(c.Source)
 	if err != nil {
@@ -126,7 +120,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		cancel()
 	})
 
-	configPool, confErr := poolfile.ConfigPoolFile(c.PoolFile, c.vmType, &envConfig)
+	configPool, confErr := poolfile.ConfigPoolFile(c.PoolFile, &envConfig)
 	if confErr != nil {
 		logrus.WithError(confErr).
 			Fatalln("exec: unable to load pool file, or use an in memory pool file")
@@ -299,10 +293,6 @@ func registerExec(app *kingpin.Application) {
 
 	cmd.Flag("pool", "file to seed the pool").
 		StringVar(&c.PoolFile)
-
-	cmd.Flag("type", "which vm provider amazon/anka/google/vmfusion, default is amazon").
-		Default(string(types.ProviderAmazon)).
-		StringVar(&c.vmType)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)

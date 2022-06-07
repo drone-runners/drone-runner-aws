@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -16,6 +18,10 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	DefaultPoolName = "testpool"
 )
 
 func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, error) {
@@ -185,35 +191,45 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 	return pool
 }
 
-func ConfigPoolFile(filepath, providerType string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {
-	if filepath == "" {
-		logrus.Infof("no pool file provided, creating in memmory pool for %s", providerType)
+func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {
+	provider := conf.Settings.DefaultProvider
+	if provider != string(types.ProviderAmazon) && provider != string(types.ProviderGoogle) && provider != string(types.ProviderVMFusion) && provider != string(types.ProviderAnka) {
+		return pool, fmt.Errorf("invalid provider '%s' it must be one of '%s/%s/%s'", provider, types.ProviderAmazon, types.ProviderGoogle, types.ProviderAnka) // dont advertise vmfusion
+	}
+	if path == "" {
+		logrus.Infof("no pool file provided, creating in memory pool for %s", provider)
 		// generate a pool file
-		switch providerType {
+		switch provider {
 		case string(types.ProviderAmazon):
 			// do we have the creds?
 			if conf.AWS.AccessKeyID == "" || conf.AWS.AccessKeySecret == "" {
-				return pool, fmt.Errorf("%s:missing credentials in env variables 'AWS_ACCESS_KEY_ID' and 'AWS_ACCESS_KEY_SECRET'", providerType)
+				return pool, fmt.Errorf("%s:missing credentials env variables 'AWS_ACCESS_KEY_ID' and 'AWS_ACCESS_KEY_SECRET'", provider)
 			}
 			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret, conf.AWS.Region, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		case string(types.ProviderGoogle):
 			// do we have the creds?
 			if conf.Google.ProjectID == "" {
-				return pool, fmt.Errorf("%s:missing credentials in env variables 'GOOGLE_PROJECT_ID'", providerType)
+				return pool, fmt.Errorf("%s:missing credentials env variables 'GOOGLE_PROJECT_ID'", provider)
 			}
-			if os.Stat(conf.Google.JSONPath); errors.Is(err, os.ErrNotExist) {
-				return pool, fmt.Errorf("%s:missing credentials file at '%s'", providerType, conf.Google.JSONPath)
+			absPath := filepath.Clean(conf.Google.JSONPath)
+			if strings.HasPrefix(absPath, "~/") {
+				dirname, _ := os.UserHomeDir()
+				absPath = filepath.Join(dirname, absPath[2:])
+			}
+			_, pathErr := os.Stat(absPath)
+			if errors.Is(pathErr, os.ErrNotExist) {
+				return pool, fmt.Errorf("%s:unable to find credentials file at '%s'", provider, conf.Google.JSONPath)
 			}
 			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		default:
-			err = fmt.Errorf("unknown provider type %s, unable to create pool file in memory", providerType)
+			err = fmt.Errorf("unknown provider type %s, unable to create pool file in memory", provider)
 			return pool, err
 		}
 	}
-	pool, err = config.ParseFile(filepath)
+	pool, err = config.ParseFile(path)
 	if err != nil {
 		logrus.WithError(err).
-			WithField("filepath", filepath).
+			WithField("path", path).
 			Errorln("exec: unable to parse pool file")
 	}
 	return pool, err
@@ -230,7 +246,7 @@ func PrintPoolFile(pool *config.PoolFile) {
 
 func createAmazonPool(accessKeyID, accessKeySecret, region string, minPoolSize, maxPoolSize int) *config.PoolFile {
 	instance := config.Instance{
-		Name:    "test_pool",
+		Name:    DefaultPoolName,
 		Default: true,
 		Type:    string(types.ProviderAmazon),
 		Pool:    minPoolSize,
@@ -259,12 +275,12 @@ func createAmazonPool(accessKeyID, accessKeySecret, region string, minPoolSize, 
 
 func createGooglePool(projectID, path, zone string, minPoolSize, maxPoolSize int) *config.PoolFile {
 	instance := config.Instance{
-		Name:    "test-pool",
+		Name:    DefaultPoolName,
 		Default: true,
 		Type:    string(types.ProviderGoogle),
 		Pool:    minPoolSize,
 		Limit:   maxPoolSize,
-		Platform: config.Platform{
+		Platform: types.Platform{
 			Arch: "amd64",
 			OS:   "linux",
 		},

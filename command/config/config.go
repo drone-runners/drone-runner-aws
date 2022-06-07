@@ -29,28 +29,28 @@ type (
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
 		Account      GoogleAccount     `json:"account,omitempty"  yaml:"account"`
-		Image        string            `json:"image,omitempty" yaml:"image, omitempty"`
-		Name         string            `json:"name,omitempty"`
-		Tags         []string          `json:"tags,omitempty"`
-		Size         string            `json:"size,omitempty"`
+		Image        string            `json:"image,omitempty" yaml:"image,omitempty"`
+		Name         string            `json:"name,omitempty" yaml:"name,omitempty"`
+		Tags         []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Size         string            `json:"size,omitempty" yaml:"size,omitempty"`
 		MachineType  string            `json:"machine_type,omitempty" yaml:"machine_type"`
-		UserData     string            `json:"user_data,omitempty"`
+		UserData     string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
 		UserDataPath string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
-		UserDataKey  string            `json:"user_data_key,omitempty"`
+		UserDataKey  string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
 		Disk         disk              `json:"disk,omitempty"`
-		Network      string            `json:"network,omitempty"`
-		Subnetwork   string            `json:"Subnetwork,omitempty"`
+		Network      string            `json:"network,omitempty" yaml:"network,omitempty"`
+		Subnetwork   string            `json:"Subnetwork,omitempty" yaml:"Subnetwork,omitempty"`
 		PrivateIP    bool              `json:"private_ip,omitempty"`
 		Zone         []string          `json:"zone,omitempty" yaml:"zone"`
-		Labels       map[string]string `json:"labels,omitempty"`
-		Scopes       []string          `json:"scopes,omitempty"`
+		Labels       map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+		Scopes       []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
 	}
 
 	GoogleAccount struct {
 		ProjectID           string   `json:"project_id,omitempty"  yaml:"project_id"`
 		JSONPath            string   `json:"json_path,omitempty"  yaml:"json_path"`
-		Scopes              []string `json:"scopes,omitempty"  yaml:"scopes"`
-		ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email"`
+		Scopes              []string `json:"scopes,omitempty"  yaml:"scopes,omitempty"`
+		ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email,omitempty"`
 	}
 
 	// Amazon specifies the configuration for an AWS instance.
@@ -186,12 +186,13 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.1.0/"`
-		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
-		BusyMaxAge     int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
-		FreeMaxAge     int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
-		MinPoolSize    int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
-		MaxPoolSize    int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
+		LiteEnginePath  string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.1.0/"`
+		DefaultProvider string `envconfig:"DRONE_DEFAULT_PROVIDER" default:"amazon"`
+		ReusePool       bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
+		BusyMaxAge      int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
+		FreeMaxAge      int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
+		MinPoolSize     int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
+		MaxPoolSize     int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 	}
 
 	Environ struct {

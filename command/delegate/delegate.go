@@ -98,7 +98,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.env = env
 	// setup the global logrus logger.
 	setupLogger(&env)
-
 	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
 	if err != nil {
 		logrus.WithError(err).
@@ -121,7 +120,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.stageOwnerStore = database.NewStageOwnerStore(db)
 	c.poolManager = drivers.New(ctx, instanceStore, c.liteEnginePath, c.runnerName)
 
-	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, string(types.ProviderAmazon), &env)
+	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)
 	if confErr != nil {
 		logrus.WithError(confErr).
 			Fatalln("Unable to load pool file, or use an in memory pool")
