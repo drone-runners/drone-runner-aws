@@ -5,22 +5,22 @@ import (
 )
 
 type InstanceState string
-type ProviderType string
+type DriverType string
 
 // Value converts the value to a sql string.
 func (s InstanceState) Value() (driver.Value, error) {
 	return string(s), nil
 }
 
-func (s ProviderType) Value() (driver.Value, error) {
+func (s DriverType) Value() (driver.Value, error) {
 	return string(s), nil
 }
 
 const (
-	ProviderAmazon   = ProviderType("amazon")
-	ProviderGoogle   = ProviderType("google")
-	ProviderVMFusion = ProviderType("vmfusion")
-	ProviderAnka     = ProviderType("anka")
+	Amazon   = DriverType("amazon")
+	Google   = DriverType("google")
+	VMFusion = DriverType("vmfusion")
+	Anka     = DriverType("anka")
 )
 
 // InstanceState type enumeration.
@@ -33,7 +33,7 @@ type Instance struct {
 	ID           string        `db:"instance_id" json:"id"`
 	Name         string        `db:"instance_name" json:"name"`
 	Address      string        `db:"instance_address" json:"address"`
-	Provider     ProviderType  `db:"instance_provider" json:"provider"`
+	Provider     DriverType    `db:"instance_provider" json:"provider"` // this is driver, though its the old legacy name of provider
 	State        InstanceState `db:"instance_state" json:"state"`
 	Pool         string        `db:"instance_pool" json:"pool"`
 	Image        string        `db:"instance_image" json:"image"`

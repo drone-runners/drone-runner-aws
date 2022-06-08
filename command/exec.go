@@ -136,7 +136,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
 	if err != nil {
 		logrus.WithError(err).
-			Fatalln("Invalid or missing hosting provider")
+			Fatalln("Unable to start the database")
 	}
 	store := database.ProvideInstanceStore(db)
 

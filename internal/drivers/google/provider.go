@@ -23,7 +23,7 @@ var (
 	}
 )
 
-type provider struct {
+type config struct {
 	init sync.Once
 
 	projectID string
@@ -50,7 +50,7 @@ type provider struct {
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
-	p := new(provider)
+	p := new(config)
 	for _, opt := range opts {
 		opt(p)
 	}

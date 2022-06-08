@@ -32,6 +32,6 @@ type Driver interface {
 	Logs(ctx context.Context, instanceID string) (string, error)
 
 	RootDir() string
-	ProviderName() string
+	DriverName() string
 	CanHibernate() bool
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/signal"
@@ -53,36 +52,30 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
-	// map arguments to configuration
-	// check cli options
-	switch env.Settings.DefaultProvider {
-	case string(types.ProviderAmazon):
+	// check cli options and map arguments to configuration
+	if c.awsAccessKeyID != "" || c.awsAccessKeySecret != "" {
 		logrus.Infoln("setup: using amazon")
 		if c.awsAccessKeyID == "" || c.awsAccessKeySecret == "" {
 			logrus.Fatalln("missing Amazon access key ID or secret")
 		}
-	case string(types.ProviderGoogle):
+		env.AWS.AccessKeyID = c.awsAccessKeyID
+		env.AWS.AccessKeySecret = c.awsAccessKeySecret
+	} else if c.googleProjectID != "" {
 		logrus.Infoln("setup: using google")
-		if c.googleProjectID == "" {
-			logrus.Fatalln("missing Google project ID")
+		env.Google.ProjectID = c.googleProjectID
+		// use the default path if the user did not specify one
+		if c.googleJSONPath != "" {
+			env.Google.JSONPath = c.googleJSONPath
 		}
-	default:
-		logrus.Fatalln("unsupported vm provider")
-	}
-	// aws
-	env.AWS.AccessKeyID = c.awsAccessKeyID
-	env.AWS.AccessKeySecret = c.awsAccessKeySecret
-	// google
-	env.Google.ProjectID = c.googleProjectID
-	// use the default path if the user did not specify one
-	if c.googleJSONPath != "" {
-		env.Google.JSONPath = c.googleJSONPath
+	} else {
+		logrus.
+			Fatalln("unsupported driver, please choose a driver setting the manditory fields:\n for amazon --awsAccessKeyID and --awsAccessKeySecret\n for google --googleProjectID")
 	}
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
 	if err != nil {
 		logrus.WithError(err).
-			Fatalln("Invalid or missing hosting provider")
+			Fatalln("Unable to setup single instance database")
 	}
 	// setup the global logrus logger.
 	setupLogger(&env)

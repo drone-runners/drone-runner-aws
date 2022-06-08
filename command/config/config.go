@@ -186,13 +186,13 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		LiteEnginePath  string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.1.0/"`
-		DefaultProvider string `envconfig:"DRONE_DEFAULT_PROVIDER" default:"amazon"`
-		ReusePool       bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
-		BusyMaxAge      int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
-		FreeMaxAge      int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
-		MinPoolSize     int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
-		MaxPoolSize     int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
+		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.1.0/"`
+		DefaultDriver  string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
+		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
+		BusyMaxAge     int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
+		FreeMaxAge     int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
+		MinPoolSize    int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
+		MaxPoolSize    int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 	}
 
 	Environ struct {
@@ -287,13 +287,13 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch s.Type {
-	case string(types.ProviderAmazon), "aws":
+	case string(types.Amazon), "aws":
 		s.Spec = new(Amazon)
-	case string(types.ProviderGoogle), "gcp":
+	case string(types.Google), "gcp":
 		s.Spec = new(Google)
-	case string(types.ProviderVMFusion):
+	case string(types.VMFusion):
 		s.Spec = new(VMFusion)
-	case string(types.ProviderAnka):
+	case string(types.Anka):
 		s.Spec = new(Anka)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)

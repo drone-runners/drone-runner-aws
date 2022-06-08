@@ -101,7 +101,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
 	if err != nil {
 		logrus.WithError(err).
-			Fatalln("Invalid or missing hosting provider")
+			Fatalln("Unable to start the database")
 	}
 
 	// Set runner name & lite engine path
@@ -140,10 +140,10 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	err = c.poolManager.PingProvider(ctx)
+	err = c.poolManager.PingDriver(ctx)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("delegate: cannot connect to cloud provider")
+			Errorln("delegate: unable to ping driver")
 		return err
 	}
 

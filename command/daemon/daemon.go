@@ -63,7 +63,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
 	if err != nil {
 		logrus.WithError(err).
-			Fatalln("Invalid or missing hosting provider")
+			Fatalln("Unable to start the database")
 	}
 	// setup the global logrus logger.
 	setupLogger(&env)
@@ -123,10 +123,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		logrus.Fatalln("daemon: no instance pools found... aborting")
 	}
 
-	err = poolManager.PingProvider(ctx)
+	err = poolManager.PingDriver(ctx)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: cannot connect to cloud provider")
+			Errorln("daemon: driver ping failed")
 		return err
 	}
 

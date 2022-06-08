@@ -2,7 +2,7 @@ package anka
 
 import "github.com/drone-runners/drone-runner-aws/internal/drivers"
 
-type provider struct {
+type config struct {
 	username string
 	password string
 	rootDir  string
@@ -11,7 +11,7 @@ type provider struct {
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
-	p := new(provider)
+	p := new(config)
 	for _, opt := range opts {
 		opt(p)
 	}
