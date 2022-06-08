@@ -568,7 +568,7 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 			return err
 		}
 
-		if retryCount >= 3 {	//nolint:gomnd
+		if retryCount >= 3 { //nolint:gomnd
 			return err
 		}
 

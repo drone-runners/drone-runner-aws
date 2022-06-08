@@ -355,7 +355,7 @@ func isHibernateRetryable(origErr error) bool {
 		return true
 	}
 
-	switch err := origErr.(type) {	//nolint:gocritic
+	switch err := origErr.(type) { //nolint:gocritic
 	case awserr.Error:
 		// Amazon linux 2 instance return error message on first try:
 		// UnsupportedOperation: Instance is not ready to hibernate yet, retry in a few minutes
