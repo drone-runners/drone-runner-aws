@@ -30,6 +30,8 @@ type provider struct {
 	JSONPath  string
 	JSON      []byte
 
+	rootDir string
+
 	// vm instance data
 	diskSize            int64
 	diskType            string

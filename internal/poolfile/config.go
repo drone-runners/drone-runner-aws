@@ -107,6 +107,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			}
 			instance.Platform = *platform
 			var driver, err = google.New(
+				google.WithRootDirectory(&instance.Platform),
 				google.WithDiskSize(g.Disk.Size),
 				google.WithDiskType(g.Disk.Type),
 				google.WithMachineImage(g.Image),
