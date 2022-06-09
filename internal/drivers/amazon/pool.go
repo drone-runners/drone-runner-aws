@@ -19,19 +19,19 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-func (p *provider) ProviderName() string {
-	return string(types.ProviderAmazon)
+func (p *config) DriverName() string {
+	return string(types.Amazon)
 }
 
-func (p *provider) InstanceType() string {
+func (p *config) InstanceType() string {
 	return p.image
 }
 
-func (p *provider) RootDir() string {
+func (p *config) RootDir() string {
 	return p.rootDir
 }
 
-func (p *provider) CanHibernate() bool {
+func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
 
@@ -40,7 +40,7 @@ const (
 )
 
 // Ping checks that we can log into EC2, and the regions respond
-func (p *provider) Ping(ctx context.Context) error {
+func (p *config) Ping(ctx context.Context) error {
 	client := p.service
 
 	allRegions := true
@@ -119,11 +119,11 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
-func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
 	startTime := time.Now()
 	logr := logger.FromContext(ctx).
-		WithField("provider", types.ProviderAmazon).
+		WithField("driver", types.Amazon).
 		WithField("ami", p.InstanceType()).
 		WithField("pool", opts.PoolName).
 		WithField("region", p.region).
@@ -258,7 +258,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	instance = &types.Instance{
 		ID:           instanceID,
 		Name:         instanceID,
-		Provider:     types.ProviderAmazon,
+		Provider:     types.Amazon, // this is driver, though its the old legacy name of provider
 		State:        types.StateCreated,
 		Pool:         opts.PoolName,
 		Image:        p.image,
@@ -284,7 +284,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 }
 
 // Destroy destroys the server AWS EC2 instances.
-func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
 		return
 	}
@@ -293,7 +293,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("provider", types.ProviderAmazon)
+		WithField("driver", types.Amazon)
 
 	awsIDs := make([]*string, len(instanceIDs))
 	for i, instanceID := range instanceIDs {
@@ -311,7 +311,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Logs(ctx context.Context, instanceID string) (string, error) {
+func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	client := p.service
 
 	output, err := client.GetConsoleOutputWithContext(ctx, &ec2.GetConsoleOutputInput{
@@ -327,9 +327,9 @@ func (p *provider) Logs(ctx context.Context, instanceID string) (string, error) 
 	return string(decoded), nil
 }
 
-func (p *provider) Hibernate(ctx context.Context, instanceID, poolName string) error {
+func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
 	logr := logger.FromContext(ctx).
-		WithField("provider", types.ProviderAmazon).
+		WithField("driver", types.Amazon).
 		WithField("pool", poolName).
 		WithField("instanceID", instanceID)
 
@@ -367,11 +367,11 @@ func isHibernateRetryable(origErr error) bool {
 	return false
 }
 
-func (p *provider) Start(ctx context.Context, instanceID, poolName string) (string, error) {
+func (p *config) Start(ctx context.Context, instanceID, poolName string) (string, error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", types.ProviderAmazon).
+		WithField("driver", types.Amazon).
 		WithField("pool", poolName).
 		WithField("instanceID", instanceID)
 
@@ -409,7 +409,7 @@ func (p *provider) Start(ctx context.Context, instanceID, poolName string) (stri
 	return p.getIP(awsInstance), nil
 }
 
-func (p *provider) getIP(amazonInstance *ec2.Instance) string {
+func (p *config) getIP(amazonInstance *ec2.Instance) string {
 	if p.allocPublicIP {
 		if amazonInstance.PublicIpAddress == nil {
 			return ""
@@ -423,7 +423,7 @@ func (p *provider) getIP(amazonInstance *ec2.Instance) string {
 	return *amazonInstance.PrivateIpAddress
 }
 
-func (p *provider) getState(amazonInstance *ec2.Instance) string {
+func (p *config) getState(amazonInstance *ec2.Instance) string {
 	if amazonInstance.State == nil {
 		return ""
 	}
@@ -435,14 +435,14 @@ func (p *provider) getState(amazonInstance *ec2.Instance) string {
 	return *amazonInstance.State.Name
 }
 
-func (p *provider) getLaunchTime(amazonInstance *ec2.Instance) time.Time {
+func (p *config) getLaunchTime(amazonInstance *ec2.Instance) time.Time {
 	if amazonInstance.LaunchTime == nil {
 		return time.Now()
 	}
 	return *amazonInstance.LaunchTime
 }
 
-func (p *provider) pollInstanceIPAddr(ctx context.Context, instanceID string, logr logger.Logger) (*ec2.Instance, error) {
+func (p *config) pollInstanceIPAddr(ctx context.Context, instanceID string, logr logger.Logger) (*ec2.Instance, error) {
 	client := p.service
 	b := backoff.NewExponentialBackOff()
 	for {
@@ -498,7 +498,7 @@ func (p *provider) pollInstanceIPAddr(ctx context.Context, instanceID string, lo
 	}
 }
 
-func (p *provider) getInstance(ctx context.Context, instanceID string) (*ec2.Instance, error) {
+func (p *config) getInstance(ctx context.Context, instanceID string) (*ec2.Instance, error) {
 	client := p.service
 	response, err := client.DescribeInstancesWithContext(ctx, &ec2.DescribeInstancesInput{InstanceIds: []*string{aws.String(instanceID)}})
 	if err != nil {

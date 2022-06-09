@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Option func(*provider)
+type Option func(*config)
 
 func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 	if platform.Arch == "" {
@@ -32,7 +32,7 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 
 // WithRootDirectory returns an OS specific temp directory
 func WithRootDirectory(platform *types.Platform) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		const dir = "gcp"
 		switch platform.OS {
 		case oshelp.OSWindows:
@@ -45,70 +45,70 @@ func WithRootDirectory(platform *types.Platform) Option {
 
 // WithDiskSize returns an option to set the instance disk size in gigabytes.
 func WithDiskSize(diskSize int64) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.diskSize = diskSize
 	}
 }
 
 // WithDiskType returns an option to set the instance disk type.
 func WithDiskType(diskType string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.diskType = diskType
 	}
 }
 
 // WithMachineImage returns an option to set the image.
 func WithMachineImage(image string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.image = image
 	}
 }
 
 // WithMachineType returns an option to set the instance type.
 func WithMachineType(size string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.size = size
 	}
 }
 
 // WithNetwork returns an option to set the network.
 func WithNetwork(network string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.network = network
 	}
 }
 
 // WithSubnetwork returns an option to set the subnetwork.
 func WithSubnetwork(subnetwork string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.subnetwork = subnetwork
 	}
 }
 
 // WithPrivateIP returns an option to set the private IP address.
 func WithPrivateIP(private bool) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.privateIP = private
 	}
 }
 
 // WithProject returns an option to set the project.
 func WithProject(project string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.projectID = project
 	}
 }
 
 // WithJSONPath returns an option to set the json path
 func WithJSONPath(path string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.JSONPath = path
 	}
 }
 
 // WithTags returns an option to set the resource tags.
 func WithTags(tags ...string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.tags = tags
 	}
 }
@@ -116,11 +116,11 @@ func WithTags(tags ...string) Option {
 // WithUserData returns an option to set the cloud-init template from a file location or passed in text.
 func WithUserData(text, path string) Option {
 	if text != "" {
-		return func(p *provider) {
+		return func(p *config) {
 			p.userData = text
 		}
 	}
-	return func(p *provider) {
+	return func(p *config) {
 		if path != "" {
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -136,7 +136,7 @@ func WithUserData(text, path string) Option {
 // WithUserDataKey allows to set the user data key for Google Cloud Platform
 // This allows user to set either user-data or a startup script
 func WithUserDataKey(text, platform string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.userDataKey = text
 		if p.userDataKey == "" && platform == oshelp.OSLinux {
 			p.userDataKey = "user-data"
@@ -148,21 +148,21 @@ func WithUserDataKey(text, platform string) Option {
 
 // WithZones WithZone returns an option to set the target zone.
 func WithZones(zones ...string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.zones = zones
 	}
 }
 
 // WithScopes returns an option to set the scopes.
 func WithScopes(scopes ...string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.scopes = scopes
 	}
 }
 
 // WithServiceAccountEmail returns an option to set the ServiceAccountEmail.
 func WithServiceAccountEmail(email string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.serviceAccountEmail = email
 	}
 }

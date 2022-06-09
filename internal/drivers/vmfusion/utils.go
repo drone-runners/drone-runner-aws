@@ -36,7 +36,7 @@ func vmrun(args ...string) (string, string, error) { //nolint
 	return stdout.String(), stderr.String(), err
 }
 
-func (p *provider) GetState() (State, error) {
+func (p *config) GetState() (State, error) {
 	vmxp, err := filepath.EvalSymlinks(p.vmxPath())
 	if err != nil {
 		return Error, err
@@ -47,7 +47,7 @@ func (p *provider) GetState() (State, error) {
 	return Stopped, nil
 }
 
-func (p *provider) GetIP() (string, error) {
+func (p *config) GetIP() (string, error) {
 	s, err := p.GetState()
 	if err != nil {
 		return "", err
@@ -77,7 +77,7 @@ func (p *provider) GetIP() (string, error) {
 	return ip, nil
 }
 
-func (p *provider) getMacAddressFromVmx() (string, error) {
+func (p *config) getMacAddressFromVmx() (string, error) {
 	var vmxfh *os.File
 	var vmxcontent []byte
 	var err error
@@ -111,7 +111,7 @@ func (p *provider) getMacAddressFromVmx() (string, error) {
 	return macaddr, nil
 }
 
-func (p *provider) getIPfromVmnetConfiguration(macaddr string) (string, error) {
+func (p *config) getIPfromVmnetConfiguration(macaddr string) (string, error) {
 	// DHCP lease table for NAT vmnet interface
 	confFiles, _ := filepath.Glob("/Library/Preferences/VMware Fusion/vmnet*/dhcpd.conf")
 	for _, conffile := range confFiles {
@@ -124,7 +124,7 @@ func (p *provider) getIPfromVmnetConfiguration(macaddr string) (string, error) {
 	return "", fmt.Errorf("IP not found for MAC %s in vmnet configuration files", macaddr)
 }
 
-func (p *provider) getIPfromVmnetConfigurationFile(conffile, macaddr string) (string, error) {
+func (p *config) getIPfromVmnetConfigurationFile(conffile, macaddr string) (string, error) {
 	var conffh *os.File
 	var confcontent []byte
 
@@ -214,7 +214,7 @@ func (p *provider) getIPfromVmnetConfigurationFile(conffile, macaddr string) (st
 	return currentip, nil
 }
 
-func (p *provider) getIPFromDHCPLease(macaddr string) (string, error) {
+func (p *config) getIPFromDHCPLease(macaddr string) (string, error) {
 	// DHCP lease table for NAT vmnet interface
 	leasesFiles, _ := filepath.Glob("/var/db/vmware/*.leases")
 	for _, dhcpfile := range leasesFiles {
@@ -227,7 +227,7 @@ func (p *provider) getIPFromDHCPLease(macaddr string) (string, error) {
 	return "", fmt.Errorf("IP not found for MAC %s in DHCP leases", macaddr)
 }
 
-func (p *provider) getIPfromDHCPLeaseFile(dhcpfile, macaddr string) (string, error) {
+func (p *config) getIPfromDHCPLeaseFile(dhcpfile, macaddr string) (string, error) {
 	var dhcpfh *os.File
 	var dhcpcontent []byte
 	var lastipmatch string
@@ -286,11 +286,11 @@ func setVmwareCmd(cmd string) string {
 	return filepath.Join(path...)
 }
 
-func (p *provider) vmxPath() string {
+func (p *config) vmxPath() string {
 	return p.ResolveStorePath(fmt.Sprintf("%s.vmx", p.MachineName))
 }
 
-func (p *provider) ResolveStorePath(file string) string {
+func (p *config) ResolveStorePath(file string) string {
 	return filepath.Join(p.StorePath, fmt.Sprintf("%s.vmwarevm", p.MachineName), file)
 }
 

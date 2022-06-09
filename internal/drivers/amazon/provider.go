@@ -8,8 +8,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 )
 
-// provider is a struct that implements drivers.Pool interface
-type provider struct {
+// config is a struct that implements drivers.Pool interface
+type config struct {
 	spotInstance     bool
 	region           string
 	availabilityZone string
@@ -42,7 +42,7 @@ type provider struct {
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
-	p := new(provider)
+	p := new(config)
 	for _, opt := range opts {
 		opt(p)
 	}

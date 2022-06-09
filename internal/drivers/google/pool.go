@@ -18,32 +18,31 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-func (p *provider) RootDir() string {
+func (p *config) RootDir() string {
 	return p.rootDir
 }
 
-func (p *provider) Zone() string {
-	/* #nosec */
-	return p.zones[rand.Intn(len(p.zones))]
+func (p *config) Zone() string {
+	return p.zones[rand.Intn(len(p.zones))] //nolint: gosec
 }
 
-func (p *provider) ProviderName() string {
-	return string(types.ProviderGoogle)
+func (p *config) DriverName() string {
+	return string(types.Google)
 }
 
-func (p *provider) InstanceType() string {
+func (p *config) InstanceType() string {
 	return p.image
 }
 
-func (p *provider) CanHibernate() bool {
+func (p *config) CanHibernate() bool {
 	return false
 }
 
-func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
+func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 	return "", errors.New("Unimplemented")
 }
 
-func (p *provider) Ping(ctx context.Context) error {
+func (p *config) Ping(ctx context.Context) error {
 	client := p.service
 	healthCheck := client.Regions.List(p.projectID).Context(ctx)
 	response, err := healthCheck.Do()
@@ -56,7 +55,7 @@ func (p *provider) Ping(ctx context.Context) error {
 	return errors.New("unable to ping google")
 }
 
-func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	p.init.Do(func() {
 		_ = p.setup(ctx)
 	})
@@ -65,7 +64,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	zone := p.Zone()
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", types.ProviderGoogle).
+		WithField("cloud", types.Google).
 		WithField("name", name).
 		WithField("image", p.InstanceType()).
 		WithField("pool", opts.PoolName).
@@ -175,7 +174,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	return &instanceMap, nil
 }
 
-func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
 		return
 	}
@@ -184,7 +183,7 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("cloud", types.ProviderGoogle)
+		WithField("cloud", types.Google)
 
 	for _, instanceID := range instanceIDs {
 		_, err = client.Instances.Delete(p.projectID, p.Zone(), instanceID).Context(ctx).Do()
@@ -200,15 +199,15 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Hibernate(_ context.Context, _, _ string) error {
+func (p *config) Hibernate(_ context.Context, _, _ string) error {
 	return errors.New("unimplemented")
 }
 
-func (p *provider) Start(_ context.Context, _, _ string) (string, error) {
+func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
-func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
+func (p *config) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
 	network := vm.NetworkInterfaces[0]
 	accessConfigs := network.AccessConfigs[0]
 	instanceIP := accessConfigs.NatIP
@@ -217,7 +216,7 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 	return types.Instance{
 		ID:           strconv.FormatUint(vm.Id, 10), //nolint
 		Name:         vm.Name,
-		Provider:     types.ProviderGoogle,
+		Provider:     types.Google, // this is driver, though its the old legacy name of provider
 		State:        types.StateCreated,
 		Pool:         opts.PoolName,
 		Image:        p.image,
@@ -235,7 +234,7 @@ func (p *provider) mapToInstance(vm *compute.Instance, opts *types.InstanceCreat
 	}
 }
 
-func (p *provider) waitZoneOperation(ctx context.Context, name, zone string) error {
+func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error {
 	for {
 		client := p.service
 		op, err := client.ZoneOperations.Get(p.projectID, zone, name).Context(ctx).Do()
@@ -256,14 +255,14 @@ func (p *provider) waitZoneOperation(ctx context.Context, name, zone string) err
 	}
 }
 
-func (p *provider) setup(ctx context.Context) error {
+func (p *config) setup(ctx context.Context) error {
 	if reflect.DeepEqual(p.tags, defaultTags) {
 		return p.setupFirewall(ctx)
 	}
 	return nil
 }
 
-func (p *provider) setupFirewall(ctx context.Context) error {
+func (p *config) setupFirewall(ctx context.Context) error {
 	logr := logger.FromContext(ctx)
 
 	logr.Debugln("finding default firewall rules")
@@ -305,7 +304,7 @@ func (p *provider) setupFirewall(ctx context.Context) error {
 	return err
 }
 
-func (p *provider) waitGlobalOperation(ctx context.Context, name string) error {
+func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 	for {
 		op, err := p.service.GlobalOperations.Get(p.projectID, name).Context(ctx).Do()
 		if err != nil {

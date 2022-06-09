@@ -22,7 +22,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
@@ -43,7 +42,6 @@ import (
 type execCommand struct {
 	*internal.Flags
 	Source        *os.File
-	vmType        string
 	PoolFile      string
 	LiteEngineURL string
 	Include       []string
@@ -65,7 +63,6 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	if err != nil {
 		return err
 	}
-
 	// load the environment configuration from the environment
 	envConfig, err := config.FromEnviron()
 	if err != nil {
@@ -123,7 +120,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		cancel()
 	})
 
-	configPool, confErr := poolfile.ConfigPoolFile(c.PoolFile, c.vmType, &envConfig)
+	configPool, confErr := poolfile.ConfigPoolFile(c.PoolFile, &envConfig)
 	if confErr != nil {
 		logrus.WithError(confErr).
 			Fatalln("exec: unable to load pool file, or use an in memory pool file")
@@ -139,7 +136,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
 	if err != nil {
 		logrus.WithError(err).
-			Fatalln("Invalid or missing hosting provider")
+			Fatalln("Unable to start the database")
 	}
 	store := database.ProvideInstanceStore(db)
 
@@ -296,10 +293,6 @@ func registerExec(app *kingpin.Application) {
 
 	cmd.Flag("pool", "file to seed the pool").
 		StringVar(&c.PoolFile)
-
-	cmd.Flag("type", "which vm provider amazon/anka/google/vmfusion, default is amazon").
-		Default(string(types.ProviderAmazon)).
-		StringVar(&c.vmType)
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)

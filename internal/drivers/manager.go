@@ -187,7 +187,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 					err := m.forEach(ctx, func(ctx context.Context, pool *poolEntry) error {
 						logr := logger.FromContext(ctx).
-							WithField("provider", pool.Driver.ProviderName()).
+							WithField("driver", pool.Driver.DriverName()).
 							WithField("pool", pool.Name)
 
 						pool.Lock()
@@ -372,7 +372,7 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 	return nil
 }
 
-func (m *Manager) PingProvider(ctx context.Context) error {
+func (m *Manager) PingDriver(ctx context.Context) error {
 	for _, pool := range m.poolMap {
 		err := pool.Driver.Ping(ctx)
 		if err != nil {
@@ -399,7 +399,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 	}
 
 	logr := logger.FromContext(ctx).
-		WithField("provider", pool.Driver.ProviderName()).
+		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
 
 	shouldCreate, shouldRemove := strategy.CountCreateRemove(
@@ -546,7 +546,7 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if pool.Driver.ProviderName() != string(types.ProviderAmazon) {
+	if pool.Driver.DriverName() != string(types.Amazon) {
 		return nil
 	}
 
