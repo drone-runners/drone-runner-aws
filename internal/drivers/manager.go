@@ -10,6 +10,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
+	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -440,7 +441,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				Infoln("build pool: created new instance")
 
 			go func() {
-				herr := m.hibernate(context.Background(), pool.Name, inst.ID)
+				herr := m.hibernateWithRetries(context.Background(), pool.Name, inst.ID)
 				if herr != nil {
 					logr.WithError(herr).Errorln("failed to hibernate the vm")
 				}
@@ -539,7 +540,7 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	return pool.Driver.Logs(ctx, instanceID)
 }
 
-func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) error {
+func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
@@ -555,6 +556,30 @@ func (m *Manager) hibernate(ctx context.Context, poolName, instanceID string) er
 
 	m.waitForInstanceConnectivity(ctx, instanceID)
 
+	retryCount := 1
+	const maxRetries = 3
+	for {
+		err := m.hibernate(ctx, instanceID, poolName, pool)
+		if err == nil {
+			return nil
+		}
+
+		logrus.WithError(err).WithField("retryCount", retryCount).Warnln("failed to hibernate the vm")
+		var re *itypes.RetryableError
+		if !errors.As(err, &re) {
+			return err
+		}
+
+		if retryCount >= maxRetries {
+			return err
+		}
+
+		time.Sleep(time.Minute)
+		retryCount++
+	}
+}
+
+func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, pool *poolEntry) error {
 	pool.Lock()
 	defer pool.Unlock()
 
