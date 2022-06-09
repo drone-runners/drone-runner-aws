@@ -11,6 +11,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -35,6 +36,36 @@ type VmxTemplateData struct {
 	VDiskPath   string
 	StorePath   string
 	Version     string
+}
+
+type config struct {
+	username string
+	password string
+
+	rootDir string
+
+	ISO         string
+	MachineName string
+	CPU         int64
+	Memory      int64
+	VDiskPath   string
+	StorePath   string
+
+	userData string
+}
+
+func New(opts ...Option) (drivers.Driver, error) {
+	p := new(config)
+	for _, opt := range opts {
+		opt(p)
+	}
+	if p.CPU == 0 {
+		p.CPU = 1
+	}
+	if p.Memory == 0 {
+		p.Memory = 1024
+	}
+	return p, nil
 }
 
 func (p *config) RootDir() string {
