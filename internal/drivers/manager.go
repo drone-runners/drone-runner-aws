@@ -10,6 +10,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
+	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -556,6 +557,7 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 	m.waitForInstanceConnectivity(ctx, instanceID)
 
 	retryCount := 1
+	const maxRetries = 3
 	for {
 		err := m.hibernate(ctx, instanceID, poolName, pool)
 		if err == nil {
@@ -563,12 +565,12 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 		}
 
 		logrus.WithError(err).WithField("retryCount", retryCount).Warnln("failed to hibernate the vm")
-		var re *types.RetryableError
+		var re *itypes.RetryableError
 		if !errors.As(err, &re) {
 			return err
 		}
 
-		if retryCount >= 3 { //nolint:gomnd
+		if retryCount >= maxRetries {
 			return err
 		}
 

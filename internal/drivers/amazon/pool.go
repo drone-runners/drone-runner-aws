@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -341,7 +342,7 @@ func (p *provider) Hibernate(ctx context.Context, instanceID, poolName string) e
 		logr.WithError(err).
 			Errorln("aws: failed to hibernate the VM")
 		if isHibernateRetryable(err) {
-			return &types.RetryableError{Msg: err.Error()}
+			return &itypes.RetryableError{Msg: err.Error()}
 		}
 		return err
 	}
@@ -355,14 +356,14 @@ func isHibernateRetryable(origErr error) bool {
 		return true
 	}
 
-	switch err := origErr.(type) { //nolint:gocritic
-	case awserr.Error:
+	if awsErr, ok := origErr.(awserr.Error); ok {
 		// Amazon linux 2 instance return error message on first try:
 		// UnsupportedOperation: Instance is not ready to hibernate yet, retry in a few minutes
-		if err.Code() == "UnsupportedOperation" {
+		if awsErr.Code() == "UnsupportedOperation" {
 			return true
 		}
 	}
+
 	return false
 }
 
