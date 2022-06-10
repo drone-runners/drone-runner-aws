@@ -76,7 +76,7 @@ steps:
                 access_key_secret: $${AWS_ACCESS_KEY_SECRET}
               ami: ami-04ca7309675983877
               size: t2.medium" > pool.tmp
-      - release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_windows.yml pool.tmp --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+      - release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_windows.yml --pool pool.tmp --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     environment:
       AWS_ACCESS_KEY_ID:
         from_secret: AWS_ACCESS_KEY_ID
