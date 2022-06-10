@@ -46,35 +46,55 @@ func WithRootDirectory(platform *types.Platform) Option {
 // WithDiskSize returns an option to set the instance disk size in gigabytes.
 func WithDiskSize(diskSize int64) Option {
 	return func(p *config) {
-		p.diskSize = diskSize
+		if diskSize == 0 {
+			p.diskSize = 50
+		} else {
+			p.diskSize = diskSize
+		}
 	}
 }
 
 // WithDiskType returns an option to set the instance disk type.
 func WithDiskType(diskType string) Option {
 	return func(p *config) {
-		p.diskType = diskType
+		if diskType == "" {
+			p.diskType = "pd-standard"
+		} else {
+			p.diskType = diskType
+		}
 	}
 }
 
 // WithMachineImage returns an option to set the image.
 func WithMachineImage(image string) Option {
 	return func(p *config) {
-		p.image = image
+		if image == "" {
+			p.image = "ubuntu-os-cloud/global/images/ubuntu-1604-xenial-v20170721"
+		} else {
+			p.image = image
+		}
 	}
 }
 
-// WithMachineType returns an option to set the instance type.
-func WithMachineType(size string) Option {
+// WithSize returns an option to set the instance type.
+func WithSize(size string) Option {
 	return func(p *config) {
-		p.size = size
+		if size == "" {
+			p.size = "n1-standard-1"
+		} else {
+			p.size = size
+		}
 	}
 }
 
 // WithNetwork returns an option to set the network.
 func WithNetwork(network string) Option {
 	return func(p *config) {
-		p.network = network
+		if network == "" {
+			p.network = "global/networks/default"
+		} else {
+			p.network = network
+		}
 	}
 }
 
@@ -109,7 +129,11 @@ func WithJSONPath(path string) Option {
 // WithTags returns an option to set the resource tags.
 func WithTags(tags ...string) Option {
 	return func(p *config) {
-		p.tags = tags
+		if len(tags) == 0 {
+			p.tags = defaultTags
+		} else {
+			p.tags = tags
+		}
 	}
 }
 
@@ -149,20 +173,32 @@ func WithUserDataKey(text, platform string) Option {
 // WithZones WithZone returns an option to set the target zone.
 func WithZones(zones ...string) Option {
 	return func(p *config) {
-		p.zones = zones
+		if len(zones) == 0 {
+			p.zones = []string{"us-central1-a"}
+		} else {
+			p.zones = zones
+		}
 	}
 }
 
 // WithScopes returns an option to set the scopes.
 func WithScopes(scopes ...string) Option {
 	return func(p *config) {
-		p.scopes = scopes
+		if len(scopes) == 0 {
+			p.scopes = defaultScopes
+		} else {
+			p.scopes = scopes
+		}
 	}
 }
 
 // WithServiceAccountEmail returns an option to set the ServiceAccountEmail.
 func WithServiceAccountEmail(email string) Option {
 	return func(p *config) {
-		p.serviceAccountEmail = email
+		if email == "" {
+			p.serviceAccountEmail = "default"
+		} else {
+			p.serviceAccountEmail = email
+		}
 	}
 }

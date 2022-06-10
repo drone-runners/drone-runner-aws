@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -21,12 +22,28 @@ import (
 
 const BIN = "/usr/local/bin/anka"
 
+type config struct {
+	username string
+	password string
+	rootDir  string
+	vmID     string
+	userData string
+}
+
 type ankaShow struct {
 	UUID    string `json:"uuid"`
 	Name    string `json:"name"`
 	Created string `json:"created"`
 	Memory  string `json:"memory"`
 	IP      string `json:"ip"`
+}
+
+func New(opts ...Option) (drivers.Driver, error) {
+	p := new(config)
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p, nil
 }
 
 func (p *config) RootDir() string {

@@ -6,17 +6,84 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 )
+
+var (
+	defaultTags = []string{
+		"allow-docker",
+	}
+
+	defaultScopes = []string{
+		"https://www.googleapis.com/auth/devstorage.read_only",
+		"https://www.googleapis.com/auth/logging.write",
+		"https://www.googleapis.com/auth/monitoring.write",
+		"https://www.googleapis.com/auth/trace.append",
+	}
+)
+
+type config struct {
+	init sync.Once
+
+	projectID string
+	JSONPath  string
+	JSON      []byte
+
+	rootDir string
+
+	// vm instance data
+	diskSize            int64
+	diskType            string
+	image               string
+	network             string
+	subnetwork          string
+	privateIP           bool
+	scopes              []string
+	serviceAccountEmail string
+	size                string
+	tags                []string
+	zones               []string
+	userData            string
+	userDataKey         string
+	service             *compute.Service
+}
+
+func New(opts ...Option) (drivers.Driver, error) {
+	p := new(config)
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	if p.service == nil {
+		if p.JSONPath != "" {
+			p.JSON, _ = os.ReadFile(p.JSONPath)
+		}
+		client, err := google.DefaultClient(oauth2.NoContext, compute.ComputeScope) //nolint:staticcheck
+		if err != nil {
+			return nil, err
+		}
+
+		p.service, err = compute.New(client) //nolint:staticcheck
+		if err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
+}
 
 func (p *config) RootDir() string {
 	return p.rootDir
