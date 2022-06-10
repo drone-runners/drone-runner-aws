@@ -1,5 +1,27 @@
 # Changelog
 
+## [v1.0.0-rc.6](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.6) (2022-06-10)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.5...v1.0.0-rc.6)
+
+**Implemented enhancements:**
+
+- \[DRON-342\] Implement Drone Runner for Windows on GCP [\#122](https://github.com/drone-runners/drone-runner-aws/pull/122) ([ccaspanello](https://github.com/ccaspanello))
+- \(DRON-324\) simplify setup for google [\#121](https://github.com/drone-runners/drone-runner-aws/pull/121) ([tphoney](https://github.com/tphoney))
+- \(DRON-333\) add custom tags for AWS [\#118](https://github.com/drone-runners/drone-runner-aws/pull/118) ([tphoney](https://github.com/tphoney))
+- \(DRON-284\) provide better OS support [\#117](https://github.com/drone-runners/drone-runner-aws/pull/117) ([tphoney](https://github.com/tphoney))
+- Add support for amazon linux 2 ami hibernate [\#105](https://github.com/drone-runners/drone-runner-aws/pull/105) ([shubham149](https://github.com/shubham149))
+- Add stage owner support in pool ownership api [\#96](https://github.com/drone-runners/drone-runner-aws/pull/96) ([shubham149](https://github.com/shubham149))
+
+**Fixed bugs:**
+
+- fixes issue where m1 doesn't have /usr/local/bin folder [\#116](https://github.com/drone-runners/drone-runner-aws/pull/116) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+**Merged pull requests:**
+
+- google move defaults to options [\#123](https://github.com/drone-runners/drone-runner-aws/pull/123) ([tphoney](https://github.com/tphoney))
+- add windows testing on merge to master [\#120](https://github.com/drone-runners/drone-runner-aws/pull/120) ([tphoney](https://github.com/tphoney))
+
 ## [v1.0.0-rc.5](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.5) (2022-05-25)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.4...v1.0.0-rc.5)
@@ -39,6 +61,7 @@
 
 **Merged pull requests:**
 
+- rc5\_prep2 [\#115](https://github.com/drone-runners/drone-runner-aws/pull/115) ([tphoney](https://github.com/tphoney))
 - \(maint\) publish happens after all checks pass [\#113](https://github.com/drone-runners/drone-runner-aws/pull/113) ([tphoney](https://github.com/tphoney))
 - Build mac binary [\#100](https://github.com/drone-runners/drone-runner-aws/pull/100) ([tphoney](https://github.com/tphoney))
 - Add dynamic wait for vm hibernate [\#98](https://github.com/drone-runners/drone-runner-aws/pull/98) ([shubham149](https://github.com/shubham149))
