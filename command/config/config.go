@@ -52,7 +52,6 @@ type (
 		Scopes              []string `json:"scopes,omitempty"  yaml:"scopes,omitempty"`
 		ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email,omitempty"`
 	}
-
 	// Amazon specifies the configuration for an AWS instance.
 	Amazon struct {
 		Account       AmazonAccount     `json:"account,omitempty"`
@@ -84,13 +83,11 @@ type (
 	}
 	// AmazonNetwork provides AmazonNetwork settings.
 	AmazonNetwork struct {
-		VPC               string   `json:"vpc,omitempty"`
 		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
 		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
 		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
 		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
 	}
-
 	// VMFusion specifies the configuration for a VMware instance.
 	VMFusion struct {
 		Account struct {
@@ -118,7 +115,6 @@ type (
 		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
-
 	// disk provides disk size and type.
 	disk struct {
 		Size int64  `json:"size,omitempty"`
