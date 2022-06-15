@@ -17,10 +17,11 @@ func (s DriverType) Value() (driver.Value, error) {
 }
 
 const (
-	Amazon   = DriverType("amazon")
-	Google   = DriverType("google")
-	VMFusion = DriverType("vmfusion")
-	Anka     = DriverType("anka")
+	Amazon       = DriverType("amazon")
+	Anka         = DriverType("anka")
+	DigitalOcean = DriverType("digitalocean")
+	Google       = DriverType("google")
+	VMFusion     = DriverType("vmfusion")
 )
 
 // InstanceState type enumeration.

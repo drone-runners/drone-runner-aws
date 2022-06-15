@@ -33,15 +33,15 @@ type (
 		Name         string            `json:"name,omitempty" yaml:"name,omitempty"`
 		Tags         []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
 		Size         string            `json:"size,omitempty" yaml:"size,omitempty"`
-		MachineType  string            `json:"machine_type,omitempty" yaml:"machine_type"`
+		MachineType  string            `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
 		UserData     string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
 		UserDataPath string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
 		UserDataKey  string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
-		Disk         disk              `json:"disk,omitempty"`
+		Disk         disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
 		Network      string            `json:"network,omitempty" yaml:"network,omitempty"`
 		Subnetwork   string            `json:"Subnetwork,omitempty" yaml:"Subnetwork,omitempty"`
-		PrivateIP    bool              `json:"private_ip,omitempty"`
-		Zone         []string          `json:"zone,omitempty" yaml:"zone"`
+		PrivateIP    bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
+		Zone         []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
 		Labels       map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 		Scopes       []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
 	}
@@ -115,11 +115,28 @@ type (
 		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
+	// digitalocean specifies the configuration for a DigitalOcean instance.
+	DigitalOcean struct {
+		Account      DigitalOceanAccount `json:"account,omitempty"`
+		Image        string              `json:"image,omitempty" yaml:"image,omitempty"`
+		Size         string              `json:"size,omitempty" yaml:"size,omitempty"`
+		FirewallID   string              `json:"firewall_id,omitempty" yaml:"firewall_id,omitempty" default:""`
+		SSHKeys      []string            `json:"ssh_keys,omitempty" yaml:"ssh_keys,omitempty"`
+		Tags         []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
+		UserData     string              `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath string              `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
+	}
+
+	DigitalOceanAccount struct {
+		PAT    string `json:"pat,omitempty" yaml:"pat"`
+		Region string `json:"region,omitempty" yaml:"region,omitempty"`
+	}
+
 	// disk provides disk size and type.
 	disk struct {
-		Size int64  `json:"size,omitempty"`
-		Type string `json:"type,omitempty"`
-		Iops int64  `json:"iops,omitempty"`
+		Size int64  `json:"size,omitempty" yaml:"size,omitempty"`
+		Type string `json:"type,omitempty" yaml:"type,omitempty"`
+		Iops int64  `json:"iops,omitempty" yaml:"iops,omitempty"`
 	}
 )
 
@@ -167,6 +184,10 @@ type EnvConfig struct {
 		AccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID"`
 		AccessKeySecret string `envconfig:"AWS_ACCESS_KEY_SECRET"`
 		Region          string `envconfig:"AWS_DEFAULT_REGION" default:"us-east-2"`
+	}
+
+	DigitalOcean struct {
+		PAT string `envconfig:"DIGITAL_OCEAN_PAT"`
 	}
 
 	Google struct {
