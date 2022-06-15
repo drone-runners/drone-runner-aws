@@ -1,0 +1,48 @@
+kind: pipeline
+type: vm
+name: default
+
+pool:
+  use: macpool
+
+steps:
+  - name: check install
+    commands:
+      - hostname -f
+      - ifconfig
+      - touch /tmp/blaaaa
+      - sw_vers -productVersion
+      - env
+  - name: plugin
+    image: plugins/docker
+    settings:
+      dry_run: true
+      repo: foo/bar
+      default_suffix: marko
+    volumes:
+      - name: cache
+        path: /go
+  - name: imagey + commands
+    image: golang
+    commands:
+      - go version
+      - go help
+      - ls -al /tmp
+  - name: docker status
+    commands:
+      - docker ps -a
+  - name: ping
+    image: redis
+    commands:
+      - redis-cli -h red ping
+  - name: check host volume
+    commands:
+      - ls /tmp
+      
+services:
+  - name: red
+    image: redis
+
+volumes:
+- name: cache
+  temp: {}
