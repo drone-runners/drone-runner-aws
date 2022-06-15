@@ -11,6 +11,7 @@ steps:
       - hostname -f
       - ifconfig
       - touch /tmp/blaaaa
+      - xcodebuild -version
       - env
   - name: plugin
     image: plugins/docker
