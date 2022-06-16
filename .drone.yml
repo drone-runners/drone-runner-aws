@@ -45,7 +45,7 @@ steps:
   - name: exec checks
     image: golang:1
     commands:
-      - DRONE_MAX_POOL_SIZE=1 DRONE_RPC_HOST=not_used DRONE_RPC_SECRET=not_used release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+      - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     environment:
       AWS_ACCESS_KEY_ID:
         from_secret: AWS_ACCESS_KEY_ID
@@ -57,6 +57,36 @@ steps:
       event:
         exclude:
           - pull_request
+  - name: windows exec checks
+    image: golang:1
+    commands:
+      - |
+        echo "version: '1'
+        instances:
+          - name: windows 2019
+            type: amazon
+            pool: 1
+            limit: 1
+            platform:
+              os: windows
+            spec:
+              account:
+                region: us-east-2
+                access_key_id: $${AWS_ACCESS_KEY_ID}
+                access_key_secret: $${AWS_ACCESS_KEY_SECRET}
+              ami: ami-04ca7309675983877
+              size: t2.medium" > pool.tmp
+      - release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_windows.yml --pool pool.tmp --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+    environment:
+      AWS_ACCESS_KEY_ID:
+        from_secret: AWS_ACCESS_KEY_ID
+      AWS_ACCESS_KEY_SECRET:
+        from_secret: AWS_ACCESS_KEY_SECRET
+    depends_on:
+      - compiler checks
+    when:
+      ref:
+        - refs/heads/master
   - name: delegate checks
     image: golang:1
     commands:
@@ -64,12 +94,12 @@ steps:
       - sleep 30
       - cat delegate.log
       - |
-        INSTANCE=`curl -d '{"id": "unique-stage-id","correlation_id":"abc1","pool_id":"test_pool", "setup_request": {"network": {"id":"drone"}, "platform": { "os":"ubuntu" }}}' -H "Content-Type: application/json" -X POST  http://localhost:3000/setup | cut -d'"' -f 4`
+        INSTANCE=`curl -d '{"id": "unique-stage-id","correlation_id":"abc1","pool_id":"testpool", "setup_request": {"network": {"id":"drone"}, "platform": { "os":"ubuntu" }}}' -H "Content-Type: application/json" -X POST  http://localhost:3000/setup | cut -d'"' -f 4`
       - |
-        curl -d "{\"id\":\"unique-stage-id\",\"instance_id\":\"$INSTANCE\",\"pool_id\":\"test_pool\",\"correlation_id\":\"abc1\",\"start_step_request\":{\"id\":\"step4\",\"image\":\"alpine:3.11\",\"working_dir\":\"/tmp\",\"run\":{\"commands\":[\"sleep 30\"], \"entrypoint\":[\"sh\", \"-c\"]}}}" -H "Content-Type: application/json" -X POST  http://localhost:3000/step
+        curl -d "{\"id\":\"unique-stage-id\",\"instance_id\":\"$INSTANCE\",\"pool_id\":\"testpool\",\"correlation_id\":\"abc1\",\"start_step_request\":{\"id\":\"step4\",\"image\":\"alpine:3.11\",\"working_dir\":\"/tmp\",\"run\":{\"commands\":[\"sleep 30\"], \"entrypoint\":[\"sh\", \"-c\"]}}}" -H "Content-Type: application/json" -X POST  http://localhost:3000/step
       - echo "step status:"$?
       - |
-        curl -d "{\"id\":\"unique-stage-id\",\"instance_id\":\"$INSTANCE\",\"pool_id\":\"test_pool\",\"correlation_id\":\"abc1\"}" -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy
+        curl -d "{\"id\":\"unique-stage-id\",\"instance_id\":\"$INSTANCE\",\"pool_id\":\"testpool\",\"correlation_id\":\"abc1\"}" -H "Content-Type: application/json" -X POST  http://127.0.0.1:3000/destroy
       - echo "destroy status:"$?
       - echo "view logs"
       - cat delegate.log
@@ -87,7 +117,6 @@ steps:
       event:
         exclude:
           - pull_request
-
   - name: publish
     image: plugins/docker
     pull: if-not-exists
@@ -107,6 +136,7 @@ steps:
     depends_on:
       - compiler checks
       - exec checks
+      - windows exec checks
       - delegate checks
       - golangci-lint
       - go vet and unit tests

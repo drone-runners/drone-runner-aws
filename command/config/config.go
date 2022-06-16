@@ -28,29 +28,30 @@ type (
 
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
-		Account struct {
-			ProjectID           string   `json:"project_id,omitempty"  yaml:"project_id"`
-			JSONPath            string   `json:"json_path,omitempty"  yaml:"json_path"`
-			Scopes              []string `json:"scopes,omitempty"  yaml:"scopes"`
-			ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email"`
-		} `json:"account,omitempty"  yaml:"account"`
-		Image        string            `json:"image,omitempty" yaml:"image, omitempty"`
-		Name         string            `json:"name,omitempty"`
-		Tags         []string          `json:"tags,omitempty"`
-		Size         string            `json:"size,omitempty"`
+		Account      GoogleAccount     `json:"account,omitempty"  yaml:"account"`
+		Image        string            `json:"image,omitempty" yaml:"image,omitempty"`
+		Name         string            `json:"name,omitempty" yaml:"name,omitempty"`
+		Tags         []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Size         string            `json:"size,omitempty" yaml:"size,omitempty"`
 		MachineType  string            `json:"machine_type,omitempty" yaml:"machine_type"`
-		UserData     string            `json:"user_data,omitempty"`
+		UserData     string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
 		UserDataPath string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
-		UserDataKey  string            `json:"user_data_key,omitempty"`
+		UserDataKey  string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
 		Disk         disk              `json:"disk,omitempty"`
-		Network      string            `json:"network,omitempty"`
-		Subnetwork   string            `json:"Subnetwork,omitempty"`
+		Network      string            `json:"network,omitempty" yaml:"network,omitempty"`
+		Subnetwork   string            `json:"Subnetwork,omitempty" yaml:"Subnetwork,omitempty"`
 		PrivateIP    bool              `json:"private_ip,omitempty"`
 		Zone         []string          `json:"zone,omitempty" yaml:"zone"`
-		Labels       map[string]string `json:"labels,omitempty"`
-		Scopes       []string          `json:"scopes,omitempty"`
+		Labels       map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+		Scopes       []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
 	}
 
+	GoogleAccount struct {
+		ProjectID           string   `json:"project_id,omitempty"  yaml:"project_id"`
+		JSONPath            string   `json:"json_path,omitempty"  yaml:"json_path"`
+		Scopes              []string `json:"scopes,omitempty"  yaml:"scopes,omitempty"`
+		ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email,omitempty"`
+	}
 	// Amazon specifies the configuration for an AWS instance.
 	Amazon struct {
 		Account       AmazonAccount     `json:"account,omitempty"`
@@ -82,13 +83,11 @@ type (
 	}
 	// AmazonNetwork provides AmazonNetwork settings.
 	AmazonNetwork struct {
-		VPC               string   `json:"vpc,omitempty"`
 		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
 		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
 		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
 		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
 	}
-
 	// VMFusion specifies the configuration for a VMware instance.
 	VMFusion struct {
 		Account struct {
@@ -116,7 +115,6 @@ type (
 		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
-
 	// disk provides disk size and type.
 	disk struct {
 		Size int64  `json:"size,omitempty"`
@@ -171,6 +169,12 @@ type EnvConfig struct {
 		Region          string `envconfig:"AWS_DEFAULT_REGION" default:"us-east-2"`
 	}
 
+	Google struct {
+		ProjectID string `envconfig:"GOOGLE_PROJECT_ID"`
+		JSONPath  string `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`
+		Zone      string `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
+	}
+
 	Limit struct {
 		Repos   []string `envconfig:"DRONE_LIMIT_REPOS"`
 		Events  []string `envconfig:"DRONE_LIMIT_EVENTS"`
@@ -178,7 +182,8 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.2.0/"`
+		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.1.0/"`
+		DefaultDriver  string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
 		ReusePool      bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge     int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
 		FreeMaxAge     int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
@@ -278,13 +283,13 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch s.Type {
-	case string(types.ProviderAmazon), "aws":
+	case string(types.Amazon), "aws":
 		s.Spec = new(Amazon)
-	case string(types.ProviderGoogle), "gcp":
+	case string(types.Google), "gcp":
 		s.Spec = new(Google)
-	case string(types.ProviderVMFusion):
+	case string(types.VMFusion):
 		s.Spec = new(VMFusion)
-	case string(types.ProviderAnka):
+	case string(types.Anka):
 		s.Spec = new(Anka)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)

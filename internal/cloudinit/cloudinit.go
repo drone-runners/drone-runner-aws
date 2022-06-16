@@ -264,10 +264,19 @@ func Linux(params *Params) (payload string) {
 
 const windowsScript = `
 <powershell>
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-choco install -y git
 
-# certificates
+echo "[DRONE] Initialization Starting"
+
+echo "[DRONE] Installing Scoop Package Manager"
+iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+
+echo "[DRONE] Installing Git"
+scoop install git --global
+
+echo "[DRONE] Updating PATH so we have access to git commands (otherwise Scoop.sh shim files cannot be found)"
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
+echo "[DRONE] Setup LiteEngine Certificates"
 
 mkdir "C:\Program Files\lite-engine"
 mkdir "{{ .CertDir }}"
@@ -290,44 +299,19 @@ if (test-path($profile) -eq "false")
 {
 	new-item -path $env:windir\System32\WindowsPowerShell\v1.0\profile.ps1 -itemtype file -force
 }
-# Updated profile content to explicitly import Choco
-$ChocoProfileValue = @'
-$ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
-if (Test-Path($ChocolateyProfile)) {
-	Import-Module "$ChocolateyProfile"
-}
-'@
-
-# Write it to the $profile location
-Set-Content -Path "$profile" -Value $ChocoProfileValue -Force
-
-# Source it
-. $profile
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
 
-# install choco
-$ChocoInstallPath = "$env:SystemDrive\ProgramData\Chocolatey\bin"
-
-if (!(Test-Path($ChocoInstallPath))) {
-	Set-ExecutionPolicy Bypass -Scope LocalMachine; iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))
-}
-
 # Refresh the PSEnviroment
 refreshenv
-
-# Stop getting prompted
-choco feature enable -n=allowGlobalConfirmation
-
-# Remember Arguments when upgrading programs
-choco feature enable -n=useRememberedArgumentsForUpgrades
-
-choco install -y git
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "C:\Program Files\lite-engine\log.out" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
+
+echo "[DRONE] Initialization Complete"
+
 </powershell>`
 
 var windowsTemplate = template.Must(template.New(oshelp.OSWindows).Funcs(funcs).Parse(windowsScript))

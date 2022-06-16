@@ -18,7 +18,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/handler/router"
@@ -64,7 +63,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
 	if err != nil {
 		logrus.WithError(err).
-			Fatalln("Invalid or missing hosting provider")
+			Fatalln("Unable to start the database")
 	}
 	// setup the global logrus logger.
 	setupLogger(&env)
@@ -103,7 +102,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	store := database.ProvideInstanceStore(db)
 	poolManager := drivers.New(ctx, store, env.Settings.LiteEnginePath, env.Runner.Name)
 
-	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, string(types.ProviderAmazon), &env)
+	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)
 	if confErr != nil {
 		logrus.WithError(confErr).
 			Fatalln("daemon: unable to load pool file, or use an in memory pool file")
@@ -124,10 +123,10 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		logrus.Fatalln("daemon: no instance pools found... aborting")
 	}
 
-	err = poolManager.PingProvider(ctx)
+	err = poolManager.PingDriver(ctx)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("daemon: cannot connect to cloud provider")
+			Errorln("daemon: driver ping failed")
 		return err
 	}
 

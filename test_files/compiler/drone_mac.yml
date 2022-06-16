@@ -3,15 +3,15 @@ type: vm
 name: default
 
 pool:
-  use: testpool
+  use: macpool
 
 steps:
   - name: check install
     commands:
-      - cat /var/log/cloud-init-output.log
       - hostname -f
       - ifconfig
       - touch /tmp/blaaaa
+      - sw_vers -productVersion
       - env
   - name: plugin
     image: plugins/docker

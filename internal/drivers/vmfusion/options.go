@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Option func(*provider)
+type Option func(*config)
 
 func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 	if platform.Arch == "" {
@@ -27,37 +27,37 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 }
 
 func WithUsername(username string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.username = username
 	}
 }
 
 func WithPassword(password string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.password = password
 	}
 }
 
 func WithISO(iso string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.ISO = iso
 	}
 }
 
 func WithCPU(cpu int64) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.CPU = cpu
 	}
 }
 
 func WithMemory(memory int64) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.Memory = memory
 	}
 }
 
 func WithVDiskPath(vDiskPath string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.VDiskPath = vDiskPath
 	}
 }
@@ -65,11 +65,11 @@ func WithVDiskPath(vDiskPath string) Option {
 // WithUserData returns an option to set the cloud-init template from a file location or passed in text.
 func WithUserData(text, path string) Option {
 	if text != "" {
-		return func(p *provider) {
+		return func(p *config) {
 			p.userData = text
 		}
 	}
-	return func(p *provider) {
+	return func(p *config) {
 		if path != "" {
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -84,14 +84,14 @@ func WithUserData(text, path string) Option {
 
 // WithStorePath the path where VM machines are stored
 func WithStorePath(storePath string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.StorePath = storePath
 	}
 }
 
 // WithRootDirectory sets the root directory for the virtual machine.
 func WithRootDirectory(dir string) Option {
-	return func(p *provider) {
+	return func(p *config) {
 		p.rootDir = tempdir(dir)
 	}
 }

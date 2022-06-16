@@ -11,6 +11,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -37,34 +38,64 @@ type VmxTemplateData struct {
 	Version     string
 }
 
-func (p *provider) RootDir() string {
+type config struct {
+	username string
+	password string
+
+	rootDir string
+
+	ISO         string
+	MachineName string
+	CPU         int64
+	Memory      int64
+	VDiskPath   string
+	StorePath   string
+
+	userData string
+}
+
+func New(opts ...Option) (drivers.Driver, error) {
+	p := new(config)
+	for _, opt := range opts {
+		opt(p)
+	}
+	if p.CPU == 0 {
+		p.CPU = 1
+	}
+	if p.Memory == 0 {
+		p.Memory = 1024
+	}
+	return p, nil
+}
+
+func (p *config) RootDir() string {
 	return p.rootDir
 }
 
-func (p *provider) ProviderName() string {
-	return string(types.ProviderVMFusion)
+func (p *config) DriverName() string {
+	return string(types.VMFusion)
 }
 
-func (p *provider) Ping(_ context.Context) error {
+func (p *config) Ping(_ context.Context) error {
 	return nil
 }
 
-func (p *provider) CanHibernate() bool {
+func (p *config) CanHibernate() bool {
 	return false
 }
 
-func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
+func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 	return "", errors.New("Unimplemented")
 }
 
-func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	uData := lehelper.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
 
 	p.MachineName = machineName
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", types.ProviderVMFusion).
+		WithField("cloud", types.VMFusion).
 		WithField("name", machineName).
 		WithField("pool", opts.PoolName)
 
@@ -163,7 +194,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	instance = &types.Instance{
 		ID:       p.vmxPath(),
 		Name:     machineName,
-		Provider: types.ProviderVMFusion,
+		Provider: types.VMFusion, // this is driver, though its the old legacy name of provider
 		State:    types.StateCreated,
 		Pool:     opts.PoolName,
 		Image:    p.ISO,
@@ -184,13 +215,13 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	return instance, nil
 }
 
-func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
 		return
 	}
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("provider", types.ProviderVMFusion)
+		WithField("driver", types.VMFusion)
 
 	for _, vmxPath := range instanceIDs {
 		// stop & delete VM
@@ -204,11 +235,11 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Hibernate(_ context.Context, _, _ string) error {
+func (p *config) Hibernate(_ context.Context, _, _ string) error {
 	return errors.New("unimplemented")
 }
 
-func (p *provider) Start(_ context.Context, _, _ string) (string, error) {
+func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 

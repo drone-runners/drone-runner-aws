@@ -1,14 +1,16 @@
 # AWS Runner
 
+[![Build Status](https://harness.drone.io/api/badges/drone-runners/drone-runner-aws/status.svg)](https://harness.drone.io/drone-runners/drone-runner-aws)
+
 This runner provisions EC2 instances in AWS for both windows and Linux. It also sets up SSH access and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Pools of hot swappable EC2 instances are created on startup of the runner to improve build spin up time.
 
 ## Installation
 
-For more information about installing this runner look at the [installation documentation](https://docs.drone.io/runner/aws/overview/).
+For more information about installing this runner look at the [installation documentation](https://docs.drone.io/runner/vm/overview/).
 
 ## Configuration
 
-For more information about configuring this runner look at the [configuration documentation](https://docs.drone.io/runner/aws/configuration/).
+For more information about configuring this runner look at the [configuration documentation](https://docs.drone.io/runner/vm/configuration/).
 
 ## Creating a build pipelines
 
@@ -20,7 +22,23 @@ This runner was initially designed in the following [proposal](https://github.co
 
 ## Release procedure
 
-Run the changelog generator.
+**MAKE SURE THE BUILD STATUS IS GREEN BEFORE YOU RELEASE A NEW VERSION**
+
+### Build and test the mac binary version
+
+1. Build the mac binary version of the runner.
+
+    ```bash
+    CGO_ENABLED=1 go build -o drone-runner-aws-darwin-amd64
+    ```
+
+2. Run the exec command to test the runner. The pool name must be `macpool`.
+
+    ```bash
+    drone-runner-aws-darwin-amd64 exec test_files/compiler/drone_mac.yml --pool pool.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+    ```
+
+### Run the changelog generator
 
 ```BASH
 docker run -it --rm -v "$(pwd)":/usr/local/src/your-app githubchangeloggenerator/github-changelog-generator -u drone-runners -p drone-runner-aws -t <secret github token>

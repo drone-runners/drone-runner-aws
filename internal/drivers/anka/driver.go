@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -21,6 +22,14 @@ import (
 
 const BIN = "/usr/local/bin/anka"
 
+type config struct {
+	username string
+	password string
+	rootDir  string
+	vmID     string
+	userData string
+}
+
 type ankaShow struct {
 	UUID    string `json:"uuid"`
 	Name    string `json:"name"`
@@ -29,15 +38,23 @@ type ankaShow struct {
 	IP      string `json:"ip"`
 }
 
-func (p *provider) RootDir() string {
+func New(opts ...Option) (drivers.Driver, error) {
+	p := new(config)
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p, nil
+}
+
+func (p *config) RootDir() string {
 	return p.rootDir
 }
 
-func (p *provider) ProviderName() string {
-	return string(types.ProviderAnka)
+func (p *config) DriverName() string {
+	return string(types.Anka)
 }
 
-func (p *provider) Ping(_ context.Context) error {
+func (p *config) Ping(_ context.Context) error {
 	_, err := exec.LookPath(BIN)
 	if err != nil {
 		return err
@@ -45,17 +62,17 @@ func (p *provider) Ping(_ context.Context) error {
 	return nil
 }
 
-func (p *provider) CanHibernate() bool {
+func (p *config) CanHibernate() bool {
 	return false
 }
 
-func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := lehelper.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", rand.Int()) //nolint
 
 	logr := logger.FromContext(ctx).
-		WithField("cloud", types.ProviderAnka).
+		WithField("cloud", types.Anka).
 		WithField("name", machineName).
 		WithField("pool", opts.PoolName)
 
@@ -137,7 +154,7 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	instance = &types.Instance{
 		ID:       createdVM.Body.UUID,
 		Name:     machineName,
-		Provider: types.ProviderAnka,
+		Provider: types.Anka, // this is driver, though its the old legacy name of provider
 		State:    types.StateCreated,
 		Pool:     opts.PoolName,
 		Platform: opts.Platform,
@@ -157,13 +174,13 @@ func (p *provider) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
 	return instance, nil
 }
 
-func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
 		return
 	}
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("provider", types.ProviderAnka)
+		WithField("driver", types.Anka)
 
 	for _, id := range instanceIDs {
 		// stop & delete VM
@@ -177,15 +194,15 @@ func (p *provider) Destroy(ctx context.Context, instanceIDs ...string) (err erro
 	return
 }
 
-func (p *provider) Hibernate(_ context.Context, _, _ string) error {
+func (p *config) Hibernate(_ context.Context, _, _ string) error {
 	return errors.New("unimplemented")
 }
 
-func (p *provider) Start(_ context.Context, _, _ string) (string, error) {
+func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
-func (p *provider) Logs(ctx context.Context, instance string) (string, error) {
+func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 	return "", errors.New("Unimplemented")
 }
 
