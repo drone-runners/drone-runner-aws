@@ -31,6 +31,7 @@ type setupCommand struct {
 	envFile            string
 	awsAccessKeyID     string
 	awsAccessKeySecret string
+	digitalOceanPAT    string
 	googleProjectID    string
 	googleJSONPath     string
 }
@@ -67,9 +68,15 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 		if c.googleJSONPath != "" {
 			env.Google.JSONPath = c.googleJSONPath
 		}
+	} else if c.digitalOceanPAT != "" {
+		logrus.Infoln("setup: using digital ocean")
+		env.DigitalOcean.PAT = c.digitalOceanPAT
 	} else {
 		logrus.
-			Fatalln("unsupported driver, please choose a driver setting the manditory fields:\n for amazon --awsAccessKeyID and --awsAccessKeySecret\n for google --googleProjectID")
+			Fatalln(`unsupported driver, please choose a driver setting the mandatory fields:
+for Amazon        --awsAccessKeyID and --awsAccessKeySecret
+for Digital Ocean --digitalOceanPAT
+for Google        --googleProjectID`)
 	}
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
@@ -209,13 +216,17 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("envfile", "load the environment variable file").
 		Default(".env").
 		StringVar(&c.envFile)
-	// AWS specific flags
+	// Amazon specific flags
 	cmd.Flag("awsAccessKeyID", "aws access key ID").
 		Default("").
 		StringVar(&c.awsAccessKeyID)
 	cmd.Flag("awsAccessKeySecret", "aws access key secret").
 		Default("").
 		StringVar(&c.awsAccessKeySecret)
+	// Digital Ocean specific flags
+	cmd.Flag("digitalOceanPAT", "digital ocean token").
+		Default("").
+		StringVar(&c.digitalOceanPAT)
 	// Google specific flags
 	cmd.Flag("googleProjectID", "Google project ID").
 		Default("").

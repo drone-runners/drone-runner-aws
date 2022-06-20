@@ -182,6 +182,7 @@ write_files:
   encoding: b64
   content: {{ .TLSKey | base64 }}
 runcmd:
+- 'ufw allow 9079'
 - 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 - 'touch /root/.env'
