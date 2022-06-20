@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/oshelp"
+
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone/runner-go/environ"
@@ -126,6 +128,12 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		LogConfig: leapi.LogConfig{}, // unused... I guess
 		TIConfig:  leapi.TIConfig{},  // unused, CIE specific
 		Files:     spec.Files,
+	}
+
+	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
+	if instance.Platform.OS == oshelp.OSMac && instance.Arch == oshelp.ArchARM64 {
+		b := false
+		setupRequest.MountDockerSocket = &b
 	}
 
 	setupResponse, err := client.Setup(ctx, setupRequest)
@@ -274,6 +282,11 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		}
 	}(ctx)
 
+	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
+	if instance.Platform.OS == oshelp.OSMac && instance.Arch == oshelp.ArchARM64 {
+		b := false
+		req.MountDockerSocket = &b
+	}
 	startStepResponse, err := client.StartStep(ctx, req)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to start step")
