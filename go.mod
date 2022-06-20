@@ -18,7 +18,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/google/go-cmp v0.5.6
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.3.0
+	github.com/harness/lite-engine v0.3.1
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0

@@ -237,8 +237,8 @@ github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=
 github.com/grpc-ecosystem/grpc-gateway v1.9.5/go.mod h1:vNeuVxBJEsws4ogUvrchl83t/GYV9WGTSLVdBhOQFDY=
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
-github.com/harness/lite-engine v0.3.0 h1:3r6QcBb52h+YNnwNc5DJE0RmuUdOqPrXD4NnB5q5zuU=
-github.com/harness/lite-engine v0.3.0/go.mod h1:fO/Jyk+tmp54i2wz9TTEhEc9YLkMdTtYz2crhny7UII=
+github.com/harness/lite-engine v0.3.1 h1:1a7etq8GdX6AnxMo1rW2i6ide3HSIED4I+sVjYc9hVc=
+github.com/harness/lite-engine v0.3.1/go.mod h1:fO/Jyk+tmp54i2wz9TTEhEc9YLkMdTtYz2crhny7UII=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
