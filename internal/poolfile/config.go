@@ -11,6 +11,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/anka"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/oshelp"
@@ -162,6 +163,34 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
+		case string(types.DigitalOcean):
+			var do, ok = instance.Spec.(*config.DigitalOcean)
+			if !ok {
+				logrus.Errorln("unable to parse pool file")
+			}
+			// set platform defaults
+			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				logrus.WithError(platformErr).WithField("driver", instance.Type)
+			}
+			instance.Platform = *platform
+			driver, err := digitalocean.New(
+				digitalocean.WithPAT(do.Account.PAT),
+				digitalocean.WithRegion(do.Account.Region),
+				digitalocean.WithSize(do.Size),
+				digitalocean.WithFirewallID(do.FirewallID),
+				digitalocean.WithTags(do.Tags),
+				digitalocean.WithSSHKeys(do.SSHKeys),
+				digitalocean.WithImage(do.Image),
+				digitalocean.WithUserData(do.UserData, do.UserDataPath),
+			)
+			if err != nil {
+				logrus.WithError(err).WithField("driver", instance.Type)
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
+
 		default:
 			return nil, fmt.Errorf("unknown instance type %s", instance.Type)
 		}
@@ -212,6 +241,9 @@ func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile,
 				return pool, fmt.Errorf("google:unable to find credentials file at '%s' or set GOOGLE_JSON_PATH to the correct location", conf.Google.JSONPath)
 			}
 			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+		} else if conf.DigitalOcean.PAT != "" {
+			logrus.Infoln("in memory pool is using digitalocean")
+			return createDigitalOceanPool(conf.DigitalOcean.PAT, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		} else {
 			return pool,
 				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n for google GOOGLE_PROJECT_ID")
@@ -254,6 +286,31 @@ func createAmazonPool(accessKeyID, accessKeySecret, region string, minPoolSize, 
 			},
 			AMI:  "ami-051197ce9cbb023ea",
 			Size: "t2.micro",
+		},
+	}
+	poolfile := config.PoolFile{
+		Version:   "1",
+		Instances: []config.Instance{instance},
+	}
+
+	return &poolfile
+}
+
+func createDigitalOceanPool(pat string, minPoolSize, maxPoolSize int) *config.PoolFile {
+	instance := config.Instance{
+		Name:    DefaultPoolName,
+		Default: true,
+		Type:    string(types.DigitalOcean),
+		Pool:    minPoolSize,
+		Limit:   maxPoolSize,
+		Platform: types.Platform{
+			Arch: oshelp.ArchAMD64,
+			OS:   oshelp.OSLinux,
+		},
+		Spec: &config.DigitalOcean{
+			Account: config.DigitalOceanAccount{
+				PAT: pat,
+			},
 		},
 	}
 	poolfile := config.PoolFile{
