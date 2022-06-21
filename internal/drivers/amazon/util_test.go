@@ -7,7 +7,7 @@ package amazon
 import (
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 )
 
 func Test_tempdir(t *testing.T) {

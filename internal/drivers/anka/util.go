@@ -1,6 +1,6 @@
 package anka
 
-import "github.com/drone-runners/drone-runner-aws/oshelp"
+import "github.com/drone-runners/drone-runner-aws/internal/oshelp"
 
 func tempdir(inputOS string) string {
 	const dir = "anka"

@@ -199,6 +199,14 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 					env.Registry.SkipVerify,
 				),
 			),
+			Tmate: compiler.Tmate{
+				Image:   env.Tmate.Image,
+				Enabled: env.Tmate.Enabled,
+				Server:  env.Tmate.Server,
+				Port:    env.Tmate.Port,
+				RSA:     env.Tmate.RSA,
+				ED25519: env.Tmate.ED25519,
+			},
 		},
 		Exec: runtime.NewExecer(
 			tracer,

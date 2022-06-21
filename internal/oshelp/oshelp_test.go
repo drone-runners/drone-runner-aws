@@ -65,14 +65,14 @@ func Test_getNetrc(t *testing.T) {
 func Test_getScript(t *testing.T) {
 	commands := []string{"go build"}
 
-	a := GenScript(OSWindows, commands)
+	a := GenScript(OSWindows, ArchAMD64, commands)
 	b := powershell.Script(commands)
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("Generated windows linux script")
 	}
 
-	a = GenScript(OSLinux, commands)
-	b = bash.Script(commands)
+	a = GenScript(OSLinux, ArchAMD64, commands)
+	b = returnTmateScript(ArchAMD64) + bash.Script(commands)
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("Generated invalid linux script")
 	}

@@ -105,9 +105,6 @@ func TestCompile_Plugin(t *testing.T) {
 	if ir.Steps[1].Envs["PLUGIN_LOCATION"] != "production" {
 		t.Error("incorrect or missing 'location' setting from the step environment")
 	}
-	if ir.Steps[1].Envs["PLUGIN_LOCATION"] != "production" {
-		t.Error("incorrect or missing 'location' setting from the step environment")
-	}
 	var username, password string
 	for _, s := range ir.Steps[1].Secrets {
 		if s.Env == "PLUGIN_USERNAME" {
@@ -208,6 +205,9 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		}),
 		PoolManager: poolManager,
 		Registry:    registry.Combine(),
+		Tmate: Tmate{
+			Enabled: false,
+		},
 	}
 	args := runtime.CompilerArgs{
 		Repo:     &drone.Repo{},
@@ -250,7 +250,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 
 	opts := cmp.Options{
 		cmpopts.IgnoreFields(engine.Spec{}, "Network"),
-		cmpopts.IgnoreFields(engine.Step{}, "Envs", "Secrets"),
+		cmpopts.IgnoreFields(engine.Step{}, "Envs", "Secrets", "Files"),
 		cmpopts.IgnoreFields(lespec.Network{}, "Labels"),
 		cmpopts.IgnoreFields(lespec.VolumeHostPath{}, "Labels"),
 		cmpopts.IgnoreFields(lespec.VolumeEmptyDir{}, "Labels"),

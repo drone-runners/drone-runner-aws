@@ -13,8 +13,9 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/encoder"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone/drone-go/drone"
+
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -35,29 +36,43 @@ var random = func() string {
 	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
 }
 
-// Compiler compiles the Yaml configuration file to an
-// intermediate representation optimized for simple execution.
-type Compiler struct {
-	// Environ provides a set of environment variables that should be added to each pipeline step by default.
-	Environ provider.Provider
+type (
+	// Tmate defines tmate settings.
+	Tmate struct {
+		Image   string
+		Enabled bool
+		Server  string
+		Port    string
+		RSA     string
+		ED25519 string
+	}
 
-	// NetworkOpts provides a set of network options that
-	// are used when creating the docker network.
-	NetworkOpts map[string]string
+	// Compiler compiles the Yaml configuration file to an intermediate representation optimized for simple execution.
+	Compiler struct {
+		// Environ provides a set of environment variables that should be added to each pipeline step by default.
+		Environ provider.Provider
 
-	// Secret returns a named secret value that can be injected into the pipeline step.
-	Secret secret.Provider
+		// NetworkOpts provides a set of network options that
+		// are used when creating the docker network.
+		NetworkOpts map[string]string
 
-	// Pools is a map of named pools that can be referenced by a pipeline.
-	PoolManager *drivers.Manager
+		// Secret returns a named secret value that can be injected into the pipeline step.
+		Secret secret.Provider
 
-	// Registry returns a list of registry credentials that can be
-	// used to pull private container images.
-	Registry registry.Provider
+		// Pools is a map of named pools that can be referenced by a pipeline.
+		PoolManager *drivers.Manager
 
-	// Volumes provides a set of volumes that should be mounted to each pipeline container
-	Volumes []string
-}
+		// Registry returns a list of registry credentials that can be
+		// used to pull private container images.
+		Registry registry.Provider
+
+		// Volumes provides a set of volumes that should be mounted to each pipeline container
+		Volumes []string
+
+		// Tmate provides global configration options for tmate live debugging.
+		Tmate
+	}
+)
 
 // Compile compiles the configuration file.
 func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic,gocyclo,funlen
@@ -129,9 +144,17 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		},
 	)
 
+	// add tmate settings to the environment
+	if c.Tmate.Server != "" {
+		envs["DRONE_TMATE_HOST"] = c.Tmate.Server
+		envs["DRONE_TMATE_PORT"] = c.Tmate.Port
+		envs["DRONE_TMATE_FINGERPRINT_RSA"] = c.Tmate.RSA
+		envs["DRONE_TMATE_FINGERPRINT_ED25519"] = c.Tmate.ED25519
+	}
+
 	// create the clone step, maybe
 	if !pipeline.Clone.Disable {
-		cloneScript := oshelp.GenScript(pipelinePlatform.OS,
+		cloneScript := oshelp.GenScript(pipelinePlatform.OS, pipelinePlatform.Arch,
 			clone.Commands(
 				clone.Args{
 					Branch: args.Build.Target,
@@ -202,7 +225,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 		// build the script of commands we will execute
 		if len(src.Commands) > 0 {
-			scriptToExecute := oshelp.GenScript(pipelinePlatform.OS, src.Commands)
+			scriptToExecute := oshelp.GenScript(pipelinePlatform.OS, pipelinePlatform.Arch, src.Commands)
 			scriptPath := oshelp.JoinPaths(pipelinePlatform.OS, pipelineRoot, "opt", oshelp.GetExt(pipelinePlatform.OS, stepID))
 
 			files = []*lespec.File{
