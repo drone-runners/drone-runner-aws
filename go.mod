@@ -6,7 +6,7 @@ replace github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.2
 
 require (
 	github.com/Masterminds/squirrel v1.5.2
-	github.com/aws/aws-sdk-go v1.44.2
+	github.com/aws/aws-sdk-go v1.44.37
 	github.com/buildkite/yaml v2.1.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.1.2
 	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9

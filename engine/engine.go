@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
@@ -150,8 +150,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 
 // Destroy the pipeline environment.
 func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
-	// HACK: this timeout delays deleting the instance to ensure
-	// there is enough time to stream the logs.
+	// HACK: this timeout delays deleting the instance to ensure there is enough time to stream the logs.
 	const destroyTimeout = time.Second * 5
 	time.Sleep(destroyTimeout)
 

@@ -14,7 +14,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"gopkg.in/yaml.v2"
 

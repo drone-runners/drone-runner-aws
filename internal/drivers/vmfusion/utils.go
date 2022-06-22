@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 
 	"github.com/sirupsen/logrus"
 )

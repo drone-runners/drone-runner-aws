@@ -14,7 +14,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 

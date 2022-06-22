@@ -12,7 +12,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )

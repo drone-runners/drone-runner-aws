@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/oshelp"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	lehttp "github.com/harness/lite-engine/cli/client"
 )
