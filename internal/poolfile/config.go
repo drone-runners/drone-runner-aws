@@ -222,7 +222,6 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 
 func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {
 	if path == "" {
-
 		logrus.Infof("no pool file provided")
 		switch {
 		case conf.AWS.AccessKeyID != "" || conf.AWS.AccessKeySecret != "":

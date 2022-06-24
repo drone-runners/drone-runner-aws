@@ -80,7 +80,6 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 							for Digital Ocean --digital-ocean-pat
 							for Google        --google-project-id
 							for Anka          --anka-vm-name`)
-
 	}
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
