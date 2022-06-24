@@ -203,7 +203,7 @@ func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 }
 
 func (p *config) Logs(ctx context.Context, instance string) (string, error) {
-	return "", errors.New("Unimplemented")
+	return "", nil
 }
 
 func commandCloneVM(ctx context.Context, vmID, newVMName string) *exec.Cmd {
