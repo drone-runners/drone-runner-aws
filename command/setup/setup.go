@@ -34,6 +34,7 @@ type setupCommand struct {
 	digitalOceanPAT    string
 	googleProjectID    string
 	googleJSONPath     string
+	ankaVMName         string
 }
 
 const (
@@ -54,29 +55,31 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 	// check cli options and map arguments to configuration
-	if c.awsAccessKeyID != "" || c.awsAccessKeySecret != "" {
+	switch {
+	case c.awsAccessKeyID != "" && c.awsAccessKeySecret != "":
 		logrus.Infoln("setup: using amazon")
-		if c.awsAccessKeyID == "" || c.awsAccessKeySecret == "" {
-			logrus.Fatalln("missing Amazon access key ID or secret")
-		}
 		env.AWS.AccessKeyID = c.awsAccessKeyID
 		env.AWS.AccessKeySecret = c.awsAccessKeySecret
-	} else if c.googleProjectID != "" {
-		logrus.Infoln("setup: using google")
+	case c.digitalOceanPAT != "":
+		env.DigitalOcean.PAT = c.digitalOceanPAT
+		logrus.Infoln("setup: using digital ocean")
+	case c.googleProjectID != "":
 		env.Google.ProjectID = c.googleProjectID
 		// use the default path if the user did not specify one
 		if c.googleJSONPath != "" {
 			env.Google.JSONPath = c.googleJSONPath
 		}
-	} else if c.digitalOceanPAT != "" {
-		logrus.Infoln("setup: using digital ocean")
-		env.DigitalOcean.PAT = c.digitalOceanPAT
-	} else {
+		logrus.Infoln("setup: using google")
+	case c.ankaVMName != "":
+		env.Anka.VMName = c.ankaVMName
+		logrus.Infoln("setup: using anka")
+	default:
 		logrus.
 			Fatalln(`unsupported driver, please choose a driver setting the mandatory fields:
-for Amazon        --awsAccessKeyID and --awsAccessKeySecret
-for Digital Ocean --digitalOceanPAT
-for Google        --googleProjectID`)
+							for Amazon        --aws-access-key-id and --aws-access-key-secret
+							for Digital Ocean --digital-ocean-pat
+							for Google        --google-project-id
+							for Anka          --anka-vm-name`)
 	}
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
@@ -217,20 +220,24 @@ func Register(app *kingpin.Application) {
 		Default(".env").
 		StringVar(&c.envFile)
 	// Amazon specific flags
-	cmd.Flag("awsAccessKeyID", "aws access key ID").
+	cmd.Flag("aws-access-key-id", "aws access key ID").
 		Default("").
 		StringVar(&c.awsAccessKeyID)
-	cmd.Flag("awsAccessKeySecret", "aws access key secret").
+	cmd.Flag("aws-access-key-secret", "aws access key secret").
 		Default("").
 		StringVar(&c.awsAccessKeySecret)
 	// Digital Ocean specific flags
-	cmd.Flag("digitalOceanPAT", "digital ocean token").
+	cmd.Flag("digital-ocean-pat", "digital ocean token").
 		Default("").
 		StringVar(&c.digitalOceanPAT)
 	// Google specific flags
-	cmd.Flag("googleProjectID", "Google project ID").
+	cmd.Flag("google-project-id", "Google project ID").
 		Default("").
 		StringVar(&c.googleProjectID)
-	cmd.Flag("googleJSONPath", "Google JSON path").
+	cmd.Flag("google-json-path", "Google JSON path").
 		StringVar(&c.googleJSONPath)
+	// Anka specific flags
+	cmd.Flag("anka-vm-name", "Anka VM name").
+		Default("").
+		StringVar(&c.ankaVMName)
 }

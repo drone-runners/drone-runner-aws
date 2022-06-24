@@ -190,6 +190,10 @@ type EnvConfig struct {
 		PAT string `envconfig:"DIGITAL_OCEAN_PAT"`
 	}
 
+	Anka struct {
+		VMName string `envconfig:"ANKA_VM_NAME"`
+	}
+
 	Google struct {
 		ProjectID string `envconfig:"GOOGLE_PROJECT_ID"`
 		JSONPath  string `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`

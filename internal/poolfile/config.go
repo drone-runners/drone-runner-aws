@@ -223,30 +223,28 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile, err error) {
 	if path == "" {
 		logrus.Infof("no pool file provided")
-		if conf.AWS.AccessKeyID != "" || conf.AWS.AccessKeySecret != "" {
+		switch {
+		case conf.AWS.AccessKeyID != "" || conf.AWS.AccessKeySecret != "":
 			logrus.Infoln("in memory pool is using amazon")
-			if conf.AWS.AccessKeyID == "" || conf.AWS.AccessKeySecret == "" {
-				return pool, fmt.Errorf("amazon: missing AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY_SECRET")
-			}
 			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret, conf.AWS.Region, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
-		} else if conf.Google.ProjectID != "" {
-			logrus.Infoln("in memory pool is using google")
-			absPath := filepath.Clean(conf.Google.JSONPath)
-			if strings.HasPrefix(absPath, "~/") {
-				dirname, _ := os.UserHomeDir()
-				absPath = filepath.Join(dirname, absPath[2:])
-			}
-			_, pathErr := os.Stat(absPath)
-			if errors.Is(pathErr, os.ErrNotExist) {
-				return pool, fmt.Errorf("google:unable to find credentials file at '%s' or set GOOGLE_JSON_PATH to the correct location", conf.Google.JSONPath)
-			}
-			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
-		} else if conf.DigitalOcean.PAT != "" {
+		case conf.DigitalOcean.PAT != "":
 			logrus.Infoln("in memory pool is using digitalocean")
 			return createDigitalOceanPool(conf.DigitalOcean.PAT, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
-		} else {
+		case conf.Google.ProjectID != "":
+			logrus.Infoln("in memory pool is using google")
+			if checkGoogleCredentialsExist(conf.Google.JSONPath) {
+				logrus.Printf("google:unable to find credentials file at '%s' or set GOOGLE_JSON_PATH to the correct location", conf.Google.JSONPath)
+			}
+			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+		case conf.Anka.VMName != "":
+			return createAnkaPool(conf.Anka.VMName, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+		default:
 			return pool,
-				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n for google GOOGLE_PROJECT_ID")
+				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n " +
+					"for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n " +
+					"for google GOOGLE_PROJECT_ID\n " +
+					"for Anka ANKA_VM_NAME\n " +
+					"for digitalocean DIGITALOCEAN_PAT")
 		}
 	}
 	pool, err = config.ParseFile(path)
@@ -265,6 +263,16 @@ func PrintPoolFile(pool *config.PoolFile) {
 			Errorln("unable to marshal pool file, cannot print")
 	}
 	fmt.Printf("Pool file:\n%s\n", marshalledPool)
+}
+
+func checkGoogleCredentialsExist(path string) bool {
+	absPath := filepath.Clean(path)
+	if strings.HasPrefix(absPath, "~/") {
+		dirname, _ := os.UserHomeDir()
+		absPath = filepath.Join(dirname, absPath[2:])
+	}
+	_, pathErr := os.Stat(absPath)
+	return !errors.Is(pathErr, os.ErrNotExist)
 }
 
 func createAmazonPool(accessKeyID, accessKeySecret, region string, minPoolSize, maxPoolSize int) *config.PoolFile {
@@ -340,6 +348,29 @@ func createGooglePool(projectID, path, zone string, minPoolSize, maxPoolSize int
 			Image:       "projects/ubuntu-os-pro-cloud/global/images/ubuntu-pro-1804-bionic-v20220131",
 			MachineType: "e2-small",
 			Zone:        []string{zone},
+		},
+	}
+	poolfile := config.PoolFile{
+		Version:   "1",
+		Instances: []config.Instance{instance},
+	}
+
+	return &poolfile
+}
+
+func createAnkaPool(vmName string, minPoolSize, maxPoolSize int) *config.PoolFile {
+	instance := config.Instance{
+		Name:    DefaultPoolName,
+		Default: true,
+		Type:    string(types.Anka),
+		Pool:    minPoolSize,
+		Limit:   maxPoolSize,
+		Platform: types.Platform{
+			Arch: oshelp.ArchAMD64,
+			OS:   oshelp.OSMac,
+		},
+		Spec: &config.Anka{
+			VMID: vmName,
 		},
 	}
 	poolfile := config.PoolFile{
