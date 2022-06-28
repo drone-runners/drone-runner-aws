@@ -74,6 +74,9 @@ func (l *Linter) checkPools(pipeline *resource.Pipeline, poolManager *drivers.Ma
 			return errors.New(errMsg)
 		}
 	} else {
+		if pipeline.Platform.OS == "" || pipeline.Platform.Arch == "" {
+			return errors.New(fmt.Sprintf("linter: you must specify a 'platform (OS & Arch)' to use"))
+		}
 		// check pool matches here and if not error
 		pool, _ := poolManager.ListByPlatform(l.GlobalCtx, pipeline.Platform.OS, pipeline.Platform.Arch)
 		if pool == "" {
