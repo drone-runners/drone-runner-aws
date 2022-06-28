@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/manifest"
 
 	"github.com/google/go-cmp/cmp"
@@ -42,7 +43,7 @@ func TestParse(t *testing.T) {
 			Workspace: Workspace{
 				Path: "/drone/src",
 			},
-			Platform: manifest.Platform{
+			Platform: types.Platform{
 				OS:   oshelp.OSLinux,
 				Arch: oshelp.ArchARM64,
 			},
