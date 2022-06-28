@@ -16,6 +16,7 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
+		Platform      Platform         `json:"platform,omitempty"`
 		Name          string           `json:"name,omitempty"`
 		CloudInstance CloudInstance    `json:"cloud_instance"`
 		Files         []*lespec.File   `json:"files,omitempty"`
@@ -36,6 +37,14 @@ type (
 		DependsOn []string          `json:"depends_on,omitempty"`
 		ErrPolicy runtime.ErrPolicy `json:"err_policy,omitempty"`
 		RunPolicy runtime.RunPolicy `json:"run_policy,omitempty"`
+	}
+
+	// Platform defines the target platform.
+	Platform struct {
+		OS      string `json:"os,omitempty"`
+		Arch    string `json:"arch,omitempty"`
+		Variant string `json:"variant,omitempty"`
+		Version string `json:"version,omitempty"`
 	}
 
 	// Secret represents a secret variable.

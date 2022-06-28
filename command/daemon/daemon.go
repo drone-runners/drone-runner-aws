@@ -154,7 +154,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
-	daemonLint := linter.New()
+	daemonLint := linter.New(ctx, &env)
 	daemonLint.PoolManager = poolManager
 	runner := &runtime.Runner{
 		Client:   cli,

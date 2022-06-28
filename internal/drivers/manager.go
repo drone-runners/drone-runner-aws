@@ -150,6 +150,26 @@ func (m *Manager) Add(pools ...Pool) error {
 	return nil
 }
 
+func (m *Manager) ListByPlatform(ctx context.Context, os, arch string) (pool string, err error) {
+	platform := types.Platform{
+		OS:   os,
+		Arch: arch,
+	}
+	list, err := m.instanceStore.List(ctx, "", &types.QueryParams{Platform: &platform})
+	if err != nil {
+		logger.FromContext(ctx).WithError(err).
+			Errorln("manager: failed to list instances")
+		return
+	}
+	for _, instance := range list {
+		// required to append instance not pointer
+		loopInstance := instance
+		return loopInstance.Pool, nil
+	}
+
+	return "", errors.New("manager: no pool found")
+}
+
 func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration) error {
 	const minMaxAge = 5 * time.Minute
 	if maxAgeBusy < minMaxAge || maxAgeFree < minMaxAge {

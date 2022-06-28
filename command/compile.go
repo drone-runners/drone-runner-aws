@@ -5,6 +5,7 @@
 package command
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -102,7 +103,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// lint the pipeline and return an error if any linting rules are broken
-	lint := linter.New()
+	lint := linter.New(context.Background(), &config.EnvConfig{})
 	lint.PoolManager = poolManager
 	err = lint.Lint(resourceInstance, c.Repo)
 	if err != nil {

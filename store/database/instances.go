@@ -30,8 +30,12 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 	dst := []*types.Instance{}
 	var args []interface{}
 
-	stmt := builder.Select(instanceColumns).From("instances").Where(squirrel.Eq{"instance_pool": pool})
-	args = append(args, pool)
+	stmt := builder.Select(instanceColumns).From("instances")
+
+	if pool != "" {
+		stmt = stmt.Where(squirrel.Eq{"instance_pool": pool})
+		args = append(args, pool)
+	}
 	if params != nil {
 		if params.Stage != "" {
 			stmt = stmt.Where(squirrel.Eq{"instance_stage": params.Stage})
@@ -40,6 +44,12 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 		if params.Status != "" {
 			stmt = stmt.Where(squirrel.Eq{"instance_state": params.Status})
 			args = append(args, params.Status)
+		}
+		if params.Platform != nil {
+			stmt = stmt.Where(squirrel.Eq{"instance_os": &params.Platform.OS})
+			args = append(args, &params.Platform.OS)
+			stmt = stmt.Where(squirrel.Eq{"instance_arch": &params.Platform.Arch})
+			args = append(args, &params.Platform.Arch)
 		}
 	}
 	stmt = stmt.OrderBy("instance_started " + "ASC")

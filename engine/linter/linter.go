@@ -5,10 +5,13 @@
 package linter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/drone-runners/drone-runner-aws/command/config"
 
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -25,12 +28,14 @@ var ErrDuplicateStepName = errors.New("linter: duplicate step names")
 // rules and returns an error if one or more of the
 // rules are broken.
 type Linter struct {
+	GlobalCtx   context.Context
 	PoolManager *drivers.Manager
+	Config      *config.EnvConfig
 }
 
 // New returns a new Linter.
-func New() *Linter {
-	return new(Linter)
+func New(globalCtx context.Context, envConfig *config.EnvConfig) *Linter {
+	return &Linter{GlobalCtx: globalCtx, Config: envConfig}
 }
 
 // Lint executes the linting rules for the pipeline configuration.
@@ -38,7 +43,7 @@ func (l *Linter) Lint(pipeline manifest.Resource, repo *drone.Repo) error {
 	if err := checkPipeline(pipeline.(*resource.Pipeline)); err != nil {
 		return err
 	}
-	if err := checkPools(pipeline.(*resource.Pipeline), l.PoolManager); err != nil {
+	if err := l.checkPools(pipeline.(*resource.Pipeline), l.PoolManager); err != nil {
 		return err
 	}
 	return nil
@@ -52,20 +57,29 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 	return err
 }
 
-func checkPools(pipeline *resource.Pipeline, poolManager *drivers.Manager) error {
+func (l *Linter) checkPools(pipeline *resource.Pipeline, poolManager *drivers.Manager) error {
 	if poolManager.Count() == 0 {
 		return fmt.Errorf("linter: there are no pools defined")
 	}
 	if pipeline.Platform.OS != oshelp.OSLinux && pipeline.Platform.OS != oshelp.OSWindows && pipeline.Platform.OS != oshelp.OSMac && pipeline.Platform.OS != "" {
 		return fmt.Errorf("linter: '%s' is an invalid valid platform 'os', %s, %s, %s or empty", pipeline.Platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
 	}
-	if pipeline.Pool.Use == "" {
-		return fmt.Errorf("linter: you must specify a 'pool' to 'use'")
-	}
-	// if we dont match lets exit
-	if !poolManager.Exists(pipeline.Pool.Use) {
-		errMsg := fmt.Sprintf("linter: unable to find definition of pool %q.", pipeline.Pool.Use)
-		return errors.New(errMsg)
+	if !l.Config.Settings.EnableAutoPool { // disable auto pooling
+		if pipeline.Pool.Use == "" {
+			return fmt.Errorf("linter: you must specify a 'pool' to 'use'")
+		}
+		// if we dont match lets exit
+		if !poolManager.Exists(pipeline.Pool.Use) {
+			errMsg := fmt.Sprintf("linter: unable to find definition of pool %q.", pipeline.Pool.Use)
+			return errors.New(errMsg)
+		}
+	} else {
+		// check pool matches here and if not error
+		pool, _ := poolManager.ListByPlatform(l.GlobalCtx, pipeline.Platform.OS, pipeline.Platform.Arch)
+		if pool == "" {
+			errMsg := fmt.Sprintf("linter: unable to find pool with OS : %s and Arch: %s", pipeline.Platform.OS, pipeline.Platform.Arch)
+			return errors.New(errMsg)
+		}
 	}
 	return nil
 }

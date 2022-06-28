@@ -5,9 +5,14 @@
 package linter
 
 import (
+	"context"
 	"path"
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/sirupsen/logrus"
+
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
@@ -51,7 +56,7 @@ func TestLint(t *testing.T) {
 				return
 			}
 
-			lint := New()
+			lint := New(context.Background(), &config.EnvConfig{})
 			lint.PoolManager = poolManager
 
 			opts := &drone.Repo{Trusted: test.trusted}
@@ -89,7 +94,7 @@ func Test_checkPools(t *testing.T) {
 		pipeline    *resource.Pipeline
 		poolManager *drivers.Manager
 	}
-
+	lint := New(context.Background(), &config.EnvConfig{})
 	poolInstance := DummyPool("test", "runner")
 	poolManagerEmpty := &drivers.Manager{}
 	poolManagerWithOne := &drivers.Manager{}
@@ -137,7 +142,55 @@ func Test_checkPools(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := checkPools(tt.args.pipeline, tt.args.poolManager); (err != nil) != tt.wantErr {
+			if err := lint.checkPools(tt.args.pipeline, tt.args.poolManager); (err != nil) != tt.wantErr {
+				t.Errorf("checkPools() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_checkPools_Auto_Pool_Enabled(t *testing.T) {
+	type args struct {
+		pipeline    *resource.Pipeline
+		poolManager *drivers.Manager
+	}
+	poolInstance := DummyPool("test", "runner")
+	db, err := database.ProvideDatabase(database.SingleInstance, "")
+	if err != nil {
+		logrus.WithError(err).
+			Fatalln("Unable to start the database")
+	}
+	store := database.ProvideInstanceStore(db)
+	poolManagerWithOne := drivers.New(context.Background(), store, "", "")
+	_ = poolManagerWithOne.Add(poolInstance)
+
+	var c = &config.EnvConfig{}
+	c.Settings.EnableAutoPool = true
+	lint := New(context.Background(), c)
+	lint.PoolManager = poolManagerWithOne
+
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "linter: unable to find pool with OS : linux and Arch: amd64",
+			args: args{
+				pipeline: &resource.Pipeline{
+					Platform: manifest.Platform{
+						OS:   "linux",
+						Arch: "amd64",
+					},
+				},
+				poolManager: poolManagerWithOne,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := lint.checkPools(tt.args.pipeline, tt.args.poolManager); (err != nil) != tt.wantErr {
 				t.Errorf("checkPools() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

@@ -75,8 +75,9 @@ type Platform struct {
 }
 
 type QueryParams struct {
-	Status InstanceState
-	Stage  string
+	Status   InstanceState
+	Stage    string
+	Platform *Platform
 }
 
 type StageOwner struct {

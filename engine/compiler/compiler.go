@@ -77,12 +77,23 @@ type (
 // Compile compiles the configuration file.
 func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runtime.Spec { //nolint:gocritic,gocyclo,funlen
 	pipeline := args.Pipeline.(*resource.Pipeline)
+	os := pipeline.Platform.OS
 	spec := &engine.Spec{}
+
+	spec.Platform.OS = os
+	spec.Platform.Arch = pipeline.Platform.Arch
+	spec.Platform.Variant = pipeline.Platform.Variant
+	spec.Platform.Version = pipeline.Platform.Version
 
 	spec.Name = pipeline.Name
 
 	// get OS and the root directory (where the work directory and everything else will be placed)
 	targetPool := pipeline.Pool.Use
+
+	if targetPool == "" {
+		pool, _ := c.PoolManager.ListByPlatform(ctx, os, pipeline.Platform.Arch)
+		targetPool = pool
+	}
 	pipelinePlatform, pipelineRoot := c.PoolManager.Inspect(targetPool)
 
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
