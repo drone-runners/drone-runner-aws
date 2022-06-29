@@ -157,7 +157,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	}
 
 	// lint the pipeline and return an error if any linting rules are broken
-	lint := linter.New(ctx, &envConfig)
+	lint := linter.New(envConfig.Settings.EnableAutoPool)
 	lint.PoolManager = poolManager
 	err = lint.Lint(res, c.Repo)
 	if err != nil {

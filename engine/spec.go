@@ -5,6 +5,7 @@
 package engine
 
 import (
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/pipeline/runtime"
 
@@ -16,10 +17,10 @@ type (
 	// required instructions for reproducible pipeline
 	// execution.
 	Spec struct {
-		Platform      Platform         `json:"platform,omitempty"`
 		Name          string           `json:"name,omitempty"`
 		CloudInstance CloudInstance    `json:"cloud_instance"`
 		Files         []*lespec.File   `json:"files,omitempty"`
+		Platform      types.Platform   `json:"platform"`
 		Steps         []*Step          `json:"steps,omitempty"`
 		Volumes       []*lespec.Volume `json:"volumes,omitempty"`
 		Network       lespec.Network   `json:"network"`
@@ -38,15 +39,6 @@ type (
 		ErrPolicy runtime.ErrPolicy `json:"err_policy,omitempty"`
 		RunPolicy runtime.RunPolicy `json:"run_policy,omitempty"`
 	}
-
-	// Platform defines the target platform.
-	Platform struct {
-		OS      string `json:"os,omitempty"`
-		Arch    string `json:"arch,omitempty"`
-		Variant string `json:"variant,omitempty"`
-		Version string `json:"version,omitempty"`
-	}
-
 	// Secret represents a secret variable.
 	// TODO: This type implements runtime.Secret unlike the one in LiteEngine. Move the interface methods to LE and remove the type.
 	Secret lespec.Secret

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/manifest"
 
 	"github.com/google/go-cmp/cmp"
@@ -28,7 +29,7 @@ func TestGetStep(t *testing.T) {
 }
 
 func TestGetters(t *testing.T) {
-	platform := manifest.Platform{
+	platform := types.Platform{
 		OS:   oshelp.OSLinux,
 		Arch: oshelp.ArchAMD64,
 	}

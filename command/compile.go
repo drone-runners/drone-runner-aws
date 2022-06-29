@@ -5,7 +5,6 @@
 package command
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,12 +32,13 @@ import (
 
 type compileCommand struct {
 	*internal.Flags
-	Source  *os.File
-	Pool    string
-	Environ map[string]string
-	Secrets map[string]string
-	Config  string
-	Volumes []string
+	Source         *os.File
+	Pool           string
+	EnableAutoPool bool
+	Environ        map[string]string
+	Secrets        map[string]string
+	Config         string
+	Volumes        []string
 }
 
 func (c *compileCommand) run(*kingpin.ParseContext) error {
@@ -103,7 +103,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	}
 
 	// lint the pipeline and return an error if any linting rules are broken
-	lint := linter.New(context.Background(), &config.EnvConfig{})
+	lint := linter.New(c.EnableAutoPool)
 	lint.PoolManager = poolManager
 	err = lint.Lint(resourceInstance, c.Repo)
 	if err != nil {
@@ -154,6 +154,10 @@ func registerCompile(app *kingpin.Application) {
 
 	cmd.Flag("secrets", "secret parameters").
 		StringMapVar(&c.Secrets)
+
+	cmd.Flag("enable_autopool", "enable autopool").
+		Default("false").
+		BoolVar(&c.EnableAutoPool)
 
 	// Check documentation of DRONE_RUNNER_VOLUMES to see how to
 	// use this param.

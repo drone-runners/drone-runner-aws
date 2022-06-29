@@ -5,13 +5,10 @@
 package linter
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
-
-	"github.com/drone-runners/drone-runner-aws/command/config"
 
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -28,14 +25,15 @@ var ErrDuplicateStepName = errors.New("linter: duplicate step names")
 // rules and returns an error if one or more of the
 // rules are broken.
 type Linter struct {
-	GlobalCtx   context.Context
-	PoolManager *drivers.Manager
-	Config      *config.EnvConfig
+	PoolManager    *drivers.Manager
+	EnableAutoPool bool
 }
 
 // New returns a new Linter.
-func New(globalCtx context.Context, envConfig *config.EnvConfig) *Linter {
-	return &Linter{GlobalCtx: globalCtx, Config: envConfig}
+func New(enableAutoPool bool) *Linter {
+	return &Linter{
+		EnableAutoPool: enableAutoPool,
+	}
 }
 
 // Lint executes the linting rules for the pipeline configuration.
@@ -43,7 +41,7 @@ func (l *Linter) Lint(pipeline manifest.Resource, repo *drone.Repo) error {
 	if err := checkPipeline(pipeline.(*resource.Pipeline)); err != nil {
 		return err
 	}
-	if err := l.checkPools(pipeline.(*resource.Pipeline), l.PoolManager); err != nil {
+	if err := checkPools(pipeline.(*resource.Pipeline), l.PoolManager, l.EnableAutoPool); err != nil {
 		return err
 	}
 	return nil
@@ -57,30 +55,34 @@ func checkPipeline(pipeline *resource.Pipeline) error {
 	return err
 }
 
-func (l *Linter) checkPools(pipeline *resource.Pipeline, poolManager *drivers.Manager) error {
+func checkPools(pipeline *resource.Pipeline, poolManager *drivers.Manager, enableAutoPool bool) error {
 	if poolManager.Count() == 0 {
 		return fmt.Errorf("linter: there are no pools defined")
 	}
 	if pipeline.Platform.OS != oshelp.OSLinux && pipeline.Platform.OS != oshelp.OSWindows && pipeline.Platform.OS != oshelp.OSMac && pipeline.Platform.OS != "" {
 		return fmt.Errorf("linter: '%s' is an invalid valid platform 'os', %s, %s, %s or empty", pipeline.Platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
 	}
-	if !l.Config.Settings.EnableAutoPool { // disable auto pooling
+	if enableAutoPool {
+		// by this point we should have a platform, if not set to defaults
+		if pipeline.Platform.OS == "" {
+			pipeline.Platform.OS = oshelp.OSLinux
+		}
+		if pipeline.Platform.Arch == "" {
+			pipeline.Platform.Arch = oshelp.ArchAMD64
+		}
+		autoPool := poolManager.MatchPoolNameFromPlatform(&pipeline.Platform)
+		if autoPool == "" {
+			return fmt.Errorf("linter: unable to automatch a pool. OS : %s and Arch: %s has no equivalents", pipeline.Platform.OS, pipeline.Platform.Arch)
+		} else {
+			fmt.Printf("linter: automatching pool: %s, based on %v", autoPool, pipeline.Platform)
+		}
+	} else {
 		if pipeline.Pool.Use == "" {
 			return fmt.Errorf("linter: you must specify a 'pool' to 'use'")
 		}
 		// if we dont match lets exit
 		if !poolManager.Exists(pipeline.Pool.Use) {
 			errMsg := fmt.Sprintf("linter: unable to find definition of pool %q.", pipeline.Pool.Use)
-			return errors.New(errMsg)
-		}
-	} else {
-		if pipeline.Platform.OS == "" || pipeline.Platform.Arch == "" {
-			return fmt.Errorf("linter: you must specify a 'platform (OS & Arch)' to use")
-		}
-		// check pool matches here and if not error
-		pool, _ := poolManager.ListByPlatform(l.GlobalCtx, pipeline.Platform.OS, pipeline.Platform.Arch)
-		if pool == "" {
-			errMsg := fmt.Sprintf("linter: unable to find pool with OS : %s and Arch: %s", pipeline.Platform.OS, pipeline.Platform.Arch)
 			return errors.New(errMsg)
 		}
 	}

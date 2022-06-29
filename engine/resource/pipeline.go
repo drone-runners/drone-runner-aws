@@ -4,13 +4,15 @@
 
 package resource
 
-import "github.com/drone/runner-go/manifest"
+import (
+	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone/runner-go/manifest"
+)
 
 var (
 	_ manifest.Resource          = (*Pipeline)(nil)
 	_ manifest.TriggeredResource = (*Pipeline)(nil)
 	_ manifest.DependantResource = (*Pipeline)(nil)
-	_ manifest.PlatformResource  = (*Pipeline)(nil)
 )
 
 // Defines the Resource Kind and Type.
@@ -31,7 +33,7 @@ type Pipeline struct {
 	Clone       manifest.Clone       `json:"clone,omitempty"`
 	Concurrency manifest.Concurrency `json:"concurrency,omitempty"`
 	Node        map[string]string    `json:"node,omitempty"`
-	Platform    manifest.Platform    `json:"platform,omitempty"`
+	Platform    types.Platform       `json:"platform,omitempty"`
 	Trigger     manifest.Conditions  `json:"conditions,omitempty"`
 
 	Pool        Pool              `json:"pool,omitempty"`
@@ -65,7 +67,7 @@ func (p *Pipeline) GetTrigger() manifest.Conditions { return p.Trigger }
 func (p *Pipeline) GetNodes() map[string]string { return p.Node }
 
 // GetPlatform returns the resource platform.
-func (p *Pipeline) GetPlatform() manifest.Platform { return p.Platform }
+func (p *Pipeline) GetPlatform() types.Platform { return p.Platform }
 
 // GetConcurrency returns the resource concurrency limits.
 func (p *Pipeline) GetConcurrency() manifest.Concurrency { return p.Concurrency }
