@@ -194,6 +194,36 @@ trigger:
 
 ---
 kind: pipeline
+type: vm
+name: build and publish M1 binaries
+
+node:
+  cluster: mac2
+
+pool:
+  use: osx-anka-m1
+
+steps:
+  - name: build mac arm64 binary
+    commands:
+      - brew install golang
+      - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-arm64
+  - name: release
+    image: plugins/github-release
+    settings:
+      files:
+        - drone-runner-aws-darwin-arm64
+      api_key:
+        from_secret: github_token
+
+depends_on:
+  - default
+trigger:
+  ref:
+    - refs/tags/*
+---
+
+kind: pipeline
 type: docker
 name: manifest
 
