@@ -204,11 +204,7 @@ pool:
   use: osx-anka-m1
 
 steps:
-  - name: build linux binary
-    image: golang:1
-    commands:
-      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o drone-runner-aws-linux-arm64
-  - name: build mac intel binary
+  - name: build mac arm64 binary
     commands:
       - brew install golang
       - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-arm64
