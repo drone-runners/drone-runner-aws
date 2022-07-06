@@ -73,6 +73,15 @@ func (m *Manager) Count() int {
 	return len(m.poolMap)
 }
 
+func (m *Manager) MatchPoolNameFromPlatform(requested *types.Platform) string {
+	for _, pool := range m.poolMap {
+		if pool.Platform.OS == requested.OS && pool.Platform.Arch == requested.Arch {
+			return pool.Name
+		}
+	}
+	return ""
+}
+
 func (m *Manager) Find(ctx context.Context, instanceID string) (*types.Instance, error) {
 	return m.instanceStore.Find(ctx, instanceID)
 }

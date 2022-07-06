@@ -67,16 +67,17 @@ type InstanceCreateOpts struct {
 
 // Platform defines the target platform.
 type Platform struct {
-	OS      string `json:"os,omitempty" db:"instance_os"`
-	Arch    string `json:"arch,omitempty" db:"instance_arch"`
+	OS      string `json:"os,omitempty" db:"instance_os" default:"linux"`
+	Arch    string `json:"arch,omitempty" db:"instance_arch" default:"amd64"`
 	Variant string `json:"variant,omitempty" yaml:"variant,omitempty" db:"instance_variant"`
 	Version string `json:"version,omitempty" yaml:"version,omitempty" db:"instance_version"`
 	OSName  string `json:"os_name,omitempty" yaml:"os_name,omitempty" db:"instance_os_name"`
 }
 
 type QueryParams struct {
-	Status InstanceState
-	Stage  string
+	Status   InstanceState
+	Stage    string
+	Platform *Platform
 }
 
 type StageOwner struct {

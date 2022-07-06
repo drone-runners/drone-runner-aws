@@ -1,15 +1,15 @@
 module github.com/drone-runners/drone-runner-aws
 
-go 1.17
+go 1.18
 
 replace github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.20200309214505-aa6a9891b09c+incompatible
 
 require (
-	github.com/Masterminds/squirrel v1.5.2
-	github.com/aws/aws-sdk-go v1.44.37
+	github.com/Masterminds/squirrel v1.5.3
+	github.com/aws/aws-sdk-go v1.44.48
 	github.com/buildkite/yaml v2.1.0+incompatible
-	github.com/cenkalti/backoff/v4 v4.1.2
-	github.com/dchest/uniuri v0.0.0-20160212164326-8902c56451e9
+	github.com/cenkalti/backoff/v4 v4.1.3
+	github.com/dchest/uniuri v0.0.0-20200228104902-7aecb25e1fe5
 	github.com/drone/drone-go v1.7.1
 	github.com/drone/envsubst v1.0.3
 	github.com/drone/runner-go v1.12.0
@@ -19,28 +19,30 @@ require (
 	github.com/google/go-cmp v0.5.8
 	github.com/google/wire v0.5.0
 	github.com/harness/lite-engine v0.3.1
-	github.com/jmoiron/sqlx v1.3.4
+	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/lib/pq v1.10.4
-	github.com/maragudk/migrate v0.4.1
+	github.com/lib/pq v1.10.6
+	github.com/maragudk/migrate v0.4.2
 	github.com/mattn/go-isatty v0.0.14
-	github.com/mattn/go-sqlite3 v1.14.7
+	github.com/mattn/go-sqlite3 v1.14.14
 	github.com/pkg/errors v0.9.1
-	github.com/rs/zerolog v1.26.1
+	github.com/rs/zerolog v1.27.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.7.0
-	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb
+	github.com/stretchr/testify v1.8.0
+	golang.org/x/oauth2 v0.0.0-20220630143837-2104d58473e0
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	google.golang.org/api v0.84.0
+	google.golang.org/api v0.86.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
-	cloud.google.com/go/compute v1.6.1 // indirect
+	cloud.google.com/go/compute v1.7.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.0.0-20220520183353-fd19c99a87aa // indirect
+	github.com/google/uuid v1.3.0 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.1.0 // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
 )
 
 require (
@@ -69,11 +71,11 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e // indirect
-	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
-	golang.org/x/sys v0.0.0-20220610221304-9f5ed59c137d // indirect
+	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e // indirect
+	golang.org/x/sys v0.0.0-20220624220833-87e55d714810 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20220608133413-ed9918b62aac // indirect
+	google.golang.org/genproto v0.0.0-20220624142145-8cd45d7dbd1f // indirect
 	google.golang.org/grpc v1.47.0 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

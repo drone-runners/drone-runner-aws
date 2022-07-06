@@ -79,10 +79,17 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	pipeline := args.Pipeline.(*resource.Pipeline)
 	spec := &engine.Spec{}
 
+	spec.Platform = pipeline.Platform
+
 	spec.Name = pipeline.Name
 
 	// get OS and the root directory (where the work directory and everything else will be placed)
 	targetPool := pipeline.Pool.Use
+
+	if targetPool == "" {
+		targetPool = c.PoolManager.MatchPoolNameFromPlatform(&pipeline.Platform)
+	}
+
 	pipelinePlatform, pipelineRoot := c.PoolManager.Inspect(targetPool)
 
 	// move the pool from the `mapping of pools` into the spec of this pipeline.

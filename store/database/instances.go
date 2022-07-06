@@ -32,6 +32,7 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 
 	stmt := builder.Select(instanceColumns).From("instances").Where(squirrel.Eq{"instance_pool": pool})
 	args = append(args, pool)
+
 	if params != nil {
 		if params.Stage != "" {
 			stmt = stmt.Where(squirrel.Eq{"instance_stage": params.Stage})
