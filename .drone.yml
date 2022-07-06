@@ -27,7 +27,7 @@ steps:
     depends_on:
       - build
   - name: check go.mod is up to date
-    image: golang:1
+    image: golang:1.18
     commands:
       - cp go.mod go.mod.bak
       - go mod tidy
