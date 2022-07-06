@@ -11,6 +11,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )
@@ -51,7 +52,7 @@ func TestLint(t *testing.T) {
 				return
 			}
 
-			lint := New()
+			lint := New(false)
 			lint.PoolManager = poolManager
 
 			opts := &drone.Repo{Trusted: test.trusted}
@@ -88,9 +89,10 @@ func Test_checkPools(t *testing.T) {
 	type args struct {
 		pipeline    *resource.Pipeline
 		poolManager *drivers.Manager
+		autoPool    bool
 	}
 
-	poolInstance := DummyPool("test", "runner")
+	poolInstance := DummyPool("testpoolname", "runnername")
 	poolManagerEmpty := &drivers.Manager{}
 	poolManagerWithOne := &drivers.Manager{}
 	_ = poolManagerWithOne.Add(poolInstance)
@@ -101,10 +103,25 @@ func Test_checkPools(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name: "pool match !",
+			args: args{
+				pipeline: &resource.Pipeline{
+					Name: "pipeline with pool to use",
+					Pool: resource.Pool{
+						Use: "testpoolname",
+					},
+				},
+				poolManager: poolManagerWithOne,
+				autoPool:    false,
+			},
+			wantErr: false,
+		},
+		{
 			name: "no pools",
 			args: args{
 				pipeline:    &resource.Pipeline{},
 				poolManager: poolManagerEmpty,
+				autoPool:    false,
 			},
 			wantErr: true,
 		},
@@ -118,6 +135,7 @@ func Test_checkPools(t *testing.T) {
 					},
 				},
 				poolManager: poolManagerWithOne,
+				autoPool:    false,
 			},
 			wantErr: true,
 		},
@@ -131,13 +149,40 @@ func Test_checkPools(t *testing.T) {
 					},
 				},
 				poolManager: poolManagerWithOne,
+				autoPool:    false,
+			},
+			wantErr: true,
+		},
+		{
+			name: "auto pool is true and platform match",
+			args: args{
+				pipeline: &resource.Pipeline{
+					Name: "pipeline with no pool to use",
+				},
+				poolManager: poolManagerWithOne,
+				autoPool:    true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "auto pool is true and NO platform match",
+			args: args{
+				pipeline: &resource.Pipeline{
+					Name: "pipeline with no pool to use",
+					Platform: types.Platform{
+						OS:   "windows",
+						Arch: "amd64",
+					},
+				},
+				poolManager: poolManagerWithOne,
+				autoPool:    true,
 			},
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := checkPools(tt.args.pipeline, tt.args.poolManager); (err != nil) != tt.wantErr {
+			if err := checkPools(tt.args.pipeline, tt.args.poolManager, tt.args.autoPool); (err != nil) != tt.wantErr {
 				t.Errorf("checkPools() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -150,6 +195,10 @@ func DummyPool(name, runnerName string) drivers.Pool {
 	pool.RunnerName = runnerName
 	var driver, err = amazon.New()
 	pool.Driver = driver
+	pool.Platform = types.Platform{
+		OS:   "linux",
+		Arch: "amd64",
+	}
 	if err != nil {
 		return pool
 	}

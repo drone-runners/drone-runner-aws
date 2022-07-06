@@ -7,14 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
-	"github.com/drone-runners/drone-runner-aws/types"
-
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute"
 )
@@ -126,7 +123,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			},
 			StorageProfile: &armcompute.StorageProfile{
 				ImageReference: &armcompute.ImageReference{
-					ID:
+					Publisher: to.Ptr(p.publisher),
+					Offer:     to.Ptr(p.offer),
+					SKU:       to.Ptr(p.sku),
+					Version:   to.Ptr(p.version),
 				},
 				OSDisk: &armcompute.OSDisk{
 					CreateOption: to.Ptr(armcompute.DiskCreateOptionTypesFromImage),
