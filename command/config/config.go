@@ -168,6 +168,13 @@ type EnvConfig struct {
 		Acme  bool   `envconfig:"DRONE_HTTP_ACME"`
 	}
 
+	Dlite struct {
+		AccountID       string `envconfig:"DRONE_DELEGATE_ACCOUNT_ID"`
+		AccountSecret   string `envconfig:"DRONE_DELEGATE_ACCOUNT_SECRET"`
+		ManagerEndpoint string `envconfig:"DRONE_DELEGATE_MANAGER_ENDPOINT"`
+		Name            string `envconfig:"DRONE_DELEGATE_NAME"`
+	}
+
 	Runner struct {
 		Name        string            `envconfig:"DRONE_RUNNER_NAME"`
 		Capacity    int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
