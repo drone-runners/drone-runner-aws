@@ -3,7 +3,6 @@ package dlite
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/harness/lite-engine/api"
@@ -16,7 +15,7 @@ type VmInitTask struct {
 }
 
 type SetupVmRequest struct {
-	ID               string            `json:"id"`
+	ID               string            `json:"id"` // stage runtime ID
 	PoolID           string            `json:"pool_id"`
 	Tags             map[string]string `json:"tags"`
 	CorrelationID    string            `json:"correlation_id"`
@@ -55,6 +54,8 @@ func (t *VmInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// fmt.Printf("init request: %+v\n", req)
+
 	// Make the setup call
 	setupResp, err := t.c.handleSetup(ctx, &req.SetupVmRequest)
 	if err != nil {
@@ -68,9 +69,6 @@ func (t *VmInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, s := range req.Services {
 		s.IPAddress = setupResp.IPAddress
 		status := VmServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running}
-		fmt.Printf("status: %+v\n", status)
-		fmt.Printf("service: %+v\n", s)
-		fmt.Printf("setupResp: %+v\n", setupResp)
 		resp, err := t.c.handleStep(ctx, &s)
 		if err != nil {
 			status.Status = Error

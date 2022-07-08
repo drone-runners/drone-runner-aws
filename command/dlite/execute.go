@@ -15,6 +15,7 @@ type VmExecuteTask struct {
 }
 
 type ExecuteVmRequest struct {
+	StageRuntimeID       string `json:"stage_runtime_id"`
 	IPAddress            string `json:"ip_address"`
 	PoolID               string `json:"pool_id"`
 	CorrelationID        string `json:"correlation_id"`
@@ -45,6 +46,7 @@ func (t *VmExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.WriteBadRequest(w, err)
 		return
 	}
+	// fmt.Printf("req is: %+v\n", req)
 	resp, err := t.c.handleStep(ctx, &req.ExecuteVmRequest)
 	if err != nil {
 		logger.WriteJSON(w, failedResponse(err.Error()), 500)

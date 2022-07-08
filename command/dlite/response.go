@@ -6,6 +6,12 @@ type VmTaskExecutionResponse struct {
 	OutputVars             map[string]string      `json:"output_vars"`
 	ServiceStatuses        []VmServiceStatus      `json:"service_statuses"`
 	CommandExecutionStatus CommandExecutionStatus `json:"command_execution_status"`
+	DelegateMetaInfo       DelegateMetaInfo       `json:"delegate_meta_info"`
+}
+
+type DelegateMetaInfo struct {
+	ID       string `json:"id"`
+	HostName string `json:"host_name"`
 }
 
 type VmServiceStatus struct {

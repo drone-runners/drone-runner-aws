@@ -357,7 +357,7 @@ func (c *dliteCommand) handleStep(ctx context.Context, r *ExecuteVmRequest) (*le
 			r.Volumes = append(r.Volumes, mount)
 		}
 	}
-	inst, err := c.poolManager.GetInstanceByStageID(ctx, r.PoolID, r.ID)
+	inst, err := c.poolManager.GetInstanceByStageID(ctx, r.PoolID, r.StageRuntimeID)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get the instance by stageId: %w", err)
 	}
