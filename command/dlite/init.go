@@ -3,6 +3,7 @@ package dlite
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/harness/lite-engine/api"
@@ -67,6 +68,9 @@ func (t *VmInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, s := range req.Services {
 		s.IPAddress = setupResp.IPAddress
 		status := VmServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running}
+		fmt.Printf("status: %+v\n", status)
+		fmt.Printf("service: %+v\n", s)
+		fmt.Printf("setupResp: %+v\n", setupResp)
 		resp, err := t.c.handleStep(ctx, &s)
 		if err != nil {
 			status.Status = Error

@@ -575,6 +575,8 @@ github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijb
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/wings-software/dlite v0.0.0-20220706225905-2557198ba902 h1:9/zaTV3AnEz5pD3uP1jLez8JgP2rYLWecXaonfFBTfI=
 github.com/wings-software/dlite v0.0.0-20220706225905-2557198ba902/go.mod h1:s1HsWGAm0WzBucQBKO0Cf0qGWa9dXtnMor+VtTORohM=
+github.com/wings-software/dlite v0.0.0-20220708090720-1231f4bf1306 h1:y3Uf1kTxByF5SlfnIQS1A2PoNSKH2YtkSVUpNORCFCM=
+github.com/wings-software/dlite v0.0.0-20220708090720-1231f4bf1306/go.mod h1:s1HsWGAm0WzBucQBKO0Cf0qGWa9dXtnMor+VtTORohM=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

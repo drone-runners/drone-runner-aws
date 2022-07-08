@@ -6,7 +6,6 @@ package dlite
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -20,6 +19,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	errors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -45,13 +45,13 @@ type dliteCommand struct {
 	poolFile        string
 	poolManager     *drivers.Manager
 	stageOwnerStore store.StageOwnerStore
-	runnerName      string
-	liteEnginePath  string
 }
 
 var (
 	taskInterval  = 3 * time.Second
 	taskExecutors = 100
+	stepTimeout   = 4 * time.Hour
+	setupTimeout  = 20 * time.Minute
 )
 
 func RegisterDlite(app *kingpin.Application) {
@@ -93,12 +93,11 @@ func (c *dliteCommand) startPoller(ctx context.Context, tags []string) error {
 	}
 	// Client to interact with the harness server
 	client := delegate.New(c.env.Dlite.ManagerEndpoint, c.env.Dlite.AccountID, token, true)
-	poller := poller.New(c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, c.env.Dlite.Name, client, router)
-	err = poller.Register(ctx, tags, taskInterval)
+	poller := poller.New(c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, c.env.Dlite.Name, tags, client, router)
+	err = poller.Poll(ctx, taskExecutors, taskInterval)
 	if err != nil {
 		return err
 	}
-	poller.Poll(ctx, taskExecutors, taskInterval)
 	return nil
 }
 
@@ -119,13 +118,8 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	setupLogger(&env)
 	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
 	if err != nil {
-		logrus.WithError(err).
-			Fatalln("Unable to start the database")
+		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
-
-	// Set runner name & lite engine path
-	c.liteEnginePath = env.Settings.LiteEnginePath
-	c.runnerName = env.Runner.Name
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -137,25 +131,23 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	instanceStore := database.ProvideInstanceStore(db)
 	c.stageOwnerStore = database.NewStageOwnerStore(db)
-	c.poolManager = drivers.New(ctx, instanceStore, c.liteEnginePath, c.runnerName)
+
+	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
 	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)
 	if confErr != nil {
-		logrus.WithError(confErr).
-			Fatalln("Unable to load pool file, or use an in memory pool")
+		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 
-	pools, err := poolfile.ProcessPool(configPool, c.runnerName)
+	pools, err := poolfile.ProcessPool(configPool, c.env.Runner.Name)
 	if err != nil {
-		logrus.WithError(err).
-			Errorln("dlite: unable to process pool file")
+		logrus.WithError(err).Errorln("dlite: unable to process pool file")
 		return err
 	}
 
 	err = c.poolManager.Add(pools...)
 	if err != nil {
-		logrus.WithError(err).
-			Errorln("dlite: unable to add pools")
+		logrus.WithError(err).Errorln("dlite: unable to add pools")
 		return err
 	}
 
@@ -208,8 +200,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	if !env.Settings.ReusePool {
 		cleanErr := c.poolManager.CleanPools(context.Background(), true, true)
 		if cleanErr != nil {
-			logrus.WithError(cleanErr).
-				Errorln("dlite: unable to clean pools")
+			logrus.WithError(cleanErr).Errorln("dlite: unable to clean pools")
 		} else {
 			logrus.Infoln("dlite: pools cleaned")
 		}
@@ -218,30 +209,31 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *dliteCommand) handleSetup(ctx context.Context, reqData *SetupVmRequest) (*SetupVmResponse, error) {
-	if reqData.ID == "" {
-		return nil, errors.New("mandatory field 'id' in the request body is empty")
+func (c *dliteCommand) handleSetup(ctx context.Context, r *SetupVmRequest) (*SetupVmResponse, error) {
+	id := r.ID
+	pool := r.PoolID
+	if id == "" {
+		return nil, errors.BadRequestError("mandatory field 'id' in the request body is empty")
 	}
 
-	if reqData.PoolID == "" {
-		return nil, errors.New("mandatory field 'pool_id' in the request body is empty")
+	if pool == "" {
+		return nil, errors.BadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
-	if err := c.stageOwnerStore.Create(ctx, &types.StageOwner{StageID: reqData.ID, PoolName: reqData.PoolID}); err != nil {
-		logrus.WithError(err).Errorln("failed to create stage owner entity")
-		return nil, err
+	if err := c.stageOwnerStore.Create(ctx, &types.StageOwner{StageID: id, PoolName: pool}); err != nil {
+		return nil, fmt.Errorf("could not create stage owner entity: %w", err)
 	}
 
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
 	var logr *logrus.Entry
-	if reqData.SetupRequest.LogConfig.URL == "" {
+	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").
-			WithField("pool", reqData.PoolID).
-			WithField("correlationID", reqData.CorrelationID)
+			WithField("pool", pool).
+			WithField("correlationID", r.CorrelationID)
 	} else {
-		wc := getStreamLogger(reqData.SetupRequest.LogConfig, reqData.LogKey, reqData.CorrelationID)
+		wc := getStreamLogger(r.SetupRequest.LogConfig, r.LogKey, r.CorrelationID)
 		defer func() {
 			if err := wc.Close(); err != nil {
 				logrus.WithError(err).Debugln("failed to close log stream")
@@ -250,7 +242,7 @@ func (c *dliteCommand) handleSetup(ctx context.Context, reqData *SetupVmRequest)
 
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
-		logr = log.WithField("pool", reqData.PoolID)
+		logr = log.WithField("pool", r.PoolID)
 
 		ctx = logger.WithContext(ctx, logger.Logrus(logr))
 	}
@@ -264,29 +256,28 @@ func (c *dliteCommand) handleSetup(ctx context.Context, reqData *SetupVmRequest)
 		}
 		vol := lespec.Volume{
 			HostPath: &lespec.VolumeHostPath{
-				ID:       id(src),
-				Name:     id(src),
+				ID:       fileID(src),
+				Name:     fileID(src),
 				Path:     src,
 				ReadOnly: ro,
 			},
 		}
-		reqData.Volumes = append(reqData.Volumes, &vol)
+		r.Volumes = append(r.Volumes, &vol)
 	}
 
-	poolName := reqData.PoolID
-	if !c.poolManager.Exists(poolName) {
-		return nil, errors.New("pool not defined")
+	if !c.poolManager.Exists(pool) {
+		return nil, fmt.Errorf("pool not defined")
 	}
 
-	instance, err := c.poolManager.Provision(ctx, poolName, c.runnerName, c.liteEnginePath)
+	instance, err := c.poolManager.Provision(ctx, pool, c.env.Runner.Name, c.env.Settings.LiteEnginePath)
 	if err != nil {
-		return nil, errors.New("failed provisioning")
+		return nil, fmt.Errorf("failed provisioning")
 	}
 
 	if instance.IsHibernated {
-		instance, err = c.poolManager.StartInstance(ctx, poolName, instance.ID)
+		instance, err = c.poolManager.StartInstance(ctx, pool, instance.ID)
 		if err != nil {
-			return nil, errors.New("failed to start the instance up")
+			return nil, fmt.Errorf("failed to start the instance up")
 		}
 	}
 
@@ -296,13 +287,13 @@ func (c *dliteCommand) handleSetup(ctx context.Context, reqData *SetupVmRequest)
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpFn := func() {
-		errCleanUp := c.poolManager.Destroy(context.Background(), poolName, instance.ID)
+		errCleanUp := c.poolManager.Destroy(context.Background(), pool, instance.ID)
 		if errCleanUp != nil {
 			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
 		}
 	}
 
-	instance.Stage = reqData.ID
+	instance.Stage = id
 	instance.Updated = time.Now().Unix()
 	err = c.poolManager.Update(ctx, instance)
 	if err != nil {
@@ -310,52 +301,49 @@ func (c *dliteCommand) handleSetup(ctx context.Context, reqData *SetupVmRequest)
 		return nil, fmt.Errorf("failed to tag: %w", err)
 	}
 
-	client, err := lehelper.GetClient(instance, c.runnerName)
+	client, err := lehelper.GetClient(instance, c.env.Runner.Name)
 	if err != nil {
 		go cleanUpFn()
 		return nil, fmt.Errorf("failed to create LE client: %w", err)
 	}
 
-	const timeoutSetup = 20 * time.Minute // TODO: Move to configuration
-
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
-	if _, err = client.RetryHealth(ctx, timeoutSetup); err != nil {
+	if _, err = client.RetryHealth(ctx, setupTimeout); err != nil {
 		go cleanUpFn()
 		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
 	logr.Traceln("retry health check complete")
 
-	setupResponse, err := client.Setup(ctx, &reqData.SetupRequest)
+	setupResponse, err := client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
 		go cleanUpFn()
 		return nil, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
-	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).
-		Traceln("VM setup is complete")
+	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).Traceln("VM setup is complete")
 
 	return &SetupVmResponse{InstanceID: instance.ID, IPAddress: instance.Address}, nil
 }
 
-func (c *dliteCommand) handleStep(ctx context.Context, reqData *ExecuteVmRequest) (*leapi.PollStepResponse, error) {
-	if reqData.ID == "" && reqData.IPAddress == "" {
-		return nil, fmt.Errorf("either parameter 'id' or 'ip_address' must be provided")
+func (c *dliteCommand) handleStep(ctx context.Context, r *ExecuteVmRequest) (*leapi.PollStepResponse, error) {
+	if r.ID == "" && r.IPAddress == "" {
+		return nil, errors.BadRequestError("either parameter 'id' or 'ip_address' must be provided")
 	}
 
-	if reqData.PoolID == "" {
-		return nil, fmt.Errorf("mandatory field 'pool_id' in the request body is empty")
+	if r.PoolID == "" {
+		return nil, errors.BadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
 	logr := logrus.
 		WithField("api", "dlite:step").
-		WithField("step_id", reqData.StartStepRequest.ID).
-		WithField("pool", reqData.PoolID).
-		WithField("correlation_id", reqData.CorrelationID)
+		WithField("step_id", r.StartStepRequest.ID).
+		WithField("pool", r.PoolID).
+		WithField("correlation_id", r.CorrelationID)
 
 	// add global volumes as mounts only if image is specified
-	if reqData.Image != "" {
+	if r.Image != "" {
 		for _, pair := range c.env.Runner.Volumes {
 			src, dest, _, err := resource.ParseVolume(pair)
 			if err != nil {
@@ -363,65 +351,53 @@ func (c *dliteCommand) handleStep(ctx context.Context, reqData *ExecuteVmRequest
 				continue
 			}
 			mount := &lespec.VolumeMount{
-				Name: id(src),
+				Name: fileID(src),
 				Path: dest,
 			}
-			reqData.Volumes = append(reqData.Volumes, mount)
+			r.Volumes = append(r.Volumes, mount)
 		}
 	}
-	inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, reqData.ID)
+	inst, err := c.poolManager.GetInstanceByStageID(ctx, r.PoolID, r.ID)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get the instance by stageId: %w", err)
 	}
 
-	logr = logr.
-		WithField("ip", inst.Address)
+	logr = logr.WithField("ip", inst.Address)
 
-	client, err := lehelper.GetClient(inst, c.runnerName)
+	client, err := lehelper.GetClient(inst, c.env.Runner.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
 	logr.Traceln("running StartStep")
 
-	startStepResponse, err := client.StartStep(ctx, &reqData.StartStepRequest)
+	startStepResponse, err := client.StartStep(ctx, &r.StartStepRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LE.StartStep: %w", err)
 	}
 
-	logr.WithField("startStepResponse", startStepResponse).
-		Traceln("LE.StartStep complete")
+	logr.WithField("startStepResponse", startStepResponse).Traceln("LE.StartStep complete")
 
-	const timeoutStep = 4 * time.Hour // TODO: Move to configuration
-
-	pollResponse, err := client.RetryPollStep(ctx, &leapi.PollStepRequest{ID: reqData.StartStepRequest.ID}, timeoutStep)
+	pollResponse, err := client.RetryPollStep(ctx, &leapi.PollStepRequest{ID: r.StartStepRequest.ID}, stepTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LE.RetryPollStep: %w", err)
 	}
 
-	logr.WithField("pollResponse", pollResponse).
-		Traceln("LE.RetryPollStep complete")
+	logr.WithField("pollResponse", pollResponse).Traceln("LE.RetryPollStep complete")
 
 	return pollResponse, nil
 }
 
-func (c *dliteCommand) handleDestroy(ctx context.Context, reqData *VmCleanupRequest) error {
-	if reqData.PoolID == "" {
-		return fmt.Errorf("mandatory field 'pool_id' in the request body is empty")
+func (c *dliteCommand) handleDestroy(ctx context.Context, r *VmCleanupRequest) error {
+	if r.PoolID == "" {
+		return errors.BadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
-	if reqData.StageRuntimeID == "" {
-		return fmt.Errorf("mandatory field 'stage_runtime_id' in the request body is empty")
+	if r.StageRuntimeID == "" {
+		return errors.BadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
 
-	logr := logrus.
-		WithField("api", "dlite:destroy").
-		WithField("stage_runtime_id", reqData.StageRuntimeID).
-		WithField("pool", reqData.PoolID)
-
-	var instanceID string
-
-	inst, err := c.poolManager.GetInstanceByStageID(ctx, reqData.PoolID, reqData.StageRuntimeID)
+	inst, err := c.poolManager.GetInstanceByStageID(ctx, r.PoolID, r.StageRuntimeID)
 	if err != nil {
 		return fmt.Errorf("cannot get the instance by tag: %w", err)
 	}
@@ -429,17 +405,18 @@ func (c *dliteCommand) handleDestroy(ctx context.Context, reqData *VmCleanupRequ
 		return fmt.Errorf("instance with provided ID not found")
 	}
 
-	instanceID = inst.ID
+	logr := logrus.
+		WithField("instance_id", inst.ID).
+		WithField("api", "dlite:destroy").
+		WithField("stage_runtime_id", r.StageRuntimeID).
+		WithField("pool", r.PoolID)
 
-	logr = logr.
-		WithField("instance_id", instanceID)
-
-	if err := c.poolManager.Destroy(ctx, reqData.PoolID, instanceID); err != nil {
+	if err := c.poolManager.Destroy(ctx, r.PoolID, inst.ID); err != nil {
 		return fmt.Errorf("annot destroy the instance: %w", err)
 	}
 	logr.Traceln("destroyed instance")
 
-	if err := c.stageOwnerStore.Delete(ctx, reqData.StageRuntimeID); err != nil {
+	if err := c.stageOwnerStore.Delete(ctx, r.StageRuntimeID); err != nil {
 		logrus.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 	return nil
@@ -460,7 +437,7 @@ func getStreamLogger(cfg leapi.LogConfig, logKey, correlationID string) *lelivel
 // generate a id from the filename
 // /path/to/a.txt and /other/path/to/a.txt should generate different hashes
 // eg - a-txt10098 and a-txt-270089
-func id(filename string) string {
+func fileID(filename string) string {
 	h := fnv.New32a()
 	h.Write([]byte(filename))
 	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))

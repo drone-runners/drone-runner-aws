@@ -15,7 +15,6 @@ type VmExecuteTask struct {
 }
 
 type ExecuteVmRequest struct {
-	ID                   string `json:"id"`
 	IPAddress            string `json:"ip_address"`
 	PoolID               string `json:"pool_id"`
 	CorrelationID        string `json:"correlation_id"`
