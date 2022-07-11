@@ -10,8 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func SetupPool(ctx context.Context, env config.EnvConfig, poolManager *drivers.Manager, poolFile string) error {
-	configPool, confErr := poolfile.ConfigPoolFile(poolFile, &env)
+func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager, poolFile string) error {
+	configPool, confErr := poolfile.ConfigPoolFile(poolFile, env)
 	if confErr != nil {
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
 	}

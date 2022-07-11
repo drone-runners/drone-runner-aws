@@ -1,10 +1,10 @@
 package dlite
 
-type VmTaskExecutionResponse struct {
+type VMTaskExecutionResponse struct {
 	ErrorMessage           string                 `json:"error_message"`
 	IPAddress              string                 `json:"ip_address"`
 	OutputVars             map[string]string      `json:"output_vars"`
-	ServiceStatuses        []VmServiceStatus      `json:"service_statuses"`
+	ServiceStatuses        []VMServiceStatus      `json:"service_statuses"`
 	CommandExecutionStatus CommandExecutionStatus `json:"command_execution_status"`
 	DelegateMetaInfo       DelegateMetaInfo       `json:"delegate_meta_info"`
 }
@@ -14,7 +14,7 @@ type DelegateMetaInfo struct {
 	HostName string `json:"host_name"`
 }
 
-type VmServiceStatus struct {
+type VMServiceStatus struct {
 	ID           string `json:"identifier"`
 	Name         string `json:"name"`
 	Image        string `json:"image"`
@@ -22,6 +22,11 @@ type VmServiceStatus struct {
 	Status       Status `json:"status"`
 	ErrorMessage string `json:"error_message"`
 }
+
+var (
+	httpOK     int = 200
+	httpFailed int = 500
+)
 
 type Status string
 
@@ -40,6 +45,6 @@ const (
 	Skipped      CommandExecutionStatus = "SKIPPED"
 )
 
-func failedResponse(msg string) VmTaskExecutionResponse {
-	return VmTaskExecutionResponse{CommandExecutionStatus: Failure, ErrorMessage: msg}
+func failedResponse(msg string) VMTaskExecutionResponse {
+	return VMTaskExecutionResponse{CommandExecutionStatus: Failure, ErrorMessage: msg}
 }

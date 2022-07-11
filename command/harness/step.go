@@ -11,12 +11,11 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	errors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/harness/lite-engine/api"
-	leapi "github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 	"github.com/sirupsen/logrus"
 )
 
-type ExecuteVmRequest struct {
+type ExecuteVMRequest struct {
 	StageRuntimeID       string `json:"stage_runtime_id"`
 	IPAddress            string `json:"ip_address"`
 	PoolID               string `json:"pool_id"`
@@ -28,7 +27,7 @@ var (
 	stepTimeout = 4 * time.Hour
 )
 
-func HandleStep(ctx context.Context, r *ExecuteVmRequest, env config.EnvConfig, poolManager *drivers.Manager) (*leapi.PollStepResponse, error) {
+func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig, poolManager *drivers.Manager) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
 		return nil, errors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
 	}
@@ -79,7 +78,7 @@ func HandleStep(ctx context.Context, r *ExecuteVmRequest, env config.EnvConfig, 
 
 	logr.WithField("startStepResponse", startStepResponse).Traceln("LE.StartStep complete")
 
-	pollResponse, err := client.RetryPollStep(ctx, &leapi.PollStepRequest{ID: r.StartStepRequest.ID}, stepTimeout)
+	pollResponse, err := client.RetryPollStep(ctx, &api.PollStepRequest{ID: r.StartStepRequest.ID}, stepTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LE.RetryPollStep: %w", err)
 	}

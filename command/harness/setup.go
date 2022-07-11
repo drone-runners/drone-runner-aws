@@ -19,7 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type SetupVmRequest struct {
+type SetupVMRequest struct {
 	ID               string            `json:"id"` // stage runtime ID
 	PoolID           string            `json:"pool_id"`
 	Tags             map[string]string `json:"tags"`
@@ -37,7 +37,7 @@ var (
 	setupTimeout = 20 * time.Minute
 )
 
-func HandleSetup(ctx context.Context, r *SetupVmRequest, store store.StageOwnerStore, env config.EnvConfig, poolManager *drivers.Manager) (*SetupVmResponse, error) {
+func HandleSetup(ctx context.Context, r *SetupVMRequest, store store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*SetupVmResponse, error) {
 	id := r.ID
 	pool := r.PoolID
 	if id == "" {

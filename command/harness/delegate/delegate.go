@@ -114,7 +114,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.stageOwnerStore = database.NewStageOwnerStore(db)
 	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
-	err = harness.SetupPool(ctx, c.env, c.poolManager, c.poolFile)
+	err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
 	if err != nil {
 		return err
 	}
@@ -187,13 +187,13 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 }
 
 func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
-	req := &harness.SetupVmRequest{}
+	req := &harness.SetupVMRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 	ctx := r.Context()
-	resp, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, c.env, c.poolManager)
+	resp, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -202,13 +202,13 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
-	req := &harness.ExecuteVmRequest{}
+	req := &harness.ExecuteVMRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 	ctx := r.Context()
-	resp, err := harness.HandleStep(ctx, req, c.env, c.poolManager)
+	resp, err := harness.HandleStep(ctx, req, &c.env, c.poolManager)
 	if err != nil {
 		writeError(w, err)
 		return

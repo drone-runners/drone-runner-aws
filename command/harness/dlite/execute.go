@@ -11,15 +11,15 @@ import (
 	"github.com/wings-software/dlite/logger"
 )
 
-type VmExecuteTask struct {
+type VMExecuteTask struct {
 	c *dliteCommand
 }
 
-type VmExecuteTaskRequest struct {
-	ExecuteVmRequest harness.ExecuteVmRequest `json:"execute_step_request"`
+type VMExecuteTaskRequest struct {
+	ExecuteVMRequest harness.ExecuteVMRequest `json:"execute_step_request"`
 }
 
-func (t *VmExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: (Vistaar) Set this in dlite
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
@@ -33,25 +33,25 @@ func (t *VmExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.WriteBadRequest(w, err)
 		return
 	}
-	req := &VmExecuteTaskRequest{}
+	req := &VMExecuteTaskRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
 		logger.WriteBadRequest(w, err)
 		return
 	}
-	// fmt.Printf("req is: %+v\n", req)
-	resp, err := harness.HandleStep(ctx, &req.ExecuteVmRequest, t.c.env, t.c.poolManager)
+
+	resp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, &t.c.env, t.c.poolManager)
 	if err != nil {
-		logger.WriteJSON(w, failedResponse(err.Error()), 500)
+		logger.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
-	logger.WriteJSON(w, convert(resp), 200)
+	logger.WriteJSON(w, convert(resp), httpOK)
 }
 
 // convert poll response to a Vm task execution response
-func convert(r *api.PollStepResponse) VmTaskExecutionResponse {
+func convert(r *api.PollStepResponse) VMTaskExecutionResponse {
 	if r.Error == "" {
-		return VmTaskExecutionResponse{CommandExecutionStatus: Success, OutputVars: r.Outputs}
+		return VMTaskExecutionResponse{CommandExecutionStatus: Success, OutputVars: r.Outputs}
 	}
-	return VmTaskExecutionResponse{CommandExecutionStatus: Failure, ErrorMessage: r.Error}
+	return VMTaskExecutionResponse{CommandExecutionStatus: Failure, ErrorMessage: r.Error}
 }

@@ -10,11 +10,11 @@ import (
 	"github.com/wings-software/dlite/logger"
 )
 
-type VmCleanupTask struct {
+type VMCleanupTask struct {
 	c *dliteCommand
 }
 
-func (t *VmCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: Get this from http Request
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
@@ -36,7 +36,7 @@ func (t *VmCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	err = harness.HandleDestroy(ctx, req, t.c.stageOwnerStore, t.c.poolManager)
 	if err != nil {
-		logger.WriteJSON(w, failedResponse(err.Error()), 500)
+		logger.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 	}
-	logger.WriteJSON(w, VmTaskExecutionResponse{CommandExecutionStatus: Success}, 200)
+	logger.WriteJSON(w, VMTaskExecutionResponse{CommandExecutionStatus: Success}, httpOK)
 }

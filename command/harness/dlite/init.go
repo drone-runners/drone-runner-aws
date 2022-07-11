@@ -10,16 +10,16 @@ import (
 	"github.com/wings-software/dlite/logger"
 )
 
-type VmInitTask struct {
+type VMInitTask struct {
 	c *dliteCommand
 }
 
-type VmInitRequest struct {
-	SetupVmRequest harness.SetupVmRequest     `json:"setup_vm_request"`
-	Services       []harness.ExecuteVmRequest `json:"services"`
+type VMInitRequest struct {
+	SetupVMRequest harness.SetupVMRequest     `json:"setup_vm_request"`
+	Services       []harness.ExecuteVMRequest `json:"services"`
 }
 
-func (t *VmInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: Get this from the request
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
@@ -33,29 +33,28 @@ func (t *VmInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.WriteBadRequest(w, err)
 		return
 	}
-	req := &VmInitRequest{}
+	req := &VMInitRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
 		logger.WriteBadRequest(w, err)
 		return
 	}
 
-	// fmt.Printf("init request: %+v\n", req)
-
 	// Make the setup call
-	setupResp, err := harness.HandleSetup(ctx, &req.SetupVmRequest, t.c.stageOwnerStore, t.c.env, t.c.poolManager)
+	setupResp, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
 	if err != nil {
-		logger.WriteJSON(w, failedResponse(err.Error()), 500)
+		logger.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
 
-	serviceStatuses := []VmServiceStatus{}
+	serviceStatuses := []VMServiceStatus{}
+	var status VMServiceStatus
 
 	// Start all the services
-	for _, s := range req.Services {
+	for i, s := range req.Services {
 		s.IPAddress = setupResp.IPAddress
-		status := VmServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running}
-		resp, err := harness.HandleStep(ctx, &s, t.c.env, t.c.poolManager)
+		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
+		resp, err := harness.HandleStep(ctx, &req.Services[i], &t.c.env, t.c.poolManager)
 		if err != nil {
 			status.Status = Error
 			status.ErrorMessage = err.Error()
@@ -67,9 +66,9 @@ func (t *VmInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct final response
-	resp := VmTaskExecutionResponse{}
+	resp := VMTaskExecutionResponse{}
 	resp.ServiceStatuses = serviceStatuses
 	resp.IPAddress = setupResp.IPAddress
 	resp.CommandExecutionStatus = Success
-	logger.WriteJSON(w, resp, 200)
+	logger.WriteJSON(w, resp, httpOK)
 }
