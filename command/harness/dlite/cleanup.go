@@ -5,17 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/logger"
 )
 
 type VmCleanupTask struct {
 	c *dliteCommand
-}
-
-type VmCleanupRequest struct {
-	PoolID         string `json:"pool_id"`
-	StageRuntimeID string `json:"stage_runtime_id"`
 }
 
 func (t *VmCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -32,13 +28,13 @@ func (t *VmCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.WriteBadRequest(w, err)
 		return
 	}
-	req := &VmCleanupRequest{}
+	req := &harness.VmCleanupRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
 		logger.WriteBadRequest(w, err)
 		return
 	}
-	err = t.c.handleDestroy(ctx, req)
+	err = harness.HandleDestroy(ctx, req, t.c.stageOwnerStore, t.c.poolManager)
 	if err != nil {
 		logger.WriteJSON(w, failedResponse(err.Error()), 500)
 	}

@@ -6,30 +6,32 @@ type RetryableError struct {
 
 func (e *RetryableError) Error() string { return e.Msg }
 
-type internalError struct {
+type InternalError struct {
 	Msg string
 }
 
-func (e *internalError) Error() string { return e.Msg }
+func (e *InternalError) Error() string { return e.Msg }
 
-func InternalError(msg string) *internalError {
-	return &internalError{Msg: msg}
+func NewInternalError(msg string) *InternalError {
+	return &InternalError{Msg: msg}
 }
 
-type badRequestError struct {
+type BadRequestError struct {
 	Msg string
 }
 
-func (e *badRequestError) Error() string { return e.Msg }
+func (e *BadRequestError) Error() string { return e.Msg }
 
-func BadRequestError(msg string) *badRequestError {
-	return &badRequestError{Msg: msg}
+func NewBadRequestError(msg string) *BadRequestError {
+	return &BadRequestError{Msg: msg}
 }
 
-type notFoundError struct {
+type NotFoundError struct {
 	Msg string
 }
 
-func NotFoundError(msg string) *notFoundError {
-	return &notFoundError{Msg: msg}
+func NewNotFoundError(msg string) *NotFoundError {
+	return &NotFoundError{Msg: msg}
 }
+
+func (e *NotFoundError) Error() string { return e.Msg }

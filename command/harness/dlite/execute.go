@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/harness/lite-engine/api"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/logger"
@@ -14,16 +15,8 @@ type VmExecuteTask struct {
 	c *dliteCommand
 }
 
-type ExecuteVmRequest struct {
-	StageRuntimeID       string `json:"stage_runtime_id"`
-	IPAddress            string `json:"ip_address"`
-	PoolID               string `json:"pool_id"`
-	CorrelationID        string `json:"correlation_id"`
-	api.StartStepRequest `json:"start_step_request"`
-}
-
 type VmExecuteTaskRequest struct {
-	ExecuteVmRequest ExecuteVmRequest `json:"execute_step_request"`
+	ExecuteVmRequest harness.ExecuteVmRequest `json:"execute_step_request"`
 }
 
 func (t *VmExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +40,7 @@ func (t *VmExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// fmt.Printf("req is: %+v\n", req)
-	resp, err := t.c.handleStep(ctx, &req.ExecuteVmRequest)
+	resp, err := harness.HandleStep(ctx, &req.ExecuteVmRequest, t.c.env, t.c.poolManager)
 	if err != nil {
 		logger.WriteJSON(w, failedResponse(err.Error()), 500)
 		return
