@@ -24,8 +24,8 @@ type VMServiceStatus struct {
 }
 
 var (
-	httpOK     int = 200
-	httpFailed int = 500
+	httpOK     = 200
+	httpFailed = 500
 )
 
 type Status string

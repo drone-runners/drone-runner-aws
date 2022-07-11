@@ -10,12 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type VmCleanupRequest struct {
+type VMCleanupRequest struct {
 	PoolID         string `json:"pool_id"`
 	StageRuntimeID string `json:"stage_runtime_id"`
 }
 
-func HandleDestroy(ctx context.Context, r *VmCleanupRequest, store store.StageOwnerStore, poolManager *drivers.Manager) error {
+func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, poolManager *drivers.Manager) error {
 	if r.PoolID == "" {
 		return errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
@@ -43,7 +43,7 @@ func HandleDestroy(ctx context.Context, r *VmCleanupRequest, store store.StageOw
 	}
 	logr.Traceln("destroyed instance")
 
-	if err := store.Delete(ctx, r.StageRuntimeID); err != nil {
+	if err := s.Delete(ctx, r.StageRuntimeID); err != nil {
 		logrus.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 	return nil

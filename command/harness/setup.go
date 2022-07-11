@@ -28,7 +28,7 @@ type SetupVMRequest struct {
 	api.SetupRequest `json:"setup_request"`
 }
 
-type SetupVmResponse struct {
+type SetupVMResponse struct {
 	IPAddress  string `json:"ip_address"`
 	InstanceID string `json:"instance_id"`
 }
@@ -37,7 +37,7 @@ var (
 	setupTimeout = 20 * time.Minute
 )
 
-func HandleSetup(ctx context.Context, r *SetupVMRequest, store store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*SetupVmResponse, error) {
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*SetupVMResponse, error) {
 	id := r.ID
 	pool := r.PoolID
 	if id == "" {
@@ -48,7 +48,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, store store.StageOwnerS
 		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
-	if err := store.Create(ctx, &types.StageOwner{StageID: id, PoolName: pool}); err != nil {
+	if err := s.Create(ctx, &types.StageOwner{StageID: id, PoolName: pool}); err != nil {
 		return nil, fmt.Errorf("could not create stage owner entity: %w", err)
 	}
 
@@ -152,5 +152,5 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, store store.StageOwnerS
 
 	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).Traceln("VM setup is complete")
 
-	return &SetupVmResponse{InstanceID: instance.ID, IPAddress: instance.Address}, nil
+	return &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}, nil
 }

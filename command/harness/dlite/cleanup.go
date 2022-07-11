@@ -28,7 +28,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.WriteBadRequest(w, err)
 		return
 	}
-	req := &harness.VmCleanupRequest{}
+	req := &harness.VMCleanupRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
 		logger.WriteBadRequest(w, err)

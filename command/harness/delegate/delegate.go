@@ -228,7 +228,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
-	req := &harness.VmCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID}
+	req := &harness.VMCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID}
 	ctx := r.Context()
 	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.poolManager)
 	if err != nil {

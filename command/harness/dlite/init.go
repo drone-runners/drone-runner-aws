@@ -15,8 +15,8 @@ type VMInitTask struct {
 }
 
 type VMInitRequest struct {
-	SetupVMRequest harness.SetupVMRequest     `json:"setup_vm_request"`
-	Services       []harness.ExecuteVMRequest `json:"services"`
+	SetupVMRequest harness.SetupVMRequest      `json:"setup_vm_request"`
+	Services       []*harness.ExecuteVMRequest `json:"services"`
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +54,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for i, s := range req.Services {
 		s.IPAddress = setupResp.IPAddress
 		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
-		resp, err := harness.HandleStep(ctx, &req.Services[i], &t.c.env, t.c.poolManager)
+		resp, err := harness.HandleStep(ctx, req.Services[i], &t.c.env, t.c.poolManager)
 		if err != nil {
 			status.Status = Error
 			status.ErrorMessage = err.Error()
