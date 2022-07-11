@@ -577,6 +577,14 @@ github.com/wings-software/dlite v0.0.0-20220706225905-2557198ba902 h1:9/zaTV3AnE
 github.com/wings-software/dlite v0.0.0-20220706225905-2557198ba902/go.mod h1:s1HsWGAm0WzBucQBKO0Cf0qGWa9dXtnMor+VtTORohM=
 github.com/wings-software/dlite v0.0.0-20220708090720-1231f4bf1306 h1:y3Uf1kTxByF5SlfnIQS1A2PoNSKH2YtkSVUpNORCFCM=
 github.com/wings-software/dlite v0.0.0-20220708090720-1231f4bf1306/go.mod h1:s1HsWGAm0WzBucQBKO0Cf0qGWa9dXtnMor+VtTORohM=
+github.com/wings-software/dlite v0.0.0-20220708093449-24e9b16eac06 h1:2JiDFiR8wxGN2dvKZzVdFbua5/wam9ssC/ja7IKyNJ4=
+github.com/wings-software/dlite v0.0.0-20220708093449-24e9b16eac06/go.mod h1:x9ve+6MDB4scjA+n5oRwYCY9PqAg79FDadHjMjALuIE=
+github.com/wings-software/dlite v0.0.0-20220711110608-cb87cfacb3c9 h1:nxhACwT3d1f6FKg4guR5wrhfb0Y0xeKo4bTkVzZ9aas=
+github.com/wings-software/dlite v0.0.0-20220711110608-cb87cfacb3c9/go.mod h1:x9ve+6MDB4scjA+n5oRwYCY9PqAg79FDadHjMjALuIE=
+github.com/wings-software/dlite v0.0.0-20220711113555-a3a16bce7514 h1:ncO594umDLTpTmFadvgnfCtnGvr5QoVVs48Y0zoUyrU=
+github.com/wings-software/dlite v0.0.0-20220711113555-a3a16bce7514/go.mod h1:B7pPRpGetrd6Z/cJkN664YDc41tY0BZWgoIsL0hJTXI=
+github.com/wings-software/dlite v0.0.0-20220711114449-dd1b413ce340 h1:lomwogCUDVujE/Ez5OqxS6IOD/MQfNNh27vHAap2uPM=
+github.com/wings-software/dlite v0.0.0-20220711114449-dd1b413ce340/go.mod h1:B7pPRpGetrd6Z/cJkN664YDc41tY0BZWgoIsL0hJTXI=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

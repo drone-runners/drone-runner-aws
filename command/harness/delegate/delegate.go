@@ -95,8 +95,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 	c.env = env
 	// setup the global logrus logger.
-	harness.SetupLogger(&env)
-	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
+	harness.SetupLogger(&c.env)
+	db, err := database.ProvideDatabase(c.env.Database.Driver, c.env.Database.Datasource)
 	if err != nil {
 		logrus.WithError(err).
 			Fatalln("Unable to start the database")
@@ -124,7 +124,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 
 	var g errgroup.Group
 	runnerServer := server.Server{
-		Addr:    env.Server.Port,
+		Addr:    c.env.Server.Port,
 		Handler: c.delegateListener(),
 	}
 
