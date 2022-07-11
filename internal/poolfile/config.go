@@ -3,6 +3,7 @@ package poolfile
 import (
 	"errors"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,6 +98,37 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithMarketType(a.MarketType),
 				amazon.WithTags(a.Tags),
 				amazon.WithHibernate(a.Hibernate),
+			)
+			if err != nil {
+				logrus.WithError(err).WithField("driver", instance.Type)
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
+		case string(types.Azure):
+			var az, ok = instance.Spec.(*config.Azure)
+			if !ok {
+				logrus.Errorln("unable to parse pool file")
+			}
+			// set platform defaults
+			platform, platformErr := azure.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				logrus.WithError(platformErr).WithField("driver", instance.Type)
+			}
+			instance.Platform = *platform
+			var driver, err = azure.New(
+				azure.WithSubscriptionID(az.Account.SubscriptionID),
+				azure.WithClientID(az.Account.ClientID),
+				azure.WithClientSecret(az.Account.ClientSecret),
+				azure.WithTenantID(az.Account.TenantID),
+				azure.WithResourceGroupName(az.ResourceGroup),
+				azure.WithUserData(az.UserData, az.UserDataPath),
+				azure.WithSize(az.Size),
+				azure.WithImage(az.Image.Publisher, az.Image.Offer, az.Image.SKU, az.Image.Version),
+				azure.WithUsername(az.Image.Username),
+				azure.WithPassword(az.Image.Password),
+				azure.WithLocation(az.Location),
+				azure.WithRootDirectory(az.RootDirectory),
 			)
 			if err != nil {
 				logrus.WithError(err).WithField("driver", instance.Type)

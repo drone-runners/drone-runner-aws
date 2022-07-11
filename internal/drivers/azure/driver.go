@@ -2,7 +2,10 @@ package azure
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"math/rand"
 	"sync"
 	"time"
@@ -19,17 +22,15 @@ import (
 type config struct {
 	init sync.Once
 
-	tenantID       string
-	clientID       string
-	clientSecret   string
-	subscriptionID string
+	tenantID          string
+	clientID          string
+	clientSecret      string
+	subscriptionID    string
+	resourceGroupName string
 
 	rootDir string
 
-	// vm instance data
 	location string // region, example: East US
-	diskSize int64
-	diskType string
 
 	// image data
 	publisher string
@@ -37,10 +38,8 @@ type config struct {
 	sku       string
 	version   string
 
-	network     string
-	subnetwork  string
-	privateIP   bool
-	scopes      []string
+	IPAddress string
+
 	size        string
 	tags        []string
 	zones       []string
@@ -51,6 +50,7 @@ type config struct {
 	password string
 
 	service *armcompute.VirtualMachinesClient
+	cred    azcore.TokenCredential
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -61,6 +61,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 
 	if p.service == nil {
 		cred, err := azidentity.NewClientSecretCredential(p.tenantID, p.clientID, p.clientSecret, nil)
+		p.cred = cred
 		if err != nil {
 			return nil, err
 		}
@@ -73,62 +74,98 @@ func New(opts ...Option) (drivers.Driver, error) {
 	return p, nil
 }
 
-func (p *config) RootDir() string {
-	return p.rootDir
+func (c *config) RootDir() string {
+	return c.rootDir
 }
 
-func (p *config) DriverName() string {
+func (c *config) DriverName() string {
 	return string(types.Azure)
 }
 
-func (p *config) Zone() string {
-	return p.zones[rand.Intn(len(p.zones))] //nolint: gosec
+func (c *config) Zone() string {
+	if len(c.zones) == 0 {
+		return ""
+	}
+	return c.zones[rand.Intn(len(c.zones))] //nolint: gosec
 }
 
-func (p *config) InstanceType() string {
-	return p.offer
+func (c *config) InstanceType() string {
+	return c.offer
 }
 
-func (p *config) CanHibernate() bool {
+func (c *config) CanHibernate() bool {
 	return false
 }
 
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	p.init.Do(func() {
-		_ = p.setup(ctx)
-	})
-
+func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", time.Now().Unix())
-	var networkInterfaceID string
+
+	vnetName := fmt.Sprintf("%s-vnet", name)
+	subnetName := fmt.Sprintf("%s-subnet", name)
+	publicIPName := fmt.Sprintf("%s-publicip", name)
+	networkInterfaceName := fmt.Sprintf("%s-networkinterface", name)
+	diskName := fmt.Sprintf("%s-disk", name)
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Azure).
 		WithField("name", name).
-		WithField("image", p.InstanceType()).
+		WithField("image", c.InstanceType()).
 		WithField("pool", opts.PoolName).
 		WithField("zone", "").
-		WithField("image", p.offer).
-		WithField("size", p.size)
+		WithField("image", c.offer).
+		WithField("size", c.size)
+
+	logr.Debugln("Starting Azure Setup")
+
+	_, err = c.createResourceGroup(ctx, c.cred)
+	if err != nil {
+		logr.Errorln(err)
+		return nil, err
+	}
+	_, err = c.createVirtualNetwork(ctx, c.cred, vnetName)
+	if err != nil {
+		logr.Errorln(err)
+		return nil, err
+	}
+	subnet, err := c.createSubnets(ctx, c.cred, subnetName, vnetName)
+	if err != nil {
+		logr.Errorln(err)
+		return nil, err
+	}
+	publicIP, err := c.createPublicIP(ctx, c.cred, publicIPName)
+	if err != nil {
+		logr.Errorln(err)
+		return nil, err
+	}
+	c.IPAddress = *publicIP.Properties.IPAddress
+	networkInterface, err := c.createNetworkInterface(ctx, c.cred, networkInterfaceName, *subnet.ID, *publicIP.ID)
+	if err != nil {
+		logr.Errorln(err)
+		return nil, err
+	}
 
 	// create the instance
 	startTime := time.Now()
 
+	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
+
 	logr.Traceln("azure: creating VM")
 
 	in := armcompute.VirtualMachine{
-		Location: to.Ptr(p.location),
+		Location: to.Ptr(c.location),
 		Properties: &armcompute.VirtualMachineProperties{
 			HardwareProfile: &armcompute.HardwareProfile{
-				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes(p.size)),
+				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes(c.size)),
 			},
 			StorageProfile: &armcompute.StorageProfile{
 				ImageReference: &armcompute.ImageReference{
-					Publisher: to.Ptr(p.publisher),
-					Offer:     to.Ptr(p.offer),
-					SKU:       to.Ptr(p.sku),
-					Version:   to.Ptr(p.version),
+					Publisher: to.Ptr(c.publisher),
+					Offer:     to.Ptr(c.offer),
+					SKU:       to.Ptr(c.sku),
+					Version:   to.Ptr(c.version),
 				},
 				OSDisk: &armcompute.OSDisk{
+					Name:         to.Ptr(diskName),
 					CreateOption: to.Ptr(armcompute.DiskCreateOptionTypesFromImage),
 					Caching:      to.Ptr(armcompute.CachingTypesReadWrite),
 					ManagedDisk: &armcompute.ManagedDiskParameters{
@@ -138,21 +175,21 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			},
 			OSProfile: &armcompute.OSProfile{ //
 				ComputerName:  to.Ptr(name),
-				AdminUsername: to.Ptr(p.username),
-				AdminPassword: to.Ptr(p.password),
-				CustomData:    to.Ptr(p.userData),
+				AdminUsername: to.Ptr(c.username),
+				AdminPassword: to.Ptr(c.password),
+				CustomData:    to.Ptr(uData),
 			},
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
 					{
-						ID: to.Ptr(networkInterfaceID),
+						ID: to.Ptr(*networkInterface.ID),
 					},
 				},
 			},
 		},
 	}
 
-	poller, err := p.service.BeginCreateOrUpdate(ctx, p.subscriptionID, name, in, nil)
+	poller, err := c.service.BeginCreateOrUpdate(ctx, c.resourceGroupName, name, in, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +204,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("azure: [provision] VM provisioned")
 
-	instanceMap := p.mapToInstance(&vm, opts)
+	instanceMap := c.mapToInstance(&vm, opts)
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
@@ -176,54 +213,95 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return &instanceMap, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
-	//TODO implement me
-	panic("implement me")
-}
+func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (error error) {
+	logr := logger.FromContext(ctx)
+	if c.resourceGroupName == "" {
+		c.resourceGroupName = defaultResourceGroup
+	}
+	logr.Debugln("Azure destroy operation started")
+	if len(instanceIDs) == 0 {
+		return
+	}
+	for _, instanceID := range instanceIDs {
+		vnetName := fmt.Sprintf("%s-vnet", instanceID)
+		publicIPName := fmt.Sprintf("%s-publicip", instanceID)
+		networkInterfaceName := fmt.Sprintf("%s-networkinterface", instanceID)
+		diskName := fmt.Sprintf("%s-disk", instanceID)
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
-	//TODO implement me
-	panic("implement me")
-}
+		logr.Debugln("Azure destroying instance", instanceID)
+		logr.WithField("id", instanceID).
+			WithField("cloud", types.Google)
 
-func (p *config) Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (p *config) Ping(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (p *config) setup(ctx context.Context) error {
-	//if reflect.DeepEqual(p.tags, defaultTags) {
-	//	return p.setupFirewall(ctx)
-	//}
+		poller, err := c.service.BeginDelete(ctx, c.resourceGroupName, instanceID, nil)
+		if err != nil {
+			return err
+		}
+		_, err = poller.PollUntilDone(ctx, nil)
+		if err != nil {
+			return err
+		}
+		logr.Debugf("Azure instance destroyed %s", instanceID)
+		err = c.deleteNetworkInterface(ctx, c.cred, networkInterfaceName)
+		if err != nil {
+			logr.Errorln(err)
+			return err
+		}
+		logr.Debugf("Azure: deleted network interface: %s", networkInterfaceName)
+		err = c.deletePublicIP(ctx, c.cred, publicIPName)
+		if err != nil {
+			logr.Errorln(err)
+			return err
+		}
+		logr.Debugf("Azure: deleted public ip: %s", publicIPName)
+		err = c.deleteVirtualNetWork(ctx, c.cred, vnetName)
+		if err != nil {
+			logr.Errorln(err)
+			return err
+		}
+		logr.Debugf("Azure: deleted virtual network: %s", vnetName)
+		err = c.deleteDisk(ctx, c.cred, diskName)
+		if err != nil {
+			logr.Errorln(err)
+			return err
+		}
+		logr.Debugf("Azure: deleted disk: %s", diskName)
+		logr.Traceln("azure: VM terminated")
+	}
 	return nil
 }
 
-func (p *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts) types.Instance {
-	//network := vm.NetworkInterfaces[0]
-	//accessConfigs := network.AccessConfigs[0]
+func (c *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
+	//TODO implement me
+	panic("implement me")
+}
 
-	instanceIP := ""
+func (c *config) Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *config) Ping(ctx context.Context) error {
+	//TODO implement me
+	return nil
+}
+
+func (c *config) Logs(ctx context.Context, instanceID string) (string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts) types.Instance {
 	return types.Instance{
-		ID:           *vm.Properties.VMID,
+		ID:           *vm.Name,
 		Name:         *vm.Name,
 		Provider:     types.Azure,
 		State:        types.StateCreated,
 		Pool:         opts.PoolName,
-		Image:        p.offer,
-		Zone:         p.Zone(),
-		Size:         p.size,
+		Image:        c.offer,
+		Zone:         c.Zone(),
+		Size:         c.size,
 		Platform:     opts.Platform,
-		Address:      instanceIP,
+		Address:      c.IPAddress,
 		CACert:       opts.CACert,
 		CAKey:        opts.CAKey,
 		TLSCert:      opts.TLSCert,

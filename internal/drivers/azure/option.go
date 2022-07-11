@@ -1,3 +1,119 @@
 package azure
 
+import (
+	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/sirupsen/logrus"
+	"os"
+)
+
 type Option func(*config)
+
+func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
+
+	if platform.Arch == "" {
+		platform.Arch = oshelp.ArchAMD64
+	}
+	if platform.Arch != oshelp.ArchAMD64 && platform.Arch != oshelp.ArchARM64 {
+		return platform, fmt.Errorf("invalid arch %s, has to be '%s/%s'", platform.Arch, oshelp.ArchAMD64, oshelp.ArchARM64)
+	}
+	// verify that we are using sane values for OS
+	if platform.OS == "" {
+		platform.OS = oshelp.OSWindows
+	}
+	if platform.OS != oshelp.OSWindows {
+		return platform, fmt.Errorf("invalid OS %s, has to be '%s'", platform.OS, oshelp.OSWindows)
+	}
+
+	return platform, nil
+}
+
+func WithClientID(clientID string) Option {
+	return func(p *config) {
+		p.clientID = clientID
+	}
+}
+
+func WithClientSecret(clientSecret string) Option {
+	return func(p *config) {
+		p.clientSecret = clientSecret
+	}
+}
+
+func WithSubscriptionID(subscriptionID string) Option {
+	return func(p *config) {
+		p.subscriptionID = subscriptionID
+	}
+}
+
+func WithTenantID(tenantID string) Option {
+	return func(p *config) {
+		p.tenantID = tenantID
+	}
+}
+
+func WithResourceGroupName(resourceGroupName string) Option {
+	return func(p *config) {
+		p.resourceGroupName = resourceGroupName
+	}
+}
+
+func WithLocation(location string) Option {
+	return func(p *config) {
+		p.location = location
+	}
+}
+
+func WithSize(size string) Option {
+	return func(p *config) {
+		p.size = size
+	}
+}
+
+func WithImage(publisher, offer, sku, version string) Option {
+	return func(p *config) {
+		p.publisher = publisher
+		p.offer = offer
+		p.sku = sku
+		p.version = version
+	}
+}
+func WithUsername(username string) Option {
+	return func(p *config) {
+		p.username = username
+	}
+}
+
+func WithPassword(password string) Option {
+	return func(p *config) {
+		p.password = password
+	}
+}
+
+// WithRootDirectory sets the root directory for the virtual machine.
+func WithRootDirectory(dir string) Option {
+	return func(p *config) {
+		p.rootDir = tempdir(dir)
+	}
+}
+
+// WithUserData returns an option to set the cloud-init template from a file location or passed in text.
+func WithUserData(text, path string) Option {
+	if text != "" {
+		return func(p *config) {
+			p.userData = text
+		}
+	}
+	return func(p *config) {
+		if path != "" {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				logrus.WithError(err).
+					Fatalln("failed to read user_data file")
+				return
+			}
+			p.userData = string(data)
+		}
+	}
+}
