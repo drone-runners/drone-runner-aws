@@ -21,7 +21,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
-		log.Errorln("could not decode HTTP body: %s", err)
+		log.WithError(err).Error("could not decode HTTP body")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
@@ -29,20 +29,20 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Unmarshal the task data
 	taskBytes, err := task.Data.MarshalJSON()
 	if err != nil {
-		logr.Errorln("could not unmarshal task data: %s", err)
+		logr.WithError(err).Error("could not unmarshal task data")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	req := &harness.VMCleanupRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
-		logr.Errorln("could not unmarshal task request data: %s", err)
+		logr.WithError(err).Error("could not unmarshal task request data")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	err = harness.HandleDestroy(ctx, req, t.c.stageOwnerStore, t.c.poolManager)
 	if err != nil {
-		logr.Errorln("could not destroy VM: %s", err)
+		logr.WithError(err).Error("could not destroy VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 	}
 	httphelper.WriteJSON(w, VMTaskExecutionResponse{CommandExecutionStatus: Success}, httpOK)

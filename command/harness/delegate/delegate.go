@@ -177,7 +177,7 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 	if stageID != "" {
 		_, err := c.stageOwnerStore.Find(context.Background(), stageID, poolName)
 		if err != nil {
-			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Trace("failed to find the stage in store")
+			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Error("failed to find the stage in store")
 			httprender.OK(w, poolOwnerResponse{Owner: false})
 			return
 		}
@@ -189,14 +189,14 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	req := &harness.SetupVMRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		logrus.WithError(err).Trace("could not decode request body")
+		logrus.WithError(err).Error("could not decode request body")
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 	ctx := r.Context()
 	resp, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
 	if err != nil {
-		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Trace("could not setup VM")
+		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not setup VM")
 		writeError(w, err)
 		return
 	}
@@ -212,7 +212,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	resp, err := harness.HandleStep(ctx, req, &c.env, c.poolManager)
 	if err != nil {
-		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Trace("could not execute step on VM")
+		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not execute step on VM")
 		writeError(w, err)
 		return
 	}
@@ -228,7 +228,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		CorrelationID string `json:"correlation_id"`
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(rs); err != nil {
-		logrus.WithError(err).Trace("could not decode request body")
+		logrus.WithError(err).Error("could not decode request body")
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
@@ -236,7 +236,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.poolManager)
 	if err != nil {
-		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Trace("could not destroy VM")
+		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Error("could not destroy VM")
 		writeError(w, err)
 		return
 	}

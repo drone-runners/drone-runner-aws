@@ -26,7 +26,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
-		log.Errorln("could not decode HTTP body: %s", err)
+		log.WithError(err).Error("could not decode HTTP body")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
@@ -34,14 +34,14 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Unmarshal the task data
 	taskBytes, err := task.Data.MarshalJSON()
 	if err != nil {
-		logr.Errorln("could not unmarshal task data: %s", err)
+		logr.WithError(err).Errorln("could not unmarshal task data")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	req := &VMInitRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
-		logr.Errorln("could not unmarshal task request data: %s", err)
+		logr.WithError(err).Errorln("could not unmarshal task request data")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
@@ -49,7 +49,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Make the setup call
 	setupResp, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
 	if err != nil {
-		logr.Errorln("could not setup VM: %s", err)
+		logr.WithError(err).Error("could not setup VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}

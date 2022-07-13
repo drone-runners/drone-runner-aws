@@ -26,7 +26,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
-		log.Errorln("could not decode HTTP body: %s", err)
+		log.WithError(err).Error("could not decode HTTP body")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
@@ -34,21 +34,21 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Unmarshal the task data
 	taskBytes, err := task.Data.MarshalJSON()
 	if err != nil {
-		logr.Errorln("could not unmarshal task data: %s", err)
+		logr.WithError(err).Error("could not unmarshal task data")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	req := &VMExecuteTaskRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
-		logr.Errorln("could not unmarshal task request data: %s", err)
+		logr.WithError(err).Error("could not unmarshal task request data")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
 
 	resp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, &t.c.env, t.c.poolManager)
 	if err != nil {
-		logr.Errorln("could not execute step: %s", err)
+		logr.WithError(err).Error("could not execute step:")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
