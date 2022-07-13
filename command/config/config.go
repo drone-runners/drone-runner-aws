@@ -79,15 +79,18 @@ type (
 
 	// Azure specifies the configuration for an Azure instance.
 	Azure struct {
-		Account       AzureAccount `json:"account,omitempty"`
-		ResourceGroup string       `json:"resource_group,omitempty" yaml:"resource_group,omitempty"`
-		Location      string       `json:"location,omitempty" yaml:"location"`
-		VMID          string       `json:"vm_id,omitempty" yaml:"vm_id"`
-		RootDirectory string       `json:"root_directory,omitempty" yaml:"root_directory"`
-		UserData      string       `json:"user_data,omitempty" yaml:"user_data"`
-		UserDataPath  string       `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
-		Image         AzureImage   `json:"image,omitempty" yaml:"image,omitempty"`
-		Size          string       `json:"size,omitempty"  yaml:"size,omitempty"`
+		Account       AzureAccount      `json:"account,omitempty"`
+		ResourceGroup string            `json:"resource_group,omitempty" yaml:"resource_group,omitempty"`
+		Location      string            `json:"location,omitempty" yaml:"location"`
+		VMID          string            `json:"vm_id,omitempty" yaml:"vm_id"`
+		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData      string            `json:"user_data,omitempty" yaml:"user_data"`
+		UserDataKey   string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
+		UserDataPath  string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+		Image         AzureImage        `json:"image,omitempty" yaml:"image,omitempty"`
+		Size          string            `json:"size,omitempty"  yaml:"size,omitempty"`
+		Zones         []string          `json:"zones,omitempty" yaml:"zones,omitempty"`
+		Tags          map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
 	}
 
 	AzureAccount struct {

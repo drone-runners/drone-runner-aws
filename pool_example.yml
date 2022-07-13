@@ -66,3 +66,30 @@ instances:
         username: admin
         password: admin
       vm_id: uuid of anka vm
+  - name: azure-ubuntu
+    default: true
+    type: azure
+    pool: 1
+    limit: 100
+    platform:
+      os: linux
+      arch: amd64
+    spec:
+      account:
+        client_id: XXXXXXX
+        client_secret: XXXXXXX
+        subscription_id: XXXXXXX
+        tenant_id: XXXXXXXXX
+      location: eastus2
+      size : Standard_F2s
+      zones:
+        - 1
+      tags:
+        tagName: tag
+      image:
+        username: azureuser
+        password: password
+        publisher: Canonical
+        offer: UbuntuServer
+        sku: 18.04-LTS
+        version: latest

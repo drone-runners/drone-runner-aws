@@ -126,6 +126,7 @@ func (c *config) createPublicIP(ctx context.Context, cred azcore.TokenCredential
 
 	parameters := armnetwork.PublicIPAddress{
 		Location: to.Ptr(c.location),
+		Zones:    c.zones,
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic), // Static or Dynamic
 		},

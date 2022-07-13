@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -41,8 +40,8 @@ type config struct {
 	IPAddress string
 
 	size        string
-	tags        []string
-	zones       []string
+	tags        map[string]string
+	zones       []*string
 	userData    string
 	userDataKey string
 
@@ -82,19 +81,24 @@ func (c *config) DriverName() string {
 	return string(types.Azure)
 }
 
-func (c *config) Zone() string {
-	if len(c.zones) == 0 {
-		return ""
-	}
-	return c.zones[rand.Intn(len(c.zones))] //nolint: gosec
-}
-
 func (c *config) InstanceType() string {
 	return c.offer
 }
 
 func (c *config) CanHibernate() bool {
 	return false
+}
+
+func (c *config) Zones() string {
+	var z string
+	if len(z) == 1 {
+		return *c.zones[0]
+	} else {
+		for _, zone := range c.zones {
+			z = fmt.Sprintf("%s%s,", z, *zone)
+		}
+	}
+	return z
 }
 
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
@@ -105,6 +109,12 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	publicIPName := fmt.Sprintf("%s-publicip", name)
 	networkInterfaceName := fmt.Sprintf("%s-networkinterface", name)
 	diskName := fmt.Sprintf("%s-disk", name)
+
+	var tags = map[string]*string{}
+	// add user defined tags
+	for k, v := range c.tags {
+		tags[k] = &v
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Azure).
@@ -153,6 +163,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	in := armcompute.VirtualMachine{
 		Location: to.Ptr(c.location),
+		Zones:    c.zones,
+		Tags:     tags,
 		Properties: &armcompute.VirtualMachineProperties{
 			HardwareProfile: &armcompute.HardwareProfile{
 				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes(c.size)),
@@ -298,7 +310,7 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 		State:        types.StateCreated,
 		Pool:         opts.PoolName,
 		Image:        c.offer,
-		Zone:         c.Zone(),
+		Zone:         c.Zones(),
 		Size:         c.size,
 		Platform:     opts.Platform,
 		Address:      c.IPAddress,

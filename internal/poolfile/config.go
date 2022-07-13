@@ -122,6 +122,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				azure.WithClientSecret(az.Account.ClientSecret),
 				azure.WithTenantID(az.Account.TenantID),
 				azure.WithResourceGroupName(az.ResourceGroup),
+				azure.WithUserDataKey(az.UserDataKey, instance.Platform.OS),
 				azure.WithUserData(az.UserData, az.UserDataPath),
 				azure.WithSize(az.Size),
 				azure.WithImage(az.Image.Publisher, az.Image.Offer, az.Image.SKU, az.Image.Version),
@@ -129,6 +130,8 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				azure.WithPassword(az.Image.Password),
 				azure.WithLocation(az.Location),
 				azure.WithRootDirectory(az.RootDirectory),
+				azure.WithZones(az.Zones...),
+				azure.WithTags(az.Tags),
 			)
 			if err != nil {
 				logrus.WithError(err).WithField("driver", instance.Type)
