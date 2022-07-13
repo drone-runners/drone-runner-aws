@@ -21,7 +21,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
-	"github.com/wings-software/dlite/logger"
+	"github.com/wings-software/dlite/httphelper"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -189,12 +189,14 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 	req := &harness.SetupVMRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		logrus.WithError(err).Trace("could not decode request body")
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 	ctx := r.Context()
 	resp, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
 	if err != nil {
+		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Trace("could not setup VM")
 		writeError(w, err)
 		return
 	}
@@ -210,6 +212,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	resp, err := harness.HandleStep(ctx, req, &c.env, c.poolManager)
 	if err != nil {
+		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Trace("could not execute step on VM")
 		writeError(w, err)
 		return
 	}
@@ -225,6 +228,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		CorrelationID string `json:"correlation_id"`
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(rs); err != nil {
+		logrus.WithError(err).Trace("could not decode request body")
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
@@ -232,6 +236,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.poolManager)
 	if err != nil {
+		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Trace("could not destroy VM")
 		writeError(w, err)
 		return
 	}
@@ -241,10 +246,10 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 func writeError(w http.ResponseWriter, err error) {
 	switch err.(type) {
 	case *errors.BadRequestError:
-		logger.WriteBadRequest(w, err)
+		httphelper.WriteBadRequest(w, err)
 	case *errors.NotFoundError:
-		logger.WriteNotFound(w, err)
+		httphelper.WriteNotFound(w, err)
 	default:
-		logger.WriteInternalError(w, err)
+		httphelper.WriteInternalError(w, err)
 	}
 }

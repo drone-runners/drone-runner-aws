@@ -6,8 +6,9 @@ import (
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
-	"github.com/wings-software/dlite/logger"
+	"github.com/wings-software/dlite/httphelper"
 )
 
 type VMCleanupTask struct {
@@ -16,27 +17,33 @@ type VMCleanupTask struct {
 
 func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: Get this from http Request
+	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		log.Errorln("could not decode HTTP body: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
+	logr := log.WithField("task_id", task.ID)
 	// Unmarshal the task data
 	taskBytes, err := task.Data.MarshalJSON()
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		logr.Errorln("could not unmarshal task data: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	req := &harness.VMCleanupRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		logr.Errorln("could not unmarshal task request data: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	err = harness.HandleDestroy(ctx, req, t.c.stageOwnerStore, t.c.poolManager)
 	if err != nil {
-		logger.WriteJSON(w, failedResponse(err.Error()), httpFailed)
+		logr.Errorln("could not destroy VM: %s", err)
+		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 	}
-	logger.WriteJSON(w, VMTaskExecutionResponse{CommandExecutionStatus: Success}, httpOK)
+	httphelper.WriteJSON(w, VMTaskExecutionResponse{CommandExecutionStatus: Success}, httpOK)
 }

@@ -585,6 +585,8 @@ github.com/wings-software/dlite v0.0.0-20220711113555-a3a16bce7514 h1:ncO594umDL
 github.com/wings-software/dlite v0.0.0-20220711113555-a3a16bce7514/go.mod h1:B7pPRpGetrd6Z/cJkN664YDc41tY0BZWgoIsL0hJTXI=
 github.com/wings-software/dlite v0.0.0-20220711114449-dd1b413ce340 h1:lomwogCUDVujE/Ez5OqxS6IOD/MQfNNh27vHAap2uPM=
 github.com/wings-software/dlite v0.0.0-20220711114449-dd1b413ce340/go.mod h1:B7pPRpGetrd6Z/cJkN664YDc41tY0BZWgoIsL0hJTXI=
+github.com/wings-software/dlite v0.0.0-20220713082428-30daf11ecea3 h1:vDCl3SWvpg1Tq+SyqEMwoUG4d+cMl4OqMDM7HBLzkEM=
+github.com/wings-software/dlite v0.0.0-20220713082428-30daf11ecea3/go.mod h1:B7pPRpGetrd6Z/cJkN664YDc41tY0BZWgoIsL0hJTXI=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

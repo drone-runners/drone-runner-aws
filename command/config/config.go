@@ -169,10 +169,10 @@ type EnvConfig struct {
 	}
 
 	Dlite struct {
-		AccountID       string `envconfig:"DRONE_DELEGATE_ACCOUNT_ID"`
-		AccountSecret   string `envconfig:"DRONE_DELEGATE_ACCOUNT_SECRET"`
-		ManagerEndpoint string `envconfig:"DRONE_DELEGATE_MANAGER_ENDPOINT"`
-		Name            string `envconfig:"DRONE_DELEGATE_NAME"`
+		AccountID       string `envconfig:"DLITE_ACCOUNT_ID"`
+		AccountSecret   string `envconfig:"DLITE_ACCOUNT_SECRET"`
+		ManagerEndpoint string `envconfig:"DLITE_MANAGER_ENDPOINT"`
+		Name            string `envconfig:"DLITE_NAME"`
 	}
 
 	Runner struct {

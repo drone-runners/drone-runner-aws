@@ -7,8 +7,9 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/harness/lite-engine/api"
+	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
-	"github.com/wings-software/dlite/logger"
+	"github.com/wings-software/dlite/httphelper"
 )
 
 type VMExecuteTask struct {
@@ -21,31 +22,37 @@ type VMExecuteTaskRequest struct {
 
 func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: (Vistaar) Set this in dlite
+	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		log.Errorln("could not decode HTTP body: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
+	logr := log.WithField("task_id", task.ID)
 	// Unmarshal the task data
 	taskBytes, err := task.Data.MarshalJSON()
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		logr.Errorln("could not unmarshal task data: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	req := &VMExecuteTaskRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		logr.Errorln("could not unmarshal task request data: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
 
 	resp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, &t.c.env, t.c.poolManager)
 	if err != nil {
-		logger.WriteJSON(w, failedResponse(err.Error()), httpFailed)
+		logr.Errorln("could not execute step: %s", err)
+		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
-	logger.WriteJSON(w, convert(resp), httpOK)
+	httphelper.WriteJSON(w, convert(resp), httpOK)
 }
 
 // convert poll response to a Vm task execution response

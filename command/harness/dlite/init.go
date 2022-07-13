@@ -6,8 +6,9 @@ import (
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
-	"github.com/wings-software/dlite/logger"
+	"github.com/wings-software/dlite/httphelper"
 )
 
 type VMInitTask struct {
@@ -21,29 +22,35 @@ type VMInitRequest struct {
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: Get this from the request
+	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		log.Errorln("could not decode HTTP body: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
+	logr := log.WithField("task_id", task.ID)
 	// Unmarshal the task data
 	taskBytes, err := task.Data.MarshalJSON()
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		logr.Errorln("could not unmarshal task data: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
 	req := &VMInitRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
-		logger.WriteBadRequest(w, err)
+		logr.Errorln("could not unmarshal task request data: %s", err)
+		httphelper.WriteBadRequest(w, err)
 		return
 	}
 
 	// Make the setup call
 	setupResp, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
 	if err != nil {
-		logger.WriteJSON(w, failedResponse(err.Error()), httpFailed)
+		logr.Errorln("could not setup VM: %s", err)
+		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
 
@@ -52,7 +59,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Start all the services
 	for i, s := range req.Services {
-		s.IPAddress = setupResp.IPAddress
+		req.Services[i].IPAddress = setupResp.IPAddress
 		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
 		resp, err := harness.HandleStep(ctx, req.Services[i], &t.c.env, t.c.poolManager)
 		if err != nil {
@@ -70,5 +77,5 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp.ServiceStatuses = serviceStatuses
 	resp.IPAddress = setupResp.IPAddress
 	resp.CommandExecutionStatus = Success
-	logger.WriteJSON(w, resp, httpOK)
+	httphelper.WriteJSON(w, resp, httpOK)
 }
