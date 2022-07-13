@@ -38,6 +38,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 
 	logr := logrus.
 		WithField("api", "dlite:step").
+		WithField("stage_runtime_id", r.StageRuntimeID).
 		WithField("step_id", r.StartStepRequest.ID).
 		WithField("pool", r.PoolID).
 		WithField("correlation_id", r.CorrelationID)
