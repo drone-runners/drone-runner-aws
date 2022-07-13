@@ -38,9 +38,9 @@ var (
 )
 
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*SetupVMResponse, error) {
-	stageRuntimeId := r.ID
+	stageRuntimeID := r.ID
 	pool := r.PoolID
-	if stageRuntimeId == "" {
+	if stageRuntimeID == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
 
@@ -48,7 +48,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
-	if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeId, PoolName: pool}); err != nil {
+	if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {
 		return nil, fmt.Errorf("could not create stage owner entity: %w", err)
 	}
 
@@ -121,7 +121,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		}
 	}
 
-	instance.Stage = stageRuntimeId
+	instance.Stage = stageRuntimeID
 	instance.Updated = time.Now().Unix()
 	err = poolManager.Update(ctx, instance)
 	if err != nil {
