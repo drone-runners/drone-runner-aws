@@ -87,6 +87,12 @@ func (m *Manager) Find(ctx context.Context, instanceID string) (*types.Instance,
 }
 
 func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error) {
+	if stage == "" {
+		logger.FromContext(ctx).
+			Errorln("manager: GetInstanceByStageID stage runtime ID is not set")
+		return nil, fmt.Errorf("stage runtime ID is not set")
+	}
+
 	pool := m.poolMap[poolName]
 	query := types.QueryParams{Status: types.StateInUse, Stage: stage}
 	list, err := m.instanceStore.List(ctx, pool.Name, &query)
