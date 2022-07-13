@@ -1,5 +1,29 @@
 # Changelog
 
+## [v1.0.0-rc.7](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.7) (2022-07-13)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.6...v1.0.0-rc.7)
+
+**Implemented enhancements:**
+
+- \(DRON-318\) add auto pooling [\#135](https://github.com/drone-runners/drone-runner-aws/pull/135) ([tphoney](https://github.com/tphoney))
+- \(feat\) build and publish m1 binary [\#133](https://github.com/drone-runners/drone-runner-aws/pull/133) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(feat\) initial attempt at adding remote debug [\#130](https://github.com/drone-runners/drone-runner-aws/pull/130) ([tphoney](https://github.com/tphoney))
+- \(feat\) initial implementation of the digitalocean driver [\#127](https://github.com/drone-runners/drone-runner-aws/pull/127) ([tphoney](https://github.com/tphoney))
+
+**Fixed bugs:**
+
+- \(fix\) remove duplicate vpc from amazon [\#124](https://github.com/drone-runners/drone-runner-aws/pull/124) ([tphoney](https://github.com/tphoney))
+
+**Merged pull requests:**
+
+- add extra checks [\#137](https://github.com/drone-runners/drone-runner-aws/pull/137) ([shubham149](https://github.com/shubham149))
+- Add task implementations for by-passing the java delegate [\#136](https://github.com/drone-runners/drone-runner-aws/pull/136) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- anka setup command & allow multiple setup pool [\#131](https://github.com/drone-runners/drone-runner-aws/pull/131) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(maint\) run go mod tidy, make sure it stays up to date [\#129](https://github.com/drone-runners/drone-runner-aws/pull/129) ([tphoney](https://github.com/tphoney))
+- \(feat\) MacOS M1 Support  [\#128](https://github.com/drone-runners/drone-runner-aws/pull/128) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(maint\) add mac testing steps to release prep docs [\#126](https://github.com/drone-runners/drone-runner-aws/pull/126) ([tphoney](https://github.com/tphoney))
+
 ## [v1.0.0-rc.6](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.6) (2022-06-10)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.5...v1.0.0-rc.6)
@@ -19,6 +43,7 @@
 
 **Merged pull requests:**
 
+- prep for v1.0.0-rc.6 [\#125](https://github.com/drone-runners/drone-runner-aws/pull/125) ([tphoney](https://github.com/tphoney))
 - google move defaults to options [\#123](https://github.com/drone-runners/drone-runner-aws/pull/123) ([tphoney](https://github.com/tphoney))
 - add windows testing on merge to master [\#120](https://github.com/drone-runners/drone-runner-aws/pull/120) ([tphoney](https://github.com/tphoney))
 
