@@ -26,7 +26,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
-		log.WithError(err).Error("could not decode HTTP body")
+		log.WithError(err).Error("could not decode VM step execute HTTP body")
 		httphelper.WriteBadRequest(w, err)
 		return
 	}

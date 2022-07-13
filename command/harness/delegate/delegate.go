@@ -206,13 +206,15 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	req := &harness.ExecuteVMRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		logrus.WithError(err).Error("could not decode VM step execute request body")
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
 	ctx := r.Context()
 	resp, err := harness.HandleStep(ctx, req, &c.env, c.poolManager)
 	if err != nil {
-		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not execute step on VM")
+		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("step_id", req.ID).
+			WithError(err).Error("could not execute step on VM")
 		writeError(w, err)
 		return
 	}
@@ -228,7 +230,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 		CorrelationID string `json:"correlation_id"`
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(rs); err != nil {
-		logrus.WithError(err).Error("could not decode request body")
+		logrus.WithError(err).Error("could not decode VM destroy request body")
 		httprender.BadRequest(w, err.Error(), nil)
 		return
 	}
