@@ -13,7 +13,6 @@ import (
 type Option func(*config)
 
 func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
-
 	if platform.Arch == "" {
 		platform.Arch = oshelp.ArchAMD64
 	}
@@ -135,8 +134,8 @@ func WithUserDataKey(text, platform string) Option {
 
 func WithZones(zones ...string) Option {
 	var z []*string
-	for i, _ := range zones {
-		z = append(z, &zones[i])
+	for zone := range zones {
+		z = append(z, &zones[zone])
 	}
 	return func(p *config) {
 		p.zones = z

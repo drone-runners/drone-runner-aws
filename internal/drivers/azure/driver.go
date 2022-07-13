@@ -3,6 +3,7 @@ package azure
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -93,11 +94,11 @@ func (c *config) Zones() string {
 	var z string
 	if len(z) == 1 {
 		return *c.zones[0]
-	} else {
-		for _, zone := range c.zones {
-			z = fmt.Sprintf("%s%s,", z, *zone)
-		}
 	}
+	for _, zone := range c.zones {
+		z = fmt.Sprintf("%s%s,", z, *zone)
+	}
+
 	return z
 }
 
@@ -112,8 +113,10 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	var tags = map[string]*string{}
 	// add user defined tags
+	var t string
 	for k, v := range c.tags {
-		tags[k] = &v
+		t = v
+		tags[k] = &t
 	}
 
 	logr := logger.FromContext(ctx).
@@ -127,11 +130,18 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	logr.Debugln("Starting Azure Setup")
 
-	_, err = c.createResourceGroup(ctx, c.cred)
-	if err != nil {
-		logr.Errorln(err)
-		return nil, err
+	c.init.Do(func() {
+		_, err = c.createResourceGroup(ctx, c.cred)
+		if err != nil {
+			logr.WithError(err).Errorln("Failed to get/create resource group")
+			return
+		}
+	})
+
+	if c.resourceGroupName == "" {
+		c.resourceGroupName = defaultResourceGroup
 	}
+
 	_, err = c.createVirtualNetwork(ctx, c.cred, vnetName)
 	if err != nil {
 		logr.Errorln(err)
@@ -225,7 +235,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return &instanceMap, nil
 }
 
-func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (error error) {
+func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	logr := logger.FromContext(ctx)
 	if c.resourceGroupName == "" {
 		c.resourceGroupName = defaultResourceGroup
@@ -282,24 +292,24 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (error erro
 	return nil
 }
 
-func (c *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
-	//TODO implement me
-	panic("implement me")
+func (c *config) Hibernate(_ context.Context, _, _ string) error {
+	return errors.New("unimplemented")
 }
 
-func (c *config) Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error) {
-	//TODO implement me
-	panic("implement me")
+func (c *config) Start(_ context.Context, _, _ string) (ipAddress string, err error) {
+	return "", errors.New("unimplemented")
 }
 
 func (c *config) Ping(ctx context.Context) error {
-	//TODO implement me
+	_, err := azidentity.NewClientSecretCredential(c.tenantID, c.clientID, c.clientSecret, nil)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (c *config) Logs(ctx context.Context, instanceID string) (string, error) {
-	//TODO implement me
-	panic("implement me")
+	return "", errors.New("unimplemented")
 }
 
 func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts) types.Instance {

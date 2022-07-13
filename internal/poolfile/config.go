@@ -3,10 +3,11 @@ package poolfile
 import (
 	"errors"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -26,7 +27,7 @@ const (
 	DefaultPoolName = "testpool"
 )
 
-func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, error) {
+func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, error) { //nolint
 	var pools = []drivers.Pool{}
 
 	for i := range poolFile.Instances {

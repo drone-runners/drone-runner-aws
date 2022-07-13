@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io/ioutil" //nolint
 	"math/rand"
 	"os"
 	"os/exec"

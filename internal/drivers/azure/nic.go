@@ -173,7 +173,6 @@ func (c *config) createNetworkInterface(ctx context.Context, cred azcore.TokenCr
 	parameters := armnetwork.Interface{
 		Location: to.Ptr(c.location),
 		Properties: &armnetwork.InterfacePropertiesFormat{
-			//NetworkSecurityGroup:
 			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
 				{
 					Name: to.Ptr("ipConfig"),
