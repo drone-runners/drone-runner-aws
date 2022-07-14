@@ -35,6 +35,7 @@ require (
 	github.com/rs/zerolog v1.27.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.0
+	github.com/wings-software/dlite v0.0.0-20220713082428-30daf11ecea3
 	golang.org/x/oauth2 v0.0.0-20220630143837-2104d58473e0
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
 	google.golang.org/api v0.86.0
@@ -53,6 +54,8 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4 // indirect
+	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
+	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
 )
 
 require (

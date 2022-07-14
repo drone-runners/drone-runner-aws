@@ -244,6 +244,13 @@ type EnvConfig struct {
 		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
 	}
 
+	Dlite struct {
+		AccountID       string `envconfig:"DLITE_ACCOUNT_ID"`
+		AccountSecret   string `envconfig:"DLITE_ACCOUNT_SECRET"`
+		ManagerEndpoint string `envconfig:"DLITE_MANAGER_ENDPOINT"`
+		Name            string `envconfig:"DLITE_NAME"`
+	}
+
 	Settings struct {
 		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.3.1/"`
 		DefaultDriver  string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
