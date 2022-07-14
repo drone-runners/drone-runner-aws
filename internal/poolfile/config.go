@@ -274,13 +274,17 @@ func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile,
 			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		case conf.Anka.VMName != "":
 			return createAnkaPool(conf.Anka.VMName, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+		case conf.Azure.ClientID != "" || conf.Azure.ClientSecret != "" || conf.Azure.SubscriptionID != "" || conf.Azure.TenantID != "":
+			logrus.Infoln("in memory pool is using azure")
+			return createAzurePool(conf.Azure.ClientID, conf.Azure.ClientSecret, conf.Azure.SubscriptionID, conf.Azure.TenantID, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		default:
 			return pool,
 				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n " +
 					"for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n " +
 					"for google GOOGLE_PROJECT_ID\n " +
-					"for Anka ANKA_VM_NAME\n " +
-					"for digitalocean DIGITALOCEAN_PAT")
+					"for anka ANKA_VM_NAME\n " +
+					"for digitalocean DIGITALOCEAN_PAT\n" +
+					"for azure AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID")
 		}
 	}
 	pool, err = config.ParseFile(path)
@@ -415,4 +419,42 @@ func createAnkaPool(vmName string, minPoolSize, maxPoolSize int) *config.PoolFil
 	}
 
 	return &poolfile
+}
+
+func createAzurePool(clientID, clientSecret, subscriptionID, tenantID string, minPoolSize, maxPoolSize int) *config.PoolFile {
+	instance := config.Instance{
+		Name:    DefaultPoolName,
+		Default: true,
+		Type:    string(types.Azure),
+		Pool:    minPoolSize,
+		Limit:   maxPoolSize,
+		Platform: types.Platform{
+			Arch: "amd64",
+			OS:   "linux",
+		},
+		Spec: &config.Azure{
+			Account: config.AzureAccount{
+				ClientID:       clientID,
+				ClientSecret:   clientSecret,
+				SubscriptionID: subscriptionID,
+				TenantID:       tenantID,
+			},
+			Location: "eastus2",
+			Size:     "Standard_F2s",
+			Image: config.AzureImage{
+				Publisher: "Canonical",
+				Offer:     "UbuntuServer",
+				SKU:       "18.04-LTS",
+				Version:   "latest",
+				Username:  "ubuntu",
+				Password:  "zf.b@jbPJZ#2MeU8",
+			},
+		},
+	}
+	poolFile := config.PoolFile{
+		Version:   "1",
+		Instances: []config.Instance{instance},
+	}
+
+	return &poolFile
 }

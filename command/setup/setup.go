@@ -28,13 +28,17 @@ import (
 var nocontext = context.Background()
 
 type setupCommand struct {
-	envFile            string
-	awsAccessKeyID     string
-	awsAccessKeySecret string
-	digitalOceanPAT    string
-	googleProjectID    string
-	googleJSONPath     string
-	ankaVMName         string
+	envFile             string
+	awsAccessKeyID      string
+	awsAccessKeySecret  string
+	digitalOceanPAT     string
+	googleProjectID     string
+	googleJSONPath      string
+	ankaVMName          string
+	azureClientID       string
+	azureClientSecret   string
+	azureTenantID       string
+	azureSubscriptionID string
 }
 
 const (
@@ -73,13 +77,20 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	case c.ankaVMName != "":
 		env.Anka.VMName = c.ankaVMName
 		logrus.Infoln("setup: using anka")
+	case c.azureClientID != "" && c.azureClientSecret != "" && c.azureSubscriptionID != "" && c.azureTenantID != "":
+		env.Azure.ClientID = c.azureClientID
+		env.Azure.ClientSecret = c.azureClientSecret
+		env.Azure.SubscriptionID = c.azureSubscriptionID
+		env.Azure.TenantID = c.azureTenantID
+		logrus.Infoln("setup: using azure")
 	default:
 		logrus.
 			Fatalln(`unsupported driver, please choose a driver setting the mandatory fields:
 							for Amazon        --aws-access-key-id and --aws-access-key-secret
+							for Anka          --anka-vm-name
+							for Azure         --azure-client-id --azure-client-secret --azure-subscription-id --azure-tenant-id
 							for Digital Ocean --digital-ocean-pat
-							for Google        --google-project-id
-							for Anka          --anka-vm-name`)
+							for Google        --google-project-id`)
 	}
 	// use a single instance db, as we only need one machine
 	db, err := database.ProvideDatabase(database.SingleInstance, "")
@@ -240,4 +251,17 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("anka-vm-name", "Anka VM name").
 		Default("").
 		StringVar(&c.ankaVMName)
+	// Azure specific flags
+	cmd.Flag("azure-client-id", "Azure client ID").
+		Default("").
+		StringVar(&c.azureClientID)
+	cmd.Flag("azure-client-secret", "Azure client secret").
+		Default("").
+		StringVar(&c.azureClientSecret)
+	cmd.Flag("azure-subscription-id", "Azure subscription ID").
+		Default("").
+		StringVar(&c.azureSubscriptionID)
+	cmd.Flag("azure-tenant-id", "Azure tenant ID").
+		Default("").
+		StringVar(&c.azureTenantID)
 }

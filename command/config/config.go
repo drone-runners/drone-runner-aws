@@ -182,6 +182,23 @@ type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
 
+	Anka struct {
+		VMName string `envconfig:"ANKA_VM_NAME"`
+	}
+
+	AWS struct {
+		AccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID"`
+		AccessKeySecret string `envconfig:"AWS_ACCESS_KEY_SECRET"`
+		Region          string `envconfig:"AWS_DEFAULT_REGION" default:"us-east-2"`
+	}
+
+	Azure struct {
+		ClientID       string `envconfig:"AZURE_CLIENT_ID"`
+		ClientSecret   string `envconfig:"AZURE_CLIENT_SECRET"`
+		SubscriptionID string `envconfig:"AZURE_SUBSCRIPTION_ID"`
+		TenantID       string `envconfig:"AZURE_TENANT_ID"`
+	}
+
 	Client struct {
 		Address    string `ignored:"true"`
 		Proto      string `envconfig:"DRONE_RPC_PROTO" default:"http"`
@@ -199,37 +216,8 @@ type EnvConfig struct {
 		Realm    string `envconfig:"DRONE_UI_REALM" default:"MyRealm"`
 	}
 
-	Server struct {
-		Port  string `envconfig:"DRONE_HTTP_BIND" default:":3000"`
-		Proto string `envconfig:"DRONE_HTTP_PROTO"`
-		Host  string `envconfig:"DRONE_HTTP_HOST"`
-		Acme  bool   `envconfig:"DRONE_HTTP_ACME"`
-	}
-
-	Runner struct {
-		Name        string            `envconfig:"DRONE_RUNNER_NAME"`
-		Capacity    int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
-		Procs       int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
-		Environ     map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
-		EnvFile     string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
-		Secrets     map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
-		Labels      map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
-		NetworkOpts map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
-		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
-	}
-
-	AWS struct {
-		AccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID"`
-		AccessKeySecret string `envconfig:"AWS_ACCESS_KEY_SECRET"`
-		Region          string `envconfig:"AWS_DEFAULT_REGION" default:"us-east-2"`
-	}
-
 	DigitalOcean struct {
 		PAT string `envconfig:"DIGITAL_OCEAN_PAT"`
-	}
-
-	Anka struct {
-		VMName string `envconfig:"ANKA_VM_NAME"`
 	}
 
 	Google struct {
@@ -244,6 +232,18 @@ type EnvConfig struct {
 		Trusted bool     `envconfig:"DRONE_LIMIT_TRUSTED"`
 	}
 
+	Runner struct {
+		Name        string            `envconfig:"DRONE_RUNNER_NAME"`
+		Capacity    int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
+		Procs       int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
+		Environ     map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
+		EnvFile     string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
+		Secrets     map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
+		Labels      map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
+		NetworkOpts map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
+		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
+	}
+
 	Settings struct {
 		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.3.1/"`
 		DefaultDriver  string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
@@ -253,6 +253,13 @@ type EnvConfig struct {
 		MinPoolSize    int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
 		MaxPoolSize    int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
+	}
+
+	Server struct {
+		Port  string `envconfig:"DRONE_HTTP_BIND" default:":3000"`
+		Proto string `envconfig:"DRONE_HTTP_PROTO"`
+		Host  string `envconfig:"DRONE_HTTP_HOST"`
+		Acme  bool   `envconfig:"DRONE_HTTP_ACME"`
 	}
 
 	Environ struct {
