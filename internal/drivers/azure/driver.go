@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -196,7 +198,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				},
 			},
 			OSProfile: &armcompute.OSProfile{ //
-				ComputerName:  to.Ptr(name),
+				ComputerName:  to.Ptr("vm-runner"),
 				AdminUsername: to.Ptr(c.username),
 				AdminPassword: to.Ptr(c.password),
 				CustomData:    to.Ptr(uData),
@@ -209,6 +211,14 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				},
 			},
 		},
+	}
+
+	if opts.OS == oshelp.OSWindows {
+		in.Plan = &armcompute.Plan{
+			Name:      to.Ptr(c.offer),
+			Product:   to.Ptr(c.offer),
+			Publisher: to.Ptr(c.publisher),
+		}
 	}
 
 	poller, err := c.service.BeginCreateOrUpdate(ctx, c.resourceGroupName, name, in, nil)
