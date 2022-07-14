@@ -8,10 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -319,7 +318,7 @@ func (c *config) Ping(ctx context.Context) error {
 }
 
 func (c *config) Logs(ctx context.Context, instanceID string) (string, error) {
-	return "", errors.New("unimplemented")
+	return "", nil
 }
 
 func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts) types.Instance {

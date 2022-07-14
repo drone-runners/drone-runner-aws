@@ -106,7 +106,7 @@ func (p *config) CanHibernate() bool {
 }
 
 func (p *config) Logs(ctx context.Context, instance string) (string, error) {
-	return "", errors.New("Unimplemented")
+	return "", nil
 }
 
 func (p *config) Ping(ctx context.Context) error {
