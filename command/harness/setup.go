@@ -97,8 +97,16 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, fmt.Errorf("pool not defined")
 	}
 
+	cleanUpFn := func() {
+		errCleanUpStageOwner := s.Delete(context.Background(), stageRuntimeID)
+		if errCleanUpStageOwner != nil {
+			logr.WithError(errCleanUpStageOwner).Errorln("failed to delete failed stage owner")
+		}
+	}
+
 	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, env.Settings.LiteEnginePath)
 	if err != nil {
+		go cleanUpFn()
 		return nil, fmt.Errorf("failed provisioning")
 	}
 
@@ -114,7 +122,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		WithField("id", instance.ID)
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
-	cleanUpFn := func() {
+	cleanUpFn = func() {
 		errCleanUp := poolManager.Destroy(context.Background(), pool, instance.ID)
 		if errCleanUp != nil {
 			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
