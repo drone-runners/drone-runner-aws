@@ -108,7 +108,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, env.Settings.LiteEnginePath)
 	if err != nil {
 		go cleanUpFn()
-		return nil, fmt.Errorf("failed provisioning")
+		logr.Errorln("failed to provision instance")
+		return nil, err
 	}
 
 	logr = logr.

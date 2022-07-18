@@ -38,7 +38,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("stage_runtime_id", r.StageRuntimeID).
 		WithField("pool", r.PoolID)
 
-	if err := poolManager.Destroy(ctx, r.PoolID, inst.ID); err != nil {
+	if err = poolManager.Destroy(ctx, r.PoolID, inst.ID); err != nil {
 		return fmt.Errorf("annot destroy the instance: %w", err)
 	}
 	logr.Traceln("destroyed instance")
