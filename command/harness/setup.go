@@ -16,6 +16,7 @@ import (
 	"github.com/drone/runner-go/logger"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -46,10 +47,6 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 	if pool == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
-	}
-
-	if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {
-		return nil, fmt.Errorf("could not create stage owner entity: %w", err)
 	}
 
 	// Sets up logger to stream the logs in case log config is set
@@ -96,17 +93,17 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	if !poolManager.Exists(pool) {
 		return nil, fmt.Errorf("pool not defined")
 	}
+	exists, _ := s.Find(ctx, stageRuntimeID, pool)
+	if exists == nil {
+		if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {
+			return nil, fmt.Errorf("could not create stage owner entity: %w", err)
+		}
+	}
 
 	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, env.Settings.LiteEnginePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed provisioning")
-	}
-
-	if instance.IsHibernated {
-		instance, err = poolManager.StartInstance(ctx, pool, instance.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to start the instance up")
-		}
+		logr.WithError(err).Errorln("failed to provision instance")
+		return nil, err
 	}
 
 	logr = logr.
@@ -118,6 +115,14 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		errCleanUp := poolManager.Destroy(context.Background(), pool, instance.ID)
 		if errCleanUp != nil {
 			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
+		}
+	}
+
+	if instance.IsHibernated {
+		instance, err = poolManager.StartInstance(ctx, pool, instance.ID)
+		if err != nil {
+			go cleanUpFn()
+			return nil, fmt.Errorf("failed to start the instance up")
 		}
 	}
 

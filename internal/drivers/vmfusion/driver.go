@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -158,7 +157,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		}
 	}
 
-	f, err := ioutil.TempFile("/tmp/", p.MachineName+".sh")
+	f, err := os.CreateTemp("/tmp/", p.MachineName+".sh")
 	if err != nil {
 		logrus.WithError(err).Warnln("Cannot generate temporary file")
 		return nil, err

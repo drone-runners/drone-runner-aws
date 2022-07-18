@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -120,7 +119,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 	createdVM.Body.IP = ip
 
-	f, err := ioutil.TempFile("/tmp/", machineName+".sh")
+	f, err := os.CreateTemp("/tmp/", machineName+".sh")
 	if err != nil {
 		logrus.WithError(err).Warnln("Cannot generate temporary file")
 		return nil, err
