@@ -26,6 +26,107 @@ type (
 		Spec     interface{}    `json:"spec,omitempty"`
 	}
 
+	// Amazon specifies the configuration for an AWS instance.
+	Amazon struct {
+		Account       AmazonAccount     `json:"account,omitempty"`
+		Name          string            `json:"name,omitempty" yaml:"name,omitempty"`
+		Size          string            `json:"size,omitempty"`
+		SizeAlt       string            `json:"size_alt,omitempty" yaml:"size_alt,omitempty"`
+		AMI           string            `json:"ami,omitempty"`
+		VPC           string            `json:"vpc,omitempty" yaml:"vpc,omitempty"`
+		Tags          map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Type          string            `json:"type,omitempty" yaml:"type,omitempty"`
+		UserData      string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath  string            `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
+		Disk          disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
+		Network       AmazonNetwork     `json:"network,omitempty" yaml:"network,omitempty"`
+		DeviceName    string            `json:"device_name,omitempty" yaml:"device_name,omitempty"`
+		IamProfileArn string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn,omitempty"`
+		MarketType    string            `json:"market_type,omitempty" yaml:"market_type,omitempty"`
+		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
+		Hibernate     bool              `json:"hibernate,omitempty"`
+		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
+	}
+
+	AmazonAccount struct {
+		AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
+		AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
+		Region           string `json:"region,omitempty"`
+		Retries          int    `json:"retries,omitempty" yaml:"retries,omitempty"`
+		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"`
+		KeyPairName      string `json:"key_pair_name,omitempty" yaml:"key_pair_name,omitempty"`
+	}
+
+	// AmazonNetwork provides AmazonNetwork settings.
+	AmazonNetwork struct {
+		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
+		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
+		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
+		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
+	}
+
+	// Anka specifies the configuration for an Anka instance.
+	Anka struct {
+		Account struct {
+			Username string `json:"username,omitempty"  yaml:"username"`
+			Password string `json:"password,omitempty"  yaml:"password"`
+		}
+		VMID          string `json:"vm_id,omitempty" yaml:"vm_id"`
+		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
+		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
+	}
+
+	// Azure specifies the configuration for an Azure instance.
+	Azure struct {
+		Account           AzureAccount      `json:"account,omitempty"`
+		ResourceGroup     string            `json:"resource_group,omitempty" yaml:"resource_group,omitempty"`
+		Location          string            `json:"location,omitempty" yaml:"location"`
+		VMID              string            `json:"vm_id,omitempty" yaml:"vm_id"`
+		RootDirectory     string            `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData          string            `json:"user_data,omitempty" yaml:"user_data"`
+		UserDataKey       string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
+		UserDataPath      string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+		Image             AzureImage        `json:"image,omitempty" yaml:"image,omitempty"`
+		Size              string            `json:"size,omitempty"  yaml:"size,omitempty"`
+		Zones             []string          `json:"zones,omitempty" yaml:"zones,omitempty"`
+		Tags              map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+		SecurityGroupName string            `json:"security_group_name,omitempty" yaml:"security_group_name,omitempty"`
+	}
+
+	AzureAccount struct {
+		SubscriptionID string `json:"subscription_id,omitempty"  yaml:"subscription_id,omitempty"`
+		ClientID       string `json:"client_id,omitempty"  yaml:"client_id,omitempty"`
+		ClientSecret   string `json:"client_secret,omitempty"  yaml:"client_secret,omitempty"`
+		TenantID       string `json:"tenant_id,omitempty"  yaml:"tenant_id,omitempty"`
+	}
+
+	AzureImage struct {
+		Publisher string `json:"publisher,omitempty"  yaml:"publisher,omitempty"`
+		Offer     string `json:"offer,omitempty"  yaml:"offer,omitempty"`
+		SKU       string `json:"sku,omitempty"  yaml:"sku,omitempty"`
+		Version   string `json:"version,omitempty"  yaml:"version,omitempty"`
+		Username  string `json:"username,omitempty"  yaml:"username,omitempty"`
+		Password  string `json:"password,omitempty"  yaml:"password,omitempty"`
+	}
+
+	// DigitalOcean specifies the configuration for a DigitalOcean instance.
+	DigitalOcean struct {
+		Account      DigitalOceanAccount `json:"account,omitempty"`
+		Image        string              `json:"image,omitempty" yaml:"image,omitempty"`
+		Size         string              `json:"size,omitempty" yaml:"size,omitempty"`
+		FirewallID   string              `json:"firewall_id,omitempty" yaml:"firewall_id,omitempty" default:""`
+		SSHKeys      []string            `json:"ssh_keys,omitempty" yaml:"ssh_keys,omitempty"`
+		Tags         []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
+		UserData     string              `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath string              `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
+	}
+
+	DigitalOceanAccount struct {
+		PAT    string `json:"pat,omitempty" yaml:"pat"`
+		Region string `json:"region,omitempty" yaml:"region,omitempty"`
+	}
+
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
 		Account      GoogleAccount     `json:"account,omitempty"  yaml:"account"`
@@ -52,43 +153,8 @@ type (
 		Scopes              []string `json:"scopes,omitempty"  yaml:"scopes,omitempty"`
 		ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email,omitempty"`
 	}
-	// Amazon specifies the configuration for an AWS instance.
-	Amazon struct {
-		Account       AmazonAccount     `json:"account,omitempty"`
-		Name          string            `json:"name,omitempty" yaml:"name,omitempty"`
-		Size          string            `json:"size,omitempty"`
-		SizeAlt       string            `json:"size_alt,omitempty" yaml:"size_alt,omitempty"`
-		AMI           string            `json:"ami,omitempty"`
-		VPC           string            `json:"vpc,omitempty" yaml:"vpc,omitempty"`
-		Tags          map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
-		Type          string            `json:"type,omitempty" yaml:"type,omitempty"`
-		UserData      string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath  string            `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
-		Disk          disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
-		Network       AmazonNetwork     `json:"network,omitempty" yaml:"network,omitempty"`
-		DeviceName    string            `json:"device_name,omitempty" yaml:"device_name,omitempty"`
-		IamProfileArn string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn,omitempty"`
-		MarketType    string            `json:"market_type,omitempty" yaml:"market_type,omitempty"`
-		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
-		Hibernate     bool              `json:"hibernate,omitempty"`
-		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
-	}
-	AmazonAccount struct {
-		AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
-		AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
-		Region           string `json:"region,omitempty"`
-		Retries          int    `json:"retries,omitempty" yaml:"retries,omitempty"`
-		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"`
-		KeyPairName      string `json:"key_pair_name,omitempty" yaml:"key_pair_name,omitempty"`
-	}
-	// AmazonNetwork provides AmazonNetwork settings.
-	AmazonNetwork struct {
-		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
-		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
-		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
-		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
-	}
-	// VMFusion specifies the configuration for a VMware instance.
+
+	// VMFusion specifies the configuration for a VMWare instance.
 	VMFusion struct {
 		Account struct {
 			Username string `json:"username,omitempty"  yaml:"username"`
@@ -104,33 +170,6 @@ type (
 		StorePath     string `json:"store_path,omitempty" yaml:"store_path"`
 		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
 	}
-	// Anka specifies the configuration for an Anka instance.
-	Anka struct {
-		Account struct {
-			Username string `json:"username,omitempty"  yaml:"username"`
-			Password string `json:"password,omitempty"  yaml:"password"`
-		}
-		VMID          string `json:"vm_id,omitempty" yaml:"vm_id"`
-		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
-		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
-		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
-	}
-	// digitalocean specifies the configuration for a DigitalOcean instance.
-	DigitalOcean struct {
-		Account      DigitalOceanAccount `json:"account,omitempty"`
-		Image        string              `json:"image,omitempty" yaml:"image,omitempty"`
-		Size         string              `json:"size,omitempty" yaml:"size,omitempty"`
-		FirewallID   string              `json:"firewall_id,omitempty" yaml:"firewall_id,omitempty" default:""`
-		SSHKeys      []string            `json:"ssh_keys,omitempty" yaml:"ssh_keys,omitempty"`
-		Tags         []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
-		UserData     string              `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath string              `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
-	}
-
-	DigitalOceanAccount struct {
-		PAT    string `json:"pat,omitempty" yaml:"pat"`
-		Region string `json:"region,omitempty" yaml:"region,omitempty"`
-	}
 
 	// disk provides disk size and type.
 	disk struct {
@@ -143,6 +182,23 @@ type (
 type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
+
+	Anka struct {
+		VMName string `envconfig:"ANKA_VM_NAME"`
+	}
+
+	AWS struct {
+		AccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID"`
+		AccessKeySecret string `envconfig:"AWS_ACCESS_KEY_SECRET"`
+		Region          string `envconfig:"AWS_DEFAULT_REGION" default:"us-east-2"`
+	}
+
+	Azure struct {
+		ClientID       string `envconfig:"AZURE_CLIENT_ID"`
+		ClientSecret   string `envconfig:"AZURE_CLIENT_SECRET"`
+		SubscriptionID string `envconfig:"AZURE_SUBSCRIPTION_ID"`
+		TenantID       string `envconfig:"AZURE_TENANT_ID"`
+	}
 
 	Client struct {
 		Address    string `ignored:"true"`
@@ -161,44 +217,8 @@ type EnvConfig struct {
 		Realm    string `envconfig:"DRONE_UI_REALM" default:"MyRealm"`
 	}
 
-	Server struct {
-		Port  string `envconfig:"DRONE_HTTP_BIND" default:":3000"`
-		Proto string `envconfig:"DRONE_HTTP_PROTO"`
-		Host  string `envconfig:"DRONE_HTTP_HOST"`
-		Acme  bool   `envconfig:"DRONE_HTTP_ACME"`
-	}
-
-	Dlite struct {
-		AccountID       string `envconfig:"DLITE_ACCOUNT_ID"`
-		AccountSecret   string `envconfig:"DLITE_ACCOUNT_SECRET"`
-		ManagerEndpoint string `envconfig:"DLITE_MANAGER_ENDPOINT"`
-		Name            string `envconfig:"DLITE_NAME"`
-	}
-
-	Runner struct {
-		Name        string            `envconfig:"DRONE_RUNNER_NAME"`
-		Capacity    int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
-		Procs       int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
-		Environ     map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
-		EnvFile     string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
-		Secrets     map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
-		Labels      map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
-		NetworkOpts map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
-		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
-	}
-
-	AWS struct {
-		AccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID"`
-		AccessKeySecret string `envconfig:"AWS_ACCESS_KEY_SECRET"`
-		Region          string `envconfig:"AWS_DEFAULT_REGION" default:"us-east-2"`
-	}
-
 	DigitalOcean struct {
 		PAT string `envconfig:"DIGITAL_OCEAN_PAT"`
-	}
-
-	Anka struct {
-		VMName string `envconfig:"ANKA_VM_NAME"`
 	}
 
 	Google struct {
@@ -213,6 +233,25 @@ type EnvConfig struct {
 		Trusted bool     `envconfig:"DRONE_LIMIT_TRUSTED"`
 	}
 
+	Runner struct {
+		Name        string            `envconfig:"DRONE_RUNNER_NAME"`
+		Capacity    int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
+		Procs       int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
+		Environ     map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
+		EnvFile     string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
+		Secrets     map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
+		Labels      map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
+		NetworkOpts map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
+		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
+	}
+
+	Dlite struct {
+		AccountID       string `envconfig:"DLITE_ACCOUNT_ID"`
+		AccountSecret   string `envconfig:"DLITE_ACCOUNT_SECRET"`
+		ManagerEndpoint string `envconfig:"DLITE_MANAGER_ENDPOINT"`
+		Name            string `envconfig:"DLITE_NAME"`
+	}
+
 	Settings struct {
 		LiteEnginePath string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.3.1/"`
 		DefaultDriver  string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
@@ -222,6 +261,13 @@ type EnvConfig struct {
 		MinPoolSize    int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
 		MaxPoolSize    int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
+	}
+
+	Server struct {
+		Port  string `envconfig:"DRONE_HTTP_BIND" default:":3000"`
+		Proto string `envconfig:"DRONE_HTTP_PROTO"`
+		Host  string `envconfig:"DRONE_HTTP_HOST"`
+		Acme  bool   `envconfig:"DRONE_HTTP_ACME"`
 	}
 
 	Environ struct {
@@ -327,12 +373,15 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	switch s.Type {
 	case string(types.Amazon), "aws":
 		s.Spec = new(Amazon)
+	case string(types.Anka):
+		s.Spec = new(Anka)
+	case string(types.Azure):
+		s.Spec = new(Azure)
 	case string(types.Google), "gcp":
 		s.Spec = new(Google)
 	case string(types.VMFusion):
 		s.Spec = new(VMFusion)
-	case string(types.Anka):
-		s.Spec = new(Anka)
+
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}

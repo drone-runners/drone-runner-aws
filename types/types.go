@@ -22,6 +22,7 @@ const (
 	DigitalOcean = DriverType("digitalocean")
 	Google       = DriverType("google")
 	VMFusion     = DriverType("vmfusion")
+	Azure        = DriverType("azure")
 )
 
 // InstanceState type enumeration.
