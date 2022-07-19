@@ -86,6 +86,8 @@ instances:
         - 1
       tags:
         tagName: tag
+      resource_group: group
+      security_group_name: drone-ci-group
       image:
         username: azureuser
         password: password

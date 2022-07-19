@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -21,8 +20,6 @@ import (
 )
 
 type config struct {
-	init sync.Once
-
 	tenantID          string
 	clientID          string
 	clientSecret      string
@@ -132,16 +129,10 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	logr.Info("Starting Azure Setup")
 
-	c.init.Do(func() {
-		_, err = c.createResourceGroup(ctx, c.cred)
-		if err != nil {
-			logr.WithError(err).Errorln("Failed to get/create resource group")
-			return
-		}
-	})
-
-	if c.resourceGroupName == "" {
-		c.resourceGroupName = defaultResourceGroup
+	_, err = c.createResourceGroup(ctx, c.cred)
+	if err != nil {
+		logr.WithError(err).Errorln("Failed to get/create resource group")
+		return
 	}
 
 	_, err = c.createVirtualNetwork(ctx, c.cred, vnetName)
