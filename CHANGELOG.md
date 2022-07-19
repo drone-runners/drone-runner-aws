@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-rc.8](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.8) (2022-07-18)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.7...v1.0.0-rc.8)
+
+**Fixed bugs:**
+
+- \(bug\) delegate - fixes issue assigning stage-owner to pool even provisioning failed. [\#140](https://github.com/drone-runners/drone-runner-aws/pull/140) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
 ## [v1.0.0-rc.7](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.7) (2022-07-13)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.6...v1.0.0-rc.7)
@@ -17,6 +25,7 @@
 
 **Merged pull requests:**
 
+- prep for v1.0.0-rc.7 [\#138](https://github.com/drone-runners/drone-runner-aws/pull/138) ([vistaarjuneja](https://github.com/vistaarjuneja))
 - add extra checks [\#137](https://github.com/drone-runners/drone-runner-aws/pull/137) ([shubham149](https://github.com/shubham149))
 - Add task implementations for by-passing the java delegate [\#136](https://github.com/drone-runners/drone-runner-aws/pull/136) ([vistaarjuneja](https://github.com/vistaarjuneja))
 - anka setup command & allow multiple setup pool [\#131](https://github.com/drone-runners/drone-runner-aws/pull/131) ([eoinmcafee00](https://github.com/eoinmcafee00))
