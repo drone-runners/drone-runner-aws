@@ -518,6 +518,8 @@ github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnh
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/pact-foundation/pact-go v1.0.4/go.mod h1:uExwJY4kCzNPcHRj+hCR/HBbOOIwwtUjcrb0b5/5kLM=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
+github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
+github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/pborman/uuid v1.2.0/go.mod h1:X/NO0urCmaxf9VXbdlT7C2Yzkj2IKimNn4k+gtPdI/k=
 github.com/performancecopilot/speed v3.0.0+incompatible/go.mod h1:/CLtqpZ5gBg1M9iaPbIdPPGyKcA8hKdoy6hAWba7Yac=
 github.com/pierrec/lz4 v1.0.2-0.20190131084431-473cd7ce01a1/go.mod h1:3/3N9NVKO0jef7pBehbT1qWhCMrIgbYNnFAZCqQ5LRc=
@@ -600,6 +602,12 @@ github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijb
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/wings-software/dlite v0.0.0-20220713082428-30daf11ecea3 h1:vDCl3SWvpg1Tq+SyqEMwoUG4d+cMl4OqMDM7HBLzkEM=
 github.com/wings-software/dlite v0.0.0-20220713082428-30daf11ecea3/go.mod h1:B7pPRpGetrd6Z/cJkN664YDc41tY0BZWgoIsL0hJTXI=
+github.com/wings-software/dlite v0.0.0-20220719092347-03cafc856826 h1:jjE3+8QVB+iOznfdZmxaoZz3zoeHuZJUN2JAxLZc3ug=
+github.com/wings-software/dlite v0.0.0-20220719092347-03cafc856826/go.mod h1:Qg4AEQ6ZPsWPcNCM4gDv3qT7y2jLy57CAmUq1doKRJY=
+github.com/wings-software/dlite v0.0.0-20220719093237-f8dea8ec887c h1:OpDanvAoKvre2ZpVMlolSMD54/j6D+xJm6jwDBbazaA=
+github.com/wings-software/dlite v0.0.0-20220719093237-f8dea8ec887c/go.mod h1:Qg4AEQ6ZPsWPcNCM4gDv3qT7y2jLy57CAmUq1doKRJY=
+github.com/wings-software/dlite v0.0.0-20220719093617-8d19b41e2aae h1:iH38Xnnck0eFCI/9lsoT+U8hweuLicHwdnNz+PyJeOM=
+github.com/wings-software/dlite v0.0.0-20220719093617-8d19b41e2aae/go.mod h1:Qg4AEQ6ZPsWPcNCM4gDv3qT7y2jLy57CAmUq1doKRJY=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

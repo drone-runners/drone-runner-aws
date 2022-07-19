@@ -22,7 +22,6 @@ import (
 var (
 	taskInterval  = 3 * time.Second
 	taskExecutors = 100
-	tokenExpiry   = 10 * time.Hour
 )
 
 type dliteCommand struct {
@@ -48,15 +47,10 @@ func RegisterDlite(app *kingpin.Application) {
 
 func (c *dliteCommand) startPoller(ctx context.Context, tags []string) error {
 	r := router.NewRouter(routeMap(c))
-	// TODO (Vistaar): Set a token updater thread which resets the token
-	token, err := delegate.Token("audience", "issuer", c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, tokenExpiry)
-	if err != nil {
-		return err
-	}
 	// Client to interact with the harness server
-	client := delegate.New(c.env.Dlite.ManagerEndpoint, c.env.Dlite.AccountID, token, true)
+	client := delegate.New(c.env.Dlite.ManagerEndpoint, c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, true)
 	p := poller.New(c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, c.env.Dlite.Name, tags, client, r)
-	err = p.Poll(ctx, taskExecutors, taskInterval)
+	err := p.Poll(ctx, taskExecutors, taskInterval)
 	if err != nil {
 		return err
 	}
