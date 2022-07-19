@@ -133,6 +133,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				azure.WithRootDirectory(az.RootDirectory),
 				azure.WithZones(az.Zones...),
 				azure.WithTags(az.Tags),
+				azure.WithSecurityGroupName(az.SecurityGroupName),
 			)
 			if err != nil {
 				logrus.WithError(err).WithField("driver", instance.Type)

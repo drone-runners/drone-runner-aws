@@ -29,6 +29,8 @@ type config struct {
 	subscriptionID    string
 	resourceGroupName string
 
+	securityGroupName string
+
 	rootDir string
 
 	location string // region, example: East US
@@ -114,10 +116,9 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	var tags = map[string]*string{}
 	// add user defined tags
-	var t string
 	for k, v := range c.tags {
-		t = v
-		tags[k] = &t
+		tagValue := v
+		tags[k] = &tagValue
 	}
 
 	logr := logger.FromContext(ctx).
@@ -129,7 +130,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("image", c.offer).
 		WithField("size", c.size)
 
-	logr.Debugln("Starting Azure Setup")
+	logr.Info("Starting Azure Setup")
 
 	c.init.Do(func() {
 		_, err = c.createResourceGroup(ctx, c.cred)
@@ -145,23 +146,23 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	_, err = c.createVirtualNetwork(ctx, c.cred, vnetName)
 	if err != nil {
-		logr.Errorln(err)
+		logr.WithError(err).Error("could not create virtual network")
 		return nil, err
 	}
 	subnet, err := c.createSubnets(ctx, c.cred, subnetName, vnetName)
 	if err != nil {
-		logr.Errorln(err)
+		logr.WithError(err).Error("could not create subnet")
 		return nil, err
 	}
 	publicIP, err := c.createPublicIP(ctx, c.cred, publicIPName)
 	if err != nil {
-		logr.Errorln(err)
+		logr.WithError(err).Error("could not create public IP")
 		return nil, err
 	}
 	c.IPAddress = *publicIP.Properties.IPAddress
 	networkInterface, err := c.createNetworkInterface(ctx, c.cred, networkInterfaceName, *subnet.ID, *publicIP.ID)
 	if err != nil {
-		logr.Errorln(err)
+		logr.WithError(err).Error("could not create network interface")
 		return nil, err
 	}
 
@@ -228,6 +229,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if err != nil {
 		return nil, err
 	}
+
 	logr.Debugln("instance insert operation completed")
 
 	logr.
@@ -251,7 +253,7 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 	}
 	logr.Debugln("Azure destroy operation started")
 	if len(instanceIDs) == 0 {
-		return
+		return nil
 	}
 	for _, instanceID := range instanceIDs {
 		vnetName := fmt.Sprintf("%s-vnet", instanceID)
@@ -271,32 +273,32 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		if err != nil {
 			return err
 		}
-		logr.Debugf("Azure instance destroyed %s", instanceID)
+		logr.Info("Azure instance destroyed %s", instanceID)
 		err = c.deleteNetworkInterface(ctx, c.cred, networkInterfaceName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Debugf("Azure: deleted network interface: %s", networkInterfaceName)
+		logr.Info("Azure: deleted network interface: %s", networkInterfaceName)
 		err = c.deletePublicIP(ctx, c.cred, publicIPName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Debugf("Azure: deleted public ip: %s", publicIPName)
+		logr.Info("Azure: deleted public ip: %s", publicIPName)
 		err = c.deleteVirtualNetWork(ctx, c.cred, vnetName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Debugf("Azure: deleted virtual network: %s", vnetName)
+		logr.Info("Azure: deleted virtual network: %s", vnetName)
 		err = c.deleteDisk(ctx, c.cred, diskName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Debugf("Azure: deleted disk: %s", diskName)
-		logr.Traceln("azure: VM terminated")
+		logr.Info("Azure: deleted disk: %s", diskName)
+		logr.Info("azure: VM terminated")
 	}
 	return nil
 }

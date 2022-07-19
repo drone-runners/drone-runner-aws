@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	defaultResourceGroup = "harness-runner-resource"
+	defaultResourceGroup         = "harness-runner-resource"
+	defaultVirtualNetworkAddress = "10.1.0.0/16"
+	defaultSubnetAddress         = "10.1.10.0/24"
 )
 
 func (c *config) createResourceGroup(ctx context.Context, cred azcore.TokenCredential) (*armresources.ResourceGroup, error) {
@@ -54,7 +56,7 @@ func (c *config) createVirtualNetwork(ctx context.Context, cred azcore.TokenCred
 		Properties: &armnetwork.VirtualNetworkPropertiesFormat{
 			AddressSpace: &armnetwork.AddressSpace{
 				AddressPrefixes: []*string{
-					to.Ptr("10.1.0.0/16"), // example 10.1.0.0/16
+					to.Ptr(defaultVirtualNetworkAddress), // example 10.1.0.0/16
 				},
 			},
 		},
@@ -94,16 +96,26 @@ func (c *config) deleteVirtualNetWork(ctx context.Context, cred azcore.TokenCred
 
 func (c *config) createSubnets(ctx context.Context, cred azcore.TokenCredential, subnetName, vnetName string) (*armnetwork.Subnet, error) {
 	logr := logger.FromContext(ctx)
-
 	subnetClient, err := armnetwork.NewSubnetsClient(c.subscriptionID, cred, nil)
 	if err != nil {
 		return nil, err
 	}
 	parameters := armnetwork.Subnet{
 		Properties: &armnetwork.SubnetPropertiesFormat{
-			AddressPrefix: to.Ptr("10.1.10.0/24"),
+			AddressPrefix: to.Ptr(defaultSubnetAddress),
 		},
 	}
+	// map security group to subnet if exists
+	if c.securityGroupName != "" {
+		securityGroupClient, _ := armnetwork.NewSecurityGroupsClient(c.subscriptionID, cred, nil)
+		sG, sgErr := securityGroupClient.Get(ctx, c.resourceGroupName, c.securityGroupName, nil)
+		if sgErr != nil {
+			logr.Infof("Failed to get security group %s: %s", c.securityGroupName, sgErr)
+			return nil, sgErr
+		}
+		parameters.Properties.NetworkSecurityGroup = &sG.SecurityGroup
+	}
+
 	pollerResponse, createErr := subnetClient.BeginCreateOrUpdate(ctx, c.resourceGroupName, vnetName, subnetName, parameters, nil)
 	if createErr != nil {
 		return nil, createErr

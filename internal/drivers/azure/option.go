@@ -148,3 +148,9 @@ func WithTags(t map[string]string) Option {
 		p.tags = t
 	}
 }
+
+func WithSecurityGroupName(securityGroupName string) Option {
+	return func(p *config) {
+		p.securityGroupName = securityGroupName
+	}
+}
