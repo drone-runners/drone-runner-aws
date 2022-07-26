@@ -5,9 +5,16 @@
 package main
 
 import (
+	"math/rand"
+	"time"
+
 	"github.com/drone-runners/drone-runner-aws/command"
 	_ "github.com/joho/godotenv/autoload"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func main() {
 	command.Command()

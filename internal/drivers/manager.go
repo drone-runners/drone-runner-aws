@@ -453,6 +453,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 			logr.
 				WithField("pool", pool.Name).
 				WithField("id", inst.ID).
+				WithField("name", inst.Name).
 				Infoln("build pool: created new instance")
 
 			go func() {
