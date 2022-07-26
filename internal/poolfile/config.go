@@ -35,12 +35,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 		case string(types.VMFusion):
 			var v, ok = instance.Spec.(*config.VMFusion)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
 			platform, platformErr := vmfusion.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
 
@@ -56,7 +56,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				vmfusion.WithRootDirectory(v.RootDirectory),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
 
@@ -65,12 +65,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 		case string(types.Amazon):
 			var a, ok = instance.Spec.(*config.Amazon)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
 			platform, platformErr := amazon.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
 			var driver, err = amazon.New(
@@ -100,7 +100,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithHibernate(a.Hibernate),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -143,12 +143,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 		case string(types.Google):
 			var g, ok = instance.Spec.(*config.Google)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
-			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
+			platform, platformErr := google.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
 			var driver, err = google.New(
@@ -170,7 +170,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				google.WithUserDataKey(g.UserDataKey, instance.Platform.OS),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -178,12 +178,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 		case string(types.Anka):
 			var ak, ok = instance.Spec.(*config.Anka)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
 			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
 			driver, err := anka.New(
@@ -194,7 +194,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				anka.WithVMID(ak.VMID),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -202,12 +202,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 		case string(types.DigitalOcean):
 			var do, ok = instance.Spec.(*config.DigitalOcean)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
 			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
 			driver, err := digitalocean.New(
@@ -221,7 +221,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				digitalocean.WithUserData(do.UserData, do.UserDataPath),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver

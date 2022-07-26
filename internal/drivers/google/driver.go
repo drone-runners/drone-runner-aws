@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"os"
 	"reflect"
 	"strconv"
 	"sync"
@@ -16,11 +15,10 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/option"
 )
 
 var (
@@ -68,16 +66,15 @@ func New(opts ...Option) (drivers.Driver, error) {
 		opt(p)
 	}
 
+	ctx := context.Background()
+	var err error
 	if p.service == nil {
 		if p.JSONPath != "" {
-			p.JSON, _ = os.ReadFile(p.JSONPath)
-		}
-		client, err := google.DefaultClient(oauth2.NoContext, compute.ComputeScope) //nolint:staticcheck
-		if err != nil {
-			return nil, err
+			p.service, err = compute.NewService(ctx, option.WithCredentialsFile(p.JSONPath))
+		} else {
+			p.service, err = compute.NewService(ctx)
 		}
 
-		p.service, err = compute.New(client) //nolint:staticcheck
 		if err != nil {
 			return nil, err
 		}
