@@ -45,9 +45,12 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logr.WithError(err).Error("could not destroy VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 	}
-	resp := VMTaskExecutionResponse{}
-	resp.CommandExecutionStatus = Success
-	resp.DelegateMetaInfo.HostName = t.c.delegateInfo.Host
-	resp.DelegateMetaInfo.ID = t.c.delegateInfo.ID
+	resp := VMTaskExecutionResponse{
+		CommandExecutionStatus: Success,
+		DelegateMetaInfo: DelegateMetaInfo{
+			HostName: t.c.delegateInfo.Host,
+			ID:       t.c.delegateInfo.ID,
+		},
+	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }
