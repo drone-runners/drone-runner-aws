@@ -79,5 +79,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp.ServiceStatuses = serviceStatuses
 	resp.IPAddress = setupResp.IPAddress
 	resp.CommandExecutionStatus = Success
+	resp.DelegateMetaInfo.HostName = t.c.delegateInfo.Host
+	resp.DelegateMetaInfo.ID = t.c.delegateInfo.ID
 	httphelper.WriteJSON(w, resp, httpOK)
 }
