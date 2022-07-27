@@ -27,6 +27,7 @@ var (
 type dliteCommand struct {
 	envFile         string
 	env             config.EnvConfig
+	delegateInfo    *poller.DelegateInfo
 	poolFile        string
 	poolManager     *drivers.Manager
 	stageOwnerStore store.StageOwnerStore
@@ -50,7 +51,12 @@ func (c *dliteCommand) startPoller(ctx context.Context, tags []string) error {
 	// Client to interact with the harness server
 	client := delegate.New(c.env.Dlite.ManagerEndpoint, c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, true)
 	p := poller.New(c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, c.env.Dlite.Name, tags, client, r)
-	err := p.Poll(ctx, taskExecutors, taskInterval)
+	info, err := p.Register(ctx)
+	if err != nil {
+		return err
+	}
+	c.delegateInfo = info
+	err = p.Poll(ctx, taskExecutors, info.ID, taskInterval)
 	if err != nil {
 		return err
 	}
@@ -100,6 +106,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	// TODO (Vistaar): Add support for tags based on available pools
 	err = c.startPoller(ctx, []string{})
 	if err != nil {
+		logrus.WithError(err).Error("could not start poller")
 		return err
 	}
 

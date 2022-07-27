@@ -75,9 +75,14 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct final response
-	resp := VMTaskExecutionResponse{}
-	resp.ServiceStatuses = serviceStatuses
-	resp.IPAddress = setupResp.IPAddress
-	resp.CommandExecutionStatus = Success
+	resp := VMTaskExecutionResponse{
+		ServiceStatuses:        serviceStatuses,
+		IPAddress:              setupResp.IPAddress,
+		CommandExecutionStatus: Success,
+		DelegateMetaInfo: DelegateMetaInfo{
+			HostName: t.c.delegateInfo.Host,
+			ID:       t.c.delegateInfo.ID,
+		},
+	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }
