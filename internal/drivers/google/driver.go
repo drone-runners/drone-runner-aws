@@ -398,5 +398,5 @@ func getInstanceName(runner, pool string) string {
 	name := strings.ToLower(fmt.Sprintf("%s-%s-%d-%s", namePrefix, pool,
 		time.Now().Unix(), randStr))
 
-	return substrStrPrefix(name, maxInstanceNameLen)
+	return substrSuffix(name, maxInstanceNameLen)
 }

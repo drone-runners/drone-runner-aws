@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func Test_substrStrPrefix(t *testing.T) {
+func Test_substrSuffix(t *testing.T) {
 	tests := []struct {
 		s        string
 		maxLen   int
@@ -16,7 +16,7 @@ func Test_substrStrPrefix(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if got, want := substrStrPrefix(test.s, test.maxLen), test.expected; got != want {
+		if got, want := substrSuffix(test.s, test.maxLen), test.expected; got != want {
 			t.Errorf("Want substring %s, got %s", want, got)
 		}
 	}
