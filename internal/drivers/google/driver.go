@@ -22,6 +22,11 @@ import (
 	"google.golang.org/api/option"
 )
 
+const (
+	maxInstanceNameLen = 63
+	randStrLen         = 5
+)
+
 var (
 	defaultTags = []string{
 		"allow-docker",
@@ -389,8 +394,9 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 // [a-z]([-a-z0-9]*[a-z0-9])?
 func getInstanceName(runner, pool string) string {
 	namePrefix := strings.ReplaceAll(runner, " ", "")
+	randStr, _ := randStringRunes(randStrLen)
 	name := strings.ToLower(fmt.Sprintf("%s-%s-%d-%s", namePrefix, pool,
-		time.Now().Unix(), randStringRunes(5)))
+		time.Now().Unix(), randStr))
 
-	return substrStrPrefix(name, 63)
+	return substrStrPrefix(name, maxInstanceNameLen)
 }
