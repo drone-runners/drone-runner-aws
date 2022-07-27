@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +20,11 @@ import (
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
+)
+
+const (
+	maxInstanceNameLen = 63
+	randStrLen         = 5
 )
 
 var (
@@ -124,7 +130,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		_ = p.setup(ctx)
 	})
 
-	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", time.Now().Unix())
+	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	zone := p.Zone()
 
 	logr := logger.FromContext(ctx).
@@ -382,4 +388,15 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+// instance name must be 1-63 characters long and match the regular expression
+// [a-z]([-a-z0-9]*[a-z0-9])?
+func getInstanceName(runner, pool string) string {
+	namePrefix := strings.ReplaceAll(runner, " ", "")
+	randStr, _ := randStringRunes(randStrLen)
+	name := strings.ToLower(fmt.Sprintf("%s-%s-%d-%s", namePrefix, pool,
+		time.Now().Unix(), randStr))
+
+	return substrSuffix(name, maxInstanceNameLen)
 }
