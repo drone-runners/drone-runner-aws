@@ -328,9 +328,6 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 		return fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
-	pool.Lock()
-	defer pool.Unlock()
-
 	err := pool.Driver.Destroy(ctx, instanceID)
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)

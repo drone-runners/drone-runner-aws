@@ -19,10 +19,11 @@ func (s DriverType) Value() (driver.Value, error) {
 const (
 	Amazon       = DriverType("amazon")
 	Anka         = DriverType("anka")
+	AnkaBuild    = DriverType("ankabuild")
+	Azure        = DriverType("azure")
 	DigitalOcean = DriverType("digitalocean")
 	Google       = DriverType("google")
 	VMFusion     = DriverType("vmfusion")
-	Azure        = DriverType("azure")
 )
 
 // InstanceState type enumeration.
@@ -51,6 +52,7 @@ type Instance struct {
 	Updated      int64  `db:"instance_updated" json:"updated"`
 	Started      int64  `db:"instance_started" json:"started"`
 	IsHibernated bool   `db:"is_hibernated" json:"is_hibernated"`
+	Port         int64  `db:"instance_port" json:"port"`
 }
 
 type InstanceCreateOpts struct {

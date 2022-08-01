@@ -330,6 +330,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:      launchTime.Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
+		Port:         lehelper.LiteEnginePort,
 	}
 	logr.
 		WithField("ip", instanceIP).
@@ -414,7 +415,7 @@ func isHibernateRetryable(origErr error) bool {
 
 	if awsErr, ok := origErr.(awserr.Error); ok {
 		// Amazon linux 2 instance return error message on first try:
-		// UnsupportedOperation: Instance is not ready to hibernate yet, retry in a few minutes
+		// UnsupportedOperation: VMFind is not ready to hibernate yet, retry in a few minutes
 		if awsErr.Code() == "UnsupportedOperation" {
 			return true
 		}

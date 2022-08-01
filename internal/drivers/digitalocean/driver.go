@@ -133,6 +133,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:      startTime.Unix(),
 		Updated:      startTime.Unix(),
 		IsHibernated: false,
+		Port:         lehelper.LiteEnginePort,
 	}
 	// poll the digitalocean endpoint for server updates and exit when a network address is allocated.
 	interval := time.Duration(0)

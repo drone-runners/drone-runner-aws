@@ -68,7 +68,6 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	if err != nil {
 		return err
 	}
-
 	envs := environ.Combine(
 		c.Environ,
 		environ.System(c.System),
@@ -243,10 +242,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 			logrus.StandardLogger(),
 		),
 	)
-
-	engineInstance, err := engine.New(engine.Opts{
-		Repopulate: false,
-	}, poolManager, runnerName, c.LiteEngineURL)
+	engineInstance, err := engine.New(engine.Opts{Repopulate: false}, poolManager, &envConfig)
 	if err != nil {
 		return err
 	}

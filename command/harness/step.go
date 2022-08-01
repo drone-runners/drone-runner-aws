@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -65,12 +67,18 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 
 	logr = logr.WithField("ip", inst.Address)
 
-	client, err := lehelper.GetClient(inst, env.Runner.Name)
+	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
 	logr.Traceln("running StartStep")
+
+	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
+	if inst.Platform.OS == oshelp.OSMac && !env.Settings.EnableDocker {
+		b := false
+		r.StartStepRequest.MountDockerSocket = &b
+	}
 
 	startStepResponse, err := client.StartStep(ctx, &r.StartStepRequest)
 	if err != nil {

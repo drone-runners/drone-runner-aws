@@ -12,10 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/command/config"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
@@ -34,28 +35,26 @@ type Opts struct {
 
 // Engine implements a pipeline engine.
 type Engine struct {
-	opts           Opts
-	poolManager    *drivers.Manager
-	runnerName     string
-	liteEnginePath string
+	opts        Opts
+	poolManager *drivers.Manager
+	config      *config.EnvConfig
 }
 
 // New returns a new engine.
-func New(opts Opts, poolManager *drivers.Manager, runnerName, liteEnginePath string) (*Engine, error) {
+func New(opts Opts, poolManager *drivers.Manager, config *config.EnvConfig) (*Engine, error) {
 	return &Engine{
-		opts:           opts,
-		poolManager:    poolManager,
-		runnerName:     runnerName,
-		liteEnginePath: liteEnginePath,
+		opts:        opts,
+		poolManager: poolManager,
+		config:      config,
 	}, nil
 }
 
 // Setup the pipeline environment.
-func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
+func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 
 	poolName := spec.CloudInstance.PoolName
-	manager := eng.poolManager
+	manager := e.poolManager
 
 	logr := logger.FromContext(ctx).
 		WithField("func", "engine.Setup").
@@ -67,7 +66,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// lets see if there is anything in the pool
-	instance, err := manager.Provision(ctx, poolName, eng.runnerName, eng.liteEnginePath)
+	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, e.config.Settings.LiteEnginePath)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
@@ -100,8 +99,8 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		logr.WithError(err).Errorln("failed to update instance")
 		return err
 	}
-
-	client, err := lehelper.GetClient(instance, eng.runnerName)
+	// required for anka build where the port is dynamic
+	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return err
@@ -119,7 +118,6 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 
 	logr.WithField("response", fmt.Sprintf("%+v", healthResponse)).
 		Traceln("LE.RetryHealth check complete")
-
 	setupRequest := &leapi.SetupRequest{
 		Envs:      nil, // no global envs, envs are passed to each step individually
 		Network:   spec.Network,
@@ -131,7 +129,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
-	if instance.Platform.OS == oshelp.OSMac && instance.Arch == oshelp.ArchARM64 {
+	if instance.Platform.OS == oshelp.OSMac && !e.config.Settings.EnableDocker {
 		b := false
 		setupRequest.MountDockerSocket = &b
 	}
@@ -149,7 +147,7 @@ func (eng *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 }
 
 // Destroy the pipeline environment.
-func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
+func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	// HACK: this timeout delays deleting the instance to ensure there is enough time to stream the logs.
 	const destroyTimeout = time.Second * 5
 	time.Sleep(destroyTimeout)
@@ -157,7 +155,7 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 	spec := specv.(*Spec)
 
 	poolName := spec.CloudInstance.PoolName
-	poolMngr := eng.poolManager
+	poolMngr := e.poolManager
 
 	instanceID := spec.CloudInstance.ID
 	instanceIP := spec.CloudInstance.IP
@@ -167,6 +165,8 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		WithField("pool", poolName).
 		WithField("id", instanceID).
 		WithField("ip", instanceIP)
+
+	logr.Infof("destroying instance %s", instanceID)
 
 	if err := poolMngr.Destroy(ctx, poolName, instanceID); err != nil {
 		logr.WithError(err).Errorln("cannot destroy the instance")
@@ -178,7 +178,7 @@ func (eng *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 }
 
 // Run runs the pipeline step.
-func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step, output io.Writer) (*runtime.State, error) {
+func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step, output io.Writer) (*runtime.State, error) {
 	spec := specv.(*Spec)
 	step := stepv.(*Step)
 
@@ -193,12 +193,12 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 		WithField("id", instanceID).
 		WithField("ip", instanceIP)
 
-	instance, err := eng.poolManager.Find(ctx, instanceID)
+	instance, err := e.poolManager.Find(ctx, instanceID)
 	if err != nil {
 		logr.WithError(err).Errorln("cannot find instance")
 		return nil, err
 	}
-	client, err := lehelper.GetClient(instance, eng.runnerName)
+	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return nil, err
@@ -282,7 +282,7 @@ func (eng *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.St
 	}(ctx)
 
 	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
-	if instance.Platform.OS == oshelp.OSMac && instance.Arch == oshelp.ArchARM64 {
+	if instance.Platform.OS == oshelp.OSMac && !e.config.Settings.EnableDocker {
 		b := false
 		req.MountDockerSocket = &b
 	}

@@ -333,5 +333,6 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 		Started:      vm.Properties.TimeCreated.Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
+		Port:         lehelper.LiteEnginePort,
 	}
 }

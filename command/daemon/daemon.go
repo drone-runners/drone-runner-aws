@@ -143,7 +143,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		Repopulate: true,
 	}
 
-	engInstance, engineErr := engine.New(opts, poolManager, env.Runner.Name, env.Settings.LiteEnginePath)
+	engInstance, engineErr := engine.New(opts, poolManager, &env)
 	if engineErr != nil {
 		logrus.WithError(engineErr).
 			Fatalln("daemon: cannot load the engine")

@@ -73,16 +73,6 @@ func Custom(templateText string, params *Params) (payload string, err error) {
 
 const macScript = `
 #!/usr/bin/env bash
-if (! /usr/local/bin/docker stats --no-stream ); then
-  # On Mac OS this would be the terminal command to launch Docker
-  open /Applications/Docker.app
- #Wait until Docker daemon is running and has completed initialisation
-while (! /usr/local/bin/docker stats --no-stream ); do
-  # Docker takes a few seconds to initialize
-  echo "Waiting for Docker to launch..."
-  sleep 1
-done
-fi
 mkdir /tmp/certs/
 
 echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
@@ -97,6 +87,7 @@ chmod 0600 {{ .KeyPath }}
 /usr/local/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine
 chmod 777 /usr/local/bin/lite-engine
 touch $HOME/.env
+echo "SKIP_PREPARE_SERVER=true" >> .env;
 /usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
@@ -116,7 +107,7 @@ chmod 0600 {{ .KeyPath }}
 wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine
 chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
-echo -e "SkipPrepareServer=true" >> .env;
+echo -e "SKIP_PREPARE_SERVER=true" >> .env;
 /opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 

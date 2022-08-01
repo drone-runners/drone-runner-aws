@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -134,7 +136,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, fmt.Errorf("failed to tag: %w", err)
 	}
 
-	client, err := lehelper.GetClient(instance, env.Runner.Name)
+	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Port)
 	if err != nil {
 		go cleanUpFn()
 		return nil, fmt.Errorf("failed to create LE client: %w", err)
@@ -148,6 +150,12 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	}
 
 	logr.Traceln("retry health check complete")
+
+	// Currently m1 architecture does not enable nested virtualisation, so we disable docker.
+	if instance.Platform.OS == oshelp.OSMac && !env.Settings.EnableDocker {
+		b := false
+		r.SetupRequest.MountDockerSocket = &b
+	}
 
 	setupResponse, err := client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
