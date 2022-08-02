@@ -56,7 +56,8 @@ func (c config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (ins
 		WithField("pool", opts.PoolName)
 
 	logr.Info("Starting Anka Build Setup")
-	response, err := c.ankaClient.VMCreate(ctx, &createVMParams{
+
+	request := &createVMParams{
 		Name:                   machineName,
 		StartupScript:          uData,
 		StartupScriptCondition: startupScriptCondition,
@@ -65,7 +66,11 @@ func (c config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (ins
 		VmID:                   c.vmID,
 		ScriptTimeout:          scriptTimeout,
 		Tag:                    c.tag,
-	})
+	}
+	if c.nodeID != "" {
+		request.NodeID = c.nodeID
+	}
+	response, err := c.ankaClient.VMCreate(ctx, request)
 	if err != nil {
 		return nil, err
 	}

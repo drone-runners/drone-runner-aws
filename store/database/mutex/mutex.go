@@ -9,6 +9,12 @@ import "sync"
 
 var m sync.RWMutex
 
+// RLock locks the global mutex for reads.
+func RLock() { m.RLock() }
+
+// RUnlock unlocks the global mutex.
+func RUnlock() { m.RUnlock() }
+
 // Lock locks the global mutex for writes.
 func Lock() { m.Lock() }
 

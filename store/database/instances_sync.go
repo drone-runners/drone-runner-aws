@@ -18,14 +18,14 @@ func NewInstanceStoreSync(instanceStore *InstanceStore) *InstanceStoreSync {
 type InstanceStoreSync struct{ base *InstanceStore }
 
 func (i InstanceStoreSync) Find(ctx context.Context, s string) (*types.Instance, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	mutex.RLock()
+	defer mutex.RUnlock()
 	return i.base.Find(ctx, s)
 }
 
 func (i InstanceStoreSync) List(ctx context.Context, pool string, params *types.QueryParams) ([]*types.Instance, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	mutex.RLock()
+	defer mutex.RUnlock()
 	return i.base.List(ctx, pool, params)
 }
 
