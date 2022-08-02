@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 const (
 	pathVMController = "%s/api/v1/vm"
 	pathVMFind       = "%s/api/v1/vm?id=%s"
+	pathStatus       = "%s/api/v1/status"
 )
 
 type createVMParams struct {
@@ -29,7 +29,7 @@ type createVMParams struct {
 	ScriptMonitoring       bool   `json:"script_monitoring,omitempty"`
 	ScriptTimeout          int    `json:"script_timeout,omitempty"`
 	ScriptFailHandler      int    `json:"script_fail_handler,omitempty"`
-	VmID                   string `json:"vmid,omitempty"`
+	VMID                   string `json:"vmid,omitempty"`
 	GroupID                string `json:"group_id,omitempty"`
 	Priority               string `json:"priority,omitempty"`
 	Tag                    string `json:"tag,omitempty"`
@@ -67,11 +67,23 @@ type vmResponse struct {
 			} `json:"port_forwarding,omitempty"`
 		} `json:"vminfo"`
 		NodeID   string    `json:"node_id"`
-		Ts       time.Time `json:"ts"`
+		TS       time.Time `json:"ts"`
 		CrTime   time.Time `json:"cr_time"`
 		Progress int       `json:"progress"`
 		Arch     string    `json:"arch"`
 		Vlan     string    `json:"vlan"`
+	} `json:"body"`
+}
+
+type statusResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Body    struct {
+		Status          string `json:"status"`
+		Version         string `json:"version"`
+		RegistryAddress string `json:"registry_address"`
+		RegistryStatus  string `json:"registry_status"`
+		License         string `json:"license"`
 	} `json:"body"`
 }
 
@@ -95,6 +107,7 @@ type Client interface {
 	VMCreate(ctx context.Context, params *createVMParams) (*createVMResponse, error)
 	VMDelete(ctx context.Context, id string) error
 	VMFind(ctx context.Context, id string) (*vmResponse, error)
+	Status(ctx context.Context) (*statusResponse, error)
 }
 
 func (c *client) VMCreate(ctx context.Context, in *createVMParams) (*createVMResponse, error) {
@@ -118,23 +131,30 @@ func (c *client) VMDelete(ctx context.Context, id string) error {
 	return err
 }
 
+func (c *client) Status(ctx context.Context) (*statusResponse, error) {
+	out := new(statusResponse)
+	uri := fmt.Sprintf(pathStatus, c.addr)
+	err := c.get(ctx, uri, nil, out)
+	return out, err
+}
+
 // helper function for making a http POST request.
-func (c *client) post(ctx context.Context, rawUrl string, in, out interface{}) error {
-	return c.do(ctx, rawUrl, "POST", in, out)
+func (c *client) post(ctx context.Context, rawURL string, in, out interface{}) error {
+	return c.do(ctx, rawURL, "POST", in, out)
 }
 
 // helper function for making a http GET request.
-func (c *client) get(ctx context.Context, rawUrl string, in, out interface{}) error {
-	return c.do(ctx, rawUrl, "GET", in, out)
+func (c *client) get(ctx context.Context, rawURL string, in, out interface{}) error {
+	return c.do(ctx, rawURL, "GET", in, out)
 }
 
 // helper function for making a http DELETE request.
-func (c *client) delete(ctx context.Context, rawUrl string, in interface{}) error {
-	return c.do(ctx, rawUrl, "DELETE", in, nil)
+func (c *client) delete(ctx context.Context, rawURL string, in interface{}) error {
+	return c.do(ctx, rawURL, "DELETE", in, nil)
 }
 
-func (c *client) do(ctx context.Context, rawUrl, method string, in, out interface{}) error {
-	body, err := c.open(ctx, rawUrl, method, in, out)
+func (c *client) do(ctx context.Context, rawURL, method string, in, out interface{}) error {
+	body, err := c.open(ctx, rawURL, method, in, out)
 	if err != nil {
 		return err
 	}
@@ -145,12 +165,12 @@ func (c *client) do(ctx context.Context, rawUrl, method string, in, out interfac
 	return nil
 }
 
-func (c *client) open(ctx context.Context, rawUrl, method string, in, out interface{}) (io.ReadCloser, error) {
-	uri, err := url.Parse(rawUrl)
+func (c *client) open(ctx context.Context, rawURL, method string, in, out interface{}) (io.ReadCloser, error) {
+	uri, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, method, uri.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, method, uri.String(), http.NoBody)
 
 	// set auth
 	req.SetBasicAuth("root", c.authToken)
@@ -164,7 +184,7 @@ func (c *client) open(ctx context.Context, rawUrl, method string, in, out interf
 			return nil, dErr
 		}
 		buf := bytes.NewBuffer(decoded)
-		req.Body = ioutil.NopCloser(buf)
+		req.Body = io.NopCloser(buf)
 		req.ContentLength = int64(len(decoded))
 		req.Header.Set("Content-Length", strconv.Itoa(len(decoded)))
 		req.Header.Set("Content-Type", "application/json")
@@ -173,9 +193,9 @@ func (c *client) open(ctx context.Context, rawUrl, method string, in, out interf
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode > 299 {
+	if resp.StatusCode > 299 { // nolint
 		defer resp.Body.Close()
-		out, _ := ioutil.ReadAll(resp.Body)
+		out, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("client error %d: %s", resp.StatusCode, string(out))
 	}
 	return resp.Body, nil

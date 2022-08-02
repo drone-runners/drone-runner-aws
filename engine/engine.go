@@ -41,11 +41,11 @@ type Engine struct {
 }
 
 // New returns a new engine.
-func New(opts Opts, poolManager *drivers.Manager, config *config.EnvConfig) (*Engine, error) {
+func New(opts Opts, poolManager *drivers.Manager, envConfig *config.EnvConfig) (*Engine, error) {
 	return &Engine{
 		opts:        opts,
 		poolManager: poolManager,
-		config:      config,
+		config:      envConfig,
 	}, nil
 }
 

@@ -31,7 +31,8 @@ type config struct {
 const (
 	startupScriptCondition = 0
 	scriptFailHandler      = 2
-	scriptTimeout          = 500
+	scriptTimeout          = 200
+	ankaRunning            = "Running"
 )
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -45,10 +46,10 @@ func New(opts ...Option) (drivers.Driver, error) {
 	return c, nil
 }
 
-func (c config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
-	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", startTime.Unix()) //nolint
+	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", startTime.Unix())
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.AnkaBuild).
@@ -63,7 +64,7 @@ func (c config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (ins
 		StartupScriptCondition: startupScriptCondition,
 		ScriptMonitoring:       true,
 		ScriptFailHandler:      scriptFailHandler,
-		VmID:                   c.vmID,
+		VMID:                   c.vmID,
 		ScriptTimeout:          scriptTimeout,
 		Tag:                    c.tag,
 	}
@@ -83,7 +84,7 @@ func (c config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (ins
 		}
 		if vm.Body.InstanceState != "Started" {
 			logrus.Debugf("VM: %s is starting...", vm.Body.InstanceID)
-			time.Sleep(5 * time.Second)
+			time.Sleep(5 * time.Second) //nolint
 			continue
 		}
 		logrus.Debugf("VM: %s is running!", vm.Body.InstanceID)
@@ -104,7 +105,7 @@ func (c config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (ins
 		CAKey:    opts.CAKey,
 		TLSCert:  opts.TLSCert,
 		TLSKey:   opts.TLSKey,
-		Started:  inst.Ts.Unix(),
+		Started:  inst.TS.Unix(),
 		Updated:  time.Now().Unix(),
 		Port:     int64(port),
 	}
@@ -116,7 +117,7 @@ func (c config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (ins
 	return instance, nil
 }
 
-func (c config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
 		return
 	}
@@ -134,30 +135,43 @@ func (c config) Destroy(ctx context.Context, instanceIDs ...string) (err error) 
 	return nil
 }
 
-func (c config) Hibernate(_ context.Context, _, _ string) error {
+func (c *config) Hibernate(_ context.Context, _, _ string) error {
 	return errors.New("unimplemented")
 }
 
-func (c config) Start(_ context.Context, _, _ string) (ipAddress string, err error) {
+func (c *config) Start(_ context.Context, _, _ string) (ipAddress string, err error) {
 	return "", errors.New("unimplemented")
 }
 
-func (c config) Ping(_ context.Context) error {
-	return nil
+func (c *config) Ping(ctx context.Context) error {
+	response, err := c.ankaClient.Status(ctx)
+	if err != nil {
+		return err
+	}
+	if response.Body.License == "" {
+		return errors.New("license is not set")
+	}
+	if response.Body.RegistryAddress == "" {
+		return errors.New("registry address is not set")
+	}
+	if response.Body.Status == ankaRunning {
+		return nil
+	}
+	return errors.New("anka registry/controller is not running")
 }
 
-func (c config) Logs(_ context.Context, _ string) (string, error) {
+func (c *config) Logs(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 
-func (c config) RootDir() string {
+func (c *config) RootDir() string {
 	return c.rootDir
 }
 
-func (c config) DriverName() string {
+func (c *config) DriverName() string {
 	return string(types.AnkaBuild)
 }
 
-func (c config) CanHibernate() bool {
+func (c *config) CanHibernate() bool {
 	return false
 }
