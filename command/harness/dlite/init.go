@@ -47,6 +47,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Make the setup call
+	req.SetupVMRequest.CorrelationID = task.ID
 	setupResp, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
 	if err != nil {
 		logr.WithError(err).Error("could not setup VM")
@@ -60,6 +61,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Start all the services
 	for i, s := range req.Services {
 		req.Services[i].IPAddress = setupResp.IPAddress
+		req.Services[i].CorrelationID = task.ID
 		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
 		resp, err := harness.HandleStep(ctx, req.Services[i], &t.c.env, t.c.poolManager)
 		if err != nil {
@@ -73,9 +75,14 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct final response
-	resp := VMTaskExecutionResponse{}
-	resp.ServiceStatuses = serviceStatuses
-	resp.IPAddress = setupResp.IPAddress
-	resp.CommandExecutionStatus = Success
+	resp := VMTaskExecutionResponse{
+		ServiceStatuses:        serviceStatuses,
+		IPAddress:              setupResp.IPAddress,
+		CommandExecutionStatus: Success,
+		DelegateMetaInfo: DelegateMetaInfo{
+			HostName: t.c.delegateInfo.Host,
+			ID:       t.c.delegateInfo.ID,
+		},
+	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }

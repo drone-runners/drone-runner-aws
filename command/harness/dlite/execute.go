@@ -46,13 +46,17 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, &t.c.env, t.c.poolManager)
+	req.ExecuteVMRequest.CorrelationID = task.ID
+	stepResp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, &t.c.env, t.c.poolManager)
 	if err != nil {
 		logr.WithError(err).Error("could not execute step:")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
-	httphelper.WriteJSON(w, convert(resp), httpOK)
+	resp := convert(stepResp)
+	resp.DelegateMetaInfo.HostName = t.c.delegateInfo.Host
+	resp.DelegateMetaInfo.ID = t.c.delegateInfo.ID
+	httphelper.WriteJSON(w, resp, httpOK)
 }
 
 // convert poll response to a Vm task execution response

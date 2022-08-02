@@ -9,15 +9,14 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/ankabuild"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/anka"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 
@@ -35,15 +34,45 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 	for i := range poolFile.Instances {
 		instance := poolFile.Instances[i]
 		switch instance.Type {
+		case string(types.VMFusion):
+			var v, ok = instance.Spec.(*config.VMFusion)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			// set platform defaults
+			platform, platformErr := vmfusion.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				return nil, platformErr
+			}
+			instance.Platform = *platform
+
+			driver, err := vmfusion.New(
+				vmfusion.WithStorePath(v.StorePath),
+				vmfusion.WithUsername(v.Account.Username),
+				vmfusion.WithPassword(v.Account.Password),
+				vmfusion.WithISO(v.ISO),
+				vmfusion.WithCPU(v.CPU),
+				vmfusion.WithMemory(v.Memory),
+				vmfusion.WithVDiskPath(v.VDiskPath),
+				vmfusion.WithUserData(v.UserData, v.UserDataPath),
+				vmfusion.WithRootDirectory(v.RootDirectory),
+			)
+			if err != nil {
+				return nil, err
+			}
+			pool := mapPool(&instance, runnerName)
+
+			pool.Driver = driver
+			pools = append(pools, pool)
 		case string(types.Amazon):
 			var a, ok = instance.Spec.(*config.Amazon)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
 			platform, platformErr := amazon.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
 			var driver, err = amazon.New(
@@ -73,7 +102,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithHibernate(a.Hibernate),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -113,94 +142,15 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-		case string(types.Anka):
-			var ak, ok = instance.Spec.(*config.Anka)
-			if !ok {
-				logrus.Errorln("unable to parse pool file")
-			}
-			// set platform defaults
-			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
-			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
-			}
-			instance.Platform = *platform
-			driver, err := anka.New(
-				anka.WithUsername(ak.Account.Username),
-				anka.WithPassword(ak.Account.Password),
-				anka.WithRootDirectory(ak.RootDirectory),
-				anka.WithUserData(ak.UserData, ak.UserDataPath),
-				anka.WithVMID(ak.VMID),
-			)
-			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
-			}
-			pool := mapPool(&instance, runnerName)
-			pool.Driver = driver
-			pools = append(pools, pool)
-		case string(types.AnkaBuild):
-			var ankaBuild, ok = instance.Spec.(*config.AnkaBuild)
-			if !ok {
-				logrus.Errorln("unable to parse pool file")
-			}
-			platform, platformErr := ankabuild.SetPlatformDefaults(&instance.Platform)
-			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
-			}
-			instance.Platform = *platform
-			driver, err := ankabuild.New(
-				ankabuild.WithUsername(ankaBuild.Account.Username),
-				ankabuild.WithPassword(ankaBuild.Account.Password),
-				ankabuild.WithRootDirectory(ankaBuild.RootDirectory),
-				ankabuild.WithUserData(ankaBuild.UserData, ankaBuild.UserDataPath),
-				ankabuild.WithVMID(ankaBuild.VMID),
-				ankabuild.WithRegistryURI(ankaBuild.RegistryURL),
-				ankabuild.WithNodeID(ankaBuild.NodeID),
-				ankabuild.WithTag(ankaBuild.Tag),
-				ankabuild.WithAuthToken(ankaBuild.AuthToken),
-			)
-			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
-			}
-			pool := mapPool(&instance, runnerName)
-			pool.Driver = driver
-			pools = append(pools, pool)
-
-		case string(types.DigitalOcean):
-			var do, ok = instance.Spec.(*config.DigitalOcean)
-			if !ok {
-				logrus.Errorln("unable to parse pool file")
-			}
-			// set platform defaults
-			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
-			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
-			}
-			instance.Platform = *platform
-			driver, err := digitalocean.New(
-				digitalocean.WithPAT(do.Account.PAT),
-				digitalocean.WithRegion(do.Account.Region),
-				digitalocean.WithSize(do.Size),
-				digitalocean.WithFirewallID(do.FirewallID),
-				digitalocean.WithTags(do.Tags),
-				digitalocean.WithSSHKeys(do.SSHKeys),
-				digitalocean.WithImage(do.Image),
-				digitalocean.WithUserData(do.UserData, do.UserDataPath),
-			)
-			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
-			}
-			pool := mapPool(&instance, runnerName)
-			pool.Driver = driver
-			pools = append(pools, pool)
 		case string(types.Google):
 			var g, ok = instance.Spec.(*config.Google)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
-			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
+			platform, platformErr := google.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
 			var driver, err = google.New(
@@ -222,39 +172,86 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				google.WithUserDataKey(g.UserDataKey, instance.Platform.OS),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-		case string(types.VMFusion):
-			var v, ok = instance.Spec.(*config.VMFusion)
+		case string(types.Anka):
+			var ak, ok = instance.Spec.(*config.Anka)
 			if !ok {
-				logrus.Errorln("unable to parse pool file")
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
 			// set platform defaults
-			platform, platformErr := vmfusion.SetPlatformDefaults(&instance.Platform)
+			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
-				logrus.WithError(platformErr).WithField("driver", instance.Type)
+				return nil, platformErr
 			}
 			instance.Platform = *platform
-
-			driver, err := vmfusion.New(
-				vmfusion.WithStorePath(v.StorePath),
-				vmfusion.WithUsername(v.Account.Username),
-				vmfusion.WithPassword(v.Account.Password),
-				vmfusion.WithISO(v.ISO),
-				vmfusion.WithCPU(v.CPU),
-				vmfusion.WithMemory(v.Memory),
-				vmfusion.WithVDiskPath(v.VDiskPath),
-				vmfusion.WithUserData(v.UserData, v.UserDataPath),
-				vmfusion.WithRootDirectory(v.RootDirectory),
+			driver, err := anka.New(
+				anka.WithUsername(ak.Account.Username),
+				anka.WithPassword(ak.Account.Password),
+				anka.WithRootDirectory(ak.RootDirectory),
+				anka.WithUserData(ak.UserData, ak.UserDataPath),
+				anka.WithVMID(ak.VMID),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, err
 			}
 			pool := mapPool(&instance, runnerName)
-
+			pool.Driver = driver
+			pools = append(pools, pool)
+		case string(types.DigitalOcean):
+			var do, ok = instance.Spec.(*config.DigitalOcean)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				return nil, platformErr
+			}
+			instance.Platform = *platform
+			driver, err := digitalocean.New(
+				digitalocean.WithPAT(do.Account.PAT),
+				digitalocean.WithRegion(do.Account.Region),
+				digitalocean.WithSize(do.Size),
+				digitalocean.WithFirewallID(do.FirewallID),
+				digitalocean.WithTags(do.Tags),
+				digitalocean.WithSSHKeys(do.SSHKeys),
+				digitalocean.WithImage(do.Image),
+				digitalocean.WithUserData(do.UserData, do.UserDataPath),
+			)
+			if err != nil {
+				return nil, err
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
+		case string(types.AnkaBuild):
+			var ankaBuild, ok = instance.Spec.(*config.AnkaBuild)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			platform, platformErr := ankabuild.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				return nil, platformErr
+			}
+			instance.Platform = *platform
+			driver, err := ankabuild.New(
+				ankabuild.WithUsername(ankaBuild.Account.Username),
+				ankabuild.WithPassword(ankaBuild.Account.Password),
+				ankabuild.WithRootDirectory(ankaBuild.RootDirectory),
+				ankabuild.WithUserData(ankaBuild.UserData, ankaBuild.UserDataPath),
+				ankabuild.WithVMID(ankaBuild.VMID),
+				ankabuild.WithRegistryURI(ankaBuild.RegistryURL),
+				ankabuild.WithNodeID(ankaBuild.NodeID),
+				ankabuild.WithTag(ankaBuild.Tag),
+				ankabuild.WithAuthToken(ankaBuild.AuthToken),
+			)
+			if err != nil {
+				return nil, err
+			}
+			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
 		default:
