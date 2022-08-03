@@ -165,7 +165,7 @@ func (c *client) do(ctx context.Context, rawURL, method string, in, out interfac
 	return nil
 }
 
-func (c *client) open(ctx context.Context, rawURL, method string, in, out interface{}) (io.ReadCloser, error) {
+func (c *client) open(ctx context.Context, rawURL, method string, in, out interface{}) (io.ReadCloser, error) { // nolint
 	uri, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err

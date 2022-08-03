@@ -415,7 +415,7 @@ func isHibernateRetryable(origErr error) bool {
 
 	if awsErr, ok := origErr.(awserr.Error); ok {
 		// Amazon linux 2 instance return error message on first try:
-		// UnsupportedOperation: VMFind is not ready to hibernate yet, retry in a few minutes
+		// UnsupportedOperation: Instance is not ready to hibernate yet, retry in a few minutes
 		if awsErr.Code() == "UnsupportedOperation" {
 			return true
 		}
