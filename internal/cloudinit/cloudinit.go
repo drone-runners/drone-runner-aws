@@ -41,7 +41,7 @@ func Custom(templateText string, params *Params) (payload string, err error) {
 	t, err := template.New("custom-template").Funcs(funcs).Parse(templateText)
 	if err != nil {
 		err = fmt.Errorf("failed to parse template data: %w", err)
-		return
+		return "", err
 	}
 
 	sb := &strings.Builder{}
@@ -63,12 +63,12 @@ func Custom(templateText string, params *Params) (payload string, err error) {
 	})
 	if err != nil {
 		err = fmt.Errorf("failed to execute template to get init script: %w", err)
-		return
+		return "", err
 	}
 
 	payload = sb.String()
 
-	return
+	return payload, nil
 }
 
 const macScript = `

@@ -62,13 +62,21 @@ func WithResourceGroupName(resourceGroupName string) Option {
 
 func WithLocation(location string) Option {
 	return func(p *config) {
-		p.location = location
+		if location == "" {
+			p.location = "eastus2"
+		} else {
+			p.location = location
+		}
 	}
 }
 
 func WithSize(size string) Option {
 	return func(p *config) {
-		p.size = size
+		if size == "" {
+			p.size = "Standard_F2s"
+		} else {
+			p.size = size
+		}
 	}
 }
 
@@ -134,8 +142,13 @@ func WithUserDataKey(text, platform string) Option {
 
 func WithZones(zones ...string) Option {
 	var z []*string
-	for zone := range zones {
-		z = append(z, &zones[zone])
+	if len(zones) > 0 {
+		zone1 := "1"
+		z = append(z, &zone1)
+	} else {
+		for zone := range zones {
+			z = append(z, &zones[zone])
+		}
 	}
 	return func(p *config) {
 		p.zones = z

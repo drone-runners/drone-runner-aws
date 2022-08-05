@@ -518,7 +518,7 @@ func (c *Compiler) findSecret(ctx context.Context, args runtime.CompilerArgs, na
 		Conf:  args.Manifest,
 	})
 	if found == nil {
-		return
+		return "", false
 	}
 	return found.Data, true
 }

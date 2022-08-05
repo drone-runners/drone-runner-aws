@@ -116,7 +116,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 		return nil, fmt.Errorf("failed to call LE.RetryPollStep: %w", err)
 	}
 
-	logr.WithField("pollResponse", pollResponse).Traceln("LE.RetryPollStep complete")
+	logr.WithField("pollResponse", pollResponse).Traceln("completed LE.RetryPollStep")
 
 	return pollResponse, nil
 }

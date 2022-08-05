@@ -8,9 +8,13 @@ pool:
 steps:
   - name: check install
     commands:
-      - type C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log
+      - $amazon = Test-Path -Path C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log
+      - if ($amazon) { type C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log }
+      - $azure = Test-Path -Path C:\WindowsAzure\Logs\UserdataExecution.log
+      - if ($azure) { type C:\WindowsAzure\Logs\UserdataExecution.log }
+      - echo "Hello World"
   - name: imagey + commands
-    image: golang:1.16.5-windowsservercore-1809
+    image: golang:1-windowsservercore
     commands:
       - go version
       - go help
@@ -23,7 +27,7 @@ steps:
     commands:
       - docker ps -a
   - name: ping service sleepyserver
-    image: golang:1.16.5-windowsservercore-1809
+    image: golang:1-windowsservercore
     commands:
       - ping sleepyserver
 
@@ -33,7 +37,7 @@ volumes:
 
 services:
   - name: sleepyserver
-    image: golang:1.16.5-windowsservercore-1809
+    image: golang:1-windowsservercore
     commands:
       - powershell Start-Sleep -s 1800
 

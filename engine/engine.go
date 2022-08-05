@@ -148,8 +148,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 
 // Destroy the pipeline environment.
 func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
-	// HACK: this timeout delays deleting the instance to ensure there is enough time to stream the logs.
-	const destroyTimeout = time.Second * 5
+	const destroyTimeout = time.Second * 5 // HACK: this timeout delays deleting the instance to ensure there is enough time to stream the logs.
 	time.Sleep(destroyTimeout)
 
 	spec := specv.(*Spec)
@@ -302,7 +301,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	}
 
 	logr.WithField("pollResponse", pollResponse).
-		Traceln("LE.RetryPollStep complete")
+		Traceln("completed LE.RetryPollStep")
 
 	wg.Wait()
 

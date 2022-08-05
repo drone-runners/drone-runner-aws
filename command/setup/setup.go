@@ -237,16 +237,6 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("aws-access-key-secret", "aws access key secret").
 		Default("").
 		StringVar(&c.awsAccessKeySecret)
-	// Digital Ocean specific flags
-	cmd.Flag("digital-ocean-pat", "digital ocean token").
-		Default("").
-		StringVar(&c.digitalOceanPAT)
-	// Google specific flags
-	cmd.Flag("google-project-id", "Google project ID").
-		Default("").
-		StringVar(&c.googleProjectID)
-	cmd.Flag("google-json-path", "Google JSON path").
-		StringVar(&c.googleJSONPath)
 	// Anka specific flags
 	cmd.Flag("anka-vm-name", "Anka VM name").
 		Default("").
@@ -264,4 +254,14 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("azure-tenant-id", "Azure tenant ID").
 		Default("").
 		StringVar(&c.azureTenantID)
+	// Digital Ocean specific flags
+	cmd.Flag("digital-ocean-pat", "digital ocean token").
+		Default("").
+		StringVar(&c.digitalOceanPAT)
+	// Google specific flags
+	cmd.Flag("google-project-id", "Google project ID").
+		Default("").
+		StringVar(&c.googleProjectID)
+	cmd.Flag("google-json-path", "Google JSON path").
+		StringVar(&c.googleJSONPath)
 }

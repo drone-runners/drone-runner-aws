@@ -285,12 +285,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if err != nil {
 		logr.WithError(err).
 			Errorln("amazon: [provision] failed to create VMs")
-		return
+		return nil, err
 	}
 
 	if len(runResult.Instances) == 0 {
 		err = fmt.Errorf("failed to create an AWS EC2 instance")
-		return
+		return nil, err
 	}
 
 	awsInstanceID := runResult.Instances[0].InstanceId
@@ -304,7 +304,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	var amazonInstance *ec2.Instance
 	amazonInstance, err = p.pollInstanceIPAddr(ctx, *awsInstanceID, logr)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	instanceID := *amazonInstance.InstanceId
@@ -337,13 +337,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("amazon: [provision] complete")
 
-	return //nolint:nakedret
+	return instance, nil
 }
 
 // Destroy destroys the server AWS EC2 instances.
 func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
-		return
+		return fmt.Errorf("no instance IDs provided")
 	}
 
 	client := p.service
@@ -359,13 +359,13 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 
 	_, err = client.TerminateInstances(&ec2.TerminateInstancesInput{InstanceIds: awsIDs})
 	if err != nil {
-		logr.WithError(err).
-			Errorln("amazon: failed to terminate VMs")
-		return
+		err = fmt.Errorf("failed to terminate instances: %v", err)
+		logr.Error(err)
+		return err
 	}
 
 	logr.Traceln("amazon: VM terminated")
-	return
+	return nil
 }
 
 func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {

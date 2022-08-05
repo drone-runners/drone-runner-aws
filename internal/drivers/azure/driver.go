@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -103,7 +104,9 @@ func (c *config) Zones() string {
 }
 
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", time.Now().Unix())
+	sanitizedRunnerName := strings.ReplaceAll(opts.RunnerName, " ", "-")
+	sanitizedPoolName := strings.ReplaceAll(opts.PoolName, " ", "-")
+	var name = fmt.Sprintf("%s-%s-%d", sanitizedRunnerName, sanitizedPoolName, time.Now().Unix())
 
 	vnetName := fmt.Sprintf("%s-vnet", name)
 	subnetName := fmt.Sprintf("%s-subnet", name)
@@ -123,35 +126,35 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("name", name).
 		WithField("image", c.InstanceType()).
 		WithField("pool", opts.PoolName).
-		WithField("zone", "").
+		WithField("zone", c.zones).
 		WithField("image", c.offer).
 		WithField("size", c.size)
 
-	logr.Info("Starting Azure Setup")
+	logr.Info("starting Azure Setup")
 
-	_, err = c.createResourceGroup(ctx, c.cred)
+	_, err = c.createResourceGroup(ctx)
 	if err != nil {
-		logr.WithError(err).Errorln("Failed to get/create resource group")
+		logr.WithError(err).Errorln("failed to get/create resource group")
 		return
 	}
 
-	_, err = c.createVirtualNetwork(ctx, c.cred, vnetName)
+	_, err = c.createVirtualNetwork(ctx, vnetName)
 	if err != nil {
 		logr.WithError(err).Error("could not create virtual network")
 		return nil, err
 	}
-	subnet, err := c.createSubnets(ctx, c.cred, subnetName, vnetName)
+	subnet, err := c.createSubnets(ctx, subnetName, vnetName)
 	if err != nil {
 		logr.WithError(err).Error("could not create subnet")
 		return nil, err
 	}
-	publicIP, err := c.createPublicIP(ctx, c.cred, publicIPName)
+	publicIP, err := c.createPublicIP(ctx, publicIPName)
 	if err != nil {
 		logr.WithError(err).Error("could not create public IP")
 		return nil, err
 	}
 	c.IPAddress = *publicIP.Properties.IPAddress
-	networkInterface, err := c.createNetworkInterface(ctx, c.cred, networkInterfaceName, *subnet.ID, *publicIP.ID)
+	networkInterface, err := c.createNetworkInterface(ctx, networkInterfaceName, *subnet.ID, *publicIP.ID)
 	if err != nil {
 		logr.WithError(err).Error("could not create network interface")
 		return nil, err
@@ -189,10 +192,11 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				},
 			},
 			OSProfile: &armcompute.OSProfile{ //
-				ComputerName:  to.Ptr("vm-runner"),
-				AdminUsername: to.Ptr(c.username),
-				AdminPassword: to.Ptr(c.password),
-				CustomData:    to.Ptr(uData),
+				ComputerName:             to.Ptr("vm-runner"),
+				AdminUsername:            to.Ptr(c.username),
+				AdminPassword:            to.Ptr(c.password),
+				CustomData:               to.Ptr(uData),
+				AllowExtensionOperations: to.Ptr(true),
 			},
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
@@ -204,14 +208,6 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		},
 	}
 
-	if opts.OS == oshelp.OSWindows {
-		in.Plan = &armcompute.Plan{
-			Name:      to.Ptr(c.offer),
-			Product:   to.Ptr(c.offer),
-			Publisher: to.Ptr(c.publisher),
-		}
-	}
-
 	poller, err := c.service.BeginCreateOrUpdate(ctx, c.resourceGroupName, name, in, nil)
 	if err != nil {
 		return nil, err
@@ -219,6 +215,13 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	vm, err := poller.PollUntilDone(ctx, nil)
 	if err != nil {
 		return nil, err
+	}
+	// if windows add extension to vm
+	if opts.OS == oshelp.OSWindows {
+		_, extensionErr := c.addExtension(ctx, name)
+		if extensionErr != nil {
+			return nil, extensionErr
+		}
 	}
 
 	logr.Debugln("instance insert operation completed")
@@ -242,7 +245,7 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 	if c.resourceGroupName == "" {
 		c.resourceGroupName = defaultResourceGroup
 	}
-	logr.Debugln("Azure destroy operation started")
+	logr.Debugln("azure destroy operation started")
 	if len(instanceIDs) == 0 {
 		return nil
 	}
@@ -252,7 +255,7 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		networkInterfaceName := fmt.Sprintf("%s-networkinterface", instanceID)
 		diskName := fmt.Sprintf("%s-disk", instanceID)
 
-		logr.Debugln("Azure destroying instance", instanceID)
+		logr.Debugln("azure destroying instance:", instanceID)
 		logr.WithField("id", instanceID).
 			WithField("cloud", types.Google)
 
@@ -264,31 +267,31 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		if err != nil {
 			return err
 		}
-		logr.Info("Azure instance destroyed %s", instanceID)
-		err = c.deleteNetworkInterface(ctx, c.cred, networkInterfaceName)
+		logr.Info("azure instance destroyed:", instanceID)
+		err = c.deleteNetworkInterface(ctx, networkInterfaceName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("Azure: deleted network interface: %s", networkInterfaceName)
-		err = c.deletePublicIP(ctx, c.cred, publicIPName)
+		logr.Info("azure: deleted network interface:", networkInterfaceName)
+		err = c.deletePublicIP(ctx, publicIPName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("Azure: deleted public ip: %s", publicIPName)
-		err = c.deleteVirtualNetWork(ctx, c.cred, vnetName)
+		logr.Info("azure: deleted public ip:", publicIPName)
+		err = c.deleteVirtualNetWork(ctx, vnetName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("Azure: deleted virtual network: %s", vnetName)
-		err = c.deleteDisk(ctx, c.cred, diskName)
+		logr.Info("azure: deleted virtual network:", vnetName)
+		err = c.deleteDisk(ctx, diskName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("Azure: deleted disk: %s", diskName)
+		logr.Info("azure: deleted disk: %s", diskName)
 		logr.Info("azure: VM terminated")
 	}
 	return nil

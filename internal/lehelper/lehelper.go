@@ -9,8 +9,8 @@ import (
 	lehttp "github.com/harness/lite-engine/cli/client"
 )
 
-var (
-	LiteEnginePort = int64(9079) //nolint:gomnd
+const (
+	LiteEnginePort = 9079
 )
 
 func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
