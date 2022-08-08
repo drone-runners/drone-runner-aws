@@ -167,7 +167,7 @@ func (c *client) do(ctx context.Context, rawURL, method string, in, out interfac
 	return nil
 }
 
-func (c *client) open(ctx context.Context, rawURL, method string, in, out interface{}) (io.ReadCloser, error) { // nolint
+func (c *client) open(ctx context.Context, rawURL, method string, in, out interface{}) (io.ReadCloser, error) { //nolint
 	uri, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func (c *client) open(ctx context.Context, rawURL, method string, in, out interf
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode > 299 { // nolint
+	if resp.StatusCode > 299 { //nolint
 		defer resp.Body.Close()
 		out, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("client error %d: %s", resp.StatusCode, string(out))

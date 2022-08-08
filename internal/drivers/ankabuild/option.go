@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Option func(*config)

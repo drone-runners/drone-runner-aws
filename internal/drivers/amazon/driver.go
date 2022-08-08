@@ -337,7 +337,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("amazon: [provision] complete")
 
-	return // nolint:nakedret
+	return //nolint:nakedret
 }
 
 // Destroy destroys the server AWS EC2 instances.

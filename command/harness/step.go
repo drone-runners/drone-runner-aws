@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
@@ -81,7 +82,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 	if inst.Platform.OS == oshelp.OSMac {
 		b := false
 		r.StartStepRequest.MountDockerSocket = &b
-		if r.StartStepRequest.Image == "harness/drone-git:1.2.0" {
+		if strings.Contains(r.StartStepRequest.Image, "harness/drone-git") {
 			r.StartStepRequest.Image = ""
 			r.Volumes = nil
 			pipelinePlatform, _ := poolManager.Inspect(inst.Pool)

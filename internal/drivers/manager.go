@@ -279,7 +279,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 
 	strategy := m.strategy
 	if strategy == nil {
-		strategy = MinMax{}
+		strategy = Greedy{}
 	}
 
 	busy, free, err := m.List(ctx, pool)
@@ -407,7 +407,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 
 	strategy := m.strategy
 	if strategy == nil {
-		strategy = MinMax{}
+		strategy = Greedy{}
 	}
 
 	logr := logger.FromContext(ctx).

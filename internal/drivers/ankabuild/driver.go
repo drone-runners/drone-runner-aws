@@ -77,7 +77,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 	var id = response.Body[0]
 	vm := &vmResponse{}
-	for i := 1; i <= 60; i++ {
+	for i := 1; i <= 50000; i++ {
 		vm, err = c.ankaClient.VMFind(ctx, id)
 		if err != nil {
 			return nil, err

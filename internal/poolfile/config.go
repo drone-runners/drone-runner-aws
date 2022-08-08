@@ -7,12 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers/ankabuild"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/anka"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/ankabuild"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
