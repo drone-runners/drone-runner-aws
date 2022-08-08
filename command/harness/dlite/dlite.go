@@ -110,8 +110,9 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		err = c.startPoller(ctx, []string{})
 		if err != nil {
 			logrus.WithError(err).Error("could not start poller")
+			return err
 		}
-		return err
+		return nil
 	})
 
 	g.Go(func() error {
@@ -122,6 +123,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	if waitErr != nil {
 		logrus.WithError(waitErr).
 			Errorln("shutting down dlite")
+		return waitErr
 	}
-	return waitErr
+	return nil
 }
