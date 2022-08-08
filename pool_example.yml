@@ -95,3 +95,19 @@ instances:
         offer: UbuntuServer
         sku: 18.04-LTS
         version: latest
+  - name: anka-build
+    default: true
+    type: ankabuild
+    pool: 1
+    limit: 2
+    platform:
+      os: darwin
+      arch: amd64
+    spec:
+      account:
+        username: admin
+        password: admin
+      vm_id: vmID
+      registry_url: controller_url
+      tag: tag
+      auth_token: auth_token
