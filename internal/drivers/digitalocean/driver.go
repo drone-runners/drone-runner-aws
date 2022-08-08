@@ -237,7 +237,7 @@ func newClient(ctx context.Context, pat string) *godo.Client {
 	)
 }
 
-//	take a slice of ssh keys and return a slice of godo.DropletCreateSSHKey
+// take a slice of ssh keys and return a slice of godo.DropletCreateSSHKey
 func createSSHKeys(sshKeys []string) []godo.DropletCreateSSHKey {
 	var keys []godo.DropletCreateSSHKey
 	for _, key := range sshKeys {
