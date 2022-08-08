@@ -5,15 +5,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	errors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
+
+	"github.com/dchest/uniuri"
 	"github.com/sirupsen/logrus"
 )
 
@@ -74,12 +77,33 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 
 	logr.Traceln("running StartStep")
 
-	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
-	if inst.Platform.OS == oshelp.OSMac && !env.Settings.EnableDocker {
+	// Currently the OSX m1 architecture does not enable nested virtualization, so we disable docker.
+	if inst.Platform.OS == oshelp.OSMac {
 		b := false
 		r.StartStepRequest.MountDockerSocket = &b
-	}
+		if r.StartStepRequest.Image == "harness/drone-git:1.2.0" {
+			r.StartStepRequest.Image = ""
+			r.Volumes = nil
+			pipelinePlatform, _ := poolManager.Inspect(inst.Pool)
 
+			cloneScript := scripts.Clone
+			clonePath := fmt.Sprintf("%s/clone.sh", r.StartStepRequest.WorkingDir)
+
+			entrypoint := getEntrypoint(pipelinePlatform.OS)
+			command := []string{clonePath}
+			r.StartStepRequest.ID = random()
+			r.StartStepRequest.Name = "clone"
+			r.StartStepRequest.Run.Entrypoint = entrypoint
+			r.StartStepRequest.Run.Command = command
+			r.StartStepRequest.Files = []*lespec.File{
+				{
+					Path: clonePath,
+					Mode: 0700,
+					Data: cloneScript,
+				},
+			}
+		}
+	}
 	startStepResponse, err := client.StartStep(ctx, &r.StartStepRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LE.StartStep: %w", err)
@@ -95,4 +119,17 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 	logr.WithField("pollResponse", pollResponse).Traceln("LE.RetryPollStep complete")
 
 	return pollResponse, nil
+}
+
+func getEntrypoint(pipelineOS string) []string {
+	if pipelineOS == oshelp.OSWindows {
+		return []string{"powershell"}
+	}
+
+	return []string{"sh", "-c"}
+}
+
+// random generator function
+var random = func() string {
+	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
 }

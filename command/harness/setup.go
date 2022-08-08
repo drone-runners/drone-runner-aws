@@ -152,7 +152,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	logr.Traceln("retry health check complete")
 
 	// Currently m1 architecture does not enable nested virtualisation, so we disable docker.
-	if instance.Platform.OS == oshelp.OSMac && !env.Settings.EnableDocker {
+	if instance.Platform.OS == oshelp.OSMac {
 		b := false
 		r.SetupRequest.MountDockerSocket = &b
 	}

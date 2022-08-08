@@ -277,7 +277,6 @@ type EnvConfig struct {
 		MinPoolSize    int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
 		MaxPoolSize    int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
-		EnableDocker   bool   `envconfig:"DRONE_ENABLE_DOCKER" default:"true"`
 	}
 
 	Server struct {
