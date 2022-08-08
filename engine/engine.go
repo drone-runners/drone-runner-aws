@@ -129,7 +129,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
-	if instance.Platform.OS == oshelp.OSMac && !e.config.Settings.EnableDocker {
+	if instance.Platform.OS == oshelp.OSMac {
 		b := false
 		setupRequest.MountDockerSocket = &b
 	}
@@ -282,7 +282,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	}(ctx)
 
 	// Currently the OSX m1 architecture does not enable nested virtualisation, so we disable docker.
-	if instance.Platform.OS == oshelp.OSMac && !e.config.Settings.EnableDocker {
+	if instance.Platform.OS == oshelp.OSMac {
 		b := false
 		req.MountDockerSocket = &b
 	}

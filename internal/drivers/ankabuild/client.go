@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 )
 
 const (
@@ -203,4 +205,17 @@ func (c *client) open(ctx context.Context, rawURL, method string, in, out interf
 
 func NewClient(uri, authToken string) Client {
 	return &client{http.DefaultClient, strings.TrimSuffix(uri, "/"), authToken}
+}
+
+func tempdir(inputOS string) string {
+	const dir = "anka"
+
+	switch inputOS {
+	case oshelp.OSWindows:
+		return oshelp.JoinPaths(inputOS, "C:\\Windows\\Temp", dir)
+	case oshelp.OSMac:
+		return oshelp.JoinPaths(inputOS, "/tmp", dir)
+	default:
+		return oshelp.JoinPaths(inputOS, "/tmp", dir)
+	}
 }

@@ -11,7 +11,7 @@ if [ "$HOME" != "/home/drone" ]; then
 	fi
 fi
 
-# if the netrc enviornment variables exist, write
+# if the netrc env variables exist, write
 # the netrc file.
 
 if [[ ! -z "${DRONE_NETRC_MACHINE}" ]]; then

@@ -56,7 +56,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("name", machineName).
 		WithField("pool", opts.PoolName)
 
-	logr.Info("Starting Anka Build Setup")
+	logr.Info("starting Anka Build Setup")
 
 	request := &createVMParams{
 		Name:                   machineName,
@@ -83,7 +83,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			return nil, err
 		}
 		if vm.Body.InstanceState != "Started" {
-			logrus.Debugf("VM: %s is starting...", vm.Body.InstanceID)
+			logrus.Debugf("ankabuild vm: %s is starting...", vm.Body.InstanceID)
 			time.Sleep(5 * time.Second) //nolint
 			continue
 		}

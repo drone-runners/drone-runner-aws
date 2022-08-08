@@ -72,8 +72,7 @@ func checkPools(pipeline *resource.Pipeline, poolManager *drivers.Manager, enabl
 		}
 		autoPool := poolManager.MatchPoolNameFromPlatform(&pipeline.Platform)
 		if autoPool == "" {
-			return fmt.Errorf(""+
-				"linter: unable to automatch a pool. OS : %s and Arch: %s has no equivalents", pipeline.Platform.OS, pipeline.Platform.Arch)
+			return fmt.Errorf("linter: unable to automatch a pool. OS : %s and Arch: %s has no equivalents", pipeline.Platform.OS, pipeline.Platform.Arch)
 		}
 		fmt.Printf("linter: automatching to pool '%s' based on pipeline platform of '%v'", autoPool, pipeline.Platform)
 	} else {
