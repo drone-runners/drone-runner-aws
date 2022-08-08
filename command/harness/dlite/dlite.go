@@ -16,6 +16,7 @@ import (
 	"github.com/wings-software/dlite/delegate"
 	"github.com/wings-software/dlite/poller"
 	"github.com/wings-software/dlite/router"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -103,22 +104,24 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
-	// TODO (Vistaar): Add support for tags based on available pools
-	err = c.startPoller(ctx, []string{})
-	if err != nil {
-		logrus.WithError(err).Error("could not start poller")
-		return err
-	}
-
-	// lets remove any old instances.
-	if !env.Settings.ReusePool {
-		cleanErr := c.poolManager.CleanPools(context.Background(), true, true)
-		if cleanErr != nil {
-			logrus.WithError(cleanErr).Errorln("dlite: unable to clean pools")
-		} else {
-			logrus.Infoln("dlite: pools cleaned")
+	var g errgroup.Group
+	g.Go(func() error {
+		// TODO (Vistaar): Add support for tags based on available pools
+		err = c.startPoller(ctx, []string{})
+		if err != nil {
+			logrus.WithError(err).Error("could not start poller")
 		}
-	}
+		return err
+	})
 
-	return nil
+	g.Go(func() error {
+		return harness.Cleanup(ctx, &c.env, c.poolManager)
+	})
+
+	waitErr := g.Wait()
+	if waitErr != nil {
+		logrus.WithError(waitErr).
+			Errorln("shutting down dlite")
+	}
+	return waitErr
 }

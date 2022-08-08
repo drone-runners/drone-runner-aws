@@ -65,3 +65,21 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	logrus.Infoln("pool created")
 	return nil
 }
+
+func Cleanup(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager) error {
+	if env.Settings.ReusePool {
+		return nil
+	}
+
+	<-ctx.Done()
+	// clean up pool on termination
+	cleanErr := poolManager.CleanPools(context.Background(), true, true)
+
+	if cleanErr != nil {
+		logrus.WithError(cleanErr).
+			Errorln("unable to clean pools")
+	} else {
+		logrus.Infoln("pools cleaned")
+	}
+	return cleanErr
+}
