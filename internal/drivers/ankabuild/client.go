@@ -68,12 +68,11 @@ type vmResponse struct {
 				RuleName  string `json:"rule_name"`
 			} `json:"port_forwarding,omitempty"`
 		} `json:"vminfo"`
-		NodeID   string    `json:"node_id"`
-		TS       time.Time `json:"ts"`
-		CrTime   time.Time `json:"cr_time"`
-		Progress int       `json:"progress"`
-		Arch     string    `json:"arch"`
-		Vlan     string    `json:"vlan"`
+		NodeID string    `json:"node_id"`
+		TS     time.Time `json:"ts"`
+		CrTime time.Time `json:"cr_time"`
+		Arch   string    `json:"arch"`
+		Vlan   string    `json:"vlan"`
 	} `json:"body"`
 }
 
