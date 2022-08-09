@@ -176,7 +176,7 @@ poller:
 // Destroy destroys the server AWS EC2 instances.
 func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
-		return
+		return fmt.Errorf("no instance ids provided")
 	}
 
 	logr := logger.FromContext(ctx).

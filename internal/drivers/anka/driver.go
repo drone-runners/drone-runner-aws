@@ -191,7 +191,7 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 			return err
 		}
 	}
-	return
+	return nil
 }
 
 func (p *config) Hibernate(_ context.Context, _, _ string) error {

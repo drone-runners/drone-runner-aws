@@ -46,11 +46,11 @@ func pingDatabase(db *sqlx.DB) (err error) {
 	for i := 0; i < 30; i++ {
 		err = db.Ping()
 		if err == nil {
-			return
+			return nil
 		}
 		time.Sleep(time.Second)
 	}
-	return
+	return err
 }
 
 // helper function to setup the databsae by performing automated

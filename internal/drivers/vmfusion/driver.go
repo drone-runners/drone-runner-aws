@@ -217,7 +217,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
-		return
+		return errors.New("no instance IDs provided")
 	}
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).

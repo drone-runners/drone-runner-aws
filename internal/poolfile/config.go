@@ -465,8 +465,6 @@ func createAzurePool(clientID, clientSecret, subscriptionID, tenantID string, mi
 				SubscriptionID: subscriptionID,
 				TenantID:       tenantID,
 			},
-			Location: "eastus2",
-			Size:     "Standard_F2s",
 			Image: config.AzureImage{
 				Publisher: "Canonical",
 				Offer:     "UbuntuServer",
