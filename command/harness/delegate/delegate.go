@@ -137,23 +137,15 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		return runnerServer.ListenAndServe(ctx)
 	})
 
+	g.Go(func() error {
+		return harness.Cleanup(ctx, &c.env, c.poolManager)
+	})
+
 	waitErr := g.Wait()
 	if waitErr != nil {
 		logrus.WithError(waitErr).
 			Errorln("shutting down the server")
 	}
-
-	// lets remove any old instances.
-	if !env.Settings.ReusePool {
-		cleanErr := c.poolManager.CleanPools(context.Background(), true, true)
-		if cleanErr != nil {
-			logrus.WithError(cleanErr).
-				Errorln("delegate: unable to clean pools")
-		} else {
-			logrus.Infoln("delegate: pools cleaned")
-		}
-	}
-
 	return waitErr
 }
 
