@@ -11,11 +11,12 @@ import (
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/signal"
-	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/delegate"
 	"github.com/wings-software/dlite/poller"
 	"github.com/wings-software/dlite/router"
+
+	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
