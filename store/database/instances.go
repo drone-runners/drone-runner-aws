@@ -106,6 +106,7 @@ const instanceColumns = `
 ,instance_started
 ,instance_updated
 ,is_hibernated
+,instance_port
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -138,6 +139,7 @@ INSERT INTO instances (
 ,instance_started
 ,instance_updated
 ,is_hibernated
+,instance_port
 ) values (
  :instance_id
 ,:instance_name
@@ -162,6 +164,7 @@ INSERT INTO instances (
 ,:instance_started
 ,:instance_updated
 ,:is_hibernated
+,:instance_port
 ) RETURNING instance_id
 `
 

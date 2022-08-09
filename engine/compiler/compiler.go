@@ -27,14 +27,7 @@ import (
 	"github.com/drone/runner-go/secret"
 	leimage "github.com/harness/lite-engine/engine/docker/image"
 	lespec "github.com/harness/lite-engine/engine/spec"
-
-	"github.com/dchest/uniuri"
 )
-
-// random generator function
-var random = func() string {
-	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
-}
 
 type (
 	// Tmate defines tmate settings.
@@ -173,12 +166,12 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		)
 		clonePath := oshelp.JoinPaths(pipelinePlatform.OS, pipelineRoot, "opt", oshelp.GetExt(pipelinePlatform.OS, "clone"))
 
-		entrypoint := getEntrypoint(pipelinePlatform.OS)
+		entrypoint := oshelp.GetEntrypoint(pipelinePlatform.OS)
 		command := []string{clonePath}
 
 		spec.Steps = append(spec.Steps, &engine.Step{
 			Step: lespec.Step{
-				ID:         random(),
+				ID:         oshelp.Random(),
 				Name:       "clone",
 				Entrypoint: entrypoint,
 				Command:    command,
@@ -216,7 +209,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		src.Detach = true // services are the same as steps, but are executed first and are detached
 	}
 	for _, src := range append(pipeline.Services, pipeline.Steps...) { // combine: services+steps
-		stepID := random()
+		stepID := oshelp.Random()
 
 		stepEnv := environ.Combine(envs, environ.Expand(convertStaticEnv(src.Environment)))
 		stepSecrets := convertSecretEnv(src.Environment)
@@ -227,7 +220,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 		// set entrypoint if running on the host or if the container has commands
 		if src.Image == "" || (src.Image != "" && len(src.Commands) > 0) {
-			entrypoint = getEntrypoint(pipelinePlatform.OS)
+			entrypoint = oshelp.GetEntrypoint(pipelinePlatform.OS)
 		}
 
 		// build the script of commands we will execute
@@ -407,7 +400,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 	// create network
 	spec.Network = lespec.Network{
-		ID:      random(),
+		ID:      oshelp.Random(),
 		Labels:  systemLabels,
 		Options: c.NetworkOpts,
 	}
@@ -415,7 +408,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// append global volumes and volume mounts to steps which have an image specified.
 	for _, pair := range c.Volumes {
 		src, dest, ro, err := resource.ParseVolume(pair)
-		id := random()
+		id := oshelp.Random()
 		if err != nil {
 			continue
 		}
@@ -445,7 +438,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		if v.EmptyDir != nil {
 			spec.Volumes = append(spec.Volumes, &lespec.Volume{
 				EmptyDir: &lespec.VolumeEmptyDir{
-					ID:     random(),
+					ID:     oshelp.Random(),
 					Name:   v.Name,
 					Labels: systemLabels,
 				},
@@ -453,7 +446,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		} else if v.HostPath != nil {
 			spec.Volumes = append(spec.Volumes, &lespec.Volume{
 				HostPath: &lespec.VolumeHostPath{
-					ID:     random(),
+					ID:     oshelp.Random(),
 					Name:   v.Name,
 					Path:   v.HostPath.Path,
 					Labels: systemLabels,
@@ -466,7 +459,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		spec.Volumes = append(spec.Volumes,
 			&lespec.Volume{ // a source volume, used by every container step
 				HostPath: &lespec.VolumeHostPath{
-					ID:     "source_dir_" + random(),
+					ID:     "source_dir_" + oshelp.Random(),
 					Name:   "source_dir",
 					Path:   sourceDir,
 					Labels: systemLabels,
@@ -474,7 +467,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			},
 			&lespec.Volume{ // a script volume, used by every container step
 				HostPath: &lespec.VolumeHostPath{
-					ID:     "script_dir_" + random(),
+					ID:     "script_dir_" + oshelp.Random(),
 					Name:   "script_dir",
 					Path:   scriptDir,
 					Labels: systemLabels,
@@ -548,14 +541,6 @@ func createDirectories(pipelineOS, pipelineRoot string) (directories []*lespec.F
 	}
 
 	return
-}
-
-func getEntrypoint(pipelineOS string) []string {
-	if pipelineOS == oshelp.OSWindows {
-		return []string{"powershell"}
-	}
-
-	return []string{"sh", "-c"}
 }
 
 func getContainerSourcePath(pipelineOS string) string {

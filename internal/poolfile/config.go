@@ -11,6 +11,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/anka"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/ankabuild"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
@@ -204,7 +205,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
-			// set platform defaults
 			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
 				return nil, platformErr
@@ -226,7 +226,33 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-
+		case string(types.AnkaBuild):
+			var ankaBuild, ok = instance.Spec.(*config.AnkaBuild)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			platform, platformErr := ankabuild.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				return nil, platformErr
+			}
+			instance.Platform = *platform
+			driver, err := ankabuild.New(
+				ankabuild.WithUsername(ankaBuild.Account.Username),
+				ankabuild.WithPassword(ankaBuild.Account.Password),
+				ankabuild.WithRootDirectory(ankaBuild.RootDirectory),
+				ankabuild.WithUserData(ankaBuild.UserData, ankaBuild.UserDataPath),
+				ankabuild.WithVMID(ankaBuild.VMID),
+				ankabuild.WithRegistryURI(ankaBuild.RegistryURL),
+				ankabuild.WithNodeID(ankaBuild.NodeID),
+				ankabuild.WithTag(ankaBuild.Tag),
+				ankabuild.WithAuthToken(ankaBuild.AuthToken),
+			)
+			if err != nil {
+				return nil, err
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
 		default:
 			return nil, fmt.Errorf("unknown instance type %s", instance.Type)
 		}

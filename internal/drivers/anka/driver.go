@@ -164,6 +164,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		TLSKey:   opts.TLSKey,
 		Started:  startTime.Unix(),
 		Updated:  time.Now().Unix(),
+		Port:     lehelper.LiteEnginePort,
 	}
 	logr.
 		WithField("ip", ip).

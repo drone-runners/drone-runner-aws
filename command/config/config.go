@@ -77,6 +77,22 @@ type (
 		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
 
+	// AnkaBuild specifies the configuration for an Anka instance.
+	AnkaBuild struct {
+		Account struct {
+			Username string `json:"username,omitempty"  yaml:"username"`
+			Password string `json:"password,omitempty"  yaml:"password"`
+		}
+		VMID          string `json:"vm_id,omitempty" yaml:"vm_id"`
+		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
+		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
+		RegistryURL   string `json:"registry_url,omitempty" yaml:"registry_url"`
+		NodeID        string `json:"node_id,omitempty" yaml:"node_id"`
+		Tag           string `json:"tag,omitempty" yaml:"tag"`
+		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
+	}
+
 	// Azure specifies the configuration for an Azure instance.
 	Azure struct {
 		Account           AzureAccount      `json:"account,omitempty"`
@@ -375,6 +391,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Amazon)
 	case string(types.Anka):
 		s.Spec = new(Anka)
+	case string(types.AnkaBuild):
+		s.Spec = new(AnkaBuild)
 	case string(types.Azure):
 		s.Spec = new(Azure)
 	case string(types.Google), "gcp":

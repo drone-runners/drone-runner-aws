@@ -330,6 +330,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:      launchTime.Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
+		Port:         lehelper.LiteEnginePort,
 	}
 	logr.
 		WithField("ip", instanceIP).

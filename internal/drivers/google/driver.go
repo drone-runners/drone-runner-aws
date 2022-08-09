@@ -301,6 +301,7 @@ func (p *config) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateO
 		Started:      started.Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
+		Port:         lehelper.LiteEnginePort,
 	}
 }
 
