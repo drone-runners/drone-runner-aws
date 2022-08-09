@@ -82,8 +82,13 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		if err != nil {
 			return nil, err
 		}
+		if vm.Body.InstanceState == "Pulling" {
+			logrus.Infof("ankabuild: template tag: %s is downloading to node: %s", vm.Body.Tag, vm.Body.NodeID)
+			time.Sleep(30 * time.Second) //nolint
+			continue
+		}
 		if vm.Body.InstanceState != "Started" {
-			logrus.Debugf("ankabuild vm: %s is starting %d ...", vm.Body.InstanceID, i)
+			logrus.Debugf("ankabuild: vm %s is starting %d ...", vm.Body.InstanceID, i)
 			time.Sleep(5 * time.Second) //nolint
 			continue
 		}
