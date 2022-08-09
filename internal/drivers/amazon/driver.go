@@ -169,7 +169,7 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 		}
 	}
 	if !found {
-		return fmt.Errorf("security group %s does not have the correct ingress rules There is no rule for port %d", *securityGroup.GroupName, lehelper.LiteEnginePort)
+		return fmt.Errorf("security group %s does not have the correct ingress rules. There is no rule for port %d", *securityGroup.GroupName, lehelper.LiteEnginePort)
 	}
 	return nil
 }
@@ -336,7 +336,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("amazon: [provision] complete")
 
-	return // nolint:nakedret
+	return //nolint:nakedret
 }
 
 // Destroy destroys the server AWS EC2 instances.
