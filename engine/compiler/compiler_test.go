@@ -16,6 +16,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
@@ -165,10 +166,10 @@ func TestCompile_Secrets(t *testing.T) {
 func testCompile(t *testing.T, source, golden string) *engine.Spec {
 	// replace the default random function with one that
 	// is deterministic, for testing purposes. restore it afterwards.
-	oldRandom := random
-	random = notRandom
+	oldRandom := oshelp.Random
+	oshelp.Random = notRandom
 	defer func() {
-		random = oldRandom
+		oshelp.Random = oldRandom
 	}()
 
 	mnfst, err := manifest.ParseFile(source)

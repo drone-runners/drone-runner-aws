@@ -1,5 +1,6 @@
 package scripts
 
+// Clone code pulled from: https://github.com/wings-software/drone-git/blob/master/posix/clone
 const Clone = `
 #!/bin/sh
 # force the home directory path.

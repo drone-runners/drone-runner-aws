@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dchest/uniuri"
+
 	"github.com/drone/runner-go/shell/bash"
 	"github.com/drone/runner-go/shell/powershell"
 )
@@ -95,4 +97,17 @@ if [ "${DRONE_BUILD_DEBUG}" = "true" ]; then
 fi
 `, arch, arch, arch)
 	return script
+}
+
+func GetEntrypoint(pipelineOS string) []string {
+	if pipelineOS == OSWindows {
+		return []string{"powershell"}
+	}
+
+	return []string{"sh", "-c"}
+}
+
+// Random generator function
+var Random = func() string {
+	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
 }

@@ -17,7 +17,6 @@ import (
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 
-	"github.com/dchest/uniuri"
 	"github.com/sirupsen/logrus"
 )
 
@@ -90,9 +89,9 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 			cloneScript := scripts.Clone
 			clonePath := fmt.Sprintf("%s/clone.sh", r.StartStepRequest.WorkingDir)
 
-			entrypoint := getEntrypoint(pipelinePlatform.OS)
+			entrypoint := oshelp.GetEntrypoint(pipelinePlatform.OS)
 			command := []string{clonePath}
-			r.StartStepRequest.ID = random()
+			r.StartStepRequest.ID = oshelp.Random()
 			r.StartStepRequest.Name = "clone"
 			r.StartStepRequest.Run.Entrypoint = entrypoint
 			r.StartStepRequest.Run.Command = command
@@ -120,17 +119,4 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 	logr.WithField("pollResponse", pollResponse).Traceln("LE.RetryPollStep complete")
 
 	return pollResponse, nil
-}
-
-func getEntrypoint(pipelineOS string) []string {
-	if pipelineOS == oshelp.OSWindows {
-		return []string{"powershell"}
-	}
-
-	return []string{"sh", "-c"}
-}
-
-// random generator function
-var random = func() string {
-	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
 }
