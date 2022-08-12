@@ -160,7 +160,34 @@ volumes:
 ---
 kind: pipeline
 type: vm
-name: build and publish binaries
+name: build and publish linux binary
+
+pool:
+  use: ubuntu
+
+steps:
+  - name: build linux binary
+    image: golang:1
+    commands:
+      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o drone-runner-aws-linux-amd64
+  - name: release
+    image: plugins/github-release
+    settings:
+      files:
+        - drone-runner-aws-linux-amd64
+      api_key:
+        from_secret: github_token
+
+depends_on:
+  - default
+trigger:
+  ref:
+    - refs/tags/*
+
+---
+kind: pipeline
+type: vm
+name: build and publish intel mac binary
 
 node:
   cluster: mac1
@@ -169,19 +196,15 @@ pool:
   use: osx-anka
 
 steps:
-  - name: build linux binary
-    image: golang:1
-    commands:
-      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o drone-runner-aws-linux-amd64
   - name: build mac intel binary
     commands:
       - brew install golang
       - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-amd64
   - name: release
-    image: plugins/github-release
+    commands:
+      - release_binary/drone-github-release-darwin-amd64
     settings:
       files:
-        - drone-runner-aws-linux-amd64
         - drone-runner-aws-darwin-amd64
       api_key:
         from_secret: github_token
@@ -209,7 +232,8 @@ steps:
       - brew install golang
       - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-arm64
   - name: release
-    image: plugins/github-release
+    commands:
+      - release_binary/drone-github-release-darwin-arm64
     settings:
       files:
         - drone-runner-aws-darwin-arm64
