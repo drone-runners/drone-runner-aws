@@ -114,7 +114,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.stageOwnerStore = database.NewStageOwnerStore(db)
 	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
-	err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
+	_, err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
 	if err != nil {
 		return err
 	}

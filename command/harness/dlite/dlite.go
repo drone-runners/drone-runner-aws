@@ -48,6 +48,16 @@ func RegisterDlite(app *kingpin.Application) {
 		StringVar(&c.poolFile)
 }
 
+// Iterate over the list of pools and register the tags for the pools it supports
+func parseTags(pf *config.PoolFile) []string {
+	tags := []string{}
+	for i := range pf.Instances {
+		t := pf.Instances[i].Platform.OS + "-" + pf.Instances[i].Platform.Arch
+		tags = append(tags, t)
+	}
+	return tags
+}
+
 func (c *dliteCommand) startPoller(ctx context.Context, tags []string) error {
 	r := router.NewRouter(routeMap(c))
 	// Client to interact with the harness server
@@ -97,18 +107,18 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	c.stageOwnerStore = database.NewStageOwnerStore(db)
 	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
-	err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
+	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
 	if err != nil {
 		return err
 	}
+	tags := parseTags(poolConfig)
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
 	var g errgroup.Group
 	g.Go(func() error {
-		// TODO (Vistaar): Add support for tags based on available pools
-		err = c.startPoller(ctx, []string{})
+		err = c.startPoller(ctx, tags)
 		if err != nil {
 			logrus.WithError(err).Error("could not start poller")
 			return err
