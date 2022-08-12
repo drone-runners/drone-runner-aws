@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager, poolFile string) error {
+func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager, poolFile string) (*config.PoolFile, error) {
 	configPool, confErr := poolfile.ConfigPoolFile(poolFile, env)
 	if confErr != nil {
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
@@ -19,20 +19,20 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name)
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
-		return err
+		return configPool, err
 	}
 
 	err = poolManager.Add(pools...)
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to add pools")
-		return err
+		return configPool, err
 	}
 
 	err = poolManager.PingDriver(ctx)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("unable to ping driver")
-		return err
+		return configPool, err
 	}
 
 	// setup lifetimes of instances
@@ -42,7 +42,7 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("failed to start instance purger")
-		return err
+		return configPool, err
 	}
 
 	// lets remove any old instances.
@@ -60,10 +60,10 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	if buildPoolErr != nil {
 		logrus.WithError(buildPoolErr).
 			Errorln("unable to build pool")
-		return buildPoolErr
+		return configPool, buildPoolErr
 	}
 	logrus.Infoln("pool created")
-	return nil
+	return configPool, nil
 }
 
 func Cleanup(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager) error {
