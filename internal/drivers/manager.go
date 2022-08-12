@@ -369,6 +369,9 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 			}
 		}
 
+		if len(instanceIDs) == 0 {
+			continue
+		}
 		err = pool.Driver.Destroy(ctx, instanceIDs...)
 		if err != nil {
 			return err
