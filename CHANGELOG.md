@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.0.0-rc.9](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.9) (2022-08-15)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.8...v1.0.0-rc.9)
+
+**Implemented enhancements:**
+
+- start publishing tags based on supported os/arch [\#153](https://github.com/drone-runners/drone-runner-aws/pull/153) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(feat\) windows support for azure [\#149](https://github.com/drone-runners/drone-runner-aws/pull/149) ([tphoney](https://github.com/tphoney))
+- \(feat\) adds anka build provider [\#148](https://github.com/drone-runners/drone-runner-aws/pull/148) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- send back delegate info as part of task response [\#145](https://github.com/drone-runners/drone-runner-aws/pull/145) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(feat\) azure support for linux [\#139](https://github.com/drone-runners/drone-runner-aws/pull/139) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+**Fixed bugs:**
+
+- Fix cleanup of instances [\#155](https://github.com/drone-runners/drone-runner-aws/pull/155) ([shubham149](https://github.com/shubham149))
+- \(bug\) fixes issue were stage owner was never getting inserted [\#152](https://github.com/drone-runners/drone-runner-aws/pull/152) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(bug\) - fixes issue were progress getting mapped wrong type on anka side [\#151](https://github.com/drone-runners/drone-runner-aws/pull/151) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- Cleanup pools on dlite termination [\#150](https://github.com/drone-runners/drone-runner-aws/pull/150) ([shubham149](https://github.com/shubham149))
+- Fix instance name in gcp runner [\#144](https://github.com/drone-runners/drone-runner-aws/pull/144) ([shubham149](https://github.com/shubham149))
+- Fix support for gcp json key credentials [\#143](https://github.com/drone-runners/drone-runner-aws/pull/143) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- \(DRON-406\) use binaries for github release on mac [\#154](https://github.com/drone-runners/drone-runner-aws/pull/154) ([tphoney](https://github.com/tphoney))
+- update README for running the runner in delegate-less mode [\#147](https://github.com/drone-runners/drone-runner-aws/pull/147) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- add return [\#146](https://github.com/drone-runners/drone-runner-aws/pull/146) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- update go.mod [\#142](https://github.com/drone-runners/drone-runner-aws/pull/142) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- moved token creation and updation to dlite [\#141](https://github.com/drone-runners/drone-runner-aws/pull/141) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
 ## [v1.0.0-rc.8](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.8) (2022-07-18)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.7...v1.0.0-rc.8)
