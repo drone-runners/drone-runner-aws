@@ -10,7 +10,7 @@ steps:
   - name: build
     image: golang:1.18
     commands:
-      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws
+      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
     volumes:
       - name: cache
         path: /root/.cache/go-build
@@ -49,14 +49,14 @@ steps:
   - name: compiler checks
     image: golang:1.18
     commands:
-      - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_ubuntu.yml' test_files/compiler/drone_pool.yml
-      - release/linux/amd64/drone-runner-aws compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
+      - release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_ubuntu.yml' test_files/compiler/drone_pool.yml
+      - release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
     depends_on:
       - build
   - name: exec checks
     image: golang:1.18
     commands:
-      - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+      - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws-linux-amd64 exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     environment:
       AWS_ACCESS_KEY_ID:
         from_secret: AWS_ACCESS_KEY_ID
@@ -87,7 +87,7 @@ steps:
                 access_key_secret: $${AWS_ACCESS_KEY_SECRET}
               ami: ami-04ca7309675983877
               size: t2.medium" > pool.tmp
-      - release/linux/amd64/drone-runner-aws exec test_files/compiler/drone_windows.yml --pool pool.tmp --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+      - release/linux/amd64/drone-runner-aws-linux-amd64 exec test_files/compiler/drone_windows.yml --pool pool.tmp --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     environment:
       AWS_ACCESS_KEY_ID:
         from_secret: AWS_ACCESS_KEY_ID
@@ -101,7 +101,7 @@ steps:
   - name: delegate checks
     image: golang:1.18
     commands:
-      - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws delegate > delegate.log 2>&1 &
+      - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws-linux-amd64 delegate > delegate.log 2>&1 &
       - sleep 30
       - cat delegate.log
       - |
@@ -155,7 +155,7 @@ steps:
     image: plugins/github-release
     settings:
       files:
-        - drone-runner-aws-linux-amd64
+        - release/linux/amd64/drone-runner-aws-linux-amd64
       api_key:
         from_secret: github_token
     when:
@@ -185,12 +185,12 @@ steps:
   - name: build arm64 linux binary
     image: golang:1
     commands:
-      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o drone-runner-aws-linux-arm64
+      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/arm64/drone-runner-aws-linux-arm64
   - name: release
     image: plugins/github-release
     settings:
       files:
-        - drone-runner-aws-linux-arm64
+        - release/linux/arm64/drone-runner-aws-linux-arm64
       api_key:
         from_secret: github_token
     when:
@@ -228,13 +228,13 @@ steps:
   - name: build mac intel binary
     commands:
       - brew install golang
-      - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-amd64
+      - CGO_ENABLED=1 go build -o release/darwin/amd64/drone-runner-aws-darwin-amd64
   - name: release
     commands:
       - release_binary/drone-github-release-darwin-amd64
     settings:
       files:
-        - drone-runner-aws-darwin-amd64
+        - release/darwin/amd64/drone-runner-aws-darwin-amd64
       api_key:
         from_secret: github_token
 
@@ -259,13 +259,13 @@ steps:
   - name: build mac arm64 binary
     commands:
       - brew install golang
-      - CGO_ENABLED=1 go build -o drone-runner-aws-darwin-arm64
+      - CGO_ENABLED=1 go build -o release/darwin/arm64/drone-runner-aws-darwin-arm64
   - name: release
     commands:
       - release_binary/drone-github-release-darwin-arm64
     settings:
       files:
-        - drone-runner-aws-darwin-arm64
+        - release/darwin/arm64/drone-runner-aws-darwin-arm64
       api_key:
         from_secret: github_token
 
@@ -275,7 +275,6 @@ trigger:
   ref:
     - refs/tags/*
 ---
-
 kind: pipeline
 type: docker
 name: manifest
