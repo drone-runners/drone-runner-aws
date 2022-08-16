@@ -128,7 +128,7 @@ steps:
       event:
         exclude:
           - pull_request
-  - name: publish
+  - name: publish to docker
     image: plugins/docker
     pull: if-not-exists
     settings:
@@ -140,6 +140,13 @@ steps:
         from_secret: docker_username
       password:
         from_secret: docker_password
+    depends_on:
+      - compiler checks
+      - exec checks
+      - windows exec checks
+      - delegate checks
+      - golangci-lint
+      - go vet and unit tests
     when:
       ref:
         - refs/heads/master
@@ -161,7 +168,6 @@ steps:
       - delegate checks
       - golangci-lint
       - go vet and unit tests
-
 
 volumes:
   - name: cache
@@ -190,7 +196,7 @@ steps:
     when:
       ref:
         - refs/tags/*
-  - name: publish
+  - name: publish to docker
     image: plugins/docker
     pull: if-not-exists
     settings:
