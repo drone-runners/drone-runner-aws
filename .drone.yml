@@ -144,6 +144,16 @@ steps:
       ref:
         - refs/heads/master
         - refs/tags/*
+  - name: release amd64 binary
+    image: plugins/github-release
+    settings:
+      files:
+        - drone-runner-aws-linux-amd64
+      api_key:
+        from_secret: github_token
+    when:
+      ref:
+        - refs/tags/*
     depends_on:
       - compiler checks
       - exec checks
@@ -160,28 +170,41 @@ volumes:
 ---
 kind: pipeline
 type: vm
-name: build and publish linux binary
+name: build arm64 linux binary and publish docker
 
 pool:
-  use: ubuntu
+  use: ubuntu_arm64
 
 steps:
-  - name: build linux binary
+  - name: build arm64 linux binary
     image: golang:1
     commands:
-      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o drone-runner-aws-linux-amd64
+      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o drone-runner-aws-linux-arm64
   - name: release
     image: plugins/github-release
     settings:
       files:
-        - drone-runner-aws-linux-amd64
+        - drone-runner-aws-linux-arm64
       api_key:
         from_secret: github_token
-
-depends_on:
-  - default
-trigger:
+    when:
+      ref:
+        - refs/tags/*
+  - name: publish
+    image: plugins/docker
+    pull: if-not-exists
+    settings:
+      repo: drone/drone-runner-aws
+      auto_tag: true
+      auto_tag_suffix: linux-arm64
+      dockerfile: docker/Dockerfile.linux.arm64
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+when:
   ref:
+    - refs/heads/master
     - refs/tags/*
 
 ---
@@ -265,6 +288,7 @@ steps:
 
 depends_on:
   - default
+  - build arm64 linux binary and publish docker
 trigger:
   ref:
     - refs/heads/master

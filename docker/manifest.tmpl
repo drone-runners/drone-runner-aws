@@ -11,3 +11,8 @@ manifests:
     platform:
       architecture: amd64
       os: linux
+  -
+    image: drone/drone-runner-aws:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm64
+    platform:
+      architecture: arm64
+      os: linux
