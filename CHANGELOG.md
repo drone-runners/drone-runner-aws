@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.0.0-rc.10](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.10) (2022-08-17)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.9...v1.0.0-rc.10)
+
+**Implemented enhancements:**
+
+- \(feat\) auto setup for Anka build [\#161](https://github.com/drone-runners/drone-runner-aws/pull/161) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(feat\) update manifest to include arm64 build [\#158](https://github.com/drone-runners/drone-runner-aws/pull/158) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+**Merged pull requests:**
+
+- \(maint\) formalise binary naming [\#159](https://github.com/drone-runners/drone-runner-aws/pull/159) ([tphoney](https://github.com/tphoney))
+
 ## [v1.0.0-rc.9](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.9) (2022-08-15)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.8...v1.0.0-rc.9)
@@ -23,6 +36,7 @@
 
 **Merged pull requests:**
 
+- \(maint\) rc9 prep [\#157](https://github.com/drone-runners/drone-runner-aws/pull/157) ([tphoney](https://github.com/tphoney))
 - \(DRON-406\) use binaries for github release on mac [\#154](https://github.com/drone-runners/drone-runner-aws/pull/154) ([tphoney](https://github.com/tphoney))
 - update README for running the runner in delegate-less mode [\#147](https://github.com/drone-runners/drone-runner-aws/pull/147) ([vistaarjuneja](https://github.com/vistaarjuneja))
 - add return [\#146](https://github.com/drone-runners/drone-runner-aws/pull/146) ([vistaarjuneja](https://github.com/vistaarjuneja))
