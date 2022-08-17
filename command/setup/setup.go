@@ -39,6 +39,9 @@ type setupCommand struct {
 	azureClientSecret   string
 	azureTenantID       string
 	azureSubscriptionID string
+	ankabuildVMName     string
+	ankabuildURL        string
+	ankabuildToken      string
 }
 
 const (
@@ -60,10 +63,24 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 	}
 	// check cli options and map arguments to configuration
 	switch {
+	case c.ankaVMName != "":
+		env.Anka.VMName = c.ankaVMName
+		logrus.Infoln("setup: using anka")
+	case c.ankabuildVMName != "" && c.ankabuildURL != "":
+		logrus.Infoln("setup: using anka build")
+		env.AnkaBuild.Token = c.ankabuildToken
+		env.AnkaBuild.URL = c.ankabuildURL
+		env.AnkaBuild.VMName = c.ankabuildVMName
 	case c.awsAccessKeyID != "" && c.awsAccessKeySecret != "":
 		logrus.Infoln("setup: using amazon")
 		env.AWS.AccessKeyID = c.awsAccessKeyID
 		env.AWS.AccessKeySecret = c.awsAccessKeySecret
+	case c.azureClientID != "" && c.azureClientSecret != "" && c.azureSubscriptionID != "" && c.azureTenantID != "":
+		env.Azure.ClientID = c.azureClientID
+		env.Azure.ClientSecret = c.azureClientSecret
+		env.Azure.SubscriptionID = c.azureSubscriptionID
+		env.Azure.TenantID = c.azureTenantID
+		logrus.Infoln("setup: using azure")
 	case c.digitalOceanPAT != "":
 		env.DigitalOcean.PAT = c.digitalOceanPAT
 		logrus.Infoln("setup: using digital ocean")
@@ -74,20 +91,12 @@ func (c *setupCommand) run(*kingpin.ParseContext) error {
 			env.Google.JSONPath = c.googleJSONPath
 		}
 		logrus.Infoln("setup: using google")
-	case c.ankaVMName != "":
-		env.Anka.VMName = c.ankaVMName
-		logrus.Infoln("setup: using anka")
-	case c.azureClientID != "" && c.azureClientSecret != "" && c.azureSubscriptionID != "" && c.azureTenantID != "":
-		env.Azure.ClientID = c.azureClientID
-		env.Azure.ClientSecret = c.azureClientSecret
-		env.Azure.SubscriptionID = c.azureSubscriptionID
-		env.Azure.TenantID = c.azureTenantID
-		logrus.Infoln("setup: using azure")
 	default:
 		logrus.
 			Fatalln(`unsupported driver, please choose a driver setting the mandatory fields:
 							for Amazon        --aws-access-key-id and --aws-access-key-secret
 							for Anka          --anka-vm-name
+							for AnkaBuild     --ankabuild-vm-name --ankabuild-url --ankabuild-token
 							for Azure         --azure-client-id --azure-client-secret --azure-subscription-id --azure-tenant-id
 							for Digital Ocean --digital-ocean-pat
 							for Google        --google-project-id`)
@@ -241,6 +250,16 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("anka-vm-name", "Anka VM name").
 		Default("").
 		StringVar(&c.ankaVMName)
+	// Anka Build specific flags
+	cmd.Flag("ankabuild-vm-name", "Anka Build VM name or ID").
+		Default("").
+		StringVar(&c.ankabuildVMName)
+	cmd.Flag("ankabuild-url", "Anka Build Token").
+		Default("").
+		StringVar(&c.ankabuildURL)
+	cmd.Flag("ankabuild-token", "Anka Build URL").
+		Default("").
+		StringVar(&c.ankabuildToken)
 	// Azure specific flags
 	cmd.Flag("azure-client-id", "Azure client ID").
 		Default("").

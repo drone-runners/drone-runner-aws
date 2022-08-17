@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/types"
+
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 )
@@ -201,6 +202,12 @@ type EnvConfig struct {
 
 	Anka struct {
 		VMName string `envconfig:"ANKA_VM_NAME"`
+	}
+
+	AnkaBuild struct {
+		VMName string `envconfig:"ANKA_BUILD_VM_NAME"`
+		URL    string `envconfig:"ANKA_BUILD_URL"`
+		Token  string `envconfig:"ANKA_BUILD_TOKEN"`
 	}
 
 	AWS struct {

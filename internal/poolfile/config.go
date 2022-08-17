@@ -286,6 +286,13 @@ func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile,
 	if path == "" {
 		logrus.Infof("no pool file provided")
 		switch {
+		case conf.Anka.VMName != "":
+			return createAnkaPool(conf.Anka.VMName, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+		case conf.AnkaBuild.VMName != "" && conf.AnkaBuild.URL != "":
+			return createAnkaBuildPool(conf.AnkaBuild.VMName, conf.AnkaBuild.URL, conf.AnkaBuild.Token, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+		case conf.Azure.ClientID != "" || conf.Azure.ClientSecret != "" || conf.Azure.SubscriptionID != "" || conf.Azure.TenantID != "":
+			logrus.Infoln("in memory pool is using azure")
+			return createAzurePool(conf.Azure.ClientID, conf.Azure.ClientSecret, conf.Azure.SubscriptionID, conf.Azure.TenantID, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		case conf.AWS.AccessKeyID != "" || conf.AWS.AccessKeySecret != "":
 			logrus.Infoln("in memory pool is using amazon")
 			return createAmazonPool(conf.AWS.AccessKeyID, conf.AWS.AccessKeySecret, conf.AWS.Region, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
@@ -298,19 +305,15 @@ func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile,
 				logrus.Printf("google:unable to find credentials file at '%s' or set GOOGLE_JSON_PATH to the correct location", conf.Google.JSONPath)
 			}
 			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
-		case conf.Anka.VMName != "":
-			return createAnkaPool(conf.Anka.VMName, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
-		case conf.Azure.ClientID != "" || conf.Azure.ClientSecret != "" || conf.Azure.SubscriptionID != "" || conf.Azure.TenantID != "":
-			logrus.Infoln("in memory pool is using azure")
-			return createAzurePool(conf.Azure.ClientID, conf.Azure.ClientSecret, conf.Azure.SubscriptionID, conf.Azure.TenantID, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		default:
 			return pool,
 				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n " +
+					"for anka ANKA_VM_NAME\n " +
+					"for ankabuild: ANKA_BUILD_VM_NAME, ANKA_BUILD_URL, ANKA_BUILD_TOKEN\n " +
+					"for azure AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID\n" +
 					"for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n " +
 					"for google GOOGLE_PROJECT_ID\n " +
-					"for anka ANKA_VM_NAME\n " +
-					"for digitalocean DIGITALOCEAN_PAT\n" +
-					"for azure AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID")
+					"for digitalocean DIGITALOCEAN_PAT\n")
 		}
 	}
 	pool, err = config.ParseFile(path)
@@ -437,6 +440,31 @@ func createAnkaPool(vmName string, minPoolSize, maxPoolSize int) *config.PoolFil
 		},
 		Spec: &config.Anka{
 			VMID: vmName,
+		},
+	}
+	poolfile := config.PoolFile{
+		Version:   "1",
+		Instances: []config.Instance{instance},
+	}
+
+	return &poolfile
+}
+
+func createAnkaBuildPool(vmName, url, token string, minPoolSize, maxPoolSize int) *config.PoolFile {
+	instance := config.Instance{
+		Name:    DefaultPoolName,
+		Default: true,
+		Type:    string(types.AnkaBuild),
+		Pool:    minPoolSize,
+		Limit:   maxPoolSize,
+		Platform: types.Platform{
+			Arch: oshelp.ArchAMD64,
+			OS:   oshelp.OSMac,
+		},
+		Spec: &config.AnkaBuild{
+			VMID:        vmName,
+			RegistryURL: url,
+			AuthToken:   token,
 		},
 	}
 	poolfile := config.PoolFile{
