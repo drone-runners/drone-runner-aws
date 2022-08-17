@@ -307,13 +307,13 @@ func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile,
 			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		default:
 			return pool,
-				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n " +
-					"for anka ANKA_VM_NAME\n " +
-					"for ankabuild: ANKA_BUILD_VM_NAME, ANKA_BUILD_URL, ANKA_BUILD_TOKEN\n " +
+				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n" +
+					"for anka ANKA_VM_NAME\n" +
+					"for ankabuild: ANKA_BUILD_VM_NAME, ANKA_BUILD_URL, ANKA_BUILD_TOKEN\n" +
 					"for azure AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID\n" +
-					"for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n " +
-					"for google GOOGLE_PROJECT_ID\n " +
-					"for digitalocean DIGITALOCEAN_PAT\n")
+					"for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n" +
+					"for google GOOGLE_PROJECT_ID\n" +
+					"for digitalocean DIGITALOCEAN_PAT")
 		}
 	}
 	pool, err = config.ParseFile(path)

@@ -50,7 +50,7 @@ const (
 	healthCheckWait = time.Minute * 10
 )
 
-func (c *setupCommand) run(*kingpin.ParseContext) error {
+func (c *setupCommand) run(*kingpin.ParseContext) error { // nolint
 	// load environment variables from file.
 	err := godotenv.Load(c.envFile)
 	if err != nil && !os.IsNotExist(err) {
