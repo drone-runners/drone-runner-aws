@@ -2,7 +2,7 @@
 
 [![Build Status](https://harness.drone.io/api/badges/drone-runners/drone-runner-aws/status.svg)](https://harness.drone.io/drone-runners/drone-runner-aws)
 
-This runner provisions EC2 instances in AWS for both windows and Linux. It also sets up SSH access and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Pools of hot swappable EC2 instances are created on startup of the runner to improve build spin up time.
+This runner provisions instances in various clouds for both mac, windows and Linux. It also sets up the lite-engine and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Pools of hot swappable EC2 instances are created on startup of the runner to improve build spin up time.
 
 ## Installation
 
