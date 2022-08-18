@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-rc.11](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.11) (2022-08-18)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.10...v1.0.0-rc.11)
+
+**Fixed bugs:**
+
+- \(fix\) fix docker entry point [\#162](https://github.com/drone-runners/drone-runner-aws/pull/162) ([tphoney](https://github.com/tphoney))
+
 ## [v1.0.0-rc.10](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.10) (2022-08-17)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.9...v1.0.0-rc.10)
@@ -11,6 +19,7 @@
 
 **Merged pull requests:**
 
+- \(maint\) rc10 release [\#160](https://github.com/drone-runners/drone-runner-aws/pull/160) ([tphoney](https://github.com/tphoney))
 - \(maint\) formalise binary naming [\#159](https://github.com/drone-runners/drone-runner-aws/pull/159) ([tphoney](https://github.com/tphoney))
 
 ## [v1.0.0-rc.9](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.9) (2022-08-15)
