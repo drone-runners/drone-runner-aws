@@ -173,7 +173,7 @@ func (c *config) Logs(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 
-func (p *config) SetTags(ctx context.Context, instance string,
+func (c *config) SetTags(ctx context.Context, instance string,
 	tags map[string]string) error {
 	return nil
 }
@@ -186,6 +186,6 @@ func (c *config) DriverName() string {
 	return string(types.AnkaBuild)
 }
 
-func (c *config) CanHibernate() bool {
+func (c *config) CanHibernate() bool { //nolint:stylecheck
 	return false
 }

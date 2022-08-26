@@ -87,7 +87,7 @@ func (c *config) InstanceType() string {
 	return c.offer
 }
 
-func (c *config) CanHibernate() bool {
+func (c *config) CanHibernate() bool { //nolint:stylecheck
 	return false
 }
 
@@ -317,7 +317,7 @@ func (c *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	return "", nil
 }
 
-func (p *config) SetTags(ctx context.Context, instance string,
+func (c *config) SetTags(ctx context.Context, instance string,
 	tags map[string]string) error {
 	return nil
 }
