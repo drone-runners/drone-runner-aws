@@ -384,6 +384,21 @@ func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	return string(decoded), nil
 }
 
+func (p *config) SetTags(ctx context.Context, instanceID string,
+	tags map[string]string) error {
+	in := &ec2.CreateTagsInput{
+		Resources: []*string{aws.String(instanceID)},
+	}
+	for key, value := range tags {
+		in.Tags = append(in.Tags, &ec2.Tag{
+			Key:   aws.String(key),
+			Value: aws.String(value),
+		})
+	}
+	_, err := p.service.CreateTagsWithContext(ctx, in)
+	return err
+}
+
 func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).

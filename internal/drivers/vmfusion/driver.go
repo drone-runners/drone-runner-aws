@@ -243,6 +243,11 @@ func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
+func (p *config) SetTags(ctx context.Context, instance string,
+	tags map[string]string) error {
+	return nil
+}
+
 func commandCopyFileToGuest(ctx context.Context, src, dest, username, password, path string) *exec.Cmd {
 	return exec.CommandContext(ctx, vmrunbin, "-gu", username, "-gp", password, "copyFileFromHostToGuest", path, src, dest)
 }

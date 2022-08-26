@@ -401,6 +401,24 @@ func (m *Manager) PingDriver(ctx context.Context) error {
 	return nil
 }
 
+// SetInstanceTags sets tags on an instance in a pool.
+func (m *Manager) SetInstanceTags(ctx context.Context, poolName, instanceID string,
+	tags map[string]string) error {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return fmt.Errorf("provision: pool name %q not found", poolName)
+	}
+
+	if len(tags) == 0 {
+		return nil
+	}
+
+	if err := pool.Driver.SetTags(ctx, instanceID, tags); err != nil {
+		return fmt.Errorf("provision: failed to label an instance of %q pool: %w", poolName, err)
+	}
+	return nil
+}
+
 // BuildPool populates a pool with as many instances as it's needed for the pool.
 func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 	instBusy, instFree, err := m.List(ctx, pool)

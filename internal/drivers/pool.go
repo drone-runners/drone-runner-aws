@@ -27,6 +27,7 @@ type Driver interface {
 	Destroy(ctx context.Context, instanceIDs ...string) (err error)
 	Hibernate(ctx context.Context, instanceID, poolName string) error
 	Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error)
+	SetTags(context.Context, string, map[string]string) error
 	Ping(ctx context.Context) error
 	// Logs returns the console logs for the instance.
 	Logs(ctx context.Context, instanceID string) (string, error)

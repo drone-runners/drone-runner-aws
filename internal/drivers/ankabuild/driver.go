@@ -173,6 +173,11 @@ func (c *config) Logs(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 
+func (c *config) SetTags(ctx context.Context, instance string,
+	tags map[string]string) error {
+	return nil
+}
+
 func (c *config) RootDir() string {
 	return c.rootDir
 }
