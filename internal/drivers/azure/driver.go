@@ -317,6 +317,11 @@ func (c *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	return "", nil
 }
 
+func (p *config) SetTags(ctx context.Context, instance string,
+	tags map[string]string) error {
+	return nil
+}
+
 func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts) types.Instance {
 	return types.Instance{
 		ID:           *vm.Name,

@@ -244,6 +244,26 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return &instanceMap, nil
 }
 
+func (p *config) SetTags(ctx context.Context, instanceID string, tags map[string]string) error {
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceID).
+		WithField("cloud", types.Google)
+
+	vm, err := p.service.Instances.Get(p.projectID, p.Zone(), instanceID).Context(ctx).Do()
+	if err != nil {
+		logr.WithError(err).Errorln("google: failed to get VM")
+		return err
+	}
+	for key, val := range tags {
+		vm.Metadata.Items = append(vm.Metadata.Items, &compute.MetadataItems{
+			Key:   key,
+			Value: googleapi.String(val),
+		})
+	}
+	_, err = p.service.Instances.Update(p.projectID, p.Zone(), instanceID, vm).Context(ctx).Do()
+	return err
+}
+
 func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
 	if len(instanceIDs) == 0 {
 		return errors.New("no instance IDs provided")
@@ -262,9 +282,10 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 			if gerr, ok := err.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
 				logr.WithError(err).Errorln("google: VM not found")
+			} else {
+				logr.WithError(err).Errorln("google: failed to delete the VM")
 			}
 		}
-		_ = p.waitZoneOperation(ctx, instanceID, p.Zone())
 	}
 	return
 }

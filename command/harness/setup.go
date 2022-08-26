@@ -136,6 +136,12 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, fmt.Errorf("failed to tag: %w", err)
 	}
 
+	err = poolManager.SetInstanceTags(ctx, pool, instance.ID, r.Tags)
+	if err != nil {
+		logr.WithError(err).Errorln("failed to add tags to the instance")
+		return nil, err
+	}
+
 	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Port)
 	if err != nil {
 		go cleanUpFn()

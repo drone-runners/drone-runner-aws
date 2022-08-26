@@ -226,6 +226,11 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return "", nil
 }
 
+func (p *config) SetTags(ctx context.Context, instance string,
+	tags map[string]string) error {
+	return nil
+}
+
 // helper function returns a new digitalocean client.
 func newClient(ctx context.Context, pat string) *godo.Client {
 	return godo.NewClient(
