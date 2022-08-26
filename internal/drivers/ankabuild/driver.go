@@ -186,6 +186,6 @@ func (c *config) DriverName() string {
 	return string(types.AnkaBuild)
 }
 
-func (c *config) CanHibernate() bool { //nolint:stylecheck
+func (c *config) CanHibernate() bool {
 	return false
 }

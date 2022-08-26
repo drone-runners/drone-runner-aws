@@ -409,6 +409,10 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName, instanceID stri
 		return fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
+	if len(tags) == 0 {
+		return nil
+	}
+
 	if err := pool.Driver.SetTags(ctx, instanceID, tags); err != nil {
 		return fmt.Errorf("provision: failed to label an instance of %q pool: %w", poolName, err)
 	}

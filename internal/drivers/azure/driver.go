@@ -87,7 +87,7 @@ func (c *config) InstanceType() string {
 	return c.offer
 }
 
-func (c *config) CanHibernate() bool { //nolint:stylecheck
+func (c *config) CanHibernate() bool {
 	return false
 }
 
