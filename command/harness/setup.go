@@ -93,8 +93,9 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	}
 
 	if !poolManager.Exists(pool) {
-		return nil, fmt.Errorf("pool not defined")
+		return nil, fmt.Errorf("%s pool not defined", pool)
 	}
+
 	_, findErr := s.Find(ctx, stageRuntimeID, pool)
 	if findErr != nil {
 		if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {

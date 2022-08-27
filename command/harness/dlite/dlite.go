@@ -10,6 +10,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	loghistory "github.com/drone/runner-go/logger/history"
+	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
 	"github.com/wings-software/dlite/delegate"
 	"github.com/wings-software/dlite/poller"
@@ -58,21 +59,17 @@ func parseTags(pf *config.PoolFile) []string {
 	return tags
 }
 
-func (c *dliteCommand) startPoller(ctx context.Context, tags []string) error {
+func (c *dliteCommand) registerPoller(ctx context.Context, tags []string) (*poller.Poller, error) {
 	r := router.NewRouter(routeMap(c))
 	// Client to interact with the harness server
 	client := delegate.New(c.env.Dlite.ManagerEndpoint, c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, true)
 	p := poller.New(c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, c.env.Dlite.Name, tags, client, r)
 	info, err := p.Register(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c.delegateInfo = info
-	err = p.Poll(ctx, taskExecutors, info.ID, taskInterval)
-	if err != nil {
-		return err
-	}
-	return nil
+	return p, nil
 }
 
 func (c *dliteCommand) run(*kingpin.ParseContext) error {
@@ -109,25 +106,46 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
 	if err != nil {
+		logrus.WithError(err).Error("could not setup pool")
 		return err
 	}
+	defer harness.Cleanup(&c.env, c.poolManager)
+
 	tags := parseTags(poolConfig)
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
+	// Register the poller
+	p, err := c.registerPoller(ctx, tags)
+	if err != nil {
+		logrus.WithError(err).Error("could not register poller")
+		return err
+	}
+
 	var g errgroup.Group
+
 	g.Go(func() error {
-		err = c.startPoller(ctx, tags)
-		if err != nil {
-			logrus.WithError(err).Error("could not start poller")
-			return err
+		// Start the HTTP server
+		server := server.Server{
+			Addr:    c.env.Server.Port,
+			Handler: Handler(p),
 		}
-		return nil
+
+		logrus.WithField("addr", server.Addr).
+			Infoln("starting the server")
+
+		return server.ListenAndServe(ctx)
+
 	})
 
 	g.Go(func() error {
-		return harness.Cleanup(ctx, &c.env, c.poolManager)
+		// Start the poller
+		err = p.Poll(ctx, taskExecutors, c.delegateInfo.ID, taskInterval)
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 
 	waitErr := g.Wait()
