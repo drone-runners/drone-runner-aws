@@ -317,7 +317,7 @@ func (c *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	return "", nil
 }
 
-func (c *config) SetTags(ctx context.Context, instance string,
+func (c *config) SetTags(ctx context.Context, instance *types.Instance,
 	tags map[string]string) error {
 	return nil
 }

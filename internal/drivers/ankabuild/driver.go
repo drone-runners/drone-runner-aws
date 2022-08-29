@@ -173,7 +173,7 @@ func (c *config) Logs(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 
-func (c *config) SetTags(ctx context.Context, instance string,
+func (c *config) SetTags(ctx context.Context, instance *types.Instance,
 	tags map[string]string) error {
 	return nil
 }

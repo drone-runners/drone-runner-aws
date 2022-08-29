@@ -202,3 +202,11 @@ func WithServiceAccountEmail(email string) Option {
 		}
 	}
 }
+
+// WithNoServiceAccount returns an option to set the NoServiceAccount.
+// It does not mount the service account on the vm.
+func WithNoServiceAccount(v bool) Option {
+	return func(p *config) {
+		p.noServiceAccount = v
+	}
+}

@@ -402,7 +402,7 @@ func (m *Manager) PingDriver(ctx context.Context) error {
 }
 
 // SetInstanceTags sets tags on an instance in a pool.
-func (m *Manager) SetInstanceTags(ctx context.Context, poolName, instanceID string,
+func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance *types.Instance,
 	tags map[string]string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
@@ -413,7 +413,7 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName, instanceID stri
 		return nil
 	}
 
-	if err := pool.Driver.SetTags(ctx, instanceID, tags); err != nil {
+	if err := pool.Driver.SetTags(ctx, instance, tags); err != nil {
 		return fmt.Errorf("provision: failed to label an instance of %q pool: %w", poolName, err)
 	}
 	return nil

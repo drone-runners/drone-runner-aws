@@ -243,7 +243,7 @@ func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
-func (p *config) SetTags(ctx context.Context, instance string,
+func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	tags map[string]string) error {
 	return nil
 }

@@ -226,7 +226,7 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return "", nil
 }
 
-func (p *config) SetTags(ctx context.Context, instance string,
+func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	tags map[string]string) error {
 	return nil
 }
