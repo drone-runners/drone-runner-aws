@@ -20,6 +20,7 @@ require (
 	github.com/drone/runner-go v1.12.0
 	github.com/drone/signal v1.0.0
 	github.com/ghodss/yaml v1.0.0
+	github.com/go-chi/chi v1.5.4
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/google/go-cmp v0.5.8
 	github.com/google/wire v0.5.0
@@ -35,7 +36,7 @@ require (
 	github.com/rs/zerolog v1.27.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
-	github.com/wings-software/dlite v0.0.0-20220827075035-0fd7b6c15ab4
+	github.com/wings-software/dlite v0.0.0-20220830083925-cfcdf07d2bf7
 	golang.org/x/oauth2 v0.0.0-20220808172628-8227340efae7
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	google.golang.org/api v0.92.0
@@ -48,7 +49,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.0.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v0.6.0 // indirect
 	github.com/corpix/uarand v0.2.0 // indirect
-	github.com/go-chi/chi v1.5.4 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect

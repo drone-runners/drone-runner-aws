@@ -92,10 +92,10 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
 	_, err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
+	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck
 	if err != nil {
 		return err
 	}
-	defer harness.Cleanup(&c.env, c.poolManager)
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
@@ -110,6 +110,11 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		WithField("kind", resource.Kind).
 		WithField("type", resource.Type).
 		Infoln("starting the server")
+
+	g.Go(func() error {
+		<-ctx.Done()
+		return harness.Cleanup(&c.env, c.poolManager)
+	})
 
 	g.Go(func() error {
 		return runnerServer.ListenAndServe(ctx)

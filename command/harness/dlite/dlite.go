@@ -105,11 +105,11 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
 	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
+	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck
 	if err != nil {
 		logrus.WithError(err).Error("could not setup pool")
 		return err
 	}
-	defer harness.Cleanup(&c.env, c.poolManager)
 
 	tags := parseTags(poolConfig)
 
@@ -126,17 +126,21 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	var g errgroup.Group
 
 	g.Go(func() error {
+		<-ctx.Done()
+		return harness.Cleanup(&c.env, c.poolManager)
+	})
+
+	g.Go(func() error {
 		// Start the HTTP server
-		server := server.Server{
+		s := server.Server{
 			Addr:    c.env.Server.Port,
 			Handler: Handler(p),
 		}
 
-		logrus.WithField("addr", server.Addr).
+		logrus.WithField("addr", s.Addr).
 			Infoln("starting the server")
 
-		return server.ListenAndServe(ctx)
-
+		return s.ListenAndServe(ctx)
 	})
 
 	g.Go(func() error {

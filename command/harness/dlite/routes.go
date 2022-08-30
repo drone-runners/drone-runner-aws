@@ -4,7 +4,7 @@ import (
 	"github.com/wings-software/dlite/task"
 )
 
-var (
+const (
 	initTask    = "DLITE_CI_VM_INITIALIZE_TASK"
 	executeTask = "DLITE_CI_VM_EXECUTE_TASK"
 	cleanupTask = "DLITE_CI_VM_CLEANUP_TASK"
