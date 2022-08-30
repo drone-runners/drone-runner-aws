@@ -66,13 +66,11 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	return configPool, nil
 }
 
-func Cleanup(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager) error {
+func Cleanup(env *config.EnvConfig, poolManager *drivers.Manager) error {
 	if env.Settings.ReusePool {
 		return nil
 	}
 
-	<-ctx.Done()
-	// clean up pool on termination
 	cleanErr := poolManager.CleanPools(context.Background(), true, true)
 
 	if cleanErr != nil {

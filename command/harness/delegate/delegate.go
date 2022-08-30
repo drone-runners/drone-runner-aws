@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
@@ -18,7 +17,6 @@ import (
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/httphelper"
@@ -37,28 +35,7 @@ type delegateCommand struct {
 func (c *delegateCommand) delegateListener() http.Handler {
 	mux := chi.NewMux()
 
-	mux.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			wrap := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-
-			reqStart := time.Now().UTC()
-			next.ServeHTTP(wrap, r)
-
-			status := wrap.Status()
-			dur := time.Since(reqStart).Milliseconds()
-
-			logr := logrus.WithContext(r.Context()).
-				WithField("t", reqStart.Format(time.RFC3339)).
-				WithField("status", status).
-				WithField("dur[ms]", dur)
-			logLine := "HTTP: " + r.Method + " " + r.URL.RequestURI()
-			if status >= http.StatusInternalServerError {
-				logr.Errorln(logLine)
-			} else {
-				logr.Infoln(logLine)
-			}
-		})
-	})
+	mux.Use(harness.Middleware)
 
 	mux.Post("/pool_owner", c.handlePoolOwner)
 	mux.Post("/setup", c.handleSetup)
@@ -115,6 +92,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
 	_, err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
+	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck
 	if err != nil {
 		return err
 	}
@@ -134,11 +112,12 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		Infoln("starting the server")
 
 	g.Go(func() error {
-		return runnerServer.ListenAndServe(ctx)
+		<-ctx.Done()
+		return harness.Cleanup(&c.env, c.poolManager)
 	})
 
 	g.Go(func() error {
-		return harness.Cleanup(ctx, &c.env, c.poolManager)
+		return runnerServer.ListenAndServe(ctx)
 	})
 
 	waitErr := g.Wait()
