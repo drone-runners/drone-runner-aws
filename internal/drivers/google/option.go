@@ -91,7 +91,7 @@ func WithSize(size string) Option {
 func WithNetwork(network string) Option {
 	return func(p *config) {
 		if network == "" {
-			p.network = "global/networks/default"
+			p.network = "default"
 		} else {
 			p.network = network
 		}
