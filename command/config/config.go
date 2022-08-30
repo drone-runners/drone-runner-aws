@@ -157,7 +157,7 @@ type (
 		UserDataKey  string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
 		Disk         disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
 		Network      string            `json:"network,omitempty" yaml:"network,omitempty"`
-		Subnetwork   string            `json:"Subnetwork,omitempty" yaml:"Subnetwork,omitempty"`
+		Subnetwork   string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
 		PrivateIP    bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
 		Zone         []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
 		Labels       map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
@@ -169,6 +169,7 @@ type (
 		JSONPath            string   `json:"json_path,omitempty"  yaml:"json_path"`
 		Scopes              []string `json:"scopes,omitempty"  yaml:"scopes,omitempty"`
 		ServiceAccountEmail string   `json:"service_account_email,omitempty"  yaml:"service_account_email,omitempty"`
+		NoServiceAccount    bool     `json:"no_service_account,omitempty"  yaml:"no_service_account,omitempty"`
 	}
 
 	// VMFusion specifies the configuration for a VMWare instance.

@@ -384,10 +384,10 @@ func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	return string(decoded), nil
 }
 
-func (p *config) SetTags(ctx context.Context, instanceID string,
+func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	tags map[string]string) error {
 	in := &ec2.CreateTagsInput{
-		Resources: []*string{aws.String(instanceID)},
+		Resources: []*string{aws.String(instance.ID)},
 	}
 	for key, value := range tags {
 		in.Tags = append(in.Tags, &ec2.Tag{

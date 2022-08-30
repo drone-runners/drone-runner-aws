@@ -54,6 +54,7 @@ type config struct {
 	diskType            string
 	image               string
 	network             string
+	noServiceAccount    bool
 	subnetwork          string
 	privateIP           bool
 	scopes              []string
@@ -92,8 +93,13 @@ func (p *config) RootDir() string {
 	return p.rootDir
 }
 
-func (p *config) Zone() string {
+func (p *config) RandomZone() string {
 	return p.zones[rand.Intn(len(p.zones))] //nolint: gosec
+}
+
+func (p *config) GetRegion(zone string) string {
+	parts := strings.Split(zone, "-")
+	return strings.Join(parts[:len(parts)-1], "-")
 }
 
 func (p *config) DriverName() string {
@@ -114,8 +120,7 @@ func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 
 func (p *config) Ping(ctx context.Context) error {
 	client := p.service
-	healthCheck := client.Regions.List(p.projectID).Context(ctx)
-	response, err := healthCheck.Do()
+	response, err := client.Regions.List(p.projectID).Context(ctx).Do()
 	if err != nil {
 		return err
 	}
@@ -131,7 +136,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	})
 
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
-	zone := p.Zone()
+	zone := p.RandomZone()
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -156,6 +161,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				Type: "ONE_TO_ONE_NAT",
 			},
 		}
+	}
+	network := ""
+	if p.network != "" {
+		network = fmt.Sprintf("projects/%s/global/networks/%s", p.projectID, p.network)
+	}
+	subnet := ""
+	if p.subnetwork != "" {
+		subnet = fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s", p.projectID, p.GetRegion(zone), p.subnetwork)
 	}
 
 	in := &compute.Instance{
@@ -188,8 +201,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		CanIpForward: false,
 		NetworkInterfaces: []*compute.NetworkInterface{
 			{
-				Network:       p.network,
-				Subnetwork:    p.subnetwork,
+				Network:       network,
+				Subnetwork:    subnet,
 				AccessConfigs: networkConfig,
 			},
 		},
@@ -199,15 +212,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			AutomaticRestart:  googleapi.Bool(true),
 		},
 		DeletionProtection: false,
-		ServiceAccounts: []*compute.ServiceAccount{
+		Tags: &compute.Tags{
+			Items: p.tags,
+		},
+	}
+	if !p.noServiceAccount {
+		in.ServiceAccounts = []*compute.ServiceAccount{
 			{
 				Scopes: p.scopes,
 				Email:  p.serviceAccountEmail,
 			},
-		},
-		Tags: &compute.Tags{
-			Items: p.tags,
-		},
+		}
 	}
 
 	op, err := p.service.Instances.Insert(p.projectID, zone, in).Context(ctx).Do()
@@ -235,7 +250,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return nil, err
 	}
 
-	instanceMap := p.mapToInstance(vm, opts)
+	instanceMap := p.mapToInstance(vm, zone, opts)
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
@@ -244,12 +259,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return &instanceMap, nil
 }
 
-func (p *config) SetTags(ctx context.Context, instanceID string, tags map[string]string) error {
+// Set the instance metadata (not network tags)
+func (p *config) SetTags(ctx context.Context, instance *types.Instance, tags map[string]string) error {
 	logr := logger.FromContext(ctx).
-		WithField("id", instanceID).
+		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
 
-	vm, err := p.service.Instances.Get(p.projectID, p.Zone(), instanceID).Context(ctx).Do()
+	vm, err := p.service.Instances.Get(p.projectID, instance.Zone, instance.ID).Context(ctx).Do()
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
 		return err
@@ -260,7 +276,7 @@ func (p *config) SetTags(ctx context.Context, instanceID string, tags map[string
 			Value: googleapi.String(val),
 		})
 	}
-	_, err = p.service.Instances.Update(p.projectID, p.Zone(), instanceID, vm).Context(ctx).Do()
+	_, err = p.service.Instances.Update(p.projectID, instance.Zone, instance.ID, vm).Context(ctx).Do()
 	return err
 }
 
@@ -270,13 +286,17 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 	}
 
 	client := p.service
-
-	logr := logger.FromContext(ctx).
-		WithField("id", instanceIDs).
-		WithField("cloud", types.Google)
-
 	for _, instanceID := range instanceIDs {
-		_, err = client.Instances.Delete(p.projectID, p.Zone(), instanceID).Context(ctx).Do()
+		logr := logger.FromContext(ctx).
+			WithField("id", instanceIDs).
+			WithField("cloud", types.Google)
+		zone, err := p.findInstanceZone(ctx, instanceID)
+		if err != nil {
+			logr.WithError(err).Errorln("google: failed to find instance")
+			continue
+		}
+
+		_, err = client.Instances.Delete(p.projectID, zone, instanceID).Context(ctx).Do()
 		if err != nil {
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 			if gerr, ok := err.(*googleapi.Error); ok &&
@@ -298,10 +318,14 @@ func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateOpts) types.Instance {
+func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts) types.Instance {
 	network := vm.NetworkInterfaces[0]
-	accessConfigs := network.AccessConfigs[0]
-	instanceIP := accessConfigs.NatIP
+	instanceIP := ""
+	if p.privateIP {
+		instanceIP = network.NetworkIP
+	} else {
+		instanceIP = network.AccessConfigs[0].NatIP
+	}
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 	return types.Instance{
@@ -311,7 +335,7 @@ func (p *config) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateO
 		State:        types.StateCreated,
 		Pool:         opts.PoolName,
 		Image:        p.image,
-		Zone:         p.Zone(),
+		Zone:         zone,
 		Size:         p.size,
 		Platform:     opts.Platform,
 		Address:      instanceIP,
@@ -324,6 +348,26 @@ func (p *config) mapToInstance(vm *compute.Instance, opts *types.InstanceCreateO
 		IsHibernated: false,
 		Port:         lehelper.LiteEnginePort,
 	}
+}
+
+func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
+	string, error) {
+	for _, zone := range p.zones {
+		_, err := p.service.Instances.Get(p.projectID, zone, instanceID).Context(ctx).Do()
+		if err == nil {
+			return zone, nil
+		}
+
+		if gerr, ok := err.(*googleapi.Error); ok &&
+			gerr.Code == http.StatusNotFound {
+			continue
+		}
+		logger.FromContext(ctx).
+			WithField("instance", instanceID).
+			WithField("zone", zone).
+			Errorln("google: failed to fetch the VM")
+	}
+	return "", fmt.Errorf("failed to find vm")
 }
 
 func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error {

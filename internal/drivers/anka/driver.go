@@ -206,7 +206,7 @@ func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 	return "", nil
 }
 
-func (p *config) SetTags(ctx context.Context, instance string,
+func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	tags map[string]string) error {
 	return nil
 }
