@@ -6,6 +6,7 @@
 
 **Implemented enhancements:**
 
+- Update lite-engine version to 0.4.1 [\#168](https://github.com/drone-runners/drone-runner-aws/pull/168) ([shubham149](https://github.com/shubham149))
 - \(feat\) add maintenance support in dlite mode [\#165](https://github.com/drone-runners/drone-runner-aws/pull/165) ([vistaarjuneja](https://github.com/vistaarjuneja))
 - Add tags to a build instance [\#164](https://github.com/drone-runners/drone-runner-aws/pull/164) ([shubham149](https://github.com/shubham149))
 
@@ -13,10 +14,6 @@
 
 - Fix default network for gcp [\#167](https://github.com/drone-runners/drone-runner-aws/pull/167) ([shubham149](https://github.com/shubham149))
 - Fix zone in gcp runner & add extra configs [\#166](https://github.com/drone-runners/drone-runner-aws/pull/166) ([shubham149](https://github.com/shubham149))
-
-**Merged pull requests:**
-
-- Update lite-engine version to 0.4.1 [\#168](https://github.com/drone-runners/drone-runner-aws/pull/168) ([shubham149](https://github.com/shubham149))
 
 ## [v1.0.0-rc.11](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.11) (2022-08-18)
 
