@@ -104,6 +104,8 @@ DLITE_ACCOUNT_ID=<account-id>
 DLITE_ACCOUNT_SECRET=<account-secret>
 DLITE_MANAGER_ENDPOINT=<manager-endpoint>
 DLITE_NAME=<name-of-runner>
+DLITE_PARALLEL_WORKERS=3000
+DLITE_POLL_INTERVAL_MILLISECS=1000
 ```
 
 The values of the above variables can be found by logging into a Harness account and adding a delegate. The spec for the delegate would contain the account ID, the secret (DELEGATE_TOKEN), and the endpoint (MANAGER_HOST_AND_PORT)
@@ -112,6 +114,6 @@ The values of the above variables can be found by logging into a Harness account
 
 If the logs say the runner has been registered successfully, you should be able to see the runner in the delegates screen on Harness.
 
-+ Create a pipeline and execute it. Since this is in beta at the moment, a UI does not exist on Harness for it. To be able to leverage this runner, remove the infrastructure part in the pipeline and add a field `runsOn: <pool-name>` at the same level as `execution:` (directly under `spec`)
++ Create a pipeline and execute it
 
 + You should see logs in the runner corresponding to the created tasks.
