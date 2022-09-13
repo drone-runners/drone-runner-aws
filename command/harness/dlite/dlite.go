@@ -22,11 +22,6 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-var (
-	taskInterval  = 3 * time.Second
-	taskExecutors = 100
-)
-
 type dliteCommand struct {
 	envFile         string
 	env             config.EnvConfig
@@ -74,10 +69,12 @@ func (c *dliteCommand) registerPoller(ctx context.Context, tags []string) (*poll
 
 func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
-	envError := godotenv.Load(c.envFile)
-	if envError != nil {
-		logrus.WithError(envError).
-			Warnf("dlite: failed to load environment variables from file: %s", c.envFile)
+	if c.envFile != "" {
+		envError := godotenv.Load(c.envFile)
+		if envError != nil {
+			logrus.WithError(envError).
+				Warnf("dlite: failed to load environment variables from file: %s", c.envFile)
+		}
 	}
 	// load the configuration from the environment
 	env, err := config.FromEnviron()
@@ -145,7 +142,8 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	g.Go(func() error {
 		// Start the poller
-		err = p.Poll(ctx, taskExecutors, c.delegateInfo.ID, taskInterval)
+		pollDuration := time.Duration(c.env.Dlite.PollIntervalMilliSecs) * time.Millisecond
+		err = p.Poll(ctx, c.env.Dlite.ParallelWorkers, c.delegateInfo.ID, pollDuration)
 		if err != nil {
 			return err
 		}
