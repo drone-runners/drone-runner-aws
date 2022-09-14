@@ -74,6 +74,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		ctx = logger.WithContext(ctx, logger.Logrus(logr))
 	}
 
+	logr.WithField("stage_runtime_id", stageRuntimeID).Traceln("starting the setup process")
+
 	// append global volumes to the setup request.
 	for _, pair := range env.Runner.Volumes {
 		src, _, ro, err := resource.ParseVolume(pair)
