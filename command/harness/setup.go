@@ -74,7 +74,9 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		ctx = logger.WithContext(ctx, logger.Logrus(logr))
 	}
 
-	logr.WithField("stage_runtime_id", stageRuntimeID).Traceln("starting the setup process")
+	logr = logr.WithField("stage_runtime_id", stageRuntimeID)
+
+	logr.Traceln("starting the setup process")
 
 	// append global volumes to the setup request.
 	for _, pair := range env.Runner.Volumes {
@@ -113,7 +115,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 	logr = logr.
 		WithField("ip", instance.Address).
-		WithField("id", instance.ID)
+		WithField("id", instance.ID).
+		WithField("instance_name", instance.Name)
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpFn := func() {

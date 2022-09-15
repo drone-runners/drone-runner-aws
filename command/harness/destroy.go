@@ -24,19 +24,24 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		return errors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
 
+	logr := logrus.
+		WithField("stage_runtime_id", r.StageRuntimeID).
+		WithField("pool", r.PoolID).
+		WithField("api", "dlite:destroy")
+
+	logr.Traceln("starting the destroy process")
+
 	inst, err := poolManager.GetInstanceByStageID(ctx, r.PoolID, r.StageRuntimeID)
 	if err != nil {
 		return fmt.Errorf("cannot get the instance by tag: %w", err)
 	}
 	if inst == nil {
-		return fmt.Errorf("instance with provided ID not found")
+		return fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
 	}
 
-	logr := logrus.
+	logr = logr.
 		WithField("instance_id", inst.ID).
-		WithField("api", "dlite:destroy").
-		WithField("stage_runtime_id", r.StageRuntimeID).
-		WithField("pool", r.PoolID)
+		WithField("instance_name", inst.Name)
 
 	if err = poolManager.Destroy(ctx, r.PoolID, inst.ID); err != nil {
 		return fmt.Errorf("cannot destroy the instance: %w", err)
