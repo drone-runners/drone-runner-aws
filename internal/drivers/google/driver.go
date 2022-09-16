@@ -86,6 +86,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 			return nil, err
 		}
 	}
+	p.setup(ctx)
 	return p, nil
 }
 
@@ -131,10 +132,6 @@ func (p *config) Ping(ctx context.Context) error {
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	p.init.Do(func() {
-		_ = p.setup(ctx)
-	})
-
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	zone := p.RandomZone()
 
@@ -264,7 +261,20 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance, tags map
 	logr := logger.FromContext(ctx).
 		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
+	var err error
+	for i := 0; i < 3; i++ {
+		err = p.setTags(ctx, instance, tags, logr)
+		if err == nil {
+			return nil
+		}
 
+		logr.WithError(err).Warnln("failed to set tags to the instance. retrying")
+		time.Sleep(50 * time.Millisecond)
+	}
+	return err
+}
+
+func (p *config) setTags(ctx context.Context, instance *types.Instance, tags map[string]string, logr logger.Logger) error {
 	vm, err := p.service.Instances.Get(p.projectID, instance.Zone, instance.ID).Context(ctx).Do()
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")

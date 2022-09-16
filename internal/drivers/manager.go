@@ -528,8 +528,9 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	err = m.instanceStore.Create(ctx, inst)
 	if err != nil {
 		logrus.WithError(err).
-			Errorln("manager: failed store instance")
+			Errorln("manager: failed to store instance")
 		_ = pool.Driver.Destroy(ctx, inst.ID)
+		return nil, err
 	}
 	return inst, nil
 }

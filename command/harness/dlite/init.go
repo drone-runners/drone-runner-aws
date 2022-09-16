@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/sirupsen/logrus"
@@ -21,7 +22,9 @@ type VMInitRequest struct {
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background() // TODO: Get this from the request
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute) // TODO: Get this from the request
+	defer cancel()
+
 	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
