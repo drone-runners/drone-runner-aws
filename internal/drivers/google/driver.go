@@ -25,6 +25,8 @@ import (
 const (
 	maxInstanceNameLen = 63
 	randStrLen         = 5
+	tagRetries         = 3
+	tagRetrySleepMs    = 50
 )
 
 var (
@@ -262,14 +264,14 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance, tags map
 		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
 	var err error
-	for i := 0; i < 3; i++ {
+	for i := 0; i < tagRetries; i++ {
 		err = p.setTags(ctx, instance, tags, logr)
 		if err == nil {
 			return nil
 		}
 
 		logr.WithError(err).Warnln("failed to set tags to the instance. retrying")
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(tagRetrySleepMs * time.Millisecond)
 	}
 	return err
 }
