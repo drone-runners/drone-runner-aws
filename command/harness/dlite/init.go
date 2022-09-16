@@ -12,6 +12,10 @@ import (
 	"github.com/wings-software/dlite/httphelper"
 )
 
+const (
+	initTimeoutSec = 10 * 60
+)
+
 type VMInitTask struct {
 	c *dliteCommand
 }
@@ -22,7 +26,7 @@ type VMInitRequest struct {
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute) // TODO: Get this from the request
+	ctx, cancel := context.WithTimeout(context.Background(), initTimeoutSec*time.Second) // TODO: Get this from the request
 	defer cancel()
 
 	log := logrus.New()
