@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -43,8 +42,6 @@ var (
 )
 
 type config struct {
-	init sync.Once
-
 	projectID string
 	JSONPath  string
 	JSON      []byte
@@ -88,7 +85,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 			return nil, err
 		}
 	}
-	p.setup(ctx)
+	_ = p.setup(ctx)
 	return p, nil
 }
 
