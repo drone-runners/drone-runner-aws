@@ -14,6 +14,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	errors "github.com/drone-runners/drone-runner-aws/internal/types"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 
@@ -22,6 +23,7 @@ import (
 
 type ExecuteVMRequest struct {
 	StageRuntimeID       string `json:"stage_runtime_id"`
+	InstanceID           string `json:"instance_id"`
 	IPAddress            string `json:"ip_address"`
 	PoolID               string `json:"pool_id"`
 	CorrelationID        string `json:"correlation_id"`
@@ -63,9 +65,9 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 			r.Volumes = append(r.Volumes, mount)
 		}
 	}
-	inst, err := poolManager.GetInstanceByStageID(ctx, r.PoolID, r.StageRuntimeID)
+	inst, err := getInstance(ctx, r, poolManager)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get the instance by stageId: %w", err)
+		return nil, err
 	}
 
 	logr = logr.WithField("ip", inst.Address)
@@ -119,4 +121,21 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 	logr.WithField("pollResponse", pollResponse).Traceln("completed LE.RetryPollStep")
 
 	return pollResponse, nil
+}
+
+func getInstance(ctx context.Context, r *ExecuteVMRequest, poolManager *drivers.Manager) (
+	*types.Instance, error) {
+	if r.InstanceID != "" {
+		inst, err := poolManager.Find(ctx, r.InstanceID)
+		if err != nil {
+			return nil, fmt.Errorf("cannot get the instance by Id %s : %w", r.InstanceID, err)
+		}
+		return inst, nil
+	}
+
+	inst, err := poolManager.GetInstanceByStageID(ctx, r.PoolID, r.StageRuntimeID)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get the instance by stageId %s: %w", r.StageRuntimeID, err)
+	}
+	return inst, nil
 }

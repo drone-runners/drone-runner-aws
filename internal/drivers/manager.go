@@ -274,20 +274,21 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
-	pool.Lock()
-	defer pool.Unlock()
-
 	strategy := m.strategy
 	if strategy == nil {
 		strategy = Greedy{}
 	}
 
+	pool.Lock()
+
 	busy, free, err := m.List(ctx, pool)
 	if err != nil {
+		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
 	if len(free) == 0 {
+		pool.Unlock()
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
 			return nil, ErrorNoInstanceAvailable
 		}
@@ -309,13 +310,15 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEngin
 	inst.State = types.StateInUse
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
+		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
+	pool.Unlock()
 
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_ = m.buildPoolWithMutex(ctx, pool)
+		_, _ = m.setupInstance(ctx, pool, false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -336,12 +339,6 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 	if derr := m.Delete(ctx, instanceID); derr != nil {
 		logrus.Warnf("failed to delete instance %s from store with err: %s", instanceID, derr)
 	}
-	// the go routine here uses the global context because this function is called
-	// from destroy API call (and we can't use HTTP request context for async tasks)
-	go func(ctx context.Context) {
-		_ = m.buildPoolWithMutex(ctx, pool)
-	}(m.globalCtx)
-
 	return nil
 }
 
@@ -473,13 +470,6 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				WithField("id", inst.ID).
 				WithField("name", inst.Name).
 				Infoln("build pool: created new instance")
-
-			go func() {
-				herr := m.hibernateWithRetries(context.Background(), pool.Name, inst.ID)
-				if herr != nil {
-					logr.WithError(herr).Errorln("failed to hibernate the vm")
-				}
-			}()
 		}(ctx, logr)
 
 		shouldCreate--
@@ -530,6 +520,15 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 		logrus.WithError(err).
 			Errorln("manager: failed store instance")
 		_ = pool.Driver.Destroy(ctx, inst.ID)
+	}
+
+	if !inuse {
+		go func() {
+			herr := m.hibernateWithRetries(context.Background(), pool.Name, inst.ID)
+			if herr != nil {
+				logrus.WithError(herr).Errorln("failed to hibernate the vm")
+			}
+		}()
 	}
 	return inst, nil
 }
