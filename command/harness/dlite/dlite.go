@@ -98,7 +98,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	})
 
 	instanceStore := database.ProvideInstanceStore(db)
-	c.stageOwnerStore = database.NewStageOwnerStore(db)
+	c.stageOwnerStore = database.ProvideStageOwnerStore(db)
 	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
 
 	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -42,6 +43,8 @@ var (
 )
 
 type config struct {
+	init sync.Once
+
 	projectID string
 	JSONPath  string
 	JSON      []byte
@@ -85,7 +88,6 @@ func New(opts ...Option) (drivers.Driver, error) {
 			return nil, err
 		}
 	}
-	_ = p.setup(ctx)
 	return p, nil
 }
 
@@ -131,6 +133,10 @@ func (p *config) Ping(ctx context.Context) error {
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+	p.init.Do(func() {
+		_ = p.setup(ctx)
+	})
+
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	zone := p.RandomZone()
 
@@ -283,7 +289,7 @@ func (p *config) setTags(ctx context.Context, instance *types.Instance,
 	}
 
 	metadata := &compute.Metadata{
-		Fingerprint: vm.Fingerprint,
+		Fingerprint: vm.Metadata.Fingerprint,
 		Items:       vm.Metadata.Items,
 	}
 	for key, val := range tags {
