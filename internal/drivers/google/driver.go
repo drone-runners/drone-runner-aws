@@ -25,6 +25,8 @@ import (
 const (
 	maxInstanceNameLen = 63
 	randStrLen         = 5
+	tagRetries         = 3
+	tagRetrySleepMs    = 50
 )
 
 var (
@@ -264,19 +266,40 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance, tags map
 	logr := logger.FromContext(ctx).
 		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
+	var err error
+	for i := 0; i < tagRetries; i++ {
+		err = p.setTags(ctx, instance, tags, logr)
+		if err == nil {
+			return nil
+		}
 
-	vm, err := p.service.Instances.Get(p.projectID, instance.Zone, instance.ID).Context(ctx).Do()
+		logr.WithError(err).Warnln("failed to set tags to the instance. retrying")
+		time.Sleep(tagRetrySleepMs * time.Millisecond)
+	}
+	return err
+}
+
+func (p *config) setTags(ctx context.Context, instance *types.Instance,
+	tags map[string]string, logr logger.Logger) error {
+	vm, err := p.service.Instances.Get(p.projectID, instance.Zone,
+		instance.ID).Context(ctx).Do()
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
 		return err
 	}
+
+	metadata := &compute.Metadata{
+		Fingerprint: vm.Metadata.Fingerprint,
+		Items:       vm.Metadata.Items,
+	}
 	for key, val := range tags {
-		vm.Metadata.Items = append(vm.Metadata.Items, &compute.MetadataItems{
+		metadata.Items = append(metadata.Items, &compute.MetadataItems{
 			Key:   key,
 			Value: googleapi.String(val),
 		})
 	}
-	_, err = p.service.Instances.Update(p.projectID, instance.Zone, instance.ID, vm).Context(ctx).Do()
+	_, err = p.service.Instances.SetMetadata(p.projectID, instance.Zone,
+		instance.ID, metadata).Context(ctx).Do()
 	return err
 }
 

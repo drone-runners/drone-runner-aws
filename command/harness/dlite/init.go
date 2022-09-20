@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/httphelper"
+)
+
+const (
+	initTimeoutSec = 10 * 60
 )
 
 type VMInitTask struct {
@@ -21,7 +26,9 @@ type VMInitRequest struct {
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background() // TODO: Get this from the request
+	ctx, cancel := context.WithTimeout(context.Background(), initTimeoutSec*time.Second) // TODO: Get this from the request
+	defer cancel()
+
 	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
