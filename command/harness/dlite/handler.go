@@ -29,7 +29,7 @@ func Handler(p *poller.Poller) http.Handler {
 	}())
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "OK")
+		io.WriteString(w, okStatus) //nolint: errcheck
 	})
 	return r
 }
