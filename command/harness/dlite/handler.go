@@ -27,6 +27,10 @@ func Handler(p *poller.Poller) http.Handler {
 		sr.Post("/disable", handleDisable(p))
 		return sr
 	}())
+
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "OK")
+	})
 	return r
 }
 

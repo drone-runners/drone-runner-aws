@@ -2,6 +2,7 @@ package harness
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/middleware"
@@ -23,6 +24,10 @@ func Middleware(next http.Handler) http.Handler {
 			WithField("status", status).
 			WithField("dur[ms]", dur)
 		logLine := "HTTP: " + r.Method + " " + r.URL.RequestURI()
+		// Avoid logging health checks to avoid spamming the logs
+		if strings.Contains(r.URL.RequestURI(), "healthz") {
+			return
+		}
 		if status >= http.StatusInternalServerError {
 			logr.Errorln(logLine)
 		} else {
