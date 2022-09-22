@@ -166,11 +166,23 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 	network := ""
 	if p.network != "" {
-		network = fmt.Sprintf("projects/%s/global/networks/%s", p.projectID, p.network)
+		slash := strings.LastIndex(p.network, "/")
+		if slash == -1 {
+			network = fmt.Sprintf("projects/%s/global/networks/%s",
+				p.projectID, p.network)
+		} else {
+			network = p.network
+		}
 	}
 	subnet := ""
 	if p.subnetwork != "" {
-		subnet = fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s", p.projectID, p.GetRegion(zone), p.subnetwork)
+		slash := strings.LastIndex(p.subnetwork, "/")
+		if slash == -1 {
+			subnet = fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s",
+				p.projectID, p.GetRegion(zone), p.subnetwork)
+		} else {
+			subnet = p.subnetwork
+		}
 	}
 
 	in := &compute.Instance{
