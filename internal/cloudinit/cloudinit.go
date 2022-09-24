@@ -173,10 +173,12 @@ write_files:
   encoding: b64
   content: {{ .TLSKey | base64 }}
 runcmd:
+- 'set -x'
 - 'ufw allow 9079'
 - 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 - 'touch /root/.env'
+- '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
 
 var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(ubuntuScript))
