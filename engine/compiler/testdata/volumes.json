@@ -39,8 +39,13 @@
     {
       "id": "random",
       "name": "clone",
-      "entrypoint": ["sh", "-c"],
-      "args": ["/tmp/aws/opt/clone"],
+      "entrypoint": [
+        "sh",
+        "-c"
+      ],
+      "args": [
+        "/tmp/aws/opt/clone"
+      ],
       "files": [
         {
           "path": "/tmp/aws/opt/clone",
@@ -54,9 +59,16 @@
     {
       "id": "random",
       "name": "test",
-      "entrypoint": ["sh", "-c"],
-      "args": ["/tmp/aws/opt/random"],
-      "depends_on": ["clone"],
+      "entrypoint": [
+        "sh",
+        "-c"
+      ],
+      "args": [
+        "/tmp/aws/opt/random"
+      ],
+      "depends_on": [
+        "clone"
+      ],
       "files": [
         {
           "path": "/tmp/aws/opt/random",
@@ -66,19 +78,31 @@
       ],
       "image": "golang:latest",
       "privileged": true,
-      "working_dir": "/drone/src",
+      "working_dir": "/tmp/aws/drone/src",
       "volumes": [
-        {"name": "gomodcache", "path": "/go/pkg/mod"},
-        {"name": "source_dir", "path": "/drone/src"},
-        {"name": "script_dir", "path": "/tmp/aws/opt"}
+        {
+          "name": "gomodcache",
+          "path": "/go/pkg/mod"
+        },
+        {
+          "name": "pipeline_root",
+          "path": "/tmp/aws"
+        }
       ]
     },
     {
       "id": "random",
       "name": "build",
-      "entrypoint": ["sh", "-c"],
-      "args": ["/tmp/aws/opt/random"],
-      "depends_on": ["test"],
+      "entrypoint": [
+        "sh",
+        "-c"
+      ],
+      "args": [
+        "/tmp/aws/opt/random"
+      ],
+      "depends_on": [
+        "test"
+      ],
       "files": [
         {
           "path": "/tmp/aws/opt/random",
@@ -88,27 +112,43 @@
       ],
       "image": "golang:latest",
       "privileged": true,
-      "working_dir": "/drone/src",
+      "working_dir": "/tmp/aws/drone/src",
       "volumes": [
-        {"name": "gomodcache", "path": "/go/pkg/mod"},
-        {"name": "output", "path": "/output"},
-        {"name": "source_dir", "path": "/drone/src"},
-        {"name": "script_dir", "path": "/tmp/aws/opt"}
+        {
+          "name": "gomodcache",
+          "path": "/go/pkg/mod"
+        },
+        {
+          "name": "output",
+          "path": "/output"
+        },
+        {
+          "name": "pipeline_root",
+          "path": "/tmp/aws"
+        }
       ]
     }
   ],
   "volumes": [
     {
-      "host": {"id": "random", "name": "output", "path": "/root"}
+      "host": {
+        "id": "random",
+        "name": "output",
+        "path": "/root"
+      }
     },
     {
-      "temp": {"id": "random", "name": "gomodcache"}
+      "temp": {
+        "id": "random",
+        "name": "gomodcache"
+      }
     },
     {
-      "host": {"id": "source_dir_random", "name": "source_dir", "path": "/tmp/aws/drone/src"}
-    },
-    {
-      "host": {"id": "script_dir_random", "name": "script_dir", "path": "/tmp/aws/opt"}
+      "host": {
+        "id": "pipeline_root_random",
+        "name": "pipeline_root",
+        "path": "/tmp/aws"
+      }
     }
   ]
 }

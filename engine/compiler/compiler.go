@@ -92,7 +92,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	// * homeDir is home directory on the host machine where netrc file will be placed
 	// * sourceDir is directory on the host machine where source code will be pulled
 	// * scriptDir is directory on the host machine where script files (with commands) will be placed
-	directories, homeDir, sourceDir, scriptDir := createDirectories(pipelinePlatform.OS, pipelineRoot)
+	directories, homeDir, sourceDir := createDirectories(pipelinePlatform.OS, pipelineRoot)
 	spec.Files = append(spec.Files, directories...)
 
 	// create netrc file if needed
@@ -138,7 +138,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 			"HOME":                homeDir,
 			"HOMEPATH":            homeDir, // for windows
 			"USERPROFILE":         homeDir, // for windows
-			"DRONE_HOME":          sourceDir,
 			"DRONE_WORKSPACE":     sourceDir,
 			"GIT_TERMINAL_PROMPT": "0",
 		},
@@ -203,7 +202,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		Branch:   args.Build.Target,
 	}
 	// create steps
-	containerSourcePath := getContainerSourcePath(pipelinePlatform.OS)
 	haveImageSteps := false // should be true if there is at least one step that uses an image
 	for _, src := range pipeline.Services {
 		src.Detach = true // services are the same as steps, but are executed first and are detached
@@ -241,7 +239,6 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 
 		// set working directory for the step and volume mount locations for steps that use an image
 		var volumeMounts []*lespec.VolumeMount
-		var workingDir string
 		if src.Image != "" {
 			haveImageSteps = true
 
@@ -250,8 +247,8 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				volumeMounts = append(volumeMounts, &lespec.VolumeMount{Name: v.Name, Path: v.MountPath})
 			}
 
-			// mount the source directory in the container
-			volumeMounts = append(volumeMounts, &lespec.VolumeMount{Name: "source_dir", Path: containerSourcePath})
+			// mount the root drone directory in the container
+			volumeMounts = append(volumeMounts, &lespec.VolumeMount{Name: "pipeline_root", Path: pipelineRoot})
 
 			if len(src.Entrypoint) > 0 {
 				entrypoint = src.Entrypoint
@@ -259,14 +256,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				// can't use both, entrypoint and commands... the entrypoint overrides the commands
 				command = nil
 				files = nil
-			} else if len(src.Commands) > 0 {
-				// mount the script directory, but only if the step has commands defined
-				volumeMounts = append(volumeMounts, &lespec.VolumeMount{Name: "script_dir", Path: scriptDir})
 			}
-
-			workingDir = containerSourcePath // steps that use an image use mounted directory as working directory
-		} else {
-			workingDir = sourceDir
 		}
 		// appends the devices to the container def.
 		var devices []*lespec.VolumeDevice
@@ -348,7 +338,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 				ShmSize:      int64(src.ShmSize),
 				User:         src.User,
 				Volumes:      volumeMounts,
-				WorkingDir:   workingDir,
+				WorkingDir:   sourceDir,
 			},
 			DependsOn: src.DependsOn,
 			ErrPolicy: errorPolicy,
@@ -457,19 +447,11 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 	if haveImageSteps {
 		// source dir and script dir will be added as volumes only if there is at least on step that uses an image.
 		spec.Volumes = append(spec.Volumes,
-			&lespec.Volume{ // a source volume, used by every container step
+			&lespec.Volume{ // a mount for pipeline_root
 				HostPath: &lespec.VolumeHostPath{
-					ID:     "source_dir_" + oshelp.Random(),
-					Name:   "source_dir",
-					Path:   sourceDir,
-					Labels: systemLabels,
-				},
-			},
-			&lespec.Volume{ // a script volume, used by every container step
-				HostPath: &lespec.VolumeHostPath{
-					ID:     "script_dir_" + oshelp.Random(),
-					Name:   "script_dir",
-					Path:   scriptDir,
+					ID:     "pipeline_root_" + oshelp.Random(),
+					Name:   "pipeline_root",
+					Path:   pipelineRoot,
 					Labels: systemLabels,
 				},
 			})
@@ -523,14 +505,14 @@ func (c *Compiler) findSecret(ctx context.Context, args runtime.CompilerArgs, na
 	return found.Data, true
 }
 
-func createDirectories(pipelineOS, pipelineRoot string) (directories []*lespec.File, homeDir, sourceDir, scriptDir string) {
+func createDirectories(pipelineOS, pipelineRoot string) (directories []*lespec.File, homeDir, sourceDir string) {
 	homeRootDir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "home")
 	homeDir = oshelp.JoinPaths(pipelineOS, homeRootDir, "drone")
 
 	droneDir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "drone")
 	sourceDir = oshelp.JoinPaths(pipelineOS, droneDir, "src")
 
-	scriptDir = oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt")
+	scriptDir := oshelp.JoinPaths(pipelineOS, pipelineRoot, "opt")
 
 	directories = []*lespec.File{
 		{Path: homeRootDir, Mode: 0700, IsDir: true},
@@ -541,12 +523,4 @@ func createDirectories(pipelineOS, pipelineRoot string) (directories []*lespec.F
 	}
 
 	return
-}
-
-func getContainerSourcePath(pipelineOS string) string {
-	if pipelineOS == oshelp.OSWindows {
-		return "c:/drone/src"
-	}
-
-	return "/drone/src"
 }
