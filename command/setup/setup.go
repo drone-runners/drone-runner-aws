@@ -135,7 +135,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	)
 
 	store := database.ProvideInstanceStore(db)
-	poolManager := drivers.New(ctx, store, env.Settings.LiteEnginePath, runnerName)
+	poolManager := drivers.New(ctx, store, &env)
 
 	configPool, confErr := poolfile.ConfigPoolFile("", &env)
 	if confErr != nil {

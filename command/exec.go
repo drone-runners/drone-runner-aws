@@ -139,7 +139,9 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	}
 	store := database.ProvideInstanceStore(db)
 
-	poolManager := drivers.New(ctx, store, c.LiteEngineURL, runnerName)
+	envConfig.Settings.LiteEnginePath = c.LiteEngineURL
+	envConfig.Runner.Name = runnerName
+	poolManager := drivers.New(ctx, store, &envConfig)
 	err = poolManager.Add(pools...)
 	if err != nil {
 		return err

@@ -70,6 +70,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
+	if env.Settings.HarnessTestBinaryURI == "" {
+		env.Settings.HarnessTestBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/split_tests"
+	}
 	c.env = env
 	// setup the global logrus logger.
 	harness.SetupLogger(&c.env)
@@ -89,7 +92,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 
 	instanceStore := database.ProvideInstanceStore(db)
 	c.stageOwnerStore = database.ProvideStageOwnerStore(db)
-	c.poolManager = drivers.New(ctx, instanceStore, c.env.Settings.LiteEnginePath, c.env.Runner.Name)
+	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
 
 	_, err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
 	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck
