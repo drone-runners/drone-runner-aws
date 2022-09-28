@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
 	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -22,13 +23,14 @@ import (
 
 type (
 	Manager struct {
-		globalCtx      context.Context
-		poolMap        map[string]*poolEntry
-		strategy       Strategy
-		cleanupTimer   *time.Ticker
-		runnerName     string
-		liteEnginePath string
-		instanceStore  store.InstanceStore
+		globalCtx            context.Context
+		poolMap              map[string]*poolEntry
+		strategy             Strategy
+		cleanupTimer         *time.Ticker
+		runnerName           string
+		liteEnginePath       string
+		instanceStore        store.InstanceStore
+		harnessTestBinaryURI string
 	}
 
 	poolEntry struct {
@@ -40,14 +42,14 @@ type (
 func New(
 	globalContext context.Context,
 	instanceStore store.InstanceStore,
-	liteEnginePath string,
-	runnerName string,
+	env *config.EnvConfig,
 ) *Manager {
 	return &Manager{
-		globalCtx:      globalContext,
-		instanceStore:  instanceStore,
-		runnerName:     runnerName,
-		liteEnginePath: liteEnginePath,
+		globalCtx:            globalContext,
+		instanceStore:        instanceStore,
+		runnerName:           env.Runner.Name,
+		liteEnginePath:       env.Settings.LiteEnginePath,
+		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
 	}
 }
 
@@ -497,6 +499,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	createOptions.PoolName = pool.Name
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize
+	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")

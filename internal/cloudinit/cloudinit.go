@@ -20,11 +20,12 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	LiteEnginePath string
-	CACert         string
-	TLSCert        string
-	TLSKey         string
-	Platform       types.Platform
+	LiteEnginePath       string
+	CACert               string
+	TLSCert              string
+	TLSKey               string
+	Platform             types.Platform
+	HarnessTestBinaryURI string
 }
 
 var funcs = map[string]interface{}{
@@ -177,6 +178,10 @@ runcmd:
 - 'ufw allow 9079'
 - 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
+{{ if .HarnessTestBinaryURI }}
+- 'wget "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
+- 'chmod 777 /usr/bin/split_tests'
+{{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`

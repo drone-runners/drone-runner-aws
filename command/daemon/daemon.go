@@ -100,7 +100,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 	store := database.ProvideInstanceStore(db)
-	poolManager := drivers.New(ctx, store, env.Settings.LiteEnginePath, env.Runner.Name)
+	poolManager := drivers.New(ctx, store, &env)
 
 	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)
 	if confErr != nil {
