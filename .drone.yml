@@ -218,11 +218,8 @@ kind: pipeline
 type: vm
 name: build and publish intel mac binary
 
-node:
-  cluster: mac1
-
 pool:
-  use: osx-anka
+  use: anka-intel
 
 steps:
   - name: build mac intel binary
@@ -245,35 +242,32 @@ trigger:
     - refs/tags/*
 
 ---
-kind: pipeline
-type: vm
-name: build and publish M1 binaries
-
-node:
-  cluster: mac2
-
-pool:
-  use: osx-anka-m1
-
-steps:
-  - name: build mac arm64 binary
-    commands:
-      - brew install golang
-      - CGO_ENABLED=1 go build -o release/darwin/arm64/drone-runner-aws-darwin-arm64
-  - name: release
-    commands:
-      - release_binary/drone-github-release-darwin-arm64
-    settings:
-      files:
-        - release/darwin/arm64/drone-runner-aws-darwin-arm64
-      api_key:
-        from_secret: github_token
-
-depends_on:
-  - default
-trigger:
-  ref:
-    - refs/tags/*
+#kind: pipeline
+#type: vm
+#name: build and publish M1 binaries
+#
+#pool:
+#  use: osx-anka-m1
+#
+#steps:
+#  - name: build mac arm64 binary
+#    commands:
+#      - brew install golang
+#      - CGO_ENABLED=1 go build -o release/darwin/arm64/drone-runner-aws-darwin-arm64
+#  - name: release
+#    commands:
+#      - release_binary/drone-github-release-darwin-arm64
+#    settings:
+#      files:
+#        - release/darwin/arm64/drone-runner-aws-darwin-arm64
+#      api_key:
+#        from_secret: github_token
+#
+#depends_on:
+#  - default
+#trigger:
+#  ref:
+#    - refs/tags/*
 ---
 kind: pipeline
 type: docker
