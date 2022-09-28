@@ -8,7 +8,7 @@ platform:
 
 steps:
   - name: build
-    image: golang:1.18
+    image: golang:1.19
     commands:
       - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
     volumes:
@@ -17,7 +17,7 @@ steps:
     depends_on:
       - clone
   - name: go vet and unit tests
-    image: golang:1.18
+    image: golang:1.19
     commands:
       - go vet ./...
       - go test -cover ./...
@@ -27,7 +27,7 @@ steps:
     depends_on:
       - build
   - name: check go.mod is up to date
-    image: golang:1.18
+    image: golang:1.19
     commands:
       - cp go.mod go.mod.bak
       - go mod tidy
@@ -46,15 +46,15 @@ steps:
         path: /root/.cache/go-build
     depends_on:
       - build
-  - name: compiler checks
-    image: golang:1.18
+  - name: drone compile checks windows and linux
+    image: golang:1.19
     commands:
       - release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_ubuntu.yml' test_files/compiler/drone_pool.yml
       - release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
     depends_on:
       - build
-  - name: exec checks
-    image: golang:1.18
+  - name: drone exec checks - linux
+    image: golang:1.19
     commands:
       - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws-linux-amd64 exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     environment:
@@ -63,13 +63,13 @@ steps:
       AWS_ACCESS_KEY_SECRET:
         from_secret: AWS_ACCESS_KEY_SECRET
     depends_on:
-      - compiler checks
+      - drone compile checks windows and linux
     when:
       event:
         exclude:
           - pull_request
-  - name: windows exec checks
-    image: golang:1.18
+  - name: drone exec checks - windows
+    image: golang:1.19
     commands:
       - |
         echo "version: '1'
@@ -94,12 +94,12 @@ steps:
       AWS_ACCESS_KEY_SECRET:
         from_secret: AWS_ACCESS_KEY_SECRET
     depends_on:
-      - compiler checks
+      - drone compile checks windows and linux
     when:
       ref:
         - refs/heads/master
   - name: delegate checks
-    image: golang:1.18
+    image: golang:1.19
     commands:
       - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws-linux-amd64 delegate > delegate.log 2>&1 &
       - sleep 30
@@ -123,7 +123,7 @@ steps:
       AWS_ACCESS_KEY_SECRET:
         from_secret: AWS_ACCESS_KEY_SECRET
     depends_on:
-      - compiler checks
+      - drone compile checks windows and linux
     when:
       event:
         exclude:
@@ -141,9 +141,9 @@ steps:
       password:
         from_secret: docker_password
     depends_on:
-      - compiler checks
-      - exec checks
-      - windows exec checks
+      - drone compile checks windows and linux
+      - drone exec checks - linux
+      - drone exec checks - windows
       - delegate checks
       - golangci-lint
       - go vet and unit tests
@@ -162,9 +162,9 @@ steps:
       ref:
         - refs/tags/*
     depends_on:
-      - compiler checks
-      - exec checks
-      - windows exec checks
+      - drone compile checks windows and linux
+      - drone exec checks - linux
+      - drone exec checks - windows
       - delegate checks
       - golangci-lint
       - go vet and unit tests
@@ -176,14 +176,14 @@ volumes:
 ---
 kind: pipeline
 type: vm
-name: build arm64 linux binary and publish docker
+name: arm64 linux binary and docker
 
 pool:
   use: ubuntu_arm64
 
 steps:
   - name: build arm64 linux binary
-    image: golang:1
+    image: golang:1.19
     commands:
       - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/arm64/drone-runner-aws-linux-arm64
   - name: release
@@ -216,7 +216,7 @@ steps:
 ---
 kind: pipeline
 type: vm
-name: build and publish intel mac binary
+name: intel mac binary
 
 pool:
   use: anka-intel
@@ -268,10 +268,11 @@ trigger:
 #trigger:
 #  ref:
 #    - refs/tags/*
+#
 #---
 kind: pipeline
 type: docker
-name: manifest
+name: docker manifest
 
 steps:
   - name: manifest
@@ -287,7 +288,7 @@ steps:
 
 depends_on:
   - default
-  - build arm64 linux binary and publish docker
+  - arm64 linux binary and docker
 trigger:
   ref:
     - refs/heads/master

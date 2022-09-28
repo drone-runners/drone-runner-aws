@@ -39,8 +39,13 @@
     {
       "id": "random",
       "name": "clone",
-      "entrypoint": ["sh", "-c"],
-      "args": ["/tmp/aws/opt/clone"],
+      "entrypoint": [
+        "sh",
+        "-c"
+      ],
+      "args": [
+        "/tmp/aws/opt/clone"
+      ],
       "files": [
         {
           "path": "/tmp/aws/opt/clone",
@@ -55,21 +60,33 @@
       "id": "random",
       "name": "redis",
       "run_policy": "on-success",
-      "depends_on": ["clone"],
+      "depends_on": [
+        "clone"
+      ],
       "detach": true,
       "image": "redis",
       "privileged": true,
-      "working_dir": "/drone/src",
+      "working_dir": "/tmp/aws/drone/src",
       "volumes": [
-        {"name": "source_dir", "path": "/drone/src"}
+        {
+          "name": "pipeline_root",
+          "path": "/tmp/aws"
+        }
       ]
     },
     {
       "id": "random",
       "name": "build",
-      "entrypoint": ["sh", "-c"],
-      "args": ["/tmp/aws/opt/random"],
-      "depends_on": ["redis"],
+      "entrypoint": [
+        "sh",
+        "-c"
+      ],
+      "args": [
+        "/tmp/aws/opt/random"
+      ],
+      "depends_on": [
+        "redis"
+      ],
       "files": [
         {
           "path": "/tmp/aws/opt/random",
@@ -79,19 +96,22 @@
       ],
       "image": "golang:latest",
       "privileged": true,
-      "working_dir": "/drone/src",
+      "working_dir": "/tmp/aws/drone/src",
       "volumes": [
-        {"name": "source_dir", "path": "/drone/src"},
-        {"name": "script_dir", "path": "/tmp/aws/opt"}
+        {
+          "name": "pipeline_root",
+          "path": "/tmp/aws"
+        }
       ]
     }
   ],
   "volumes": [
     {
-      "host": {"id": "source_dir_random", "name": "source_dir", "path": "/tmp/aws/drone/src"}
-    },
-    {
-      "host": {"id": "script_dir_random", "name": "script_dir", "path": "/tmp/aws/opt"}
+      "host": {
+        "id": "pipeline_root_random",
+        "name": "pipeline_root",
+        "path": "/tmp/aws"
+      }
     }
   ]
 }
