@@ -268,7 +268,7 @@ trigger:
 #trigger:
 #  ref:
 #    - refs/tags/*
----
+#---
 kind: pipeline
 type: docker
 name: manifest
