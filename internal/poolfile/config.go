@@ -57,7 +57,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				vmfusion.WithRootDirectory(v.RootDirectory),
 			)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
 			}
 			pool := mapPool(&instance, runnerName)
 
@@ -101,7 +101,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithHibernate(a.Hibernate),
 			)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -136,7 +136,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				azure.WithSecurityGroupName(az.SecurityGroupName),
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("driver", instance.Type)
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -196,7 +196,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				anka.WithVMID(ak.VMID),
 			)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -222,7 +222,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				digitalocean.WithUserData(do.UserData, do.UserDataPath),
 			)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
@@ -249,7 +249,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				ankabuild.WithAuthToken(ankaBuild.AuthToken),
 			)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
