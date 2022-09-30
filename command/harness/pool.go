@@ -44,16 +44,13 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 			Errorln("failed to start instance purger")
 		return configPool, err
 	}
-
 	// lets remove any old instances.
 	if !env.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
-			logrus.WithError(cleanErr).
-				Errorln("unable to clean pools")
-		} else {
-			logrus.Infoln("pools cleaned")
+			return configPool, cleanErr
 		}
+		logrus.Infoln("pools cleaned")
 	}
 	// seed pools
 	buildPoolErr := poolManager.BuildPools(ctx)
@@ -73,11 +70,5 @@ func Cleanup(env *config.EnvConfig, poolManager *drivers.Manager) error {
 
 	cleanErr := poolManager.CleanPools(context.Background(), true, true)
 
-	if cleanErr != nil {
-		logrus.WithError(cleanErr).
-			Errorln("unable to clean pools")
-	} else {
-		logrus.Infoln("pools cleaned")
-	}
 	return cleanErr
 }

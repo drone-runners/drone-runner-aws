@@ -473,7 +473,6 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 				WithField("name", inst.Name).
 				Infoln("build pool: created new instance")
 		}(ctx, logr)
-
 		shouldCreate--
 	}
 
@@ -505,7 +504,6 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 			Errorln("manager: failed to generate certificates")
 		return nil, err
 	}
-
 	// create instance
 	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {

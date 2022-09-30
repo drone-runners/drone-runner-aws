@@ -60,6 +60,9 @@ func New(opts ...Option) (drivers.Driver, error) {
 		opt(p)
 	}
 
+	if p.tenantID == "" || p.clientID == "" || p.clientSecret == "" || p.subscriptionID == "" {
+		return nil, errors.New("missing required azure account credentials (tenant_id, client_id, client_secret, subscription_id)")
+	}
 	if p.service == nil {
 		cred, err := azidentity.NewClientSecretCredential(p.tenantID, p.clientID, p.clientSecret, nil)
 		p.cred = cred
@@ -255,7 +258,7 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		networkInterfaceName := fmt.Sprintf("%s-networkinterface", instanceID)
 		diskName := fmt.Sprintf("%s-disk", instanceID)
 
-		logr.Debugln("azure destroying instance:", instanceID)
+		logr.Debugln("azure destroying instance: ", instanceID)
 		logr.WithField("id", instanceID).
 			WithField("cloud", types.Google)
 
@@ -267,31 +270,31 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		if err != nil {
 			return err
 		}
-		logr.Info("azure instance destroyed:", instanceID)
+		logr.Info("azure instance destroyed: %s", instanceID)
 		err = c.deleteNetworkInterface(ctx, networkInterfaceName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("azure: deleted network interface:", networkInterfaceName)
+		logr.Info("azure: deleted network interface: ", networkInterfaceName)
 		err = c.deletePublicIP(ctx, publicIPName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("azure: deleted public ip:", publicIPName)
+		logr.Info("azure: deleted public ip: ", publicIPName)
 		err = c.deleteVirtualNetWork(ctx, vnetName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("azure: deleted virtual network:", vnetName)
+		logr.Info("azure: deleted virtual network: ", vnetName)
 		err = c.deleteDisk(ctx, diskName)
 		if err != nil {
 			logr.Errorln(err)
 			return err
 		}
-		logr.Info("azure: deleted disk: %s", diskName)
+		logr.Info("azure: deleted disk: ", diskName)
 		logr.Info("azure: VM terminated")
 	}
 	return nil
