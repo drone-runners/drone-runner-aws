@@ -244,11 +244,16 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 }
 
 func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
-	logr := logger.FromContext(ctx)
+	logr := logger.FromContext(ctx).
+		WithField("cloud", types.Azure).
+		WithField("image", c.InstanceType()).
+		WithField("zone", c.zones).
+		WithField("image", c.offer).
+		WithField("size", c.size)
+
 	if c.resourceGroupName == "" {
 		c.resourceGroupName = defaultResourceGroup
 	}
-	logr.Debugln("azure destroy operation started")
 	if len(instanceIDs) == 0 {
 		return nil
 	}
@@ -258,10 +263,6 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		networkInterfaceName := fmt.Sprintf("%s-networkinterface", instanceID)
 		diskName := fmt.Sprintf("%s-disk", instanceID)
 
-		logr.Debugln("azure destroying instance: ", instanceID)
-		logr.WithField("id", instanceID).
-			WithField("cloud", types.Google)
-
 		poller, err := c.service.BeginDelete(ctx, c.resourceGroupName, instanceID, nil)
 		if err != nil {
 			return err
@@ -270,7 +271,7 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		if err != nil {
 			return err
 		}
-		logr.Info("azure instance destroyed: %s", instanceID)
+		logr.Info("azure: begin delete VM")
 		err = c.deleteNetworkInterface(ctx, networkInterfaceName)
 		if err != nil {
 			logr.Errorln(err)
@@ -295,7 +296,7 @@ func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 			return err
 		}
 		logr.Info("azure: deleted disk: ", diskName)
-		logr.Info("azure: VM terminated")
+		logr.Info("azure: VM deleted")
 	}
 	return nil
 }
