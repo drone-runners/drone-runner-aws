@@ -182,9 +182,15 @@ runcmd:
 - 'wget "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
-- 'touch /root/.env'
+- 'touch /root/.env'	
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
+- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
+- 'mkdir /harness'
+- 'wget https://github.com/tmate-io/tmate/releases/download/2.4.0/tmate-2.4.0-static-linux-amd64.tar.xz -O /harness/tmate.xz' 
+- 'tar -xf /harness/tmate.xz -C /harness/'
+- 'chmod +x  /harness/tmate-2.4.0-static-linux-amd64/tmate'
+- 'mv  /harness/tmate-2.4.0-static-linux-amd64/tmate /harness/tmate'
+- 'rm -rf /harness/tmate-2.4.0-static-linux-amd64/tmate'`
 
 var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(ubuntuScript))
 
