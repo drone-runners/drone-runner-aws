@@ -36,7 +36,7 @@ require (
 	github.com/rs/zerolog v1.28.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
-	github.com/wings-software/dlite v0.0.0-20220915141325-eb8c295a2189
+	github.com/wings-software/dlite v1.0.0-rc.1
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
 	golang.org/x/sync v0.0.0-20220923202941-7f9b1623fab7
 	google.golang.org/api v0.97.0
