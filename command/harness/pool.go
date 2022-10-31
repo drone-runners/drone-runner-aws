@@ -69,6 +69,11 @@ func Cleanup(env *config.EnvConfig, poolManager *drivers.Manager) error {
 	}
 
 	cleanErr := poolManager.CleanPools(context.Background(), true, true)
+	if cleanErr != nil {
+		logrus.WithError(cleanErr).Errorln("unable to clean pools")
+	} else {
+		logrus.Infoln("pools cleaned")
+	}
 
 	return cleanErr
 }
