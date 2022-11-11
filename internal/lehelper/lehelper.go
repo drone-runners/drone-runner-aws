@@ -40,9 +40,9 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 func GetClient(instance *types.Instance, runnerName, arch, os string, liteEnginePort int64) (*lehttp.HTTPClient, error) {
 	var leURL string
 	if arch == oshelp.ArchARM64 && os == oshelp.OSMac {
-		leURL = fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
-	} else {
 		leURL = fmt.Sprintf("http://%s:%d/", instance.Address, liteEnginePort)
+	} else {
+		leURL = fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
 	}
 	return lehttp.NewHTTPClient(leURL,
 		runnerName, string(instance.CACert),
