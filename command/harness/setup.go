@@ -148,7 +148,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
-	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Platform.Arch, instance.Platform.OSName, instance.Port)
+	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Port)
 	if err != nil {
 		go cleanUpFn()
 		return nil, fmt.Errorf("failed to create LE client: %w", err)
