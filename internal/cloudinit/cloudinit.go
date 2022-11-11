@@ -89,7 +89,6 @@ chmod 0600 {{ .KeyPath }}
 chmod 777 /usr/local/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
-echo "CLIENT_INSECURE=true" >> .env;
 /usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
