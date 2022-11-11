@@ -72,7 +72,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 
 	logr = logr.WithField("ip", inst.Address)
 
-	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port)
+	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Platform.Arch, inst.Platform.OSName, inst.Port)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}

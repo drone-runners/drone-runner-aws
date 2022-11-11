@@ -109,6 +109,7 @@ wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}"
 chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
+echo "SERVER_INSECURE=true" >> .env;
 /opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
