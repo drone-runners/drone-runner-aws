@@ -37,13 +37,8 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	return userdata
 }
 
-func GetClient(instance *types.Instance, runnerName, arch, os string, liteEnginePort int64) (*lehttp.HTTPClient, error) {
-	var leURL string
-	if arch == oshelp.ArchARM64 && os == oshelp.OSMac {
-		leURL = fmt.Sprintf("http://%s:%d/", instance.Address, liteEnginePort)
-	} else {
-		leURL = fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
-	}
+func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64) (*lehttp.HTTPClient, error) {
+	leURL := fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
 	return lehttp.NewHTTPClient(leURL,
 		runnerName, string(instance.CACert),
 		string(instance.TLSCert), string(instance.TLSKey))
