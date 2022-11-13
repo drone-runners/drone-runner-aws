@@ -1,5 +1,39 @@
 # Changelog
 
+## [v1.0.0-rc.18](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.18) (2022-11-13)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.17...v1.0.0-rc.18)
+
+**Merged pull requests:**
+
+- Upgrade lite-engine version [\#199](https://github.com/drone-runners/drone-runner-aws/pull/199) ([rutvijmehta-harness](https://github.com/rutvijmehta-harness))
+
+## [v1.0.0-rc.17](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.17) (2022-11-11)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.16...v1.0.0-rc.17)
+
+**Fixed bugs:**
+
+- \(bug\) revert running lite-engine on http for mac64 [\#196](https://github.com/drone-runners/drone-runner-aws/pull/196) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc.16](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.16) (2022-11-11)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.15...v1.0.0-rc.16)
+
+**Fixed bugs:**
+
+- \(bug\) Fixes issue cert errors on lite-engie on anka build [\#195](https://github.com/drone-runners/drone-runner-aws/pull/195) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc.15](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.15) (2022-11-10)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.14...v1.0.0-rc.15)
+
+**Merged pull requests:**
+
+- fixes trailing -e typo in cloudinit: [\#194](https://github.com/drone-runners/drone-runner-aws/pull/194) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- fix: update tag for dlite [\#193](https://github.com/drone-runners/drone-runner-aws/pull/193) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(maint\): rc14 release prep [\#191](https://github.com/drone-runners/drone-runner-aws/pull/191) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
 ## [v1.0.0-rc.14](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.14) (2022-10-31)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.13...v1.0.0-rc.14)
