@@ -31,6 +31,7 @@ type (
 		liteEnginePath       string
 		instanceStore        store.InstanceStore
 		harnessTestBinaryURI string
+		pluginBinaryURI      string
 	}
 
 	poolEntry struct {
@@ -50,6 +51,7 @@ func New(
 		runnerName:           env.Runner.Name,
 		liteEnginePath:       env.Settings.LiteEnginePath,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:      env.Settings.PluginBinaryURI,
 	}
 }
 
@@ -499,6 +501,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize
 	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
+	createOptions.PluginBinaryURI = m.pluginBinaryURI
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")

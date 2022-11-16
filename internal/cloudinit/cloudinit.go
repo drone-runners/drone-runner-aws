@@ -26,6 +26,7 @@ type Params struct {
 	TLSKey               string
 	Platform             types.Platform
 	HarnessTestBinaryURI string
+	PluginBinaryURI      string
 }
 
 var funcs = map[string]interface{}{
@@ -182,6 +183,10 @@ runcmd:
 - 'wget "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
+{{ if .PluginBinaryURI }}
+- 'wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'chmod 777 /usr/bin/plugin'
+{{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
@@ -212,6 +217,10 @@ runcmd:
 - 'sudo usermod -a -G docker ec2-user'
 - 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
+{{ if .PluginBinaryURI }}
+- 'wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'chmod 777 /usr/bin/plugin'
+{{ end }}
 - 'touch /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
 
