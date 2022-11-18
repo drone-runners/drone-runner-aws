@@ -50,6 +50,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 		WithField("pool", r.PoolID).
 		WithField("correlation_id", r.CorrelationID)
 
+	setPrevStepExportEnvs(r)
 	// add global volumes as mounts only if image is specified
 	if r.Image != "" {
 		for _, pair := range env.Runner.Volumes {
@@ -119,6 +120,9 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 	}
 
 	logr.WithField("pollResponse", pollResponse).Traceln("completed LE.RetryPollStep")
+	if len(pollResponse.Envs) > 0 {
+		envState().Add(r.StageRuntimeID, pollResponse.Envs)
+	}
 
 	return pollResponse, nil
 }
@@ -138,4 +142,11 @@ func getInstance(ctx context.Context, r *ExecuteVMRequest, poolManager *drivers.
 		return nil, fmt.Errorf("cannot get the instance by stageId %s: %w", r.StageRuntimeID, err)
 	}
 	return inst, nil
+}
+
+func setPrevStepExportEnvs(r *ExecuteVMRequest) {
+	prevStepExportEnvs := envState().Get(r.StageRuntimeID)
+	for k, v := range prevStepExportEnvs {
+		r.StartStepRequest.Envs[k] = v
+	}
 }

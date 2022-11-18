@@ -47,12 +47,13 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		return fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Traceln("destroyed instance")
+
+	envState().Delete(r.StageRuntimeID)
 	exists, _ := s.Find(ctx, r.StageRuntimeID, r.PoolID)
 	if exists != nil {
 		if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
 			logr.WithError(err).Errorln("failed to delete stage owner entity")
 		}
 	}
-
 	return nil
 }
