@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.0.0-rc.19](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.19) (2022-11-18)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.18...v1.0.0-rc.19)
+
+**Implemented enhancements:**
+
+- Add support for setting exported env vars for harness [\#201](https://github.com/drone-runners/drone-runner-aws/pull/201) ([shubham149](https://github.com/shubham149))
+- Add support for setting exported env vars for harness [\#200](https://github.com/drone-runners/drone-runner-aws/pull/200) ([shubham149](https://github.com/shubham149))
+
 ## [v1.0.0-rc.18](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.18) (2022-11-13)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.17...v1.0.0-rc.18)
