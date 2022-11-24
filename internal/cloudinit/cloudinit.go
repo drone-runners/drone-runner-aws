@@ -90,6 +90,12 @@ chmod 0600 {{ .KeyPath }}
 chmod 777 /usr/local/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
+
+{{ if .PluginBinaryURI }}
+wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+chmod 777 /usr/bin/plugin
+{{ end }}
+
 /usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
@@ -110,6 +116,12 @@ wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}"
 chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
+
+{{ if .PluginBinaryURI }}
+wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin
+chmod 777 /usr/local/bin/plugin
+{{ end }}
+
 /opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
