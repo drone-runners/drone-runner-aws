@@ -364,7 +364,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 	return types.Instance{
-		ID:           strconv.FormatUint(vm.Id, 10),
+		ID:           strconv.FormatUint(vm.Id, 10), //nolint
 		Name:         vm.Name,
 		Provider:     types.Google, // this is driver, though its the old legacy name of provider
 		State:        types.StateCreated,

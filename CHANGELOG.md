@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-rc20](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc20) (2022-11-24)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.19...v1.0.0-rc20)
+
+**Implemented enhancements:**
+
+- \(feat\) adds support for bitrise plugin on mac [\#203](https://github.com/drone-runners/drone-runner-aws/pull/203) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
 ## [v1.0.0-rc.19](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.19) (2022-11-18)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.18...v1.0.0-rc.19)
