@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-rc-21](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc-21) (2022-11-24)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc20...v1.0.0-rc-21)
+
+**Closed issues:**
+
+- generate instance name using crypto / rand [\#197](https://github.com/drone-runners/drone-runner-aws/issues/197)
+
 ## [v1.0.0-rc20](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc20) (2022-11-24)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.19...v1.0.0-rc20)
