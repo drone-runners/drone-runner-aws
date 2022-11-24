@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/dchest/uniuri"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -49,7 +50,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
-	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", startTime.Unix())
+	machineName := fmt.Sprintf(opts.RunnerName + uniuri.NewLen(8))
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.AnkaBuild).
