@@ -108,7 +108,7 @@ DLITE_NAME=<name-of-runner>
 
 The values of the above variables can be found by logging into a Harness account and adding a delegate. The spec for the delegate would contain the account ID, the secret (DELEGATE_TOKEN), and the endpoint (MANAGER_HOST_AND_PORT)
 
-+ Run the runner in delegate-less mode `go run main.do dlite --pool=pool.yml`
++ Run the runner in delegate-less mode `go run main.go dlite --pool=pool.yml`
 
 If the logs say the runner has been registered successfully, you should be able to see the runner in the delegates screen on Harness.
 
