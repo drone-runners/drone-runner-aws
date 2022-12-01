@@ -147,6 +147,9 @@ func getInstance(ctx context.Context, r *ExecuteVMRequest, poolManager *drivers.
 func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 	prevStepExportEnvs := envState().Get(r.StageRuntimeID)
 	for k, v := range prevStepExportEnvs {
+		if r.StartStepRequest.Envs == nil {
+			r.StartStepRequest.Envs = make(map[string]string)
+		}
 		r.StartStepRequest.Envs[k] = v
 	}
 }
