@@ -99,7 +99,10 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 
 	pool := m.poolMap[poolName]
 	if pool == nil {
-		return nil, fmt.Errorf("GetInstanceByStageID: pool name %q not found", poolName)
+		err := fmt.Errorf("GetInstanceByStageID: pool name %s not found", poolName)
+		logger.FromContext(ctx).WithError(err).WithField("stage_runtime_id", stage).
+			Errorln("manager: GetInstanceByStageID failed find pool")
+		return nil, err
 	}
 	query := types.QueryParams{Status: types.StateInUse, Stage: stage}
 	list, err := m.instanceStore.List(ctx, pool.Name, &query)
