@@ -1,8 +1,24 @@
 # Changelog
 
-## [v1.0.0-rc-21](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc-21) (2022-11-24)
+## [v1.0.0-rc22](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc22) (2022-12-01)
 
-[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc20...v1.0.0-rc-21)
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc21...v1.0.0-rc22)
+
+**Fixed bugs:**
+
+- Fix nil map in exported envs [\#206](https://github.com/drone-runners/drone-runner-aws/pull/206) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- Update README.md [\#205](https://github.com/drone-runners/drone-runner-aws/pull/205) ([devkimittal](https://github.com/devkimittal))
+
+## [v1.0.0-rc21](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc21) (2022-11-24)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc20...v1.0.0-rc21)
+
+**Fixed bugs:**
+
+- \(bug\) - fixes issue where machine name wasn't unique for anka build [\#204](https://github.com/drone-runners/drone-runner-aws/pull/204) ([eoinmcafee00](https://github.com/eoinmcafee00))
 
 **Closed issues:**
 
