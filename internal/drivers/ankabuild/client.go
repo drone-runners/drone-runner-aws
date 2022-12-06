@@ -37,6 +37,29 @@ type createVMParams struct {
 	Tag                    string `json:"tag,omitempty"`
 }
 
+type listResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Body    []struct {
+		ExternalID interface{} `json:"external_id"`
+		InstanceID string      `json:"instance_id"`
+		Name       string      `json:"name"`
+		VM         struct {
+			InstanceID    string    `json:"instance_id"`
+			InstanceState string    `json:"instance_state"`
+			AnkaRegistry  string    `json:"anka_registry"`
+			Vmid          string    `json:"vmid"`
+			InflightReqid string    `json:"inflight_reqid"`
+			TS            time.Time `json:"ts"`
+			CrTime        time.Time `json:"cr_time"`
+			Progress      int       `json:"progress"`
+			Name          string    `json:"name"`
+			Arch          string    `json:"arch"`
+			Vlan          string    `json:"vlan"`
+		} `json:"vm"`
+	} `json:"body"`
+}
+
 type vmResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
@@ -109,6 +132,7 @@ type Client interface {
 	VMDelete(ctx context.Context, id string) error
 	VMFind(ctx context.Context, id string) (*vmResponse, error)
 	Status(ctx context.Context) (*statusResponse, error)
+	ListVM(ctx context.Context) (*listResponse, error)
 }
 
 func (c *client) VMCreate(ctx context.Context, in *createVMParams) (*createVMResponse, error) {
@@ -135,6 +159,13 @@ func (c *client) VMDelete(ctx context.Context, id string) error {
 func (c *client) Status(ctx context.Context) (*statusResponse, error) {
 	out := new(statusResponse)
 	uri := fmt.Sprintf(pathStatus, c.addr)
+	err := c.get(ctx, uri, nil, out)
+	return out, err
+}
+
+func (c *client) ListVM(ctx context.Context) (*listResponse, error) {
+	out := new(listResponse)
+	uri := fmt.Sprintf(pathVMController, c.addr)
 	err := c.get(ctx, uri, nil, out)
 	return out, err
 }
