@@ -78,7 +78,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 	var id = response.Body[0]
 	vm := &vmResponse{}
-	for i := 1; i <= 10000; i++ {
+	for i := 1; i <= 100; i++ {
 		vm, err = c.ankaClient.VMFind(ctx, id)
 		if err != nil {
 			return nil, err
@@ -99,8 +99,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		logrus.Debugf("VM: %s is running!", vm.Body.InstanceID)
 		break
 	}
-
-	if vm.Body.InstanceState == "Scheduling" {
+	// if instance not started at this point - clean up and return error
+	if vm.Body.InstanceState != "Started" {
 		logrus.Infof("ankabuild: vm failed to schedule, deleting vm: %s", vm.Body.InstanceID)
 		deleteErr := c.ankaClient.VMDelete(ctx, vm.Body.InstanceID)
 		if deleteErr != nil {
