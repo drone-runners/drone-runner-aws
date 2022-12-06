@@ -78,10 +78,15 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 	var id = response.Body[0]
 	vm := &vmResponse{}
-	for i := 1; i <= 50000; i++ {
+	for i := 1; i <= 10000; i++ {
 		vm, err = c.ankaClient.VMFind(ctx, id)
 		if err != nil {
 			return nil, err
+		}
+		if vm.Body.InstanceState == "Scheduling" {
+			logrus.Infof("ankabuild: vm %s is scheduling with node %s", vm.Body.InstanceID, vm.Body.NodeID)
+			time.Sleep(5 * time.Second) //nolint
+			continue
 		}
 		if vm.Body.InstanceState == "Pulling" {
 			logrus.Infof("ankabuild: template tag: %s is downloading to node: %s", vm.Body.Tag, vm.Body.NodeID)
@@ -89,12 +94,19 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			continue
 		}
 		if vm.Body.InstanceState != "Started" {
-			logrus.Debugf("ankabuild: vm %s is starting %d ...", vm.Body.InstanceID, i)
-			time.Sleep(5 * time.Second) //nolint
 			continue
 		}
 		logrus.Debugf("VM: %s is running!", vm.Body.InstanceID)
 		break
+	}
+
+	if vm.Body.InstanceState == "Scheduling" {
+		logrus.Infof("ankabuild: vm failed to schedule, deleting vm: %s", vm.Body.InstanceID)
+		deleteErr := c.ankaClient.VMDelete(ctx, vm.Body.InstanceID)
+		if deleteErr != nil {
+			logrus.Errorf("ankabuild: error deleting vm: %s", deleteErr)
+		}
+		return nil, errors.New("ankabuild: vm failed to schedule - no capacity available")
 	}
 
 	inst := vm.Body
