@@ -32,7 +32,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 
 	for i := range poolFile.Instances {
 		instance := poolFile.Instances[i]
+<<<<<<< HEAD
 		logrus.Infoln(fmt.Sprintf("Parsing pool '%s', of type '%s'", instance.Name, instance.Type))
+=======
+		fmt.Printf("instance type is: %s", instance.Type)
+>>>>>>> 0125be3 (poc demo)
 		switch instance.Type {
 		case string(types.VMFusion):
 			var v, ok = instance.Spec.(*config.VMFusion)
@@ -275,7 +279,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool.Driver = driver
 			pools = append(pools, pool)
 		default:
-			return nil, fmt.Errorf("unknown instance type %s", instance.Type)
+			return nil, fmt.Errorf("unknown instance tip %s", instance.Type)
 		}
 	}
 	return pools, nil
