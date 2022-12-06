@@ -10,9 +10,10 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
-	"golang.org/x/oauth2"
 
+	"github.com/dchest/uniuri"
 	"github.com/digitalocean/godo"
+	"golang.org/x/oauth2"
 )
 
 // config is a struct that implements drivers.Pool interface
@@ -69,7 +70,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("pool", opts.PoolName).
 		WithField("image", p.image).
 		WithField("hibernate", p.CanHibernate())
-	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", startTime.Unix())
+	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	logr.Infof("digitalocean: creating instance %s", name)
 
 	// create a new digitalocean request

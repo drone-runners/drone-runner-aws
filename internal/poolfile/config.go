@@ -77,6 +77,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			var driver, err = amazon.New(
 				amazon.WithAccessKeyID(a.Account.AccessKeyID),
 				amazon.WithSecretAccessKey(a.Account.AccessKeySecret),
+				amazon.WithSessionToken(a.Account.SessionToken),
 				amazon.WithZone(a.Account.AvailabilityZone),
 				amazon.WithKeyPair(a.Account.KeyPairName),
 				amazon.WithDeviceName(a.DeviceName, instance.Platform.OSName),

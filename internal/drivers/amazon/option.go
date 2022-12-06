@@ -51,6 +51,13 @@ func WithSecretAccessKey(secretAccessKey string) Option {
 	}
 }
 
+// WithSessionToken returns an option to set the session token.
+func WithSessionToken(sessionToken string) Option {
+	return func(p *config) {
+		p.sessionToken = sessionToken
+	}
+}
+
 // WithRootDirectory sets the root directory for the virtual machine.
 func WithRootDirectory(dir string) Option {
 	return func(p *config) {
