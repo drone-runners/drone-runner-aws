@@ -68,7 +68,7 @@ func (p *config) CanHibernate() bool {
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := lehelper.GenerateUserdata(p.userData, opts)
-	machineName := fmt.Sprintf(opts.RunnerName + uniuri.NewLen(8)) //nolint
+	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Anka).

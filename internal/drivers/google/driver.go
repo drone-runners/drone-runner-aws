@@ -497,8 +497,6 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 func getInstanceName(runner, pool string) string {
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
-	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool,
-		uniuri.NewLen(8), randStr)) //nolint
-
+	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd
 	return substrSuffix(name, maxInstanceNameLen)
 }

@@ -50,8 +50,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
-	machineName := fmt.Sprintf(opts.RunnerName + uniuri.NewLen(8)) //nolint
-
+	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.AnkaBuild).
 		WithField("name", machineName).

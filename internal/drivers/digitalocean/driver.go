@@ -70,7 +70,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("pool", opts.PoolName).
 		WithField("image", p.image).
 		WithField("hibernate", p.CanHibernate())
-	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", uniuri.NewLen(8)) //nolint
+	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	logr.Infof("digitalocean: creating instance %s", name)
 
 	// create a new digitalocean request
