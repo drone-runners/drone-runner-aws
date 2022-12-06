@@ -95,6 +95,13 @@ type (
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
 	}
 
+	SSH struct {
+		Hostname   string `json:"hostname,omitempty" yaml:"hostname"`
+		Username   string `json:"username,omitempty" yaml:"username"`
+		Password   string `json:"password,omitempty" yaml:"password"`
+		SSHKeyPath string `json:"ssh_key_path,omitempty" yaml:"ssh_key_path"`
+	}
+
 	// Azure specifies the configuration for an Azure instance.
 	Azure struct {
 		Account           AzureAccount      `json:"account,omitempty"`
@@ -412,6 +419,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Google)
 	case string(types.VMFusion):
 		s.Spec = new(VMFusion)
+	case string(types.SSH):
+		s.Spec = new(SSH)
 
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)

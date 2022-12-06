@@ -15,6 +15,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/ssh"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -32,6 +33,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 
 	for i := range poolFile.Instances {
 		instance := poolFile.Instances[i]
+		fmt.Printf("instance type is: %s", instance.Type)
 		switch instance.Type {
 		case string(types.VMFusion):
 			var v, ok = instance.Spec.(*config.VMFusion)
@@ -255,8 +257,26 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
+		case string(types.SSH):
+			var sshConfig, ok = instance.Spec.(*config.SSH)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			dat, err := os.ReadFile(sshConfig.SSHKeyPath)
+			if err != nil {
+				return nil, err
+			}
+			driver, err := ssh.New(ssh.WithHostname(sshConfig.Hostname),
+				ssh.WithPassword(sshConfig.Password), ssh.WithSSHKey(string(dat)),
+				ssh.WithUsername(sshConfig.Username))
+			if err != nil {
+				return nil, err
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
 		default:
-			return nil, fmt.Errorf("unknown instance type %s", instance.Type)
+			return nil, fmt.Errorf("unknown instance tip %s", instance.Type)
 		}
 	}
 	return pools, nil
