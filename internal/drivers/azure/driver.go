@@ -18,6 +18,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute"
+	"github.com/dchest/uniuri"
 )
 
 type config struct {
@@ -109,8 +110,7 @@ func (c *config) Zones() string {
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	sanitizedRunnerName := strings.ReplaceAll(opts.RunnerName, " ", "-")
 	sanitizedPoolName := strings.ReplaceAll(opts.PoolName, " ", "-")
-	var name = fmt.Sprintf("%s-%s-%d", sanitizedRunnerName, sanitizedPoolName, time.Now().Unix())
-
+	var name = fmt.Sprintf("%s-%s-%s", sanitizedRunnerName, sanitizedPoolName, uniuri.NewLen(8)) //nolint
 	vnetName := fmt.Sprintf("%s-vnet", name)
 	subnetName := fmt.Sprintf("%s-subnet", name)
 	publicIPName := fmt.Sprintf("%s-publicip", name)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
+	"github.com/dchest/uniuri"
 	"github.com/sirupsen/logrus"
 )
 
@@ -68,7 +68,7 @@ func (p *config) CanHibernate() bool {
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	uData := lehelper.GenerateUserdata(p.userData, opts)
-	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", rand.Int()) //nolint
+	machineName := fmt.Sprintf(opts.RunnerName + uniuri.NewLen(8)) //nolint
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Anka).

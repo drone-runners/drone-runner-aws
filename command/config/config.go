@@ -52,6 +52,7 @@ type (
 	AmazonAccount struct {
 		AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
 		AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
+		SessionToken     string `json:"aws_session_token,omitempty" yaml:"aws_session_token"`
 		Region           string `json:"region,omitempty"`
 		Retries          int    `json:"retries,omitempty" yaml:"retries,omitempty"`
 		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"`

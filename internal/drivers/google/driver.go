@@ -17,6 +17,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
+	"github.com/dchest/uniuri"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -496,8 +497,8 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 func getInstanceName(runner, pool string) string {
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
-	name := strings.ToLower(fmt.Sprintf("%s-%s-%d-%s", namePrefix, pool,
-		time.Now().Unix(), randStr))
+	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool,
+		uniuri.NewLen(8), randStr)) //nolint
 
 	return substrSuffix(name, maxInstanceNameLen)
 }
