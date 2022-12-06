@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-rc23](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc23) (2022-12-05)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc22...v1.0.0-rc23)
+
+**Fixed bugs:**
+
+- \(bug\) add nil check if pool not found [\#207](https://github.com/drone-runners/drone-runner-aws/pull/207) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
 ## [v1.0.0-rc22](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc22) (2022-12-01)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc21...v1.0.0-rc22)
