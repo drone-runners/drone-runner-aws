@@ -6,6 +6,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/poller"
 )
@@ -19,6 +20,7 @@ var (
 func Handler(p *poller.Poller) http.Handler {
 	r := chi.NewRouter()
 	r.Use(harness.Middleware)
+	r.Use(middleware.Recoverer)
 
 	r.Mount("/maintenance_mode", func() http.Handler {
 		sr := chi.NewRouter()
