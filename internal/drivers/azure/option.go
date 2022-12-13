@@ -24,7 +24,7 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 		platform.OS = oshelp.OSWindows
 	}
 	if platform.OS != oshelp.OSWindows {
-		return platform, fmt.Errorf("invalid OS %s, has to be '%s'", platform.OS, oshelp.OSWindows)
+		return platform, fmt.Errorf("azure - invalid OS %s, has to be '%s'", platform.OS, oshelp.OSWindows)
 	}
 
 	return platform, nil

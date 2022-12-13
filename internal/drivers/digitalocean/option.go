@@ -23,7 +23,7 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 		platform.OS = oshelp.OSLinux
 	}
 	if platform.OS != oshelp.OSLinux {
-		return platform, fmt.Errorf("invalid OS %s, has to be '%s'", platform.OS, oshelp.OSLinux)
+		return platform, fmt.Errorf("digitalocean: invalid OS %s, has to be '%s'", platform.OS, oshelp.OSLinux)
 	}
 	// set osname
 	if platform.OS == oshelp.OSLinux {

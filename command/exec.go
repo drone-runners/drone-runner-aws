@@ -317,7 +317,7 @@ func registerExec(app *kingpin.Application) {
 		BoolVar(&c.Dump)
 
 	cmd.Flag("lite-engine-url", "web url for the lite-engine binaries ").
-		Default("https://github.com/harness/lite-engine/releases/download/v0.1.0/").
+		Default("https://github.com/harness/lite-engine/releases/download/v0.4.6/").
 		StringVar(&c.LiteEngineURL)
 
 	cmd.Flag("pretty", "pretty print the output").
