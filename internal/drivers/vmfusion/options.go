@@ -20,7 +20,7 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 		platform.OS = oshelp.OSMac
 	}
 	if platform.OS != oshelp.OSMac {
-		return platform, fmt.Errorf("vmfusion: invalid OS %s, has to be '%s'", platform.OS, oshelp.OSMac)
+		return platform, fmt.Errorf("vmfusion - invalid OS %s, has to be '%s'", platform.OS, oshelp.OSMac)
 	}
 
 	return platform, nil
