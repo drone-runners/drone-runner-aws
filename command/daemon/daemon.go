@@ -6,6 +6,7 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -102,12 +103,14 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 
 	poolManager := drivers.New(ctx, store, &env)
 
+	logrus.Infoln(fmt.Sprintf("Loeading pool file '%s'", c.poolFile))
 	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)
 	if confErr != nil {
 		logrus.WithError(confErr).
 			Fatalln("daemon: unable to load pool file, or use an in memory pool file")
 	}
 
+	logrus.Infoln(fmt.Sprintf("daemon: processing config for %s", env.Runner.Name))
 	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name)
 	if err != nil {
 		logrus.WithError(err).

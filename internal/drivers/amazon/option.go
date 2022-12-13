@@ -24,7 +24,7 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 		platform.OS = oshelp.OSLinux
 	}
 	if platform.OS != oshelp.OSLinux && platform.OS != oshelp.OSWindows && platform.OS != oshelp.OSMac {
-		return platform, fmt.Errorf("invalid OS %s, has to be one of the following '%s/%s/%s'", platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
+		return platform, fmt.Errorf("aws - invalid OS %s, has to be one of the following '%s/%s/%s'", platform.OS, oshelp.OSLinux, oshelp.OSWindows, oshelp.OSMac)
 	}
 	// set osname, we dont separate different versions of windows or mac with osname yet.
 	if platform.OS == oshelp.OSLinux {
@@ -32,7 +32,7 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 			platform.OSName = oshelp.Ubuntu
 		}
 		if platform.OSName != oshelp.Ubuntu && platform.OSName != oshelp.AmazonLinux {
-			return platform, fmt.Errorf("invalid OS Name %s, has to be one of the following '%s/%s'", platform.OSName, oshelp.Ubuntu, oshelp.AmazonLinux)
+			return platform, fmt.Errorf("aws - invalid OS Name %s, has to be one of the following '%s/%s'", platform.OSName, oshelp.Ubuntu, oshelp.AmazonLinux)
 		}
 	}
 	return platform, nil

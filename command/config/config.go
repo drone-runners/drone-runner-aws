@@ -414,6 +414,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(AnkaBuild)
 	case string(types.Azure):
 		s.Spec = new(Azure)
+	case string(types.DigitalOcean):
+		s.Spec = new(DigitalOcean)
 	case string(types.Google), "gcp":
 		s.Spec = new(Google)
 	case string(types.VMFusion):

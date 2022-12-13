@@ -134,6 +134,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		setupRequest.MountDockerSocket = &b
 	}
 
+	logr.WithField("request", fmt.Sprintf("%+v", setupRequest)).Traceln("Calling LE.Setup")
 	setupResponse, err := client.Setup(ctx, setupRequest)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to call LE.Setup")
