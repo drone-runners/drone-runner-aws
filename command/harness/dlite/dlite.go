@@ -49,7 +49,6 @@ func parseTags(pf *config.PoolFile) []string {
 	tags := []string{}
 	for i := range pf.Instances {
 		tags = append(tags, pf.Instances[i].Name)
-
 	}
 	return tags
 }
