@@ -47,8 +47,9 @@ func RegisterDlite(app *kingpin.Application) {
 // Iterate over the list of pools and register the tags for the pools it supports
 func parseTags(pf *config.PoolFile) []string {
 	tags := []string{}
-	for _, instance := range pf.Instances {
-		tags = append(tags, instance.Name)
+	for i := range pf.Instances {
+		tags = append(tags, pf.Instances[i].Name)
+
 	}
 	return tags
 }
