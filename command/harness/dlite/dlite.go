@@ -48,13 +48,7 @@ func RegisterDlite(app *kingpin.Application) {
 func parseTags(pf *config.PoolFile) []string {
 	tags := []string{}
 	for i := range pf.Instances {
-		os := pf.Instances[i].Platform.OS
-		arch := pf.Instances[i].Platform.Arch
-		if os == "darwin" {
-			os = "macos"
-		}
-		t := os + "-" + arch
-		tags = append(tags, t)
+		tags = append(tags, pf.Instances[i].Name)
 	}
 	return tags
 }
