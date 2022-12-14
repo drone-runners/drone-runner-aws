@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.0.0-rc24](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc24) (2022-12-06)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc23...v1.0.0-rc24)
+
+**Fixed bugs:**
+
+- \(bug\) issue with timestamp being used on machine name [\#209](https://github.com/drone-runners/drone-runner-aws/pull/209) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(bug\) - fixes scheduling timeout issue on ankabuild [\#208](https://github.com/drone-runners/drone-runner-aws/pull/208) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
 ## [v1.0.0-rc23](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc23) (2022-12-05)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc22...v1.0.0-rc23)
