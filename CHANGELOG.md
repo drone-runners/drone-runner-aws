@@ -1,5 +1,21 @@
 # Changelog
 
+## [v1.0.0-rc25](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc25) (2022-12-15)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc24...v1.0.0-rc25)
+
+**Implemented enhancements:**
+
+- Set selector as same as pool id [\#211](https://github.com/drone-runners/drone-runner-aws/pull/211) ([shubham149](https://github.com/shubham149))
+
+**Fixed bugs:**
+
+- Avoid crashing of runner in case of handler panics [\#210](https://github.com/drone-runners/drone-runner-aws/pull/210) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- release prep for v1.0.0-rc25 [\#213](https://github.com/drone-runners/drone-runner-aws/pull/213) ([shubham149](https://github.com/shubham149))
+
 ## [v1.0.0-rc24](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc24) (2022-12-06)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc23...v1.0.0-rc24)
