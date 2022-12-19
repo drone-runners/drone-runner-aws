@@ -1,5 +1,159 @@
 # Changelog
 
+## [v1.0.0-rc25](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc25) (2022-12-15)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc24...v1.0.0-rc25)
+
+**Implemented enhancements:**
+
+- Set selector as same as pool id [\#211](https://github.com/drone-runners/drone-runner-aws/pull/211) ([shubham149](https://github.com/shubham149))
+
+**Fixed bugs:**
+
+- Avoid crashing of runner in case of handler panics [\#210](https://github.com/drone-runners/drone-runner-aws/pull/210) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- release prep for v1.0.0-rc25 [\#213](https://github.com/drone-runners/drone-runner-aws/pull/213) ([shubham149](https://github.com/shubham149))
+
+## [v1.0.0-rc24](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc24) (2022-12-06)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc23...v1.0.0-rc24)
+
+**Fixed bugs:**
+
+- \(bug\) issue with timestamp being used on machine name [\#209](https://github.com/drone-runners/drone-runner-aws/pull/209) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(bug\) - fixes scheduling timeout issue on ankabuild [\#208](https://github.com/drone-runners/drone-runner-aws/pull/208) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc23](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc23) (2022-12-05)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc22...v1.0.0-rc23)
+
+**Fixed bugs:**
+
+- \(bug\) add nil check if pool not found [\#207](https://github.com/drone-runners/drone-runner-aws/pull/207) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc22](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc22) (2022-12-01)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc21...v1.0.0-rc22)
+
+**Fixed bugs:**
+
+- Fix nil map in exported envs [\#206](https://github.com/drone-runners/drone-runner-aws/pull/206) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- Update README.md [\#205](https://github.com/drone-runners/drone-runner-aws/pull/205) ([devkimittal](https://github.com/devkimittal))
+
+## [v1.0.0-rc21](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc21) (2022-11-24)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc20...v1.0.0-rc21)
+
+**Fixed bugs:**
+
+- \(bug\) - fixes issue where machine name wasn't unique for anka build [\#204](https://github.com/drone-runners/drone-runner-aws/pull/204) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+**Closed issues:**
+
+- generate instance name using crypto / rand [\#197](https://github.com/drone-runners/drone-runner-aws/issues/197)
+
+## [v1.0.0-rc20](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc20) (2022-11-24)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.19...v1.0.0-rc20)
+
+**Implemented enhancements:**
+
+- \(feat\) adds support for bitrise plugin on mac [\#203](https://github.com/drone-runners/drone-runner-aws/pull/203) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc.19](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.19) (2022-11-18)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.18...v1.0.0-rc.19)
+
+**Implemented enhancements:**
+
+- Add support for setting exported env vars for harness [\#201](https://github.com/drone-runners/drone-runner-aws/pull/201) ([shubham149](https://github.com/shubham149))
+- Add plugin binary to cloudinit to support containerless plugin, action and bitrise steps [\#192](https://github.com/drone-runners/drone-runner-aws/pull/192) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- \(maint\): rc18 release prep [\#200](https://github.com/drone-runners/drone-runner-aws/pull/200) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.18](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.18) (2022-11-13)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.17...v1.0.0-rc.18)
+
+**Merged pull requests:**
+
+- Upgrade lite-engine version [\#199](https://github.com/drone-runners/drone-runner-aws/pull/199) ([rutvijmehta-harness](https://github.com/rutvijmehta-harness))
+
+## [v1.0.0-rc.17](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.17) (2022-11-11)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.16...v1.0.0-rc.17)
+
+**Fixed bugs:**
+
+- \(bug\) revert running lite-engine on http for mac64 [\#196](https://github.com/drone-runners/drone-runner-aws/pull/196) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc.16](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.16) (2022-11-11)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.15...v1.0.0-rc.16)
+
+**Fixed bugs:**
+
+- \(bug\) Fixes issue cert errors on lite-engie on anka build [\#195](https://github.com/drone-runners/drone-runner-aws/pull/195) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc.15](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.15) (2022-11-10)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.14...v1.0.0-rc.15)
+
+**Merged pull requests:**
+
+- fixes trailing -e typo in cloudinit: [\#194](https://github.com/drone-runners/drone-runner-aws/pull/194) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- fix: update tag for dlite [\#193](https://github.com/drone-runners/drone-runner-aws/pull/193) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(maint\): rc14 release prep [\#191](https://github.com/drone-runners/drone-runner-aws/pull/191) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.14](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.14) (2022-10-31)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.13...v1.0.0-rc.14)
+
+**Implemented enhancements:**
+
+- \(feat\): upgrade dlite version to RC1 release [\#190](https://github.com/drone-runners/drone-runner-aws/pull/190) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+**Fixed bugs:**
+
+- \(fix\) improve destroy logs on azure [\#188](https://github.com/drone-runners/drone-runner-aws/pull/188) ([tphoney](https://github.com/tphoney))
+- \(fix\) better error messages when parsing pool file, azure especially [\#187](https://github.com/drone-runners/drone-runner-aws/pull/187) ([tphoney](https://github.com/tphoney))
+- \(fix\) single bind point for pipeline base folder [\#184](https://github.com/drone-runners/drone-runner-aws/pull/184) ([tphoney](https://github.com/tphoney))
+
+**Merged pull requests:**
+
+- fixes issue were mac builds werent' pointing at correct pool [\#185](https://github.com/drone-runners/drone-runner-aws/pull/185) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- \(feat\) Inject split test binary for Linux VMs \(CIE\) [\#156](https://github.com/drone-runners/drone-runner-aws/pull/156) ([rutvijmehta-harness](https://github.com/rutvijmehta-harness))
+
+## [v1.0.0-rc.13](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.13) (2022-09-26)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.12...v1.0.0-rc.13)
+
+**Implemented enhancements:**
+
+- Upgrade lite-engine version and go.mod [\#183](https://github.com/drone-runners/drone-runner-aws/pull/183) ([shubham149](https://github.com/shubham149))
+- Set machine environment variables to lite-engine [\#182](https://github.com/drone-runners/drone-runner-aws/pull/182) ([shubham149](https://github.com/shubham149))
+- Add support for passing fully qualified subnet and network [\#181](https://github.com/drone-runners/drone-runner-aws/pull/181) ([shubham149](https://github.com/shubham149))
+- add /healthz endpoint in dlite mode [\#180](https://github.com/drone-runners/drone-runner-aws/pull/180) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- Reduce deadlock time in vm setup [\#179](https://github.com/drone-runners/drone-runner-aws/pull/179) ([shubham149](https://github.com/shubham149))
+- \(fix\): update go mod [\#177](https://github.com/drone-runners/drone-runner-aws/pull/177) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(fix\): update go.mod [\#176](https://github.com/drone-runners/drone-runner-aws/pull/176) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(fix\): improve logging [\#175](https://github.com/drone-runners/drone-runner-aws/pull/175) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(fix\): update go.mod [\#174](https://github.com/drone-runners/drone-runner-aws/pull/174) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(feat\): make dlite logs compatible with stackdriver [\#172](https://github.com/drone-runners/drone-runner-aws/pull/172) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \(feat\) make poll interval and number of executors configurable [\#171](https://github.com/drone-runners/drone-runner-aws/pull/171) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- Add curl tool to the docker image [\#170](https://github.com/drone-runners/drone-runner-aws/pull/170) ([shubham149](https://github.com/shubham149))
+
+**Fixed bugs:**
+
+- Retries on setting tag and add timeout for setup [\#178](https://github.com/drone-runners/drone-runner-aws/pull/178) ([shubham149](https://github.com/shubham149))
+
 ## [v1.0.0-rc.12](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.12) (2022-09-08)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.11...v1.0.0-rc.12)
@@ -14,6 +168,10 @@
 
 - Fix default network for gcp [\#167](https://github.com/drone-runners/drone-runner-aws/pull/167) ([shubham149](https://github.com/shubham149))
 - Fix zone in gcp runner & add extra configs [\#166](https://github.com/drone-runners/drone-runner-aws/pull/166) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- rc-12 prep [\#169](https://github.com/drone-runners/drone-runner-aws/pull/169) ([shubham149](https://github.com/shubham149))
 
 ## [v1.0.0-rc.11](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.11) (2022-08-18)
 

@@ -21,6 +21,7 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 		TLSKey:               string(opts.TLSKey),
 		LiteEnginePath:       opts.LiteEnginePath,
 		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
+		PluginBinaryURI:      opts.PluginBinaryURI,
 	}
 
 	if userdata == "" {

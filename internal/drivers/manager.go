@@ -31,6 +31,7 @@ type (
 		liteEnginePath       string
 		instanceStore        store.InstanceStore
 		harnessTestBinaryURI string
+		pluginBinaryURI      string
 	}
 
 	poolEntry struct {
@@ -50,6 +51,7 @@ func New(
 		runnerName:           env.Runner.Name,
 		liteEnginePath:       env.Settings.LiteEnginePath,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:      env.Settings.PluginBinaryURI,
 	}
 }
 
@@ -96,6 +98,12 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 	}
 
 	pool := m.poolMap[poolName]
+	if pool == nil {
+		err := fmt.Errorf("GetInstanceByStageID: pool name %s not found", poolName)
+		logger.FromContext(ctx).WithError(err).WithField("stage_runtime_id", stage).
+			Errorln("manager: GetInstanceByStageID failed find pool")
+		return nil, err
+	}
 	query := types.QueryParams{Status: types.StateInUse, Stage: stage}
 	list, err := m.instanceStore.List(ctx, pool.Name, &query)
 	if err != nil {
@@ -499,6 +507,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize
 	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
+	createOptions.PluginBinaryURI = m.pluginBinaryURI
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")

@@ -67,6 +67,7 @@ type InstanceCreateOpts struct {
 	Limit                int
 	Pool                 int
 	HarnessTestBinaryURI string
+	PluginBinaryURI      string
 }
 
 // Platform defines the target platform.

@@ -52,6 +52,7 @@ type (
 	AmazonAccount struct {
 		AccessKeyID      string `json:"access_key_id,omitempty"  yaml:"access_key_id"`
 		AccessKeySecret  string `json:"access_key_secret,omitempty" yaml:"access_key_secret"`
+		SessionToken     string `json:"aws_session_token,omitempty" yaml:"aws_session_token"`
 		Region           string `json:"region,omitempty"`
 		Retries          int    `json:"retries,omitempty" yaml:"retries,omitempty"`
 		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"`
@@ -279,7 +280,7 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		LiteEnginePath       string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.4.3/"`
+		LiteEnginePath       string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.4.6/"`
 		DefaultDriver        string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
 		ReusePool            bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge           int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
@@ -288,6 +289,7 @@ type EnvConfig struct {
 		MaxPoolSize          int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool       bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		HarnessTestBinaryURI string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
+		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.1.4-alpha"`
 	}
 
 	Server struct {

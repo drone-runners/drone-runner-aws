@@ -26,6 +26,7 @@ type Params struct {
 	TLSKey               string
 	Platform             types.Platform
 	HarnessTestBinaryURI string
+	PluginBinaryURI      string
 }
 
 var funcs = map[string]interface{}{
@@ -89,6 +90,12 @@ chmod 0600 {{ .KeyPath }}
 chmod 777 /usr/local/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
+
+{{ if .PluginBinaryURI }}
+wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+chmod 777 /usr/bin/plugin
+{{ end }}
+
 /usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
@@ -108,7 +115,13 @@ chmod 0600 {{ .KeyPath }}
 wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine
 chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
-echo -e "SKIP_PREPARE_SERVER=true" >> .env;
+echo "SKIP_PREPARE_SERVER=true" >> .env;
+
+{{ if .PluginBinaryURI }}
+wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin
+chmod 777 /usr/local/bin/plugin
+{{ end }}
+
 /opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
@@ -182,6 +195,10 @@ runcmd:
 - 'wget "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
+{{ if .PluginBinaryURI }}
+- 'wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'chmod 777 /usr/bin/plugin'
+{{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
@@ -219,6 +236,10 @@ runcmd:
 - 'sudo usermod -a -G docker ec2-user'
 - 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
+{{ if .PluginBinaryURI }}
+- 'wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'chmod 777 /usr/bin/plugin'
+{{ end }}
 - 'touch /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'`
 

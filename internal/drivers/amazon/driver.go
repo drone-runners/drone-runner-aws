@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dchest/uniuri"
 )
 
 // config is a struct that implements drivers.Pool interface
@@ -31,6 +32,7 @@ type config struct {
 
 	accessKeyID     string
 	secretAccessKey string
+	sessionToken    string
 	keyPairName     string
 
 	rootDir string
@@ -67,7 +69,11 @@ func New(opts ...Option) (drivers.Driver, error) {
 			MaxRetries: aws.Int(p.retries),
 		}
 		if p.accessKeyID != "" && p.secretAccessKey != "" {
-			config.Credentials = credentials.NewStaticCredentials(p.accessKeyID, p.secretAccessKey, "")
+			if p.sessionToken != "" {
+				config.Credentials = credentials.NewStaticCredentials(p.accessKeyID, p.secretAccessKey, p.sessionToken)
+			} else {
+				config.Credentials = credentials.NewStaticCredentials(p.accessKeyID, p.secretAccessKey, "")
+			}
 		}
 		mySession := session.Must(session.NewSession())
 		p.service = ec2.New(mySession, config)
@@ -186,7 +192,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("image", p.image).
 		WithField("size", p.size).
 		WithField("hibernate", p.CanHibernate())
-	var name = fmt.Sprintf(opts.RunnerName+"-"+opts.PoolName+"-%d", startTime.Unix())
+	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	var tags = map[string]string{
 		"Name": name,
 	}
