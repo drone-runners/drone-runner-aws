@@ -7,6 +7,7 @@ package database
 import (
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/singleinstance"
+	"github.com/drone-runners/drone-runner-aws/store/sql"
 
 	"github.com/google/wire"
 	"github.com/jmoiron/sqlx"
@@ -40,13 +41,13 @@ func ProvideDatabase(driver, datasource string) (*sqlx.DB, error) {
 func ProvideInstanceStore(db *sqlx.DB) store.InstanceStore {
 	switch db.DriverName() {
 	case "postgres":
-		return NewInstanceStore(db)
+		return sql.NewInstanceStore(db)
 	case SingleInstance:
 		// this is a store with a single instance, used by exec and setup commands
 		return singleinstance.NewSingleInstanceStore(db)
 	default:
-		return NewInstanceStoreSync(
-			NewInstanceStore(db),
+		return sql.NewInstanceStoreSync(
+			sql.NewInstanceStore(db),
 		)
 	}
 }
@@ -55,10 +56,10 @@ func ProvideInstanceStore(db *sqlx.DB) store.InstanceStore {
 func ProvideStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	switch db.DriverName() {
 	case "postgres":
-		return NewStageOwnerStore(db)
+		return sql.NewStageOwnerStore(db)
 	default:
-		return NewStageOwnerStoreSync(
-			NewStageOwnerStore(db),
+		return sql.NewStageOwnerStoreSync(
+			sql.NewStageOwnerStore(db),
 		)
 	}
 }

@@ -1,4 +1,4 @@
-package database
+package sql
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 )
 
 var _ store.InstanceStore = (*InstanceStore)(nil)
+var builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
 func NewInstanceStore(db *sqlx.DB) *InstanceStore {
 	return &InstanceStore{db}
