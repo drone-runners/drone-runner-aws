@@ -282,7 +282,6 @@ func Linux(params *Params) (payload string) {
 	keyPath := filepath.Join(certsDir, "server-key.pem")
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		fmt.Println("We are at amazon linux")
 		err := amazonLinuxTemplate.Execute(sb, struct {
 			Params
 			CaCertPath string
@@ -299,7 +298,6 @@ func Linux(params *Params) (payload string) {
 		}
 	default:
 		// Ubuntu
-		fmt.Println("We are at ubuntu")
 		err := ubuntuTemplate.Execute(sb, struct {
 			Params
 			CaCertPath string
