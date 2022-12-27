@@ -27,6 +27,7 @@ type Params struct {
 	Platform             types.Platform
 	HarnessTestBinaryURI string
 	PluginBinaryURI      string
+	Tmate                types.Tmate
 }
 
 var funcs = map[string]interface{}{
@@ -202,6 +203,7 @@ runcmd:
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
+{{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
 - 'wget https://github.com/tmate-io/tmate/releases/download/2.4.0/tmate-2.4.0-static-linux-amd64.tar.xz -O /addon/tmate.xz' 
@@ -216,7 +218,8 @@ runcmd:
 - 'mv  /addon/tmate-2.4.0-static-linux-arm64v8/tmate /addon/tmate'
 - 'rm -rf /addon/tmate-2.4.0-static-linux-arm64v8/'
 {{ end }}
-- 'rm -rf /addon/tmate.xz'`
+- 'rm -rf /addon/tmate.xz'
+{{ end }}`
 
 var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(ubuntuScript))
 
