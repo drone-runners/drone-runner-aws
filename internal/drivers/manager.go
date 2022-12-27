@@ -148,8 +148,8 @@ func (m *Manager) Update(ctx context.Context, instance *types.Instance) error {
 	return m.instanceStore.Update(ctx, instance)
 }
 
-func (m *Manager) AddTmate(tmate types.Tmate) error {
-	m.tmate = tmate
+func (m *Manager) AddTmate(env *config.EnvConfig) error {
+	m.tmate = types.Tmate(env.Tmate)
 	return nil
 }
 
@@ -281,7 +281,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName string, env config.EnvConfig) (*types.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName string, env *config.EnvConfig) (*types.Instance, error) {
 	m.runnerName = serverName
 	m.liteEnginePath = env.Settings.LiteEnginePath
 	m.tmate = types.Tmate(env.Tmate)

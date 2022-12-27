@@ -7,7 +7,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,7 +35,7 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 		return configPool, err
 	}
 
-	err = poolManager.AddTmate(types.Tmate(env.Tmate))
+	err = poolManager.AddTmate(env)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("unable to set tmate configuration")
