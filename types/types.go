@@ -25,6 +25,7 @@ const (
 	Google       = DriverType("google")
 	VMFusion     = DriverType("vmfusion")
 	SSH          = DriverType("ssh")
+	Nomad        = DriverType("nomad")
 )
 
 // InstanceState type enumeration.

@@ -1,20 +1,12 @@
 package lehelper
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
-	"github.com/harness/lite-engine/api"
-	"golang.org/x/crypto/ssh"
+	lehttp "github.com/harness/lite-engine/cli/client"
 )
 
 const (
@@ -47,189 +39,257 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	return userdata
 }
 
-func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64) (*liteEngineSSHClient, error) {
-	dat, err := os.ReadFile("/tmp/engine/harsh.pem")
-	if err != nil {
-		return nil, err
+func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64) (*lehttp.HTTPClient, error) {
+	var leURL string
+	if instance.Provider == types.Nomad {
+		leURL = instance.Address
+	} else {
+		leURL = fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
 	}
-	return &liteEngineSSHClient{Hostname: "ec2-3-129-87-150.us-east-2.compute.amazonaws.com:22", Username: "ubuntu", BaseURL: instance.Address, SSHKey: string(dat)}, nil
+	return lehttp.NewHTTPClient(leURL,
+		runnerName, string(instance.CACert),
+		string(instance.TLSCert), string(instance.TLSKey))
 }
 
-type liteEngineSSHClient struct {
-	Hostname string
-	Username string
-	Password string
-	SSHKey   string
-	BaseURL  string
-}
+// func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64) (*liteEngineNomadClient, error) {
+// 	l := strings.Split(instance.ID, "/")
+// 	fmt.Println("l is: ", l)
+// 	node := l[1]
+// 	fmt.Println("node is: ", node)
+// 	fmt.Println("zone (address) is: ", instance.Zone)
+// 	fmt.Println("base url is: ", instance.Address)
+// 	// TODO: Change zone
+// 	config := &nomad.Config{
+// 		Address: instance.Zone,
+// 	}
+// 	c, err := nomad.NewClient(config)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &liteEngineNomadClient{Address: instance.Zone, NodeID: node, BaseURL: instance.Address, Client: c}, nil
+// }
 
-func (l *liteEngineSSHClient) Setup(ctx context.Context, in *api.SetupRequest) (*api.SetupResponse, error) {
-	client, err := dial(l.Hostname, l.Username, l.Password, l.SSHKey)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-	b, err := json.Marshal(in)
-	if err != nil {
-		return nil, err
-	}
-	cmd := fmt.Sprintf("curl -H \"Content-Type: application/json\" -X POST %s/setup -d '%s'", l.BaseURL, string(b))
-	fmt.Printf("cmd is: %s\n", cmd)
-	var buf bytes.Buffer
-	session.Stdout = &buf
-	session.Stderr = &buf
-	if err = session.Run(cmd); err != nil {
-		fmt.Printf("stdout/stderr logs: %s", string(b))
-		return nil, err
-	}
-	fmt.Printf("stdout/stderr logs: %s", string(b))
-	return &api.SetupResponse{}, nil
-}
+// type liteEngineNomadClient struct {
+// 	Address string
+// 	NodeID  string
+// 	BaseURL string
+// 	Client  *nomad.Client
+// }
 
-func (l *liteEngineSSHClient) Destroy(ctx context.Context, in *api.DestroyRequest) (*api.DestroyResponse, error) {
-	client, err := dial(l.Hostname, l.Username, l.Password, l.SSHKey)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-	b, err := json.Marshal(in)
-	if err != nil {
-		return nil, err
-	}
-	cmd := fmt.Sprintf("curl -H \"Content-Type: application/json\" -X POST %s/destroy -d '%s'", l.BaseURL, string(b))
-	var buf bytes.Buffer
-	session.Stdout = &buf
-	session.Stderr = &buf
-	if err = session.Run(cmd); err != nil {
-		fmt.Printf("stdout/stderr logs: %s", string(b))
-		return nil, err
-	}
-	fmt.Printf("stdout/stderr logs: %s", string(b))
-	return &api.DestroyResponse{}, nil
-}
+// func (l *liteEngineNomadClient) Setup(ctx context.Context, in *api.SetupRequest) (*api.SetupResponse, error) {
+// 	b, err := json.Marshal(in)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	constraint := &nomad.Constraint{
+// 		LTarget: "${node.unique.id}",
+// 		RTarget: l.NodeID,
+// 		Operand: "=",
+// 	}
+// 	job := &nomad.Job{
+// 		ID:          stringToPtr(random(20)),
+// 		Name:        stringToPtr(random(20)),
+// 		Type:        stringToPtr("batch"),
+// 		Datacenters: []string{"dc1"},
+// 		Constraints: []*nomad.Constraint{
+// 			constraint,
+// 		},
+// 		TaskGroups: []*nomad.TaskGroup{
+// 			{
+// 				Name:  stringToPtr("setup_vm"),
+// 				Count: intToPtr(1),
+// 				Tasks: []*nomad.Task{
+// 					{
+// 						Name:   "ignite_setup",
+// 						Driver: "raw_exec",
+// 						Config: map[string]interface{}{
+// 							"command": "/usr/bin/curl",
+// 							"args":    []string{"-H", "Content-Type: application/json", "-X", "POST", fmt.Sprintf("%s/setup", l.BaseURL), "-d", string(b)},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}}
+// 	_, _, err = l.Client.Jobs().Register(job, nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	pollForJob(*job.ID, l.Client)
+// 	return &api.SetupResponse{}, nil
+// }
 
-func (l *liteEngineSSHClient) StartStep(ctx context.Context, in *api.StartStepRequest) (*api.StartStepResponse, error) {
-	client, err := dial(l.Hostname, l.Username, l.Password, l.SSHKey)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-	b, err := json.Marshal(in)
-	if err != nil {
-		return nil, err
-	}
-	cmd := fmt.Sprintf("curl -H \"Content-Type: application/json\" -X POST %s/start_step -d '%s'", l.BaseURL, string(b))
-	fmt.Printf("cmd is: %s\n", cmd)
-	var buf bytes.Buffer
-	session.Stdout = &buf
-	session.Stderr = &buf
-	if err = session.Run(cmd); err != nil {
-		fmt.Printf("stdout/stderr logs: %s", string(b))
-		return nil, err
-	}
-	fmt.Printf("stdout/stderr logs: %s", string(b))
-	return nil, nil
-}
+// func (l *liteEngineNomadClient) Destroy(ctx context.Context, in *api.DestroyRequest) (*api.DestroyResponse, error) {
+// 	return &api.DestroyResponse{}, nil
+// }
 
-func (l *liteEngineSSHClient) PollStep(ctx context.Context, in *api.PollStepRequest) (*api.PollStepResponse, error) {
-	client, err := dial(l.Hostname, l.Username, l.Password, l.SSHKey)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-	b, err := json.Marshal(in)
-	if err != nil {
-		return nil, err
-	}
-	cmd := fmt.Sprintf("curl -H \"Content-Type: application/json\" -X POST %s/poll_step -d '%s'", l.BaseURL, string(b))
-	fmt.Printf("cmd is: %s\n", cmd)
-	output, err := session.Output(cmd)
-	if err != nil {
-		fmt.Printf("output: %s\n", string(output))
-		return nil, err
-	}
-	fmt.Printf("output: %s\n", output)
-	// Try to unmarshal the response
-	resp := &api.PollStepResponse{}
-	err = json.Unmarshal(output, resp)
-	if err != nil {
-		fmt.Printf("error while unmarshaling: %s\n", err)
-	}
-	return resp, nil
-}
+// func (l *liteEngineNomadClient) StartStep(ctx context.Context, in *api.StartStepRequest) (*api.StartStepResponse, error) {
+// 	b, err := json.Marshal(in)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	constraint := &nomad.Constraint{
+// 		LTarget: "${node.unique.id}",
+// 		RTarget: l.NodeID,
+// 		Operand: "=",
+// 	}
+// 	job := &nomad.Job{
+// 		ID:          stringToPtr(random(20)),
+// 		Name:        stringToPtr(random(20)),
+// 		Type:        stringToPtr("batch"),
+// 		Datacenters: []string{"dc1"},
+// 		Constraints: []*nomad.Constraint{
+// 			constraint,
+// 		},
+// 		TaskGroups: []*nomad.TaskGroup{
+// 			{
+// 				Name:  stringToPtr("delete_vm"),
+// 				Count: intToPtr(1),
+// 				Tasks: []*nomad.Task{
+// 					{
+// 						Name:   "ignite_delete",
+// 						Driver: "raw_exec",
+// 						Config: map[string]interface{}{
+// 							"command": "/usr/bin/curl",
+// 							"args":    []string{"-H", "Content-Type: application/json", "-X", "POST", fmt.Sprintf("%s/start_step", l.BaseURL), "-d", string(b)},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}}
+// 	_, _, err = l.Client.Jobs().Register(job, nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	pollForJob(*job.ID, l.Client)
+// 	return &api.StartStepResponse{}, nil
+// }
 
-func (l *liteEngineSSHClient) RetryPollStep(ctx context.Context, in *api.PollStepRequest, timeout time.Duration) (step *api.PollStepResponse, pollError error) {
-	startTime := time.Now()
-	retryCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	for i := 0; ; i++ {
-		select {
-		case <-retryCtx.Done():
-			return step, retryCtx.Err()
-		default:
-		}
-		step, pollError = l.PollStep(retryCtx, in)
-		fmt.Printf("step: %+v\n", step)
-		fmt.Printf("pollError: %s\n", pollError)
-		if pollError == nil {
-			logger.FromContext(retryCtx).
-				WithField("duration", time.Since(startTime)).
-				Trace("RetryPollStep: step completed")
-			return step, pollError
-		}
-		time.Sleep(time.Millisecond * 10) //nolint:gomnd
-	}
-}
+// func (l *liteEngineNomadClient) PollStep(ctx context.Context, in *api.PollStepRequest) (*api.PollStepResponse, error) {
+// 	b, err := json.Marshal(in)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	constraint := &nomad.Constraint{
+// 		LTarget: "${node.unique.id}",
+// 		RTarget: l.NodeID,
+// 		Operand: "=",
+// 	}
+// 	job := &nomad.Job{
+// 		ID:          stringToPtr(random(20)),
+// 		Name:        stringToPtr(random(20)),
+// 		Type:        stringToPtr("batch"),
+// 		Datacenters: []string{"dc1"},
+// 		Constraints: []*nomad.Constraint{
+// 			constraint,
+// 		},
+// 		TaskGroups: []*nomad.TaskGroup{
+// 			{
+// 				Name:  stringToPtr("poll_vm"),
+// 				Count: intToPtr(1),
+// 				Tasks: []*nomad.Task{
+// 					{
+// 						Name:   "ignite_poll",
+// 						Driver: "raw_exec",
+// 						Config: map[string]interface{}{
+// 							"command": "/usr/bin/curl",
+// 							"args":    []string{"-H", "Content-Type: application/json", "-X", "POST", fmt.Sprintf("%s/poll_step", l.BaseURL), "-d", string(b)},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}}
+// 	_, _, err = l.Client.Jobs().Register(job, nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	pollForJob(*job.ID, l.Client)
+// 	return &api.PollStepResponse{ExitCode: 0, Exited: true}, nil
+// }
 
-func (l *liteEngineSSHClient) GetStepLogOutput(ctx context.Context, in *api.StreamOutputRequest, w io.Writer) error {
-	return nil
-}
+// func (l *liteEngineNomadClient) RetryPollStep(ctx context.Context, in *api.PollStepRequest, timeout time.Duration) (step *api.PollStepResponse, pollError error) {
+// 	startTime := time.Now()
+// 	retryCtx, cancel := context.WithTimeout(ctx, timeout)
+// 	defer cancel()
+// 	for i := 0; ; i++ {
+// 		select {
+// 		case <-retryCtx.Done():
+// 			return step, retryCtx.Err()
+// 		default:
+// 		}
+// 		step, pollError = l.PollStep(retryCtx, in)
+// 		fmt.Printf("step: %+v\n", step)
+// 		fmt.Printf("pollError: %s\n", pollError)
+// 		if pollError == nil {
+// 			logger.FromContext(retryCtx).
+// 				WithField("duration", time.Since(startTime)).
+// 				Trace("RetryPollStep: step completed")
+// 			return step, pollError
+// 		}
+// 		time.Sleep(time.Millisecond * 10) //nolint:gomnd
+// 	}
+// }
 
-func (l *liteEngineSSHClient) Health(ctx context.Context) (*api.HealthResponse, error) {
-	time.Sleep(2 * time.Second)
-	return &api.HealthResponse{OK: true}, nil
-}
+// func (l *liteEngineNomadClient) GetStepLogOutput(ctx context.Context, in *api.StreamOutputRequest, w io.Writer) error {
+// 	return nil
+// }
 
-func (l *liteEngineSSHClient) RetryHealth(ctx context.Context, timeout time.Duration) (*api.HealthResponse, error) {
-	return l.Health(ctx)
-}
+// func (l *liteEngineNomadClient) Health(ctx context.Context) (*api.HealthResponse, error) {
+// 	time.Sleep(2 * time.Second)
+// 	return &api.HealthResponse{OK: true}, nil
+// }
 
-// helper function configures and dials the ssh server.
-func dial(server, username, password, privatekey string) (*ssh.Client, error) {
-	config := &ssh.ClientConfig{
-		User:            username,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-	if privatekey != "" {
-		pem := []byte(privatekey)
-		signer, err := ssh.ParsePrivateKey(pem)
-		if err != nil {
-			return nil, err
-		}
-		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
-	}
-	if password != "" {
-		config.Auth = append(config.Auth, ssh.Password(password))
-	}
-	return ssh.Dial("tcp", server, config)
-}
+// func (l *liteEngineNomadClient) RetryHealth(ctx context.Context, timeout time.Duration) (*api.HealthResponse, error) {
+// 	return l.Health(ctx)
+// }
+
+// // Helper function to convert an int to a pointer to an int
+// func intToPtr(i int) *int {
+// 	return &i
+// }
+
+// var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+// func random(n int) string {
+// 	b := make([]rune, n)
+// 	for i := range b {
+// 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+// 	}
+// 	return string(b)
+// }
+
+// func init() {
+// 	rand.Seed(time.Now().UnixNano())
+// }
+
+// // Helper function to convert an int to a pointer to an int
+// func stringToPtr(i string) *string {
+// 	return &i
+// }
+
+// func pollForJob(id string, client *nomad.Client) *nomad.Job {
+// 	var job *nomad.Job
+// 	// Poll for the response
+// 	for {
+// 		// Get the job status
+// 		job, _, err := client.Jobs().Info(id, nil)
+// 		if err != nil {
+// 			fmt.Println("error: ", err)
+// 			log.Fatal(err)
+// 		}
+// 		fmt.Printf("job is %+v", job)
+
+// 		// Check the job status
+// 		if *job.Status == "running" {
+// 			fmt.Println("Job is running")
+// 		} else if *job.Status == "pending" {
+// 			fmt.Println("job is pending")
+// 		} else if *job.Status == "failed" {
+// 			fmt.Println("Job failed")
+// 			break
+// 		} else if *job.Status == "dead" {
+// 			fmt.Println("Job is dead")
+// 			break
+// 		}
+// 	}
+// 	return job
+// }

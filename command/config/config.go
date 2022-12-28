@@ -102,6 +102,14 @@ type (
 		SSHKeyPath string `json:"ssh_key_path,omitempty" yaml:"ssh_key_path"`
 	}
 
+	Nomad struct {
+		Address        string `json:"address,omitempty" yaml:"address"`
+		Insecure       bool   `json:"insecure,omitempty" yaml:"insecure"`
+		CaCertPath     string `json:"ca_cert_path,omitempty" yaml:"ca_cert_path"`
+		ClientKeyPath  string `json:"client_key_path,omitempty" yaml:"client_key_path"`
+		ClientCertPath string `json:"client_cert_path,omitempty" yaml:"client_cert_path"`
+	}
+
 	// Azure specifies the configuration for an Azure instance.
 	Azure struct {
 		Account           AzureAccount      `json:"account,omitempty"`
@@ -422,6 +430,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(VMFusion)
 	case string(types.SSH):
 		s.Spec = new(SSH)
+	case string(types.Nomad):
+		s.Spec = new(Nomad)
 
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)

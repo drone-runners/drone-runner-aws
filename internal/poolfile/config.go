@@ -15,6 +15,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/nomad"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/ssh"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
@@ -263,13 +264,25 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
-			dat, err := os.ReadFile(sshConfig.SSHKeyPath)
+			driver, err := ssh.New(ssh.WithHostname(sshConfig.Hostname),
+				ssh.WithPassword(sshConfig.Password),
+				ssh.WithUsername(sshConfig.Username))
 			if err != nil {
 				return nil, err
 			}
-			driver, err := ssh.New(ssh.WithHostname(sshConfig.Hostname),
-				ssh.WithPassword(sshConfig.Password), ssh.WithSSHKey(string(dat)),
-				ssh.WithUsername(sshConfig.Username))
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
+		case string(types.Nomad):
+			var nomadConfig, ok = instance.Spec.(*config.Nomad)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			driver, err := nomad.New(nomad.WithAddress(nomadConfig.Address),
+				nomad.WithCaCertPath(nomadConfig.CaCertPath),
+				nomad.WithClientCertPath(nomadConfig.ClientCertPath),
+				nomad.WithClientKeyPath(nomadConfig.ClientKeyPath),
+				nomad.WithInsecure(nomadConfig.Insecure))
 			if err != nil {
 				return nil, err
 			}
