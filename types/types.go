@@ -25,6 +25,7 @@ const (
 	Google       = DriverType("google")
 	VMFusion     = DriverType("vmfusion")
 	Noop         = DriverType("noop")
+	Nomad        = DriverType("nomad")
 )
 
 // InstanceState type enumeration.
