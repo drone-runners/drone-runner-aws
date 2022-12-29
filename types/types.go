@@ -37,6 +37,7 @@ const (
 
 type Instance struct {
 	ID           string        `db:"instance_id" json:"id"`
+	NodeID       string        `db:"instance_node_id" json:"node_id"`
 	Name         string        `db:"instance_name" json:"name"`
 	Address      string        `db:"instance_address" json:"address"`
 	Provider     DriverType    `db:"instance_provider" json:"provider"` // this is driver, though its the old legacy name of provider

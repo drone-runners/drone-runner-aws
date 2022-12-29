@@ -86,6 +86,7 @@ func (s InstanceStore) Purge(ctx context.Context) error {
 const instanceColumns = `
  instance_name
 ,instance_id
+,instance_node_id
 ,instance_address
 ,instance_provider
 ,instance_state
@@ -118,6 +119,7 @@ WHERE instance_id = $1
 const instanceInsert = `
 INSERT INTO instances (
  instance_id
+,instance_node_id
 ,instance_name
 ,instance_address
 ,instance_provider
@@ -143,6 +145,7 @@ INSERT INTO instances (
 ,instance_port
 ) values (
  :instance_id
+,:instance_node_id
 ,:instance_name
 ,:instance_address
 ,:instance_provider

@@ -33,11 +33,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 
 	for i := range poolFile.Instances {
 		instance := poolFile.Instances[i]
-<<<<<<< HEAD
 		logrus.Infoln(fmt.Sprintf("Parsing pool '%s', of type '%s'", instance.Name, instance.Type))
-=======
-		fmt.Printf("instance type is: %s", instance.Type)
->>>>>>> 0125be3 (poc demo)
 		switch instance.Type {
 		case string(types.VMFusion):
 			var v, ok = instance.Spec.(*config.VMFusion)
@@ -263,6 +259,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
+<<<<<<< HEAD
 		case string(types.Noop):
 			var noopBuild, ok = instance.Spec.(*config.Noop)
 			if !ok {
@@ -272,6 +269,8 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				noop.WithRootDirectory(),
 				noop.WithHibernate(noopBuild.Hibernate),
 			)
+=======
+>>>>>>> 937be3b (add node ID in database schema, clean up code)
 		case string(types.Nomad):
 			var nomadConfig, ok = instance.Spec.(*config.Nomad)
 			if !ok {

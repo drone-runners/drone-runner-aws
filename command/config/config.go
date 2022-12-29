@@ -95,13 +95,6 @@ type (
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
 	}
 
-	SSH struct {
-		Hostname   string `json:"hostname,omitempty" yaml:"hostname"`
-		Username   string `json:"username,omitempty" yaml:"username"`
-		Password   string `json:"password,omitempty" yaml:"password"`
-		SSHKeyPath string `json:"ssh_key_path,omitempty" yaml:"ssh_key_path"`
-	}
-
 	Nomad struct {
 		Address        string `json:"address,omitempty" yaml:"address"`
 		Insecure       bool   `json:"insecure,omitempty" yaml:"insecure"`
@@ -436,16 +429,10 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Google)
 	case string(types.VMFusion):
 		s.Spec = new(VMFusion)
-<<<<<<< HEAD
 	case string(types.Noop):
 		s.Spec = new(Noop)
-=======
-	case string(types.SSH):
-		s.Spec = new(SSH)
 	case string(types.Nomad):
 		s.Spec = new(Nomad)
-
->>>>>>> a6222c8 (nomad changes)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}

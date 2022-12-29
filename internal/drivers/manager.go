@@ -232,34 +232,34 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 						}
 						free = append(free, hibernating...)
 
-						var ids []string
+						var instances []*types.Instance
 						for _, inst := range busy {
 							startedAt := time.Unix(inst.Started, 0)
 							if time.Since(startedAt) > maxAgeBusy {
-								ids = append(ids, inst.ID)
+								instances = append(instances, inst)
 							}
 						}
 						for _, inst := range free {
 							startedAt := time.Unix(inst.Started, 0)
 							if time.Since(startedAt) > maxAgeFree {
-								ids = append(ids, inst.ID)
+								instances = append(instances, inst)
 							}
 						}
 
-						if len(ids) == 0 {
+						if len(instances) == 0 {
 							return nil
 						}
 
-						logr.Infof("purger: Terminating %d stale instances\n", len(ids))
+						logr.Infof("purger: Terminating %d stale instances\n", len(instances))
 
-						err = pool.Driver.Destroy(ctx, ids...)
+						err = pool.Driver.Destroy(ctx, instances)
 						if err != nil {
 							return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
 						}
-						for _, id := range ids {
-							derr := m.Delete(ctx, id)
+						for _, instance := range instances {
+							derr := m.Delete(ctx, instance.ID)
 							if derr != nil {
-								return fmt.Errorf("failed to delete %s from instance store with err: %s", id, derr)
+								return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
 							}
 						}
 
@@ -351,7 +351,12 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 		return fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
-	err := pool.Driver.Destroy(ctx, instanceID)
+	instance, err := m.Find(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+
+	err = pool.Driver.Destroy(ctx, []*types.Instance{instance})
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
@@ -373,29 +378,29 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 			return err
 		}
 		free = append(free, hibernating...)
-		var instanceIDs []string
+		var instanceIDs []*types.Instance
 
 		if destroyBusy {
 			for _, inst := range busy {
-				instanceIDs = append(instanceIDs, inst.ID)
+				instances = append(instances, inst)
 			}
 		}
 
 		if destroyFree {
 			for _, inst := range free {
-				instanceIDs = append(instanceIDs, inst.ID)
+				instances = append(instances, inst)
 			}
 		}
 
-		if len(instanceIDs) == 0 {
+		if len(instances) == 0 {
 			continue
 		}
-		err = pool.Driver.Destroy(ctx, instanceIDs...)
+		err = pool.Driver.Destroy(ctx, instances)
 		if err != nil {
 			return err
 		}
-		for _, inst := range instanceIDs {
-			err = m.Delete(ctx, inst)
+		for _, inst := range instances {
+			err = m.Delete(ctx, inst.ID)
 			if err != nil {
 				return err
 			}
@@ -459,12 +464,12 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 		len(instBusy), len(instFree))
 
 	if shouldRemove > 0 {
-		ids := make([]string, shouldRemove)
+		instances := make([]*types.Instance, shouldRemove)
 		for i := 0; i < shouldRemove; i++ {
-			ids[i] = instFree[i].ID
+			instances[i] = instFree[i]
 		}
 
-		err := pool.Driver.Destroy(ctx, ids...)
+		err := pool.Driver.Destroy(ctx, instances)
 		if err != nil {
 			logr.WithError(err).Errorln("build pool: failed to destroy excess instances")
 		}
@@ -542,7 +547,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to store instance")
-		_ = pool.Driver.Destroy(ctx, inst.ID)
+		_ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
 		return nil, err
 	}
 

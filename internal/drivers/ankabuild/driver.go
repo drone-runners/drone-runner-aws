@@ -175,9 +175,10 @@ func (c *config) FindVM(ctx context.Context, id string, retryInterval time.Durat
 	}
 }
 
-func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
-	if len(instanceIDs) == 0 {
-		return
+func (c *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+	var instanceIDs []string
+	for _, instance := range instances {
+		instanceIDs = append(instanceIDs, instance.ID)
 	}
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
