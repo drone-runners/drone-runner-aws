@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/hashicorp/nomad/api"
@@ -72,18 +73,16 @@ func (p *config) CanHibernate() bool {
 
 // Ping checks that we can ping the machine
 func (p *config) Ping(ctx context.Context) error {
-	// TODO: Add test to ping the nomad server
-	return nil
+	if p.client != nil {
+		return nil
+	}
+	return errors.New("could not create a client to the nomad server")
 }
 
 // Create a VM in the bare metal machine
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	vm := random(20)
-	vm = strings.ToLower(vm)
+	vm := strings.ToLower(random(20))
 	port := fmt.Sprintf("NOMAD_PORT_%s", vm)
-	if err != nil {
-		return nil, err
-	}
 	job := &api.Job{
 		ID:          stringToPtr(vm),
 		Name:        stringToPtr(vm),
@@ -100,7 +99,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite run vistaarjuneja/demo:lite-engine-metal1 --name %s --cpus 2 --memory 6GB --size 6GB --ssh --ports $%s:9079", vm, port)},
+							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite run vistaarjuneja/demo:lite-engine-metal1 --name %s --cpus 2 --memory 6GB --size 6GB --ssh --ports $%s:%s", vm, port, strconv.Itoa(lehelper.LiteEnginePort))},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -167,35 +166,34 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	fmt.Println("port label: ", alloc.Resources.Networks[0].DynamicPorts[0].To)
 	fmt.Println("port label: ", alloc.Resources.Networks[0].DynamicPorts[0].Value)
 
-	vmIP := fmt.Sprintf("http://%s:%s/", ip, strconv.Itoa(alloc.Resources.Networks[0].DynamicPorts[0].Value))
+	liteEnginePort := alloc.Resources.Networks[0].DynamicPorts[0].Value
 
 	fmt.Println("cert: ", opts.CACert)
 
 	return &types.Instance{
-		ID:       fmt.Sprintf("%s/%s", vm, id),
+		ID:       vm,
+		NodeID:   id,
 		Name:     id, // TODO: Move this to a separate field
 		Platform: opts.Platform,
 		State:    types.StateCreated,
-		Address:  vmIP,
+		Address:  ip,
 		CACert:   opts.CACert,
 		CAKey:    opts.CAKey,
 		TLSCert:  opts.TLSCert,
 		TLSKey:   opts.TLSKey,
 		Provider: types.Nomad,
 		Pool:     opts.PoolName,
+		Port:     int64(liteEnginePort),
 	}, nil
 }
 
 // Destroy destroys the VM in the bare metal machine
-func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
-	for _, i := range instanceIDs {
-		l := strings.Split(i, "/")
-		vm := l[0]
-		node := l[1]
-		fmt.Printf("vm is: %s and node ID is: %s\n", vm, node)
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+	for _, instance := range instances {
+		fmt.Printf("vm is: %s and node ID is: %s\n", instance.ID, instance.NodeID)
 		constraint := &api.Constraint{
 			LTarget: "${node.unique.id}",
-			RTarget: node,
+			RTarget: instance.NodeID,
 			Operand: "=",
 		}
 		job := &api.Job{
@@ -216,7 +214,7 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 							Driver: "raw_exec",
 							Config: map[string]interface{}{
 								"command": "/usr/bin/su",
-								"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite kill %s", vm)},
+								"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite kill %s", instance.ID)},
 							},
 						},
 					},

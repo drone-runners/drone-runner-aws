@@ -1,0 +1,1 @@
+ALTER TABLE instances ADD COLUMN instance_node_id  TEXT NOT NULL DEFAULT '';

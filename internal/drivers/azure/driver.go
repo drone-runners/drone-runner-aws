@@ -243,7 +243,11 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return &instanceMap, nil
 }
 
-func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+func (c *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+	var instanceIDs []string
+	for _, instance := range instances {
+		instanceIDs = append(instanceIDs, instance.ID)
+	}
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Azure).
 		WithField("image", c.InstanceType()).
