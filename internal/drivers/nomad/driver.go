@@ -2,6 +2,7 @@ package nomad
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
@@ -81,7 +83,16 @@ func (p *config) Ping(ctx context.Context) error {
 
 // Create a VM in the bare metal machine
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+	val := opts.Arch
+	opts.Arch = "amd64"
+	startupScript := generateStartupScript(opts)
+	opts.Arch = val
+	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
 	vm := strings.ToLower(random(20))
+	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
+	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
+	fmt.Println("vmPath: ", vmPath)
+	fmt.Println("hostPath: ", hostPath)
 	port := fmt.Sprintf("NOMAD_PORT_%s", vm)
 	job := &api.Job{
 		ID:          stringToPtr(vm),
@@ -91,19 +102,28 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		TaskGroups: []*api.TaskGroup{
 			{
 				Networks: []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: vm}}}},
-				Name:     stringToPtr("ignite_run_group"),
+				Name:     stringToPtr(fmt.Sprintf("init_task_group_%s", vm)),
 				Count:    intToPtr(1),
 				Tasks: []*api.Task{
+					{
+						Name:   "create_startup_script",
+						Driver: "raw_exec",
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedStartupScript, hostPath)},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "prestart",
+						},
+					},
+
 					{
 						Name:   "ignite_run",
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite run vistaarjuneja/demo:lite-engine-metal1 --name %s --cpus 2 --memory 6GB --size 6GB --ssh --ports $%s:%s", vm, port, strconv.Itoa(lehelper.LiteEnginePort))},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "prestart",
+							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite run vistaarjuneja/demo:lite-engine-metal1 --name %s --cpus 2 --memory 6GB --size 6GB --ssh --ports $%s:%s --copy-files %s:%s", vm, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath)},
 						},
 					},
 					{
@@ -111,7 +131,23 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite exec %s '/usr/bin/lite-engine-linux-amd64 server --env-file=/usr/bin/.env > /dev/null 2>&1 &'", vm)},
+							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite exec %s 'cat %s | base64 --decode | bash'", vm, vmPath)},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "poststop",
+						},
+					},
+					{
+						Name:   "cleanup_startup_script",
+						Driver: "raw_exec",
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", fmt.Sprintf("rm %s", hostPath)},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "poststop",
 						},
 					},
 				},
@@ -280,6 +316,10 @@ func pollForJob(id string, client *api.Client) *api.Job {
 		q := &api.QueryOptions{WaitTime: 5 * time.Minute}
 		// Get the job status
 		job, _, err = client.Jobs().Info(id, q)
+		if job == nil {
+			fmt.Println("job was nil.... continuing")
+			continue
+		}
 		fmt.Printf("job: %+v", job)
 		fmt.Printf("err: %+v", err)
 		fmt.Println("create index: ", *job.CreateIndex)
@@ -306,4 +346,18 @@ func pollForJob(id string, client *api.Client) *api.Job {
 		}
 	}
 	return job
+}
+
+func generateStartupScript(opts *types.InstanceCreateOpts) string {
+	params := &cloudinit.Params{
+		Platform:             opts.Platform,
+		CACert:               string(opts.CACert),
+		TLSCert:              string(opts.TLSCert),
+		TLSKey:               string(opts.TLSKey),
+		LiteEnginePath:       opts.LiteEnginePath,
+		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
+		PluginBinaryURI:      opts.PluginBinaryURI,
+	}
+
+	return cloudinit.LinuxBash(params)
 }
