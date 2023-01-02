@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.0.0-rc26](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc26) (2022-12-16)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc25...v1.0.0-rc26)
+
+**Merged pull requests:**
+
+- Prep for rc26 [\#215](https://github.com/drone-runners/drone-runner-aws/pull/215) ([shubham149](https://github.com/shubham149))
+- Upgrade plugin binary version [\#214](https://github.com/drone-runners/drone-runner-aws/pull/214) ([shubham149](https://github.com/shubham149))
+
 ## [v1.0.0-rc25](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc25) (2022-12-15)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc24...v1.0.0-rc25)
