@@ -39,7 +39,7 @@ if [[ ! -z "${DRONE_SSH_KEY}" ]]; then
 	if [[ ! -z "${DRONE_NETRC_PORT}" ]]; then
 		SSH_KEYSCAN_FLAGS="-p ${DRONE_NETRC_PORT}"
 	fi
-	ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh_known_hosts 2> /dev/null
+	ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
 
 	export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/id_rsa ${SSH_KEYSCAN_FLAGS} -F /dev/null"
 fi
