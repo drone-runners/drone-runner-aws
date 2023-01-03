@@ -31,3 +31,21 @@ func WithInsecure(b bool) Option {
 		p.insecure = b
 	}
 }
+
+func WithImage(s string) Option {
+	return func(p *config) {
+		p.vmImage = s
+	}
+}
+
+func WithMemory(s string) Option {
+	return func(p *config) {
+		p.vmMemory = s
+	}
+}
+
+func WithCpus(s string) Option {
+	return func(p *config) {
+		p.vmCpus = s
+	}
+}

@@ -96,11 +96,22 @@ type (
 	}
 
 	Nomad struct {
+		Server NomadServer `json:"server,omitempty" yaml:"server"`
+		VM     NomadVM     `json:"vm,omitempty" yaml:"vm"`
+	}
+
+	NomadServer struct {
 		Address        string `json:"address,omitempty" yaml:"address"`
-		Insecure       bool   `json:"insecure,omitempty" yaml:"insecure"`
+		Insecure       bool   `json:"insecure,omitempty" yaml:"insecure" default:"false"`
 		CaCertPath     string `json:"ca_cert_path,omitempty" yaml:"ca_cert_path"`
 		ClientKeyPath  string `json:"client_key_path,omitempty" yaml:"client_key_path"`
 		ClientCertPath string `json:"client_cert_path,omitempty" yaml:"client_cert_path"`
+	}
+
+	NomadVM struct {
+		Image  string `json:"image,omitempty" yaml:"image" default:"weaveworks/ignite-ubuntu:latest"`
+		Memory string `json:"memory,omitempty" yaml:"memory" default:"6GB"`
+		Cpus   string `json:"cpus,omitempty" yaml:"cpus" default:"2"`
 	}
 
 	// Azure specifies the configuration for an Azure instance.

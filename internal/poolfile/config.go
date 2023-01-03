@@ -263,11 +263,14 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
-			driver, err := nomad.New(nomad.WithAddress(nomadConfig.Address),
-				nomad.WithCaCertPath(nomadConfig.CaCertPath),
-				nomad.WithClientCertPath(nomadConfig.ClientCertPath),
-				nomad.WithClientKeyPath(nomadConfig.ClientKeyPath),
-				nomad.WithInsecure(nomadConfig.Insecure))
+			driver, err := nomad.New(nomad.WithAddress(nomadConfig.Server.Address),
+				nomad.WithCaCertPath(nomadConfig.Server.CaCertPath),
+				nomad.WithClientCertPath(nomadConfig.Server.ClientCertPath),
+				nomad.WithClientKeyPath(nomadConfig.Server.ClientKeyPath),
+				nomad.WithInsecure(nomadConfig.Server.Insecure),
+				nomad.WithCpus(nomadConfig.VM.Cpus),
+				nomad.WithMemory(nomadConfig.VM.Memory),
+				nomad.WithImage(nomadConfig.VM.Image))
 			if err != nil {
 				return nil, err
 			}
