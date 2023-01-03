@@ -1,7 +1,6 @@
 package dlite
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 
@@ -40,7 +39,6 @@ func Handler(p *poller.Poller) http.Handler {
 func handleEnable(p *poller.Poller) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p.SetFilter(func(ev *client.TaskEvent) bool {
-			fmt.Println("in filter fn")
 			return ev.TaskType != initTask
 		})
 		io.WriteString(w, okStatus) //nolint: errcheck

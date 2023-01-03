@@ -24,7 +24,6 @@ const (
 	DigitalOcean = DriverType("digitalocean")
 	Google       = DriverType("google")
 	VMFusion     = DriverType("vmfusion")
-	SSH          = DriverType("ssh")
 	Nomad        = DriverType("nomad")
 )
 
