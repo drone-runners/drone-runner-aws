@@ -35,17 +35,26 @@ func WithInsecure(b bool) Option {
 func WithImage(s string) Option {
 	return func(p *config) {
 		p.vmImage = s
+		if p.vmImage == "" {
+			p.vmImage = "weaveworks/ignite-ubuntu:latest"
+		}
 	}
 }
 
 func WithMemory(s string) Option {
 	return func(p *config) {
 		p.vmMemory = s
+		if p.vmMemory == "" {
+			p.vmMemory = "6GB"
+		}
 	}
 }
 
 func WithCpus(s string) Option {
 	return func(p *config) {
 		p.vmCpus = s
+		if p.vmCpus == "" {
+			p.vmCpus = "2"
+		}
 	}
 }

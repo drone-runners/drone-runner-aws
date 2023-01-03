@@ -107,6 +107,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		strconv.Itoa(lehelper.LiteEnginePort),
 		hostPath,
 		vmPath)
+	fmt.Println("runCmd is: ", runCmd)
 	job := &api.Job{
 		ID:          &jobID,
 		Name:        stringToPtr(vm),
