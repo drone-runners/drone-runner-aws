@@ -16,6 +16,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/nomad/api"
 )
 
@@ -91,22 +92,25 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	vm := strings.ToLower(random(20))
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
-	fmt.Println("vmPath: ", vmPath)
-	fmt.Println("hostPath: ", hostPath)
+	jobID := fmt.Sprintf("init_job_%s", vm)
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
 	port := fmt.Sprintf("NOMAD_PORT_%s", vm)
 	job := &api.Job{
-		ID:          stringToPtr(vm),
+		ID:          &jobID,
 		Name:        stringToPtr(vm),
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
 		TaskGroups: []*api.TaskGroup{
 			{
 				Networks: []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: vm}}}},
-				Name:     stringToPtr(fmt.Sprintf("init_task_group_%s", vm)),
-				Count:    intToPtr(1),
+				RestartPolicy: &api.RestartPolicy{
+					Attempts: intToPtr(0),
+				},
+				Name:  stringToPtr(fmt.Sprintf("init_task_group_%s", vm)),
+				Count: intToPtr(1),
 				Tasks: []*api.Task{
 					{
-						Name:   "create_startup_script",
+						Name:   "create_startup_script_on_host",
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
@@ -139,7 +143,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 						},
 					},
 					{
-						Name:   "cleanup_startup_script",
+						Name:   "cleanup_startup_script_from_host",
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
@@ -154,19 +158,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			},
 		},
 	}
+	logr.Debugln("nomad: submitting job to nomad")
 	_, _, err = p.client.Jobs().Register(job, nil)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("started polling for start job\n")
-	j := pollForJob(vm, p.client)
-	fmt.Printf("job returned back is: %+v", j)
-	fmt.Println("id: ", *j.ID)
-	fmt.Println("name: ", *j.Name)
-	fmt.Printf("completed polling for start job\n")
+	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
+	j := pollForJob(jobID, p.client)
+	logr.Debugln("nomad: job marked as finished")
+
 	// Get the allocation corresponding to this job submission
 	l, _, err := p.client.Jobs().Allocations(*j.ID, false, nil)
-	fmt.Println("len(l): ", len(l))
 	if err != nil {
 		return nil, err
 	}
@@ -181,8 +183,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return nil, err
 	}
 
-	fmt.Println("node id: ", id)
-
 	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
 	if err != nil {
 		fmt.Println("err: ", err)
@@ -192,19 +192,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	fmt.Printf("node IP is: %s", n.HTTPAddr)
 	ip := strings.Split(n.HTTPAddr, ":")[0]
 
-	if alloc.Resources.Networks != nil {
-		fmt.Println("length of ports: ", len(alloc.Resources.Networks))
+	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
+		return nil, errors.New("could not assign an available port as part of the job")
 	}
 
-	fmt.Println("len(ports): ", len(alloc.Resources.Networks[0].DynamicPorts))
-	fmt.Println("port label: ", alloc.Resources.Networks[0].DynamicPorts[0].HostNetwork)
-	fmt.Println("port label: ", alloc.Resources.Networks[0].DynamicPorts[0].Label)
-	fmt.Println("port label: ", alloc.Resources.Networks[0].DynamicPorts[0].To)
-	fmt.Println("port label: ", alloc.Resources.Networks[0].DynamicPorts[0].Value)
-
 	liteEnginePort := alloc.Resources.Networks[0].DynamicPorts[0].Value
+	// sanity check
+	if liteEnginePort <= 0 || liteEnginePort > 65535 {
+		return nil, fmt.Errorf("port %d is not a valid port", liteEnginePort)
+	}
 
-	fmt.Println("cert: ", opts.CACert)
+	logr.WithField("node_ip", ip).WithField("node_port", liteEnginePort).Traceln("nomad: successfully created instance")
 
 	return &types.Instance{
 		ID:       vm,
@@ -226,14 +224,18 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 // Destroy destroys the VM in the bare metal machine
 func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
 	for _, instance := range instances {
-		fmt.Printf("vm is: %s and node ID is: %s\n", instance.ID, instance.NodeID)
+		jobID := fmt.Sprintf("destroy_job_%s", instance.ID)
+		logr := logger.FromContext(ctx).
+			WithField("instance_id", instance.ID).
+			WithField("instance_node_id", instance.NodeID).
+			WithField("job_id", jobID)
 		constraint := &api.Constraint{
 			LTarget: "${node.unique.id}",
 			RTarget: instance.NodeID,
 			Operand: "=",
 		}
 		job := &api.Job{
-			ID:          stringToPtr(random(20)),
+			ID:          &jobID,
 			Name:        stringToPtr(random(20)),
 			Type:        stringToPtr("batch"),
 			Datacenters: []string{"dc1"},
@@ -242,6 +244,9 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			},
 			TaskGroups: []*api.TaskGroup{
 				{
+					RestartPolicy: &api.RestartPolicy{
+						Attempts: intToPtr(0),
+					},
 					Name:  stringToPtr("delete_vm_grp"),
 					Count: intToPtr(1),
 					Tasks: []*api.Task{
@@ -260,9 +265,9 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 		if err != nil {
 			return err
 		}
-		fmt.Printf("started polling for destroy job\n")
-		pollForJob(*job.ID, p.client)
-		fmt.Printf("finished waiting for destroy job")
+		logr.Debugln("nomad: started polling for destroy job")
+		pollForJob(jobID, p.client)
+		logr.Debugln("nomad: destroy task finished")
 	}
 	return nil
 }
