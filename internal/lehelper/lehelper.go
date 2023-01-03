@@ -22,6 +22,7 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 		LiteEnginePath:       opts.LiteEnginePath,
 		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
 		PluginBinaryURI:      opts.PluginBinaryURI,
+		Tmate:                opts.Tmate,
 	}
 
 	if userdata == "" {

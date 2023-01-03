@@ -55,6 +55,15 @@ type Instance struct {
 	Port         int64  `db:"instance_port" json:"port"`
 }
 
+type Tmate struct {
+	Enabled bool
+	Image   string
+	Server  string
+	Port    string
+	RSA     string
+	ED25519 string
+}
+
 type InstanceCreateOpts struct {
 	CAKey          []byte
 	CACert         []byte
@@ -68,6 +77,7 @@ type InstanceCreateOpts struct {
 	Pool                 int
 	HarnessTestBinaryURI string
 	PluginBinaryURI      string
+	Tmate                Tmate
 }
 
 // Platform defines the target platform.

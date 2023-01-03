@@ -35,6 +35,13 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 		return configPool, err
 	}
 
+	err = poolManager.AddTmate(env)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("unable to set tmate configuration")
+		return configPool, err
+	}
+
 	// setup lifetimes of instances
 	busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
 	freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)

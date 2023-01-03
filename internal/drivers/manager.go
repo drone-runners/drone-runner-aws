@@ -32,6 +32,7 @@ type (
 		instanceStore        store.InstanceStore
 		harnessTestBinaryURI string
 		pluginBinaryURI      string
+		tmate                types.Tmate
 	}
 
 	poolEntry struct {
@@ -145,6 +146,11 @@ func (m *Manager) Delete(ctx context.Context, instanceID string) error {
 
 func (m *Manager) Update(ctx context.Context, instance *types.Instance) error {
 	return m.instanceStore.Update(ctx, instance)
+}
+
+func (m *Manager) AddTmate(env *config.EnvConfig) error {
+	m.tmate = types.Tmate(env.Tmate)
+	return nil
 }
 
 func (m *Manager) Add(pools ...Pool) error {
@@ -275,9 +281,10 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, liteEnginePath string) (*types.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName string, env *config.EnvConfig) (*types.Instance, error) {
 	m.runnerName = serverName
-	m.liteEnginePath = liteEnginePath
+	m.liteEnginePath = env.Settings.LiteEnginePath
+	m.tmate = types.Tmate(env.Tmate)
 
 	pool := m.poolMap[poolName]
 	if pool == nil {
@@ -508,6 +515,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	createOptions.Pool = pool.MinSize
 	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
 	createOptions.PluginBinaryURI = m.pluginBinaryURI
+	createOptions.Tmate = m.tmate
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
