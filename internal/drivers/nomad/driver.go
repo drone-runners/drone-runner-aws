@@ -22,6 +22,9 @@ import (
 
 type config struct {
 	address        string
+	vmImage        string
+	vmMemory       string
+	vmCpus         string
 	caCertPath     string
 	clientCertPath string
 	clientKeyPath  string
@@ -95,6 +98,15 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	jobID := fmt.Sprintf("init_job_%s", vm)
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
 	port := fmt.Sprintf("NOMAD_PORT_%s", vm)
+	runCmd := fmt.Sprintf("/usr/local/bin/ignite run %s --name %s --cpus %s --memory %s --ssh --ports $%s:%s --copy-files %s:%s",
+		p.vmImage,
+		vm,
+		p.vmCpus,
+		p.vmMemory,
+		port,
+		strconv.Itoa(lehelper.LiteEnginePort),
+		hostPath,
+		vmPath)
 	job := &api.Job{
 		ID:          &jobID,
 		Name:        stringToPtr(vm),
@@ -127,7 +139,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite run vistaarjuneja/demo:lite-engine-metal1 --name %s --cpus 2 --memory 6GB --size 6GB --ssh --ports $%s:%s --copy-files %s:%s", vm, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath)},
+							"args":    []string{"-c", runCmd},
 						},
 					},
 					{
