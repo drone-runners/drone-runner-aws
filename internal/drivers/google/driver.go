@@ -31,6 +31,7 @@ const (
 	getRetries         = 3
 	insertRetries      = 3
 	deleteRetries      = 3
+	secSleep           = 1
 	tagRetrySleepMs    = 50
 )
 
@@ -361,19 +362,19 @@ func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 }
 
 func (p *config) getInstance(ctx context.Context, projectID, zone, name string) (*compute.Instance, error) {
-	return retry(ctx, getRetries, 1, func() (*compute.Instance, error) {
+	return retry(ctx, getRetries, secSleep, func() (*compute.Instance, error) {
 		return p.service.Instances.Get(p.projectID, zone, name).Context(ctx).Do()
 	})
 }
 
 func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
-	return retry(ctx, insertRetries, 1, func() (*compute.Operation, error) {
+	return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Instances.Insert(p.projectID, zone, in).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
 func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID, requestID string) (*compute.Operation, error) {
-	return retry(ctx, deleteRetries, 1, func() (*compute.Operation, error) {
+	return retry(ctx, deleteRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Instances.Delete(p.projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
 	})
 }
