@@ -337,7 +337,8 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		}
 
 		requestID := uuid.New().String()
-		err = p.deleteInstance(ctx, p.projectID, zone, instanceID, requestID)
+
+		_, err = p.deleteInstance(ctx, p.projectID, zone, instanceID, requestID)
 		if err != nil {
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 			if gerr, ok := err.(*googleapi.Error); ok &&
@@ -360,50 +361,21 @@ func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 }
 
 func (p *config) getInstance(ctx context.Context, projectID, zone, name string) (*compute.Instance, error) {
-	var err error
-	var vm *compute.Instance
-	for i := 0; i < getRetries; i++ {
-		vm, err = p.service.Instances.Get(p.projectID, zone, name).Context(ctx).Do()
-		if err == nil {
-			return vm, nil
-		}
-
-		if !shouldRetry(err) {
-			return nil, err
-		}
-	}
-	return nil, err
+	return retry(ctx, getRetries, 1, func() (*compute.Instance, error) {
+		return p.service.Instances.Get(p.projectID, zone, name).Context(ctx).Do()
+	})
 }
 
 func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
-	var err error
-	var op *compute.Operation
-	for i := 0; i < insertRetries; i++ {
-		op, err = p.service.Instances.Insert(p.projectID, zone, in).RequestId(requestID).Context(ctx).Do()
-		if err == nil {
-			return op, nil
-		}
-
-		if !shouldRetry(err) {
-			return nil, err
-		}
-	}
-	return nil, err
+	return retry(ctx, insertRetries, 1, func() (*compute.Operation, error) {
+		return p.service.Instances.Insert(p.projectID, zone, in).RequestId(requestID).Context(ctx).Do()
+	})
 }
 
-func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID, requestID string) error {
-	var err error
-	for i := 0; i < insertRetries; i++ {
-		_, err = p.service.Instances.Delete(p.projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
-		if err == nil {
-			return nil
-		}
-
-		if !shouldRetry(err) {
-			return err
-		}
-	}
-	return err
+func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID, requestID string) (*compute.Operation, error) {
+	return retry(ctx, deleteRetries, 1, func() (*compute.Operation, error) {
+		return p.service.Instances.Delete(p.projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
+	})
 }
 
 func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts) types.Instance {
@@ -576,4 +548,22 @@ func shouldRetry(err error) bool {
 	default:
 		return false
 	}
+}
+
+func retry[T any](ctx context.Context, attempts int, sleep int, f func() (T, error)) (result T, err error) {
+	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			logger.FromContext(ctx).Warnf("retrying after error:", err)
+			time.Sleep(time.Duration(sleep) * time.Second)
+		}
+		result, err = f()
+		if err == nil {
+			return result, nil
+		}
+
+		if !shouldRetry(err) {
+			return result, err
+		}
+	}
+	return result, err
 }
