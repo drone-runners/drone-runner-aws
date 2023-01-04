@@ -18,6 +18,7 @@ import (
 	"github.com/drone/runner-go/logger"
 
 	"github.com/dchest/uniuri"
+	"github.com/google/uuid"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -27,6 +28,9 @@ const (
 	maxInstanceNameLen = 63
 	randStrLen         = 5
 	tagRetries         = 3
+	getRetries         = 3
+	insertRetries      = 3
+	deleteRetries      = 3
 	tagRetrySleepMs    = 50
 )
 
@@ -240,7 +244,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		}
 	}
 
-	op, err := p.service.Instances.Insert(p.projectID, zone, in).Context(ctx).Do()
+	requestID := uuid.New().String()
+	op, err := p.insertInstance(ctx, p.projectID, zone, requestID, in)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to provision VM")
 		return nil, err
@@ -259,7 +264,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("google: [provision] VM provisioned")
 
-	vm, err := p.service.Instances.Get(p.projectID, zone, name).Context(ctx).Do()
+	vm, err := p.getInstance(ctx, p.projectID, zone, name)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
 		return nil, err
@@ -321,7 +326,6 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 		return errors.New("no instance IDs provided")
 	}
 
-	client := p.service
 	for _, instanceID := range instanceIDs {
 		logr := logger.FromContext(ctx).
 			WithField("id", instanceIDs).
@@ -332,7 +336,8 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 			continue
 		}
 
-		_, err = client.Instances.Delete(p.projectID, zone, instanceID).Context(ctx).Do()
+		requestID := uuid.New().String()
+		err = p.deleteInstance(ctx, p.projectID, zone, instanceID, requestID)
 		if err != nil {
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 			if gerr, ok := err.(*googleapi.Error); ok &&
@@ -352,6 +357,53 @@ func (p *config) Hibernate(_ context.Context, _, _ string) error {
 
 func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("unimplemented")
+}
+
+func (p *config) getInstance(ctx context.Context, projectID, zone, name string) (*compute.Instance, error) {
+	var err error
+	var vm *compute.Instance
+	for i := 0; i < getRetries; i++ {
+		vm, err = p.service.Instances.Get(p.projectID, zone, name).Context(ctx).Do()
+		if err == nil {
+			return vm, nil
+		}
+
+		if !shouldRetry(err) {
+			return nil, err
+		}
+	}
+	return nil, err
+}
+
+func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
+	var err error
+	var op *compute.Operation
+	for i := 0; i < insertRetries; i++ {
+		op, err = p.service.Instances.Insert(p.projectID, zone, in).RequestId(requestID).Context(ctx).Do()
+		if err == nil {
+			return op, nil
+		}
+
+		if !shouldRetry(err) {
+			return nil, err
+		}
+	}
+	return nil, err
+}
+
+func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID, requestID string) error {
+	var err error
+	for i := 0; i < insertRetries; i++ {
+		_, err = p.service.Instances.Delete(p.projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
+		if err == nil {
+			return nil
+		}
+
+		if !shouldRetry(err) {
+			return err
+		}
+	}
+	return err
 }
 
 func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts) types.Instance {
@@ -389,7 +441,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
 	string, error) {
 	for _, zone := range p.zones {
-		_, err := p.service.Instances.Get(p.projectID, zone, instanceID).Context(ctx).Do()
+		_, err := p.getInstance(ctx, p.projectID, zone, instanceID)
 		if err == nil {
 			return zone, nil
 		}
@@ -414,6 +466,14 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 			if gerr, ok := err.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
 				return errors.New("not Found")
+			}
+			if shouldRetry(err) {
+				logger.FromContext(ctx).
+					WithField("name", name).
+					WithField("zone", zone).
+					Warnf("google: wait operation failed with retryable error: %s. retrying\n", err)
+				time.Sleep(time.Second)
+				continue
 			}
 			return err
 		}
@@ -480,6 +540,10 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 	for {
 		op, err := p.service.GlobalOperations.Get(p.projectID, name).Context(ctx).Do()
 		if err != nil {
+			if shouldRetry(err) {
+				time.Sleep(time.Second)
+				continue
+			}
 			return err
 		}
 		if op.Error != nil {
@@ -499,4 +563,17 @@ func getInstanceName(runner, pool string) string {
 	randStr, _ := randStringRunes(randStrLen)
 	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd
 	return substrSuffix(name, maxInstanceNameLen)
+}
+
+func shouldRetry(err error) bool {
+	switch e := err.(type) {
+	case *googleapi.Error:
+		// Retry on 429 and 5xx, according to
+		// https://cloud.google.com/storage/docs/exponential-backoff.
+		return e.Code == 429 || (e.Code >= 500 && e.Code < 600)
+	case interface{ Temporary() bool }:
+		return e.Temporary()
+	default:
+		return false
+	}
 }
