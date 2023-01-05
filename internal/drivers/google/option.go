@@ -210,3 +210,9 @@ func WithNoServiceAccount(v bool) Option {
 		p.noServiceAccount = v
 	}
 }
+
+func WithHibernate(hibernate bool) Option {
+	return func(p *config) {
+		p.hibernate = hibernate
+	}
+}

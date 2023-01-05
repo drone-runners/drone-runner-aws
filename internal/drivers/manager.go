@@ -598,7 +598,8 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if pool.Driver.DriverName() != string(types.Amazon) {
+	if pool.Driver.DriverName() != string(types.Amazon) &&
+		pool.Driver.DriverName() != string(types.Google) {
 		return nil
 	}
 
