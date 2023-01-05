@@ -551,7 +551,7 @@ func shouldRetry(err error) bool {
 	}
 }
 
-func retry[T any](ctx context.Context, attempts int, sleepSecs int, f func() (T, error)) (result T, err error) {
+func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, error)) (result T, err error) {
 	for i := 0; i < attempts; i++ {
 		if i > 0 {
 			logger.FromContext(ctx).Warnf("retrying after error: %s\n", err)
