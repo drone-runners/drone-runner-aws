@@ -363,19 +363,19 @@ func (p *config) Start(_ context.Context, _, _ string) (string, error) {
 
 func (p *config) getInstance(ctx context.Context, projectID, zone, name string) (*compute.Instance, error) {
 	return retry(ctx, getRetries, secSleep, func() (*compute.Instance, error) {
-		return p.service.Instances.Get(p.projectID, zone, name).Context(ctx).Do()
+		return p.service.Instances.Get(projectID, zone, name).Context(ctx).Do()
 	})
 }
 
 func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
 	return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
-		return p.service.Instances.Insert(p.projectID, zone, in).RequestId(requestID).Context(ctx).Do()
+		return p.service.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
 func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID, requestID string) (*compute.Operation, error) {
 	return retry(ctx, deleteRetries, secSleep, func() (*compute.Operation, error) {
-		return p.service.Instances.Delete(p.projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
+		return p.service.Instances.Delete(projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
@@ -551,11 +551,11 @@ func shouldRetry(err error) bool {
 	}
 }
 
-func retry[T any](ctx context.Context, attempts int, sleep int, f func() (T, error)) (result T, err error) {
+func retry[T any](ctx context.Context, attempts int, sleepSecs int, f func() (T, error)) (result T, err error) {
 	for i := 0; i < attempts; i++ {
 		if i > 0 {
 			logger.FromContext(ctx).Warnf("retrying after error: %s\n", err)
-			time.Sleep(time.Duration(sleep) * time.Second)
+			time.Sleep(time.Duration(sleepSecs) * time.Second)
 		}
 		result, err = f()
 		if err == nil {
