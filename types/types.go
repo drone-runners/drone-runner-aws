@@ -24,6 +24,7 @@ const (
 	DigitalOcean = DriverType("digitalocean")
 	Google       = DriverType("google")
 	VMFusion     = DriverType("vmfusion")
+	Noop         = DriverType("noop")
 )
 
 // InstanceState type enumeration.
