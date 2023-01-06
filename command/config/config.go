@@ -418,7 +418,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Google)
 	case string(types.VMFusion):
 		s.Spec = new(VMFusion)
-
+	case string(types.Noop):
+		s.Spec = new(Noop)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}
