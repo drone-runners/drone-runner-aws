@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/google/uuid"
 )
 
 type config struct {
@@ -16,6 +18,7 @@ type config struct {
 	createWaitSecs    int
 	destroyWaitSecs   int
 	tagWaitSecs       int
+	leIP              string
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -24,12 +27,36 @@ func New(opts ...Option) (drivers.Driver, error) {
 		opt(p)
 	}
 
+	p.hibernateWaitSecs = 5
+	p.startWaitSecs = 10
+	p.createWaitSecs = 15
+	p.destroyWaitSecs = 5
+	p.tagWaitSecs = 1
+	p.leIP = "127.0.0.1"
+
 	return p, nil
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	time.Sleep(time.Duration(p.createWaitSecs) * time.Second)
-	return &types.Instance{}, nil
+	id := uuid.New().String()
+	return &types.Instance{
+		ID:           id,
+		Name:         id,
+		Provider:     types.Noop, // this is driver, though its the old legacy name of provider
+		State:        types.StateCreated,
+		Pool:         opts.PoolName,
+		Platform:     opts.Platform,
+		Address:      p.leIP,
+		CACert:       opts.CACert,
+		CAKey:        opts.CAKey,
+		TLSCert:      opts.TLSCert,
+		TLSKey:       opts.TLSKey,
+		Started:      time.Now().Unix(),
+		Updated:      time.Now().Unix(),
+		IsHibernated: false,
+		Port:         lehelper.LiteEnginePort,
+	}, nil
 }
 
 func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {

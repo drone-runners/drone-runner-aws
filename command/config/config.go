@@ -191,6 +191,11 @@ type (
 		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
 	}
 
+	// Noop specifies the configuration for a Noop instance.
+	Noop struct {
+		Hibernate bool `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
+	}
+
 	// disk provides disk size and type.
 	disk struct {
 		Size int64  `json:"size,omitempty" yaml:"size,omitempty"`
