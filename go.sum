@@ -242,6 +242,8 @@ github.com/hashicorp/mdns v1.0.0/go.mod h1:tL+uN++7HEJ6SQLQ2/p+z2pH24WQKWjBPkE0m
 github.com/hashicorp/memberlist v0.1.3/go.mod h1:ajVTdAv/9Im8oMAAj5G31PhhMCZJV2pPBoIllUwCN7I=
 github.com/hashicorp/nomad/api v0.0.0-20221216234658-16401b864ee3 h1:JCnU/+m81I4fNyb/xG8hoTohJwgR2qQmc+8C4GuaPgw=
 github.com/hashicorp/nomad/api v0.0.0-20221216234658-16401b864ee3/go.mod h1:55vGj19d1qHlWuQPte9lLJc7P7h6jjWKM9ViSgc9udk=
+github.com/hashicorp/nomad/api v0.0.0-20230105155713-bfcb21a550ce h1:g+PduSsRloCHZSCsypqbJKS+wcTlq3MEmH+XyDsOX8Y=
+github.com/hashicorp/nomad/api v0.0.0-20230105155713-bfcb21a550ce/go.mod h1:EM/2XaEwHziSB4NdWZ6MfE65TcvgWwVawOUBT8kVRqE=
 github.com/hashicorp/serf v0.8.2/go.mod h1:6hOLApaqBFA1NXqRQAsxw9QxuDEvNxSQRwA/JwenrHc=
 github.com/hpcloud/tail v1.0.0 h1:nfCOvKYfkgYP8hkirhJocXT2+zOD8yUNjXaWfTlyFKI=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
