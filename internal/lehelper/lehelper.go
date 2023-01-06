@@ -41,7 +41,6 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 
 func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64) (*lehttp.HTTPClient, error) {
 	leURL := fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
-	fmt.Println("leURL is: ", leURL)
 	return lehttp.NewHTTPClient(leURL,
 		runnerName, string(instance.CACert),
 		string(instance.TLSCert), string(instance.TLSKey))
