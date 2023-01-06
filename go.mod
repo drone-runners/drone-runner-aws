@@ -37,6 +37,7 @@ require (
 	github.com/rs/zerolog v1.28.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
+	github.com/syndtr/goleveldb v1.0.0
 	github.com/wings-software/dlite v1.0.0-rc.1
 	golang.org/x/oauth2 v0.4.0
 	golang.org/x/sync v0.1.0
@@ -61,7 +62,6 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	github.com/syndtr/goleveldb v1.0.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448 // indirect
 )

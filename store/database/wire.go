@@ -6,8 +6,8 @@ package database
 
 import (
 	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/store/database/sql"
 	"github.com/drone-runners/drone-runner-aws/store/singleinstance"
-	"github.com/drone-runners/drone-runner-aws/store/sql"
 
 	"github.com/google/wire"
 	"github.com/jmoiron/sqlx"
