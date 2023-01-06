@@ -85,20 +85,19 @@ func (p *config) Ping(ctx context.Context) error {
 }
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
-// It is meant to be idempotent - any issues with any of the operations try their best to clean up
-// all created resources before returning back.
+// TODO (Vistaar): Handle cleanup in cases of partial execution of tasks and errors - idempotency is required
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	val := opts.Arch
-	opts.Arch = "amd64"
 	startupScript := generateStartupScript(opts)
-	opts.Arch = val
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
 	vm := strings.ToLower(random(20))
+
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 	jobID := fmt.Sprintf("init_job_%s", vm)
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
 	port := fmt.Sprintf("NOMAD_PORT_%s", vm)
+
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
+
 	runCmd := fmt.Sprintf("/usr/local/bin/ignite run %s --name %s --cpus %s --memory %s --ssh --ports $%s:%s --copy-files %s:%s",
 		p.vmImage,
 		vm,
@@ -108,7 +107,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		strconv.Itoa(lehelper.LiteEnginePort),
 		hostPath,
 		vmPath)
-	fmt.Println("runCmd is: ", runCmd)
 	job := &api.Job{
 		ID:          &jobID,
 		Name:        stringToPtr(vm),
@@ -181,7 +179,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
 	_, err = pollForJob(ctx, jobID, p.client, logr, 5*time.Minute, true) // TODO (Vistaar): validate this timeout
 	if err != nil {
-		// TODO (Vistaar): Handle cleanup in cases of partial execution of tasks here
 		return nil, err
 	}
 	logr.Debugln("nomad: job marked as finished")
@@ -192,13 +189,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return nil, err
 	}
 	if len(l) == 0 {
-		return nil, errors.New("no allocation found for the job")
+		return nil, errors.New("nomad: no allocation found for the job")
 	}
 
 	id := l[0].NodeID
 	allocID := l[0].ID
+	if id == "" || allocID == "" {
+		return nil, errors.New("nomad: could not find an allocation identifier for the job")
+	}
 	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
 	if err != nil {
+		logr.WithError(err).Errorln("nomad: could not get allocation information")
 		return nil, err
 	}
 
@@ -209,7 +210,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	ip := strings.Split(n.HTTPAddr, ":")[0]
-	ip = "15.204.47.68"
 	if net.ParseIP(ip) == nil {
 		return nil, fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
 	}
