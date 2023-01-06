@@ -9,3 +9,4 @@ __debug_bin
 temp.pem
 pool.yml
 *.sqlite3
+*.leveldb/*
