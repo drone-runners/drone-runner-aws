@@ -54,8 +54,8 @@ func ProvideSQLInstanceStore(db *sqlx.DB) store.InstanceStore {
 	}
 }
 
-// ProvideInstanceStore provides an instance store.
-func ProvideSqlStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
+// ProvideSQLStageOwnerStore provides an stage owner store.
+func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	switch db.DriverName() {
 	case "postgres":
 		return sql.NewStageOwnerStore(db)
@@ -79,5 +79,5 @@ func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOw
 	if err != nil {
 		return nil, nil, err
 	}
-	return ProvideSQLInstanceStore(db), ProvideSqlStageOwnerStore(db), nil
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), nil
 }
