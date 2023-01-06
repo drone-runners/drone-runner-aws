@@ -60,11 +60,6 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	db, err := database.ProvideDatabase(env.Database.Driver, env.Database.Datasource)
-	if err != nil {
-		logrus.WithError(err).
-			Fatalln("Unable to start the database")
-	}
 	// setup the global logrus logger.
 	setupLogger(&env)
 
@@ -99,7 +94,12 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 			logrus.StandardLogger(),
 		),
 	)
-	store := database.ProvideInstanceStore(db)
+
+	store, _, err := database.ProvideStore(env.Database.Driver, env.Database.Datasource)
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+	}
+
 	poolManager := drivers.New(ctx, store, &env)
 
 	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)

@@ -37,6 +37,7 @@ require (
 	github.com/rs/zerolog v1.28.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
+	github.com/syndtr/goleveldb v1.0.0
 	github.com/wings-software/dlite v1.0.0-rc.1
 	golang.org/x/oauth2 v0.4.0
 	golang.org/x/sync v0.1.0
@@ -52,6 +53,7 @@ require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v0.7.0 // indirect
 	github.com/corpix/uarand v0.2.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.3 // indirect
+	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.1 // indirect
 	github.com/icrowley/fake v0.0.0-20221112152111-d7b7e2276db2 // indirect

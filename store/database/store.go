@@ -12,10 +12,10 @@ import (
 	_ "github.com/mattn/go-sqlite3" // required for sqlite3
 )
 
-var builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+var _ = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
-// Connect to a database and verify with a ping.
-func Connect(driver, datasource string) (*sqlx.DB, error) {
+// ConnectSQL to a database and verify with a ping.
+func ConnectSQL(driver, datasource string) (*sqlx.DB, error) {
 	db, err := sql.Open(driver, datasource)
 	if err != nil {
 		return nil, err

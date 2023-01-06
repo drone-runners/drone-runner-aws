@@ -6,7 +6,10 @@ package database
 
 import (
 	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/store/database/ldb"
+	"github.com/drone-runners/drone-runner-aws/store/database/sql"
 	"github.com/drone-runners/drone-runner-aws/store/singleinstance"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/google/wire"
 	"github.com/jmoiron/sqlx"
@@ -14,14 +17,14 @@ import (
 
 // WireSet provides a wire set for this package
 var WireSet = wire.NewSet(
-	ProvideDatabase,
-	ProvideInstanceStore,
+	ProvideSQLDatabase,
+	ProvideSQLInstanceStore,
 )
 
 const SingleInstance = "singleinstance"
 
-// ProvideDatabase provides a database connection.
-func ProvideDatabase(driver, datasource string) (*sqlx.DB, error) {
+// ProvideSQLDatabase provides a database connection.
+func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
 	switch driver {
 	case SingleInstance:
 		// use a single instance db, as we only need one machine
@@ -29,36 +32,52 @@ func ProvideDatabase(driver, datasource string) (*sqlx.DB, error) {
 
 		return empty, nil
 	default:
-		return Connect(
+		return ConnectSQL(
 			driver,
 			datasource,
 		)
 	}
 }
 
-// ProvideInstanceStore provides an instance store.
-func ProvideInstanceStore(db *sqlx.DB) store.InstanceStore {
+// ProvideSQLInstanceStore provides an instance store.
+func ProvideSQLInstanceStore(db *sqlx.DB) store.InstanceStore {
 	switch db.DriverName() {
 	case "postgres":
-		return NewInstanceStore(db)
+		return sql.NewInstanceStore(db)
 	case SingleInstance:
 		// this is a store with a single instance, used by exec and setup commands
 		return singleinstance.NewSingleInstanceStore(db)
 	default:
-		return NewInstanceStoreSync(
-			NewInstanceStore(db),
+		return sql.NewInstanceStoreSync(
+			sql.NewInstanceStore(db),
 		)
 	}
 }
 
-// ProvideInstanceStore provides an instance store.
-func ProvideStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
+// ProvideSQLStageOwnerStore provides an stage owner store.
+func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	switch db.DriverName() {
 	case "postgres":
-		return NewStageOwnerStore(db)
+		return sql.NewStageOwnerStore(db)
 	default:
-		return NewStageOwnerStoreSync(
-			NewStageOwnerStore(db),
+		return sql.NewStageOwnerStoreSync(
+			sql.NewStageOwnerStore(db),
 		)
 	}
+}
+
+func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, error) {
+	if driver == "leveldb" {
+		db, err := leveldb.OpenFile(datasource, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil
+	}
+
+	db, err := ProvideSQLDatabase(driver, datasource)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), nil
 }
