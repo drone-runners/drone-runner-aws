@@ -427,7 +427,7 @@ func (p *config) getInstanceIP(i *compute.Instance) string {
 	network := i.NetworkInterfaces[0]
 	if p.privateIP {
 		instanceIP = network.NetworkIP
-	} else {
+	} else if len(network.AccessConfigs) > 0 {
 		instanceIP = network.AccessConfigs[0].NatIP
 	}
 	return instanceIP
