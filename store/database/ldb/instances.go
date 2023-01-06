@@ -13,23 +13,23 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-var _ store.InstanceStore = (*LevelDbStore)(nil)
+var _ store.InstanceStore = (*InstanceStore)(nil)
 
 const keyPrefix = "inst-"
 
-func NewInstanceStore(db *leveldb.DB) *LevelDbStore {
-	return &LevelDbStore{db}
+func NewInstanceStore(db *leveldb.DB) *InstanceStore {
+	return &InstanceStore{db}
 }
 
-type LevelDbStore struct {
+type InstanceStore struct {
 	db *leveldb.DB
 }
 
-func (s LevelDbStore) getKey(id string) string {
+func (s InstanceStore) getKey(id string) string {
 	return keyPrefix + id
 }
 
-func (s LevelDbStore) Find(_ context.Context, id string) (*types.Instance, error) {
+func (s InstanceStore) Find(_ context.Context, id string) (*types.Instance, error) {
 	key := s.getKey(id)
 	data, err := s.db.Get([]byte(key), nil)
 	if err != nil {
@@ -41,7 +41,7 @@ func (s LevelDbStore) Find(_ context.Context, id string) (*types.Instance, error
 	return dst, err
 }
 
-func (s LevelDbStore) List(_ context.Context, pool string, params *types.QueryParams) ([]*types.Instance, error) {
+func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryParams) ([]*types.Instance, error) {
 	instances := make([]*types.Instance, 0)
 
 	iter := s.db.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
@@ -73,16 +73,16 @@ func (s LevelDbStore) List(_ context.Context, pool string, params *types.QueryPa
 	return instances, nil
 }
 
-func (s LevelDbStore) Create(ctx context.Context, instance *types.Instance) error {
+func (s InstanceStore) Create(ctx context.Context, instance *types.Instance) error {
 	return s.Update(ctx, instance)
 }
 
-func (s LevelDbStore) Delete(ctx context.Context, id string) error {
+func (s InstanceStore) Delete(ctx context.Context, id string) error {
 	key := s.getKey(id)
 	return s.db.Delete([]byte(key), nil)
 }
 
-func (s LevelDbStore) Update(_ context.Context, instance *types.Instance) error {
+func (s InstanceStore) Update(_ context.Context, instance *types.Instance) error {
 	key := s.getKey(instance.ID)
 	var data bytes.Buffer
 	enc := gob.NewEncoder(&data)
@@ -93,11 +93,11 @@ func (s LevelDbStore) Update(_ context.Context, instance *types.Instance) error 
 	return s.db.Put([]byte(key), data.Bytes(), nil)
 }
 
-func (s LevelDbStore) Purge(ctx context.Context) error {
+func (s InstanceStore) Purge(ctx context.Context) error {
 	panic("implement me")
 }
 
-func (s LevelDbStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
+func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
 	if inst.Pool != pool {
 		return false
 	}

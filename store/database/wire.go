@@ -17,14 +17,14 @@ import (
 
 // WireSet provides a wire set for this package
 var WireSet = wire.NewSet(
-	ProvideSqlDatabase,
-	ProvideSqlInstanceStore,
+	ProvideSQLDatabase,
+	ProvideSQLInstanceStore,
 )
 
 const SingleInstance = "singleinstance"
 
-// ProvideSqlDatabase provides a database connection.
-func ProvideSqlDatabase(driver, datasource string) (*sqlx.DB, error) {
+// ProvideSQLDatabase provides a database connection.
+func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
 	switch driver {
 	case SingleInstance:
 		// use a single instance db, as we only need one machine
@@ -32,15 +32,15 @@ func ProvideSqlDatabase(driver, datasource string) (*sqlx.DB, error) {
 
 		return empty, nil
 	default:
-		return ConnectSql(
+		return ConnectSQL(
 			driver,
 			datasource,
 		)
 	}
 }
 
-// ProvideSqlInstanceStore provides an instance store.
-func ProvideSqlInstanceStore(db *sqlx.DB) store.InstanceStore {
+// ProvideSQLInstanceStore provides an instance store.
+func ProvideSQLInstanceStore(db *sqlx.DB) store.InstanceStore {
 	switch db.DriverName() {
 	case "postgres":
 		return sql.NewInstanceStore(db)
@@ -75,9 +75,9 @@ func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOw
 		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil
 	}
 
-	db, err := ProvideSqlDatabase(driver, datasource)
+	db, err := ProvideSQLDatabase(driver, datasource)
 	if err != nil {
 		return nil, nil, err
 	}
-	return ProvideSqlInstanceStore(db), ProvideSqlStageOwnerStore(db), nil
+	return ProvideSQLInstanceStore(db), ProvideSqlStageOwnerStore(db), nil
 }
