@@ -5,8 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
-	"math/rand"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -85,7 +84,9 @@ func (p *config) Ping(ctx context.Context) error {
 	return errors.New("could not create a client to the nomad server")
 }
 
-// Create a VM in the bare metal machine
+// Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
+// It is meant to be idempotent - any issues with any of the operations try their best to clean up
+// all created resources before returning back.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	val := opts.Arch
 	opts.Arch = "amd64"
@@ -115,7 +116,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Datacenters: []string{"dc1"},
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks: []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: vm}}}},
+				Networks:                  []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: vm}}}},
+				StopAfterClientDisconnect: durationToPtr(4 * time.Minute),
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -174,14 +176,18 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	logr.Debugln("nomad: submitting job to nomad")
 	_, _, err = p.client.Jobs().Register(job, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
 	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
-	j := pollForJob(jobID, p.client)
+	_, err = pollForJob(ctx, jobID, p.client, logr, 5*time.Minute, true) // TODO (Vistaar): validate this timeout
+	if err != nil {
+		// TODO (Vistaar): Handle cleanup in cases of partial execution of tasks here
+		return nil, err
+	}
 	logr.Debugln("nomad: job marked as finished")
 
 	// Get the allocation corresponding to this job submission
-	l, _, err := p.client.Jobs().Allocations(*j.ID, false, nil)
+	l, _, err := p.client.Jobs().Allocations(jobID, false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -198,13 +204,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
 	if err != nil {
-		fmt.Println("err: ", err)
+		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the init job")
 		return nil, err
 	}
 
-	fmt.Printf("node IP is: %s", n.HTTPAddr)
 	ip := strings.Split(n.HTTPAddr, ":")[0]
+	ip = "15.204.47.68"
+	if net.ParseIP(ip) == nil {
+		return nil, fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
+	}
 
+	// Not expected - if nomad is unable to find a port, it should not run the job at all.
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
 		return nil, errors.New("could not assign an available port as part of the job")
 	}
@@ -212,7 +222,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	liteEnginePort := alloc.Resources.Networks[0].DynamicPorts[0].Value
 	// sanity check
 	if liteEnginePort <= 0 || liteEnginePort > 65535 {
-		return nil, fmt.Errorf("port %d is not a valid port", liteEnginePort)
+		err := fmt.Errorf("nomad: port %d generated is not a valid port", liteEnginePort)
+		logr.Errorln(err)
+		return nil, err
 	}
 
 	logr.WithField("node_ip", ip).WithField("node_port", liteEnginePort).Traceln("nomad: successfully created instance")
@@ -258,7 +270,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			TaskGroups: []*api.TaskGroup{
 				{
 					RestartPolicy: &api.RestartPolicy{
-						Attempts: intToPtr(0),
+						Attempts: intToPtr(3),
 					},
 					Name:  stringToPtr("delete_vm_grp"),
 					Count: intToPtr(1),
@@ -274,12 +286,17 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					},
 				},
 			}}
-		_, _, err = p.client.Jobs().Register(job, nil)
+		_, _, err := p.client.Jobs().Register(job, nil)
 		if err != nil {
+			logr.WithError(err).Errorln("nomad: could not register destroy job")
 			return err
 		}
 		logr.Debugln("nomad: started polling for destroy job")
-		pollForJob(jobID, p.client)
+		_, err = pollForJob(ctx, jobID, p.client, logr, 10*time.Minute, true)
+		if err != nil {
+			logr.WithError(err).Errorln("nomad: could not complete destroy job")
+			return err
+		}
 		logr.Debugln("nomad: destroy task finished")
 	}
 	return nil
@@ -302,68 +319,65 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return "", nil
 }
 
-// Helper function to convert an int to a pointer to an int
-func intToPtr(i int) *int {
-	return &i
-}
-
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func random(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-// Helper function to convert an int to a pointer to an int
-func stringToPtr(i string) *string {
-	return &i
-}
-
-func pollForJob(id string, client *api.Client) *api.Job {
+// pollForJob polls on the status of the job and returns back once it is in a terminal state.
+// if remove is set to true, it deregisters the job in case it either exceeds the timeout or the context is marked as Done
+// it returns an error if the job did not reach the terminal state
+func pollForJob(ctx context.Context, id string, client *api.Client, logr logger.Logger, timeout time.Duration, remove bool) (*api.Job, error) {
+	maxPollTime := time.After(timeout)
 	var job *api.Job
 	var err error
-	// Poll for the response
+	var waitIndex uint64 = 0
+L:
 	for {
-		q := &api.QueryOptions{WaitTime: 5 * time.Minute}
-		// Get the job status
-		job, _, err = client.Jobs().Info(id, q)
-		if job == nil {
-			fmt.Println("job was nil.... continuing")
-			continue
-		}
-		fmt.Printf("job: %+v", job)
-		fmt.Printf("err: %+v", err)
-		fmt.Println("create index: ", *job.CreateIndex)
-		fmt.Println("job modify index: ", *job.JobModifyIndex)
-		fmt.Println("modify index: ", *job.ModifyIndex)
-		fmt.Println("job status: ", *job.Status)
-		if err != nil {
-			fmt.Println("error: ", err)
-			log.Fatal(err)
-		}
-		fmt.Printf("job is %+v", job)
+		select {
+		case <-ctx.Done():
+			break L
+		case <-maxPollTime:
+			break L
+		default:
+			q := &api.QueryOptions{WaitTime: 15 * time.Second, WaitIndex: waitIndex}
+			var qm *api.QueryMeta
+			// Get the job status
+			job, qm, err = client.Jobs().Info(id, q)
+			if job == nil {
+				continue
+			}
+			if err != nil {
+				logr.WithError(err).WithField("job_id", id).Error("could not retrieve job information")
+				continue
+			}
+			waitIndex = qm.LastIndex
 
-		// Check the job status
-		if *job.Status == "running" {
-			fmt.Println("Job is running")
-		} else if *job.Status == "pending" {
-			fmt.Println("job is pending")
-		} else if *job.Status == "failed" {
-			fmt.Println("Job failed")
-			break
-		} else if *job.Status == "dead" {
-			fmt.Println("Job is dead")
-			break
+			// Check the job status
+			if *job.Status == "running" {
+				logr.WithField("job_id", id).Traceln("job is running")
+			} else if *job.Status == "pending" {
+				logr.WithField("job_id", id).Traceln("job is in pending state")
+			} else if *job.Status == "dead" {
+				logr.WithField("job_id", id).Traceln("job is finished")
+				break L
+			}
 		}
 	}
-	return job
+	if job == nil {
+		logr.WithField("job_id", id).Errorln("could not poll for job")
+		return job, errors.New("could not poll for job")
+	}
+	if *job.Status == "running" || *job.Status == "pending" {
+		// Kill the job as it has reached its timeout and still not completed.
+		// Nomad does not offer a way to set a max runtime on jobs: https://github.com/hashicorp/nomad/issues/1782
+		if !remove {
+			return job, errors.New("job never reached terminal state")
+		}
+		_, _, err = client.Jobs().Deregister(id, true, &api.WriteOptions{})
+		if err != nil {
+			logr.WithField("job_id", id).WithError(err).Errorln("job timed out but could still not be deregistered")
+		} else {
+			logr.WithField("job_id", id).Infoln("successfully deregistered long running job")
+		}
+		return job, fmt.Errorf("job never reached terminal status, deregister error: %s", err)
+	}
+	return job, nil
 }
 
 func generateStartupScript(opts *types.InstanceCreateOpts) string {
