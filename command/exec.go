@@ -132,12 +132,10 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		return err
 	}
 	// use a single instance db, as we only need one machine
-	db, err := database.ProvideDatabase(database.SingleInstance, "")
+	store, _, err := database.ProvideStore(database.SingleInstance, "")
 	if err != nil {
-		logrus.WithError(err).
-			Fatalln("Unable to start the database")
+		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
-	store := database.ProvideInstanceStore(db)
 
 	envConfig.Settings.LiteEnginePath = c.LiteEngineURL
 	envConfig.Runner.Name = runnerName

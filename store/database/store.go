@@ -10,13 +10,12 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"           // required for postgres
 	_ "github.com/mattn/go-sqlite3" // required for sqlite3
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
-// Connect to a database and verify with a ping.
-func Connect(driver, datasource string) (*sqlx.DB, error) {
+// ConnectSql to a database and verify with a ping.
+func ConnectSql(driver, datasource string) (*sqlx.DB, error) {
 	db, err := sql.Open(driver, datasource)
 	if err != nil {
 		return nil, err
@@ -29,10 +28,6 @@ func Connect(driver, datasource string) (*sqlx.DB, error) {
 		return nil, err
 	}
 	return dbx, nil
-}
-
-func ConnectLevelDb(datasource string) {
-	leveldb.OpenFile(datasource, nil)
 }
 
 // Must is a helper function that wraps a call to Connect

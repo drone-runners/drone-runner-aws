@@ -6,8 +6,10 @@ package database
 
 import (
 	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/store/database/ldb"
 	"github.com/drone-runners/drone-runner-aws/store/database/sql"
 	"github.com/drone-runners/drone-runner-aws/store/singleinstance"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/google/wire"
 	"github.com/jmoiron/sqlx"
@@ -15,14 +17,14 @@ import (
 
 // WireSet provides a wire set for this package
 var WireSet = wire.NewSet(
-	ProvideDatabase,
-	ProvideInstanceStore,
+	ProvideSqlDatabase,
+	ProvideSqlInstanceStore,
 )
 
 const SingleInstance = "singleinstance"
 
-// ProvideDatabase provides a database connection.
-func ProvideDatabase(driver, datasource string) (*sqlx.DB, error) {
+// ProvideSqlDatabase provides a database connection.
+func ProvideSqlDatabase(driver, datasource string) (*sqlx.DB, error) {
 	switch driver {
 	case SingleInstance:
 		// use a single instance db, as we only need one machine
@@ -30,15 +32,15 @@ func ProvideDatabase(driver, datasource string) (*sqlx.DB, error) {
 
 		return empty, nil
 	default:
-		return Connect(
+		return ConnectSql(
 			driver,
 			datasource,
 		)
 	}
 }
 
-// ProvideInstanceStore provides an instance store.
-func ProvideInstanceStore(db *sqlx.DB) store.InstanceStore {
+// ProvideSqlInstanceStore provides an instance store.
+func ProvideSqlInstanceStore(db *sqlx.DB) store.InstanceStore {
 	switch db.DriverName() {
 	case "postgres":
 		return sql.NewInstanceStore(db)
@@ -53,7 +55,7 @@ func ProvideInstanceStore(db *sqlx.DB) store.InstanceStore {
 }
 
 // ProvideInstanceStore provides an instance store.
-func ProvideStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
+func ProvideSqlStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	switch db.DriverName() {
 	case "postgres":
 		return sql.NewStageOwnerStore(db)
@@ -62,4 +64,20 @@ func ProvideStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 			sql.NewStageOwnerStore(db),
 		)
 	}
+}
+
+func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, error) {
+	if driver == "leveldb" {
+		db, err := leveldb.OpenFile(datasource, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil
+	}
+
+	db, err := ProvideSqlDatabase(driver, datasource)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ProvideSqlInstanceStore(db), ProvideSqlStageOwnerStore(db), nil
 }

@@ -101,12 +101,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 							for Digital Ocean --digital-ocean-pat
 							for Google        --google-project-id`)
 	}
-	// use a single instance db, as we only need one machine
-	db, err := database.ProvideDatabase(database.SingleInstance, "")
-	if err != nil {
-		logrus.WithError(err).
-			Fatalln("Unable to setup single instance database")
-	}
+
 	// setup the global logrus logger.
 	setupLogger(&env)
 
@@ -134,7 +129,12 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 		),
 	)
 
-	store := database.ProvideInstanceStore(db)
+	// use a single instance db, as we only need one machine
+	store, _, err := database.ProvideStore(database.SingleInstance, "")
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+	}
+
 	poolManager := drivers.New(ctx, store, &env)
 
 	configPool, confErr := poolfile.ConfigPoolFile("", &env)

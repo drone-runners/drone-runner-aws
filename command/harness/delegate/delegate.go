@@ -76,11 +76,6 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.env = env
 	// setup the global logrus logger.
 	harness.SetupLogger(&c.env)
-	db, err := database.ProvideDatabase(c.env.Database.Driver, c.env.Database.Datasource)
-	if err != nil {
-		logrus.WithError(err).
-			Fatalln("Unable to start the database")
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -90,8 +85,12 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	instanceStore := database.ProvideInstanceStore(db)
-	c.stageOwnerStore = database.ProvideStageOwnerStore(db)
+	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+	}
+
+	c.stageOwnerStore = stageOwnerStore
 	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
 
 	_, err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)

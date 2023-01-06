@@ -17,7 +17,7 @@ var _ store.InstanceStore = (*LevelDbStore)(nil)
 
 const keyPrefix = "inst-"
 
-func NewLevelDbStore(db *leveldb.DB) *LevelDbStore {
+func NewInstanceStore(db *leveldb.DB) *LevelDbStore {
 	return &LevelDbStore{db}
 }
 

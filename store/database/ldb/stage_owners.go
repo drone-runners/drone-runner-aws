@@ -15,7 +15,7 @@ var _ store.StageOwnerStore = (*LdbStageOwnerStore)(nil)
 
 const ssKeyPrefix = "stage-owner-"
 
-func NewLdbStageOwnerStore(db *leveldb.DB) *LdbStageOwnerStore {
+func NewStageOwnerStore(db *leveldb.DB) *LdbStageOwnerStore {
 	return &LdbStageOwnerStore{db}
 }
 
