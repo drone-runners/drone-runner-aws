@@ -54,6 +54,7 @@ func (c *command) run(*kingpin.ParseContext) error {
 				fail = true
 				logrus.WithError(err).WithField("id", id).Infoln("pipeline run failed")
 			}
+			wg.Done()
 		}()
 	}
 	wg.Wait()
