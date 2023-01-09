@@ -163,6 +163,7 @@ type (
 		Zone         []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
 		Labels       map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 		Scopes       []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
+		Hibernate    bool              `json:"hibernate,omitempty"`
 	}
 
 	GoogleAccount struct {

@@ -598,10 +598,6 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if pool.Driver.DriverName() != string(types.Amazon) {
-		return nil
-	}
-
 	if !pool.Driver.CanHibernate() {
 		return nil
 	}

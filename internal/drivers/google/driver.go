@@ -60,6 +60,7 @@ type config struct {
 	// vm instance data
 	diskSize            int64
 	diskType            string
+	hibernate           bool
 	image               string
 	network             string
 	noServiceAccount    bool
@@ -119,7 +120,7 @@ func (p *config) InstanceType() string {
 }
 
 func (p *config) CanHibernate() bool {
-	return false
+	return p.hibernate
 }
 
 func (p *config) Logs(ctx context.Context, instance string) (string, error) {
@@ -353,17 +354,94 @@ func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error)
 	return
 }
 
-func (p *config) Hibernate(_ context.Context, _, _ string) error {
-	return errors.New("unimplemented")
+func (p *config) Hibernate(ctx context.Context, instanceID, _ string) error {
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceID).
+		WithField("cloud", types.Google)
+
+	zone, err := p.findInstanceZone(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+
+	op, err := p.suspendInstance(ctx, p.projectID, zone, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("google: failed to suspend VM")
+		return err
+	}
+
+	err = p.waitZoneOperation(ctx, op.Name, zone)
+	if err != nil {
+		logr.WithError(err).Errorln("instance suspend operation failed")
+		return err
+	}
+	return nil
 }
 
-func (p *config) Start(_ context.Context, _, _ string) (string, error) {
-	return "", errors.New("unimplemented")
+func (p *config) Start(ctx context.Context, instanceID, _ string) (string, error) {
+	logr := logger.FromContext(ctx).
+		WithField("id", instanceID).
+		WithField("cloud", types.Google)
+
+	zone, err := p.findInstanceZone(ctx, instanceID)
+	if err != nil {
+		return "", err
+	}
+
+	vm, err := p.getInstance(ctx, p.projectID, zone, instanceID)
+	if err != nil {
+		return "", err
+	}
+	if vm.Status != "SUSPENDED" {
+		return p.getInstanceIP(vm), nil
+	}
+
+	op, err := p.resumeInstance(ctx, p.projectID, zone, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("google: failed to suspend VM")
+		return "", err
+	}
+
+	err = p.waitZoneOperation(ctx, op.Name, zone)
+	if err != nil {
+		logr.WithError(err).Errorln("google: instance suspend operation failed")
+		return "", err
+	}
+
+	vm, err = p.getInstance(ctx, p.projectID, zone, instanceID)
+	if err != nil {
+		logr.WithError(err).Errorln("google: failed to retrieve instance data")
+		return "", err
+	}
+	return p.getInstanceIP(vm), nil
 }
 
 func (p *config) getInstance(ctx context.Context, projectID, zone, name string) (*compute.Instance, error) {
 	return retry(ctx, getRetries, secSleep, func() (*compute.Instance, error) {
 		return p.service.Instances.Get(projectID, zone, name).Context(ctx).Do()
+	})
+}
+
+func (p *config) getInstanceIP(i *compute.Instance) string {
+	instanceIP := ""
+	network := i.NetworkInterfaces[0]
+	if p.privateIP {
+		instanceIP = network.NetworkIP
+	} else if len(network.AccessConfigs) > 0 {
+		instanceIP = network.AccessConfigs[0].NatIP
+	}
+	return instanceIP
+}
+
+func (p *config) suspendInstance(ctx context.Context, projectID, zone, name string) (*compute.Operation, error) {
+	return retry(ctx, getRetries, secSleep, func() (*compute.Operation, error) {
+		return p.service.Instances.Suspend(projectID, zone, name).Context(ctx).Do()
+	})
+}
+
+func (p *config) resumeInstance(ctx context.Context, projectID, zone, name string) (*compute.Operation, error) {
+	return retry(ctx, getRetries, secSleep, func() (*compute.Operation, error) {
+		return p.service.Instances.Resume(projectID, zone, name).Context(ctx).Do()
 	})
 }
 
