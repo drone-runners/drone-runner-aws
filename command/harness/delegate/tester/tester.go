@@ -2,7 +2,9 @@ package tester
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
@@ -17,7 +19,7 @@ import (
 type command struct {
 	envFile string
 	pool    string
-	scale   int64
+	scale   int
 }
 
 func Register(app *kingpin.Application) {
@@ -30,7 +32,7 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("pool", "pool name").
 		StringVar(&c.pool)
 	cmd.Flag("scale", "number of parallel builds to run").
-		Int64Var(&c.scale)
+		IntVar(&c.scale)
 }
 
 func (c *command) run(*kingpin.ParseContext) error {
@@ -41,17 +43,34 @@ func (c *command) run(*kingpin.ParseContext) error {
 			Warnf("delegate: failed to load environment variables from file: %s", c.envFile)
 	}
 
-	return c.runPipeline()
+	var wg sync.WaitGroup
+	fail := false
+	for i := 0; i < c.scale; i++ {
+		wg.Add(1)
+
+		go func() {
+			id := uuid.NewString()
+			if err := c.runPipeline(id); err != nil {
+				fail = true
+				logrus.WithError(err).WithField("id", id).Infoln("pipeline run failed")
+			}
+		}()
+	}
+	wg.Wait()
+
+	if fail {
+		return fmt.Errorf("scale test failed")
+	}
+	return nil
 }
 
-func (c *command) runPipeline() error {
+func (c *command) runPipeline(id string) error {
 	client := &HTTPClient{
 		Client:   &http.Client{Timeout: time.Duration(1000) * time.Second},
 		Endpoint: "http://127.0.0.1:3000",
 	}
 	ctx := context.Background()
 
-	id := uuid.NewString()
 	mount := false
 	// setup the stage
 	setupIn := &harness.SetupVMRequest{
