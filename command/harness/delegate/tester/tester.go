@@ -48,14 +48,14 @@ func (c *command) run(*kingpin.ParseContext) error {
 	for i := 0; i < c.scale; i++ {
 		wg.Add(1)
 
-		go func() {
-			id := uuid.NewString()
+		go func(i int) {
+			id := fmt.Sprint(i)
 			if err := c.runPipeline(id); err != nil {
 				fail = true
 				logrus.WithError(err).WithField("id", id).Infoln("pipeline run failed")
 			}
 			wg.Done()
-		}()
+		}(i)
 	}
 	wg.Wait()
 
@@ -81,9 +81,11 @@ func (c *command) runPipeline(id string) error {
 			MountDockerSocket: &mount,
 		},
 	}
+	logrus.WithField("id", id).Infoln("Starting vm setup")
 	if _, err := client.Setup(ctx, setupIn); err != nil {
 		return errors.Wrap(err, "vm setup failed")
 	}
+	logrus.WithField("id", id).Infoln("Completed vm setup")
 
 	// run a command on host
 	runIn := &harness.ExecuteVMRequest{
@@ -98,17 +100,23 @@ func (c *command) runPipeline(id string) error {
 			},
 		},
 	}
+	logrus.WithField("id", id).Infoln("Starting execute step")
 	if _, err := client.Step(ctx, runIn); err != nil {
 		return errors.Wrap(err, "execute step failed")
 	}
+	logrus.WithField("id", id).Infoln("Completed execute step")
 
 	// cleanup
 	cleanupIn := &CleanupRequest{
 		PoolID: c.pool,
 		ID:     id,
 	}
+
+	logrus.WithField("id", id).Infoln("Starting vm cleanup")
 	if err := client.Destroy(ctx, cleanupIn); err != nil {
 		return errors.Wrap(err, "vm clean failed")
 	}
+	logrus.WithField("id", id).Infoln("Completed vm cleanup")
+
 	return nil
 }
