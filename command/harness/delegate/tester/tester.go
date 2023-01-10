@@ -20,6 +20,22 @@ type command struct {
 	envFile string
 	pool    string
 	scale   int
+	loop    int
+}
+
+var netClient = &HTTPClient{}
+
+func init() {
+	tr := &http.Transport{
+		MaxIdleConns:        2000,
+		MaxIdleConnsPerHost: 2000,
+	}
+	netClient = &HTTPClient{
+		Client: &http.Client{
+			Transport: tr,
+			Timeout:   time.Duration(1000) * time.Second},
+		Endpoint: "http://127.0.0.1:3000",
+	}
 }
 
 func Register(app *kingpin.Application) {
@@ -33,6 +49,8 @@ func Register(app *kingpin.Application) {
 		StringVar(&c.pool)
 	cmd.Flag("scale", "number of parallel builds to run").
 		IntVar(&c.scale)
+	cmd.Flag("loop", "number of times to run the test").
+		IntVar(&c.loop)
 }
 
 func (c *command) run(*kingpin.ParseContext) error {
@@ -43,6 +61,19 @@ func (c *command) run(*kingpin.ParseContext) error {
 			Warnf("delegate: failed to load environment variables from file: %s", c.envFile)
 	}
 
+	if c.loop == 0 {
+		c.loop = 1
+	}
+
+	for i := 0; i < c.loop; i++ {
+		if err := c.scaleTest(i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *command) scaleTest(loopIdx int) error {
 	var wg sync.WaitGroup
 	fail := false
 	for i := 0; i < c.scale; i++ {
@@ -55,7 +86,7 @@ func (c *command) run(*kingpin.ParseContext) error {
 				logrus.WithError(err).WithField("id", id).Infoln("pipeline run failed")
 			}
 			wg.Done()
-		}(i)
+		}(i + c.scale*loopIdx)
 	}
 	wg.Wait()
 
@@ -66,15 +97,7 @@ func (c *command) run(*kingpin.ParseContext) error {
 }
 
 func (c *command) runPipeline(id string) error {
-	client := &HTTPClient{
-		Client: &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        20,
-				MaxIdleConnsPerHost: 20,
-			},
-			Timeout: time.Duration(1000) * time.Second},
-		Endpoint: "http://127.0.0.1:3000",
-	}
+	client := netClient
 	ctx := context.Background()
 
 	mount := false
