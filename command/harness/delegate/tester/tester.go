@@ -67,7 +67,12 @@ func (c *command) run(*kingpin.ParseContext) error {
 
 func (c *command) runPipeline(id string) error {
 	client := &HTTPClient{
-		Client:   &http.Client{Timeout: time.Duration(1000) * time.Second},
+		Client: &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:        20,
+				MaxIdleConnsPerHost: 20,
+			},
+			Timeout: time.Duration(1000) * time.Second},
 		Endpoint: "http://127.0.0.1:3000",
 	}
 	ctx := context.Background()
