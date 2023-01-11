@@ -17,7 +17,7 @@ fi
 
 if [[ ! -z "${DRONE_NETRC_MACHINE}" ]]; then
 	cat <<EOF > ${HOME}/.netrc
-machine ${DRONE_NETRC_MACHINE}s
+machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
