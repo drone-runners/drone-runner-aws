@@ -17,10 +17,11 @@ fi
 
 if [[ ! -z "${DRONE_NETRC_MACHINE}" ]]; then
 	cat <<EOF > ${HOME}/.netrc
-machine ${DRONE_NETRC_MACHINE}
+machine ${DRONE_NETRC_MACHINE}s
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
+chmod 600 ${HOME}/.netrc
 fi
 
 # if the ssh_key environment variable exists, write
