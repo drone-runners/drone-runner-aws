@@ -16,6 +16,10 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+const (
+	clientTimeoutSecs = 1000
+)
+
 type command struct {
 	envFile string
 	pool    string
@@ -25,7 +29,7 @@ type command struct {
 
 var netClient = &HTTPClient{}
 
-func init() {
+func init() { //nolint:gochecknoinits
 	tr := &http.Transport{
 		MaxIdleConns:        2000,
 		MaxIdleConnsPerHost: 2000,
@@ -33,7 +37,7 @@ func init() {
 	netClient = &HTTPClient{
 		Client: &http.Client{
 			Transport: tr,
-			Timeout:   time.Duration(1000) * time.Second},
+			Timeout:   time.Duration(clientTimeoutSecs) * time.Second},
 		Endpoint: "http://127.0.0.1:3000",
 	}
 }
