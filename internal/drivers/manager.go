@@ -335,24 +335,23 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName string, en
 
 		inst, err = m.instanceStore.Find(ctx, inst.ID)
 		if err != nil {
-			pool.Unlock()
 			pool.getInstanceLock(inst.ID).Unlock()
+			pool.Unlock()
 			return nil, fmt.Errorf("provision: failed to find instance in %q store: %w", inst.ID, err)
 		}
 	}
 	inst.State = types.StateInUse
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
-		pool.Unlock()
 		if pool.Driver.CanHibernate() {
 			pool.getInstanceLock(inst.ID).Unlock()
 		}
+		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 
 	if pool.Driver.CanHibernate() {
-		l := pool.getInstanceLock(inst.ID)
-		l.Unlock()
+		pool.getInstanceLock(inst.ID).Unlock()
 	}
 	pool.Unlock()
 
