@@ -38,6 +38,9 @@ type (
 	poolEntry struct {
 		sync.Mutex
 		Pool
+
+		LockByInstance map[string]*sync.Mutex
+		InstLock       sync.Mutex
 	}
 )
 
@@ -173,8 +176,10 @@ func (m *Manager) Add(pools ...Pool) error {
 		}
 
 		m.poolMap[name] = &poolEntry{
-			Mutex: sync.Mutex{},
-			Pool:  pools[i],
+			Mutex:          sync.Mutex{},
+			Pool:           pools[i],
+			LockByInstance: make(map[string]*sync.Mutex),
+			InstLock:       sync.Mutex{},
 		}
 	}
 
@@ -324,11 +329,30 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName string, en
 	})
 
 	inst := free[0]
+
+	if pool.Driver.CanHibernate() {
+		pool.getInstanceLock(inst.ID).Lock()
+
+		inst, err = m.instanceStore.Find(ctx, inst.ID)
+		if err != nil {
+			pool.Unlock()
+			pool.getInstanceLock(inst.ID).Unlock()
+			return nil, fmt.Errorf("provision: failed to find instance in %q store: %w", inst.ID, err)
+		}
+	}
 	inst.State = types.StateInUse
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
 		pool.Unlock()
+		if pool.Driver.CanHibernate() {
+			pool.getInstanceLock(inst.ID).Unlock()
+		}
 		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+	}
+
+	if pool.Driver.CanHibernate() {
+		l := pool.getInstanceLock(inst.ID)
+		l.Unlock()
 	}
 	pool.Unlock()
 
@@ -347,6 +371,8 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 	if pool == nil {
 		return fmt.Errorf("provision: pool name %q not found", poolName)
 	}
+
+	defer pool.deleteInstanceLock(instanceID)
 
 	err := pool.Driver.Destroy(ctx, instanceID)
 	if err != nil {
@@ -628,8 +654,9 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 }
 
 func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, pool *poolEntry) error {
-	pool.Lock()
-	defer pool.Unlock()
+	l := pool.getInstanceLock(instanceID)
+	l.Lock()
+	defer l.Unlock()
 
 	inst, err := m.Find(ctx, instanceID)
 	if err != nil {
@@ -711,4 +738,21 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID stri
 	}
 
 	return nil
+}
+
+func (p *poolEntry) getInstanceLock(instanceID string) *sync.Mutex {
+	p.InstLock.Lock()
+	defer p.InstLock.Unlock()
+
+	if l, ok := p.LockByInstance[instanceID]; ok {
+		return l
+	}
+
+	l1 := &sync.Mutex{}
+	p.LockByInstance[instanceID] = l1
+	return l1
+}
+
+func (p *poolEntry) deleteInstanceLock(instanceID string) {
+	delete(p.LockByInstance, instanceID)
 }
