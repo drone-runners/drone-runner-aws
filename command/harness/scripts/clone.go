@@ -21,6 +21,7 @@ machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
+chmod 600 ${HOME}/.netrc
 fi
 
 # if the ssh_key environment variable exists, write
