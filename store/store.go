@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/types"
 )
 
 type InstanceStore interface {

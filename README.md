@@ -1,6 +1,6 @@
 # AWS Runner
 
-[![Build Status](https://harness.drone.io/api/badges/drone-runners/drone-runner-aws/status.svg)](https://harness.drone.io/drone-runners/drone-runner-aws)
+[![Build Status](https://harness.drone.io/api/badges/drone-runners/drone-runner-vm/status.svg)](https://harness.drone.io/drone-runners/drone-runner-vm)
 
 This runner provisions instances in various clouds for both mac, windows and Linux. It also sets up the lite-engine and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Pools of hot swappable EC2 instances are created on startup of the runner to improve build spin up time.
 
@@ -29,19 +29,19 @@ This runner was initially designed in the following [proposal](https://github.co
 1. Build the mac binary version of the runner.
 
     ```bash
-    CGO_ENABLED=1 go build -o drone-runner-aws-darwin-amd64
+    CGO_ENABLED=1 go build -o drone-runner-vm-darwin-amd64
     ```
 
 2. Run the exec command to test the runner. The pool name must be `macpool`.
 
     ```bash
-    drone-runner-aws-darwin-amd64 exec test_files/compiler/drone_mac.yml --pool pool.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
+    drone-runner-vm-darwin-amd64 exec test_files/compiler/drone_mac.yml --pool pool.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     ```
 
 ### Run the changelog generator
 
 ```BASH
-docker run -it --rm -v "$(pwd)":/usr/local/src/your-app githubchangeloggenerator/github-changelog-generator -u drone-runners -p drone-runner-aws -t <secret github token>
+docker run -it --rm -v "$(pwd)":/usr/local/src/your-app githubchangeloggenerator/github-changelog-generator -u drone-runners -p drone-runner-vm -t <secret github token>
 ```
 
 You can generate a token by logging into your GitHub account and going to Settings -> Personal access tokens.
@@ -51,7 +51,7 @@ Next we tag the PR's with the fixes or enhancements labels. If the PR does not f
 Run the changelog generator again with the future version according to semver.
 
 ```BASH
-docker run -it --rm -v "$(pwd)":/usr/local/src/your-app githubchangeloggenerator/github-changelog-generator -u drone-runners -p drone-runner-aws -t <secret token> --future-release v1.0.0
+docker run -it --rm -v "$(pwd)":/usr/local/src/your-app githubchangeloggenerator/github-changelog-generator -u drone-runners -p drone-runner-vm -t <secret token> --future-release v1.0.0
 ```
 
 Create your pull request for the release. Get it merged then tag the release.

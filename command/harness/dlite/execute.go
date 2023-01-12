@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/drone-runners/drone-runner-vm/command/harness"
 	"github.com/harness/lite-engine/api"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"

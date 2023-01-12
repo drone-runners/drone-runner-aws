@@ -3,9 +3,9 @@ package lehelper
 import (
 	"fmt"
 
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/internal/cloudinit"
+	"github.com/drone-runners/drone-runner-vm/internal/oshelp"
+	"github.com/drone-runners/drone-runner-vm/types"
 	lehttp "github.com/harness/lite-engine/cli/client"
 )
 

@@ -1,4 +1,4 @@
-module github.com/drone-runners/drone-runner-aws
+module github.com/drone-runners/drone-runner-vm
 
 go 1.19
 

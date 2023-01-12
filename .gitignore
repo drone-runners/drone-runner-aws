@@ -1,6 +1,6 @@
 .idea
-drone-runner-aws
-drone-runner-aws.exe
+drone-runner-vm
+drone-runner-vm.exe
 release/*
 .env
 .vscode/

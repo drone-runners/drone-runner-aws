@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/types"
 )
 
 var ErrorNoInstanceAvailable = errors.New("no free instances available")

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-vm/internal/oshelp"
 )
 
 const (

@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
+	"github.com/drone-runners/drone-runner-vm/command/harness/scripts"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	errors "github.com/drone-runners/drone-runner-aws/internal/types"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/command/config"
+	"github.com/drone-runners/drone-runner-vm/engine/resource"
+	"github.com/drone-runners/drone-runner-vm/internal/drivers"
+	"github.com/drone-runners/drone-runner-vm/internal/lehelper"
+	"github.com/drone-runners/drone-runner-vm/internal/oshelp"
+	errors "github.com/drone-runners/drone-runner-vm/internal/types"
+	"github.com/drone-runners/drone-runner-vm/types"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 

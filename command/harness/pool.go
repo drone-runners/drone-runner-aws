@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-vm/command/config"
+	"github.com/drone-runners/drone-runner-vm/internal/drivers"
+	"github.com/drone-runners/drone-runner-vm/internal/poolfile"
 	"github.com/sirupsen/logrus"
 )
 

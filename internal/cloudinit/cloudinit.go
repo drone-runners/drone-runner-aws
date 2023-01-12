@@ -14,8 +14,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/internal/oshelp"
+	"github.com/drone-runners/drone-runner-vm/types"
 )
 
 // Params defines parameters used to create userdata files.

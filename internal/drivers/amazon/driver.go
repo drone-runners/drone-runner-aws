@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/internal/drivers"
+	"github.com/drone-runners/drone-runner-vm/internal/lehelper"
+	itypes "github.com/drone-runners/drone-runner-vm/internal/types"
+	"github.com/drone-runners/drone-runner-vm/types"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/aws/aws-sdk-go/aws"

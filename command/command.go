@@ -8,10 +8,10 @@ import (
 	"context"
 	"os"
 
-	"github.com/drone-runners/drone-runner-aws/command/daemon"
-	"github.com/drone-runners/drone-runner-aws/command/harness/delegate"
-	"github.com/drone-runners/drone-runner-aws/command/harness/dlite"
-	"github.com/drone-runners/drone-runner-aws/command/setup"
+	"github.com/drone-runners/drone-runner-vm/command/daemon"
+	"github.com/drone-runners/drone-runner-vm/command/harness/delegate"
+	"github.com/drone-runners/drone-runner-vm/command/harness/dlite"
+	"github.com/drone-runners/drone-runner-vm/command/setup"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 )

@@ -8,10 +8,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers/amazon"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/engine/resource"
+	"github.com/drone-runners/drone-runner-vm/internal/drivers"
+	"github.com/drone-runners/drone-runner-vm/internal/drivers/amazon"
+	"github.com/drone-runners/drone-runner-vm/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/manifest"
 )

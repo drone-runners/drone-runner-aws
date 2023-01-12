@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/internal/oshelp"
+	"github.com/drone-runners/drone-runner-vm/types"
 )
 
 func TestSetPlatformDefaults(t *testing.T) {

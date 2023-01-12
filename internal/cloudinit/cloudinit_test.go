@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/internal/cloudinit"
+	"github.com/drone-runners/drone-runner-vm/types"
 )
 
 const (

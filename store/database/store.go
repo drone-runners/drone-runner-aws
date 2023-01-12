@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/store/database/migrate"
+	"github.com/drone-runners/drone-runner-vm/store/database/migrate"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"

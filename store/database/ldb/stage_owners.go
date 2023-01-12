@@ -6,8 +6,8 @@ import (
 	"encoding/gob"
 	"fmt"
 
-	"github.com/drone-runners/drone-runner-aws/store"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/store"
+	"github.com/drone-runners/drone-runner-vm/types"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/drone-runners/drone-runner-vm/command/harness"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/httphelper"

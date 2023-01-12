@@ -5,7 +5,7 @@
 package resource
 
 import (
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/types"
 	"github.com/drone/runner-go/manifest"
 )
 

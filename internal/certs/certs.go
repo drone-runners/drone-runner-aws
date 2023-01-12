@@ -3,7 +3,7 @@ package certs
 import (
 	"fmt"
 
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/types"
 
 	"github.com/harness/lite-engine/cli/certs"
 )

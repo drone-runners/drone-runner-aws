@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/internal/drivers"
+	"github.com/drone-runners/drone-runner-vm/internal/lehelper"
+	"github.com/drone-runners/drone-runner-vm/types"
 	"github.com/drone/runner-go/logger"
 
 	"github.com/dchest/uniuri"

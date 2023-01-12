@@ -3,8 +3,8 @@ package sql
 import (
 	"context"
 
-	"github.com/drone-runners/drone-runner-aws/store"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/store"
+	"github.com/drone-runners/drone-runner-vm/types"
 
 	"github.com/jmoiron/sqlx"
 )

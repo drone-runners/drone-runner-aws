@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"os"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-vm/command/config"
 	"github.com/drone/runner-go/logger"
 	"github.com/sirupsen/logrus"
 )

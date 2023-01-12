@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/drone-runners/drone-runner-aws/engine"
-	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/encoder"
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-vm/engine"
+	"github.com/drone-runners/drone-runner-vm/engine/resource"
+	"github.com/drone-runners/drone-runner-vm/internal/drivers"
+	"github.com/drone-runners/drone-runner-vm/internal/encoder"
+	"github.com/drone-runners/drone-runner-vm/internal/oshelp"
 	"github.com/drone/drone-go/drone"
 
 	"github.com/drone/runner-go/clone"

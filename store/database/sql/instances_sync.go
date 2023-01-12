@@ -3,10 +3,10 @@ package sql
 import (
 	"context"
 
-	"github.com/drone-runners/drone-runner-aws/store/database/mutex"
+	"github.com/drone-runners/drone-runner-vm/store/database/mutex"
 
-	"github.com/drone-runners/drone-runner-aws/store"
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/store"
+	"github.com/drone-runners/drone-runner-vm/types"
 )
 
 var _ store.InstanceStore = (*InstanceStoreSync)(nil)

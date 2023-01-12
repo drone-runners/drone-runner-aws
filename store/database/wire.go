@@ -5,10 +5,10 @@
 package database
 
 import (
-	"github.com/drone-runners/drone-runner-aws/store"
-	"github.com/drone-runners/drone-runner-aws/store/database/ldb"
-	"github.com/drone-runners/drone-runner-aws/store/database/sql"
-	"github.com/drone-runners/drone-runner-aws/store/singleinstance"
+	"github.com/drone-runners/drone-runner-vm/store"
+	"github.com/drone-runners/drone-runner-vm/store/database/ldb"
+	"github.com/drone-runners/drone-runner-vm/store/database/sql"
+	"github.com/drone-runners/drone-runner-vm/store/singleinstance"
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/google/wire"

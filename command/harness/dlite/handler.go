@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/drone-runners/drone-runner-vm/command/harness"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/wings-software/dlite/client"

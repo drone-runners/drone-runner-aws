@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone-runners/drone-runner-vm/types"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
