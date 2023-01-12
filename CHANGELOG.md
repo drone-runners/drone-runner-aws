@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-rc27](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc27) (2023-01-02)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc26...v1.0.0-rc27)
+
+**Fixed bugs:**
+
+- \(bug\) ssh Mac clone can't not write to ssh known hosts [\#219](https://github.com/drone-runners/drone-runner-aws/pull/219) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
 ## [v1.0.0-rc26](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc26) (2022-12-16)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc25...v1.0.0-rc26)
