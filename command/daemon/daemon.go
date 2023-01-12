@@ -103,7 +103,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 
 	poolManager := drivers.New(ctx, store, &env)
 
-	logrus.Infoln(fmt.Sprintf("Loeading pool file '%s'", c.poolFile))
+	logrus.Infoln(fmt.Sprintf("Loading pool file '%s'", c.poolFile))
 	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)
 	if confErr != nil {
 		logrus.WithError(confErr).

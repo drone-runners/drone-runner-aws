@@ -83,7 +83,6 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	logr = logr.
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
-
 	// now we have an instance, put the information in the spec
 	spec.CloudInstance.PoolName = poolName
 	spec.CloudInstance.ID = instance.ID
