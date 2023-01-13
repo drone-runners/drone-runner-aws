@@ -644,15 +644,14 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 		return nil
 	}
 	inst.State = types.StateHibernating
-	if err := m.instanceStore.Update(ctx, inst); err != nil {
+	if err = m.instanceStore.Update(ctx, inst); err != nil {
 		pool.Unlock()
 		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
 	}
 	pool.Unlock()
 
 	logrus.WithField("instanceID", instanceID).Infoln("Hibernating vm")
-	err = pool.Driver.Hibernate(ctx, instanceID, poolName)
-	if err != nil {
+	if err = pool.Driver.Hibernate(ctx, instanceID, poolName); err != nil {
 		if uerr := m.updateInstState(ctx, pool, instanceID, types.StateCreated); uerr != nil {
 			logrus.WithError(err).WithField("instanceID", instanceID).Errorln("failed to update state for failed hibernation")
 		}
@@ -660,15 +659,14 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 	}
 
 	pool.Lock()
-	inst, err = m.Find(ctx, instanceID)
-	if err != nil {
+	if inst, err = m.Find(ctx, instanceID); err != nil {
 		pool.Unlock()
 		return fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
 	}
 
 	inst.IsHibernated = true
 	inst.State = types.StateCreated
-	if err := m.instanceStore.Update(ctx, inst); err != nil {
+	if err = m.instanceStore.Update(ctx, inst); err != nil {
 		pool.Unlock()
 		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
 	}
