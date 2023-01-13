@@ -191,6 +191,11 @@ type (
 		RootDirectory string `json:"root_directory,omitempty" yaml:"root_directory"`
 	}
 
+	// Noop specifies the configuration for a Noop instance.
+	Noop struct {
+		Hibernate bool `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
+	}
+
 	// disk provides disk size and type.
 	disk struct {
 		Size int64  `json:"size,omitempty" yaml:"size,omitempty"`
@@ -290,7 +295,7 @@ type EnvConfig struct {
 		MaxPoolSize          int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool       bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		HarnessTestBinaryURI string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.1.4-alpha"`
+		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.1.5-alpha"`
 	}
 
 	Server struct {
@@ -413,7 +418,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(Google)
 	case string(types.VMFusion):
 		s.Spec = new(VMFusion)
-
+	case string(types.Noop):
+		s.Spec = new(Noop)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}

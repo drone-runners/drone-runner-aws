@@ -567,13 +567,11 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 		return inst, nil
 	}
 
+	logrus.WithField("instanceID", instanceID).Infoln("Starting vm from hibernate state")
 	ipAddress, err := pool.Driver.Start(ctx, instanceID, poolName)
 	if err != nil {
 		return nil, fmt.Errorf("start_instance: failed to start the instance %s of %q pool: %w", instanceID, poolName, err)
 	}
-
-	pool.Lock()
-	defer pool.Unlock()
 
 	inst.IsHibernated = false
 	inst.Address = ipAddress
@@ -609,6 +607,7 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 	for {
 		err := m.hibernate(ctx, instanceID, poolName, pool)
 		if err == nil {
+			logrus.WithField("instanceID", instanceID).Infoln("hibernate complete")
 			return nil
 		}
 
@@ -631,6 +630,7 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 	pool.Lock()
 	defer pool.Unlock()
 
+	logrus.WithField("instanceID", instanceID).Infoln("Hibernating vm")
 	inst, err := m.Find(ctx, instanceID)
 	if err != nil {
 		return fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)

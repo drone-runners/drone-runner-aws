@@ -10,6 +10,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
 	"github.com/drone-runners/drone-runner-aws/command/harness/delegate"
+	"github.com/drone-runners/drone-runner-aws/command/harness/delegate/tester"
 	"github.com/drone-runners/drone-runner-aws/command/harness/dlite"
 	"github.com/drone-runners/drone-runner-aws/command/setup"
 
@@ -31,6 +32,7 @@ func Command() {
 	delegate.RegisterDelegate(app)
 	dlite.RegisterDlite(app)
 	setup.Register(app)
+	tester.Register(app)
 
 	kingpin.Version(version)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
