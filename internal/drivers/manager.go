@@ -672,6 +672,7 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 		pool.Unlock()
 		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
 	}
+	pool.Unlock()
 	return nil
 }
 
