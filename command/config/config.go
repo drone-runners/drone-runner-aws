@@ -130,14 +130,15 @@ type (
 
 	// DigitalOcean specifies the configuration for a DigitalOcean instance.
 	DigitalOcean struct {
-		Account      DigitalOceanAccount `json:"account,omitempty"`
-		Image        string              `json:"image,omitempty" yaml:"image,omitempty"`
-		Size         string              `json:"size,omitempty" yaml:"size,omitempty"`
-		FirewallID   string              `json:"firewall_id,omitempty" yaml:"firewall_id,omitempty" default:""`
-		SSHKeys      []string            `json:"ssh_keys,omitempty" yaml:"ssh_keys,omitempty"`
-		Tags         []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
-		UserData     string              `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath string              `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
+		Account       DigitalOceanAccount `json:"account,omitempty"`
+		Image         string              `json:"image,omitempty" yaml:"image,omitempty"`
+		Size          string              `json:"size,omitempty" yaml:"size,omitempty"`
+		FirewallID    string              `json:"firewall_id,omitempty" yaml:"firewall_id,omitempty" default:""`
+		SSHKeys       []string            `json:"ssh_keys,omitempty" yaml:"ssh_keys,omitempty"`
+		Tags          []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
+		RootDirectory string              `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData      string              `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath  string              `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
 
 	DigitalOceanAccount struct {
@@ -286,7 +287,7 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		LiteEnginePath       string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.4.6/"`
+		LiteEnginePath       string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.4.7/"`
 		DefaultDriver        string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
 		ReusePool            bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge           int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
@@ -414,6 +415,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(AnkaBuild)
 	case string(types.Azure):
 		s.Spec = new(Azure)
+	case string(types.DigitalOcean):
+		s.Spec = new(DigitalOcean)
 	case string(types.Google), "gcp":
 		s.Spec = new(Google)
 	case string(types.VMFusion):

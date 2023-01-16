@@ -24,7 +24,7 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 		platform.OS = oshelp.OSLinux
 	}
 	if platform.OS != oshelp.OSLinux && platform.OS != oshelp.OSWindows {
-		return platform, fmt.Errorf("invalid OS %s, has to be either'%s/%s'", platform.OS, oshelp.OSLinux, oshelp.OSWindows)
+		return platform, fmt.Errorf("google - invalid OS %s, has to be either'%s/%s'", platform.OS, oshelp.OSLinux, oshelp.OSWindows)
 	}
 
 	return platform, nil

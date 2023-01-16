@@ -260,6 +260,7 @@ func getFirewallID(ctx context.Context, client *godo.Client, sshException bool) 
 	if listErr != nil {
 		return "", listErr
 	}
+	// if the firewall already exists, return the id. NB we do not update any new firewall rules.
 	for i := range firewalls {
 		if firewalls[i].Name == "harness-runner" {
 			return firewalls[i].ID, nil

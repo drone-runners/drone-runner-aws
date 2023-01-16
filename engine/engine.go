@@ -83,7 +83,6 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	logr = logr.
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID)
-
 	// now we have an instance, put the information in the spec
 	spec.CloudInstance.PoolName = poolName
 	spec.CloudInstance.ID = instance.ID
@@ -134,6 +133,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		setupRequest.MountDockerSocket = &b
 	}
 
+	logr.WithField("request", fmt.Sprintf("%+v", setupRequest)).Traceln("Calling LE.Setup")
 	setupResponse, err := client.Setup(ctx, setupRequest)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to call LE.Setup")

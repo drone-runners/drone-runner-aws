@@ -137,7 +137,11 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
 
-	envConfig.Settings.LiteEnginePath = c.LiteEngineURL
+	if c.LiteEngineURL != "" {
+		envConfig.Settings.LiteEnginePath = c.LiteEngineURL
+	}
+	logrus.WithField("lite_engine_url", envConfig.Settings.LiteEnginePath).Infoln("Using lite engine base url")
+
 	envConfig.Runner.Name = runnerName
 	poolManager := drivers.New(ctx, store, &envConfig)
 	err = poolManager.Add(pools...)
@@ -314,8 +318,7 @@ func registerExec(app *kingpin.Application) {
 	cmd.Flag("dump", "dump the pipeline state to stdout").
 		BoolVar(&c.Dump)
 
-	cmd.Flag("lite-engine-url", "web url for the lite-engine binaries ").
-		Default("https://github.com/harness/lite-engine/releases/download/v0.1.0/").
+	cmd.Flag("lite-engine-url", "web url for the lite-engine binaries").
 		StringVar(&c.LiteEngineURL)
 
 	cmd.Flag("pretty", "pretty print the output").

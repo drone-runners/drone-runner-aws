@@ -32,6 +32,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 
 	for i := range poolFile.Instances {
 		instance := poolFile.Instances[i]
+		logrus.Infoln(fmt.Sprintf("Parsing pool '%s', of type '%s'", instance.Name, instance.Type))
 		switch instance.Type {
 		case string(types.VMFusion):
 			var v, ok = instance.Spec.(*config.VMFusion)
@@ -208,7 +209,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
-			platform, platformErr := anka.SetPlatformDefaults(&instance.Platform)
+			platform, platformErr := digitalocean.SetPlatformDefaults(&instance.Platform)
 			if platformErr != nil {
 				return nil, platformErr
 			}
@@ -222,6 +223,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				digitalocean.WithSSHKeys(do.SSHKeys),
 				digitalocean.WithImage(do.Image),
 				digitalocean.WithUserData(do.UserData, do.UserDataPath),
+				digitalocean.WithRootDirectory(do.RootDirectory),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
