@@ -140,7 +140,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	if c.LiteEngineURL != "" {
 		envConfig.Settings.LiteEnginePath = c.LiteEngineURL
 	}
-	logrus.WithField("lite_engine_url", envConfig.Settings.LiteEnginePath).Infoln("Using lite engine url")
+	logrus.WithField("lite_engine_url", envConfig.Settings.LiteEnginePath).Infoln("Using lite engine base url")
 
 	envConfig.Runner.Name = runnerName
 	poolManager := drivers.New(ctx, store, &envConfig)

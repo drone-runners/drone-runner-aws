@@ -223,6 +223,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				digitalocean.WithSSHKeys(do.SSHKeys),
 				digitalocean.WithImage(do.Image),
 				digitalocean.WithUserData(do.UserData, do.UserDataPath),
+				digitalocean.WithRootDirectory(do.RootDirectory),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)

@@ -106,3 +106,10 @@ func WithUserData(text, path string) Option {
 		}
 	}
 }
+
+// WithRootDirectory sets the root directory for the virtual machine.
+func WithRootDirectory(dir string) Option {
+	return func(p *config) {
+		p.rootDir = oshelp.JoinPaths(oshelp.OSLinux, "/tmp", "digitalocean")
+	}
+}
