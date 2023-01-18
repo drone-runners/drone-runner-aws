@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/dchest/uniuri"
@@ -35,8 +36,6 @@ const (
 	scriptTimeout          = 200
 	ankaRunning            = "Running"
 )
-
-var retry = 0
 
 func New(opts ...Option) (drivers.Driver, error) {
 	c := new(config)
@@ -73,50 +72,11 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if c.nodeID != "" {
 		request.NodeID = c.nodeID
 	}
-	response, err := c.ankaClient.VMCreate(ctx, request)
+
+	vm, err := c.CreateVM(ctx, request, 3, 5*time.Second) //nolint:gomnd
 	if err != nil {
 		return nil, err
 	}
-	var id = response.Body[0]
-	vm := &vmResponse{}
-	for i := 1; i <= 100; i++ {
-		vm, err = c.ankaClient.VMFind(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		if vm.Body.InstanceState == "Scheduling" {
-			logrus.Infof("ankabuild: vm %s is scheduling...", vm.Body.InstanceID)
-			time.Sleep(5 * time.Second) //nolint
-			continue
-		}
-		if vm.Body.InstanceState == "Pulling" {
-			logrus.Infof("ankabuild: template tag: %s is pulling...", vm.Body.Tag)
-			time.Sleep(30 * time.Second) //nolint
-			continue
-		}
-		if vm.Body.InstanceState != "Started" {
-			continue
-		}
-		logrus.Infof("ankabuild: vm %s has started on node %s", vm.Body.InstanceID, vm.Body.NodeID)
-		break
-	}
-	// if instance not started at this point - clean up and return error
-	if vm.Body.InstanceState != "Started" {
-		logrus.Infof("ankabuild: vm failed to schedule, deleting vm: %s", vm.Body.InstanceID)
-		deleteErr := c.ankaClient.VMDelete(ctx, vm.Body.InstanceID)
-		if deleteErr != nil {
-			logrus.Errorf("ankabuild: error deleting vm: %s", deleteErr)
-			return nil, deleteErr
-		}
-		// VMs creation can randomly fail, retry 3 times before returning error
-		if retry < 3 {
-			logrus.Infof("ankabuild: retry vm creation attempt: %d", retry)
-			retry++
-			return c.Create(ctx, opts)
-		}
-		return nil, fmt.Errorf("ankabuild: vm failed to schedule, deleted vm: %s", vm.Body.InstanceID)
-	}
-
 	inst := vm.Body
 
 	if inst.Vminfo.PortForwarding == nil {
@@ -145,6 +105,73 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Debugln("anka build: [creation] complete")
 
 	return instance, nil
+}
+
+func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetries int, retryInterval time.Duration) (*vmResponse, error) {
+	var vm *vmResponse
+	retry := 0
+	for retry < maxRetries {
+		response, err := c.ankaClient.VMCreate(ctx, request)
+		if err != nil {
+			if retry < maxRetries {
+				logrus.Infof("ankabuild: failed to create vm, retrying in %v seconds", retryInterval.Seconds())
+				retry++
+				time.Sleep(retryInterval)
+				retryInterval = retryInterval * 2
+				continue
+			} else {
+				return nil, fmt.Errorf("failed to create vm after %d retries: %v", maxRetries, err)
+			}
+		}
+		var id = response.Body[0]
+		vm = &vmResponse{}
+		vm, _ = c.FindVM(ctx, id, retryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if vm.Body.InstanceState != "Started" {
+			deleteErr := c.ankaClient.VMDelete(ctx, vm.Body.InstanceID)
+			if deleteErr != nil {
+				logrus.Errorf("ankabuild: error deleting vm: %s", deleteErr)
+				return nil, fmt.Errorf("failed to delete vm: %v", deleteErr)
+			}
+			retry++
+			retryInterval = time.Duration(rand.Int63n(int64(retryInterval)))
+		} else {
+			break
+		}
+	}
+	if retry == maxRetries {
+		return nil, fmt.Errorf("failed to create vm after %d retries", maxRetries)
+	}
+	logrus.Infof("ankabuild: vm %s has started on node %s", vm.Body.InstanceID, vm.Body.NodeID)
+	return vm, nil
+}
+
+func (c *config) FindVM(ctx context.Context, id string, retryInterval time.Duration) (*vmResponse, error) {
+	tick := time.NewTicker(retryInterval)
+	for {
+		select {
+		case <-ctx.Done():
+			tick.Stop()
+			return nil, ctx.Err()
+		case <-tick.C:
+			vm, err := c.ankaClient.VMFind(ctx, id)
+			if err != nil {
+				logrus.Infof("Failed to find vm, retrying in %v seconds", retryInterval.Seconds())
+				continue
+			}
+			if vm.Body.InstanceState == "Scheduling" {
+				logrus.Infof("ankabuild: vm %s is scheduling, retrying in %v seconds...", vm.Body.InstanceID, retryInterval.Seconds())
+				continue
+			}
+			if vm.Body.InstanceState == "Pulling" {
+				logrus.Infof("ankabuild: template tag: %s is pulling, retrying in %v seconds...", vm.Body.Tag, retryInterval.Seconds())
+				continue
+			}
+			return vm, nil
+		}
+	}
 }
 
 func (c *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
