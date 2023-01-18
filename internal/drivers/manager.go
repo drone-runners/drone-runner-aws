@@ -119,7 +119,7 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 	return list[0], nil
 }
 
-func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free []*types.Instance, err error) {
+func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free, hibernating []*types.Instance, err error) {
 	list, err := m.instanceStore.List(ctx, pool.Name, nil)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
@@ -132,12 +132,14 @@ func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free []*type
 		loopInstance := instance
 		if instance.State == types.StateInUse {
 			busy = append(busy, loopInstance)
+		} else if instance.State == types.StateHibernating {
+			hibernating = append(hibernating, loopInstance)
 		} else {
 			free = append(free, loopInstance)
 		}
 	}
 
-	return busy, free, nil
+	return busy, free, hibernating, nil
 }
 
 func (m *Manager) Delete(ctx context.Context, instanceID string) error {
@@ -224,10 +226,11 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 						pool.Lock()
 						defer pool.Unlock()
 
-						busy, free, err := m.List(ctx, pool)
+						busy, free, hibernating, err := m.List(ctx, pool)
 						if err != nil {
 							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 						}
+						free = append(free, hibernating...)
 
 						var ids []string
 						for _, inst := range busy {
@@ -298,7 +301,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName string, en
 
 	pool.Lock()
 
-	busy, free, err := m.List(ctx, pool)
+	busy, free, _, err := m.List(ctx, pool)
 	if err != nil {
 		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
@@ -365,10 +368,11 @@ func (m *Manager) BuildPools(ctx context.Context) error {
 
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	for _, pool := range m.poolMap {
-		busy, free, err := m.List(ctx, pool)
+		busy, free, hibernating, err := m.List(ctx, pool)
 		if err != nil {
 			return err
 		}
+		free = append(free, hibernating...)
 		var instanceIDs []string
 
 		if destroyBusy {
@@ -435,10 +439,11 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
 func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
-	instBusy, instFree, err := m.List(ctx, pool)
+	instBusy, instFree, instHibernating, err := m.List(ctx, pool)
 	if err != nil {
 		return err
 	}
+	instFree = append(instFree, instHibernating...)
 
 	strategy := m.strategy
 	if strategy == nil {
@@ -628,26 +633,59 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 
 func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, pool *poolEntry) error {
 	pool.Lock()
-	defer pool.Unlock()
-
-	logrus.WithField("instanceID", instanceID).Infoln("Hibernating vm")
 	inst, err := m.Find(ctx, instanceID)
 	if err != nil {
+		pool.Unlock()
 		return fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
 	}
 
 	if inst.State == types.StateInUse {
+		pool.Unlock()
 		return nil
 	}
+	inst.State = types.StateHibernating
+	if err = m.instanceStore.Update(ctx, inst); err != nil {
+		pool.Unlock()
+		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
+	}
+	pool.Unlock()
 
-	err = pool.Driver.Hibernate(ctx, instanceID, poolName)
-	if err != nil {
+	logrus.WithField("instanceID", instanceID).Infoln("Hibernating vm")
+	if err = pool.Driver.Hibernate(ctx, instanceID, poolName); err != nil {
+		if uerr := m.updateInstState(ctx, pool, instanceID, types.StateCreated); uerr != nil {
+			logrus.WithError(err).WithField("instanceID", instanceID).Errorln("failed to update state for failed hibernation")
+		}
 		return fmt.Errorf("hibernate: failed to hibernated an instance %s of %q pool: %w", instanceID, poolName, err)
 	}
 
+	pool.Lock()
+	if inst, err = m.Find(ctx, instanceID); err != nil {
+		pool.Unlock()
+		return fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
+	}
+
 	inst.IsHibernated = true
-	if err := m.instanceStore.Update(ctx, inst); err != nil {
+	inst.State = types.StateCreated
+	if err = m.instanceStore.Update(ctx, inst); err != nil {
+		pool.Unlock()
 		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
+	}
+	pool.Unlock()
+	return nil
+}
+
+func (m *Manager) updateInstState(ctx context.Context, pool *poolEntry, instanceID string, state types.InstanceState) error {
+	pool.Lock()
+	defer pool.Unlock()
+
+	inst, err := m.Find(ctx, instanceID)
+	if err != nil {
+		return fmt.Errorf("update state: failed to find the instance in db %s of %q pool: %w", instanceID, pool.Name, err)
+	}
+
+	inst.State = state
+	if err := m.instanceStore.Update(ctx, inst); err != nil {
+		return fmt.Errorf("update state: failed to update instance in db %s of %q pool: %w", instanceID, pool.Name, err)
 	}
 	return nil
 }

@@ -29,8 +29,9 @@ const (
 
 // InstanceState type enumeration.
 const (
-	StateCreated = InstanceState("created")
-	StateInUse   = InstanceState("inuse")
+	StateCreated     = InstanceState("created")
+	StateInUse       = InstanceState("inuse")
+	StateHibernating = InstanceState("hibernating")
 )
 
 type Instance struct {
