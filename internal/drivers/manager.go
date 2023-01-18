@@ -521,6 +521,12 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 			Errorln("manager: failed to generate certificates")
 		return nil, err
 	}
+	maxRetries := 3
+	retryInterval := 5 * time.Second
+
+	// create a new context with the additional values
+	ctx = context.WithValue(context.Background(), "maxRetries", maxRetries)
+	ctx = context.WithValue(ctx, "retryInterval", retryInterval)
 	// create instance
 	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {

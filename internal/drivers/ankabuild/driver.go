@@ -73,10 +73,14 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		request.NodeID = c.nodeID
 	}
 
-	vm, err := c.CreateVM(ctx, request, 3, 5*time.Second) //nolint:gomnd
+	// retrieve maxRetries from context and use it to call CreateVM
+	maxRetries := ctx.Value("maxRetries").(int)
+	retryInterval := ctx.Value("retryInterval").(time.Duration)
+	vm, err := c.CreateVM(ctx, request, maxRetries, retryInterval)
 	if err != nil {
 		return nil, err
-	}
+	} //nolint:gomnd
+
 	inst := vm.Body
 
 	if inst.Vminfo.PortForwarding == nil {
@@ -113,7 +117,7 @@ func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetri
 	for retry < maxRetries {
 		response, err := c.ankaClient.VMCreate(ctx, request)
 		if err != nil {
-			if retry < maxRetries {
+			if retry < maxRetries-1 {
 				logrus.Infof("ankabuild: failed to create vm, retrying in %v seconds", retryInterval.Seconds())
 				retry++
 				time.Sleep(retryInterval)
