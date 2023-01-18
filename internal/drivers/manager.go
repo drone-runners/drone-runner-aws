@@ -523,10 +523,11 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	}
 	maxRetries := 3
 	retryInterval := 5 * time.Second
-
+	retryIntervalFind := 5 * time.Second
 	// create a new context with the additional values
 	ctx = context.WithValue(context.Background(), "maxRetries", maxRetries)
 	ctx = context.WithValue(ctx, "retryInterval", retryInterval)
+	ctx = context.WithValue(ctx, "retryIntervalFind", retryIntervalFind)
 	// create instance
 	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {

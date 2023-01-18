@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/dchest/uniuri"
@@ -76,7 +75,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	// retrieve maxRetries from context and use it to call CreateVM
 	maxRetries := ctx.Value("maxRetries").(int)
 	retryInterval := ctx.Value("retryInterval").(time.Duration)
-	vm, err := c.CreateVM(ctx, request, maxRetries, retryInterval)
+	retryIntervalFind := ctx.Value("retryIntervalFind").(time.Duration)
+	vm, err := c.CreateVM(ctx, request, maxRetries, retryInterval, retryIntervalFind)
 	if err != nil {
 		return nil, err
 	} //nolint:gomnd
@@ -111,7 +111,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return instance, nil
 }
 
-func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetries int, retryInterval time.Duration) (*vmResponse, error) {
+func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetries int, retryInterval, retryIntervalFind time.Duration) (*vmResponse, error) {
 	var vm *vmResponse
 	retry := 0
 	for retry < maxRetries {
@@ -129,18 +129,17 @@ func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetri
 		}
 		var id = response.Body[0]
 		vm = &vmResponse{}
-		vm, _ = c.FindVM(ctx, id, retryInterval)
+		vm, _ = c.FindVM(ctx, id, retryIntervalFind)
 		if err != nil {
 			return nil, err
 		}
-		if vm.Body.InstanceState != "Started" {
+		if vm.Body.InstanceState == "Started" {
+			logrus.Errorf("ankabuild: deleting vm: %s", vm.Body.InstanceID)
 			deleteErr := c.ankaClient.VMDelete(ctx, vm.Body.InstanceID)
 			if deleteErr != nil {
-				logrus.Errorf("ankabuild: error deleting vm: %s", deleteErr)
 				return nil, fmt.Errorf("failed to delete vm: %v", deleteErr)
 			}
 			retry++
-			retryInterval = time.Duration(rand.Int63n(int64(retryInterval)))
 		} else {
 			break
 		}
