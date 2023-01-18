@@ -133,7 +133,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		// Start the HTTP server
 		s := server.Server{
 			Addr:    c.env.Server.Port,
-			Handler: Handler(p),
+			Handler: Handler(p, c.poolManager),
 		}
 
 		logrus.WithField("addr", s.Addr).

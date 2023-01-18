@@ -216,70 +216,75 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 				case <-ctx.Done():
 					return
 				case <-m.cleanupTimer.C:
-					logrus.Traceln("Launching instance purger")
-
-					err := m.forEach(ctx, func(ctx context.Context, pool *poolEntry) error {
-						logr := logger.FromContext(ctx).
-							WithField("driver", pool.Driver.DriverName()).
-							WithField("pool", pool.Name)
-
-						pool.Lock()
-						defer pool.Unlock()
-
-						busy, free, hibernating, err := m.List(ctx, pool)
-						if err != nil {
-							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
-						}
-						free = append(free, hibernating...)
-
-						var ids []string
-						for _, inst := range busy {
-							startedAt := time.Unix(inst.Started, 0)
-							if time.Since(startedAt) > maxAgeBusy {
-								ids = append(ids, inst.ID)
-							}
-						}
-						for _, inst := range free {
-							startedAt := time.Unix(inst.Started, 0)
-							if time.Since(startedAt) > maxAgeFree {
-								ids = append(ids, inst.ID)
-							}
-						}
-
-						if len(ids) == 0 {
-							return nil
-						}
-
-						logr.Infof("purger: Terminating %d stale instances\n", len(ids))
-
-						err = pool.Driver.Destroy(ctx, ids...)
-						if err != nil {
-							return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
-						}
-						for _, id := range ids {
-							derr := m.Delete(ctx, id)
-							if derr != nil {
-								return fmt.Errorf("failed to delete %s from instance store with err: %s", id, derr)
-							}
-						}
-
-						err = m.buildPool(ctx, pool)
-						if err != nil {
-							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
-						}
-
-						return nil
-					})
-					if err != nil {
-						logger.FromContext(ctx).WithError(err).
-							Errorln("purger: Failed to purge stale instances")
-					}
+					m.PurgeInstances(ctx, maxAgeFree, maxAgeBusy)
 				}
 			}()
 		}
 	}()
 
 	return nil
+}
+
+func (m *Manager) PurgeInstances(ctx context.Context, maxAgeFree, maxAgeBusy time.Duration) {
+	logrus.Traceln("Launching instance purger")
+
+	err := m.forEach(ctx, func(ctx context.Context, pool *poolEntry) error {
+		logr := logger.FromContext(ctx).
+			WithField("driver", pool.Driver.DriverName()).
+			WithField("pool", pool.Name)
+
+		pool.Lock()
+		defer pool.Unlock()
+
+		busy, free, hibernating, err := m.List(ctx, pool)
+		if err != nil {
+			return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
+		}
+		free = append(free, hibernating...)
+
+		var ids []string
+		for _, inst := range busy {
+			startedAt := time.Unix(inst.Started, 0)
+			if time.Since(startedAt) > maxAgeBusy {
+				ids = append(ids, inst.ID)
+			}
+		}
+		for _, inst := range free {
+			startedAt := time.Unix(inst.Started, 0)
+			if time.Since(startedAt) > maxAgeFree {
+				ids = append(ids, inst.ID)
+			}
+		}
+
+		if len(ids) == 0 {
+			return nil
+		}
+
+		logr.Infof("purger: Terminating %d stale instances\n", len(ids))
+
+		err = pool.Driver.Destroy(ctx, ids...)
+		if err != nil {
+			return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
+		}
+		for _, id := range ids {
+			derr := m.Delete(ctx, id)
+			if derr != nil {
+				return fmt.Errorf("failed to delete %s from instance store with err: %s", id, derr)
+			}
+		}
+
+		err = m.buildPool(ctx, pool)
+		if err != nil {
+			return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		logger.FromContext(ctx).WithError(err).
+			Errorln("purger: Failed to purge stale instances")
+
+	}
 }
 
 // Provision returns an instance for a job execution and tags it as in use.
@@ -749,4 +754,12 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID stri
 	}
 
 	return nil
+}
+
+func (m *Manager) UpdatePoolSizeToZero() {
+	for _, p := range m.poolMap {
+		p.Lock()
+		p.MinSize = 0
+		p.Unlock()
+	}
 }

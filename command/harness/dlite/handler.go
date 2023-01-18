@@ -1,10 +1,13 @@
 package dlite
 
 import (
+	"context"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/wings-software/dlite/client"
@@ -17,7 +20,7 @@ var (
 	disabledStatus = "DISABLED"
 )
 
-func Handler(p *poller.Poller) http.Handler {
+func Handler(p *poller.Poller, m *drivers.Manager) http.Handler {
 	r := chi.NewRouter()
 	r.Use(harness.Middleware)
 	r.Use(middleware.Recoverer)
@@ -25,8 +28,8 @@ func Handler(p *poller.Poller) http.Handler {
 	r.Mount("/maintenance_mode", func() http.Handler {
 		sr := chi.NewRouter()
 		sr.Get("/", handleStatus(p))
-		sr.Post("/enable", handleEnable(p))
-		sr.Post("/disable", handleDisable(p))
+		sr.Post("/enable", handleEnable(p, m))
+		// sr.Post("/disable", handleDisable(p))
 		return sr
 	}())
 
@@ -36,11 +39,13 @@ func Handler(p *poller.Poller) http.Handler {
 	return r
 }
 
-func handleEnable(p *poller.Poller) http.HandlerFunc {
+func handleEnable(p *poller.Poller, m *drivers.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p.SetFilter(func(ev *client.TaskEvent) bool {
 			return ev.TaskType != initTask
 		})
+		m.UpdatePoolSizeToZero()
+		m.PurgeInstances(context.Background(), 0, time.Hour*24)
 		io.WriteString(w, okStatus) //nolint: errcheck
 	}
 }
