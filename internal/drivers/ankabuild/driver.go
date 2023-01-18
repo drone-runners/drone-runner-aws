@@ -36,6 +36,8 @@ const (
 	ankaRunning            = "Running"
 )
 
+var retry = 0
+
 func New(opts ...Option) (drivers.Driver, error) {
 	c := new(config)
 	for _, opt := range opts {
@@ -83,19 +85,19 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			return nil, err
 		}
 		if vm.Body.InstanceState == "Scheduling" {
-			logrus.Infof("ankabuild: vm %s is scheduling with node %s", vm.Body.InstanceID, vm.Body.NodeID)
+			logrus.Infof("ankabuild: vm %s is scheduling...", vm.Body.InstanceID)
 			time.Sleep(5 * time.Second) //nolint
 			continue
 		}
 		if vm.Body.InstanceState == "Pulling" {
-			logrus.Infof("ankabuild: template tag: %s is downloading to node: %s", vm.Body.Tag, vm.Body.NodeID)
+			logrus.Infof("ankabuild: template tag: %s is pulling...", vm.Body.Tag)
 			time.Sleep(30 * time.Second) //nolint
 			continue
 		}
 		if vm.Body.InstanceState != "Started" {
 			continue
 		}
-		logrus.Debugf("VM: %s is running!", vm.Body.InstanceID)
+		logrus.Infof("ankabuild: vm %s has started on node %s", vm.Body.InstanceID, vm.Body.NodeID)
 		break
 	}
 	// if instance not started at this point - clean up and return error
@@ -104,8 +106,15 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		deleteErr := c.ankaClient.VMDelete(ctx, vm.Body.InstanceID)
 		if deleteErr != nil {
 			logrus.Errorf("ankabuild: error deleting vm: %s", deleteErr)
+			return nil, deleteErr
 		}
-		return nil, errors.New("ankabuild: vm failed to schedule - no capacity available")
+		// VMs creation can randomly fail, retry 3 times before returning error
+		if retry < 3 {
+			logrus.Infof("ankabuild: retry vm creation attempt: %d", retry)
+			retry++
+			return c.Create(ctx, opts)
+		}
+		return nil, fmt.Errorf("ankabuild: vm failed to schedule, deleted vm: %s", vm.Body.InstanceID)
 	}
 
 	inst := vm.Body
