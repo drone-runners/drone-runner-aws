@@ -133,7 +133,7 @@ func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetri
 		if err != nil {
 			return nil, err
 		}
-		if vm.Body.InstanceState == "Started" {
+		if vm.Body.InstanceState != "Started" {
 			logrus.Errorf("ankabuild: deleting vm: %s", vm.Body.InstanceID)
 			deleteErr := c.ankaClient.VMDelete(ctx, vm.Body.InstanceID)
 			if deleteErr != nil {
