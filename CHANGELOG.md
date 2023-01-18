@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.0.0-rc29](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc29) (2023-01-18)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc28...v1.0.0-rc29)
+
+**Fixed bugs:**
+
+- Fix start on digitalocean [\#231](https://github.com/drone-runners/drone-runner-aws/pull/231) ([tphoney](https://github.com/tphoney))
+
+**Merged pull requests:**
+
+- release prep for rc29 [\#233](https://github.com/drone-runners/drone-runner-aws/pull/233) ([devkimittal](https://github.com/devkimittal))
+- Noop driver for scale testing runner [\#224](https://github.com/drone-runners/drone-runner-aws/pull/224) ([shubham149](https://github.com/shubham149))
+- Upgraded lite engine to v0.4.8 \(where docker client is downgraded\) [\#220](https://github.com/drone-runners/drone-runner-aws/pull/220) ([devkimittal](https://github.com/devkimittal))
+
 ## [v1.0.0-rc28](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc28) (2023-01-12)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc27...v1.0.0-rc28)
