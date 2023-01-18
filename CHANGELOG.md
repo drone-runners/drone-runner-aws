@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.0.0-rc28](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc28) (2023-01-12)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc27...v1.0.0-rc28)
+
+**Implemented enhancements:**
+
+- Add hibernate support for gcp [\#223](https://github.com/drone-runners/drone-runner-aws/pull/223) ([shubham149](https://github.com/shubham149))
+- \[CI-6546\]: Add retries in gcp ops for retryable errors [\#221](https://github.com/drone-runners/drone-runner-aws/pull/221) ([shubham149](https://github.com/shubham149))
+
+**Fixed bugs:**
+
+- fix permission of .netrc file [\#227](https://github.com/drone-runners/drone-runner-aws/pull/227) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- Delete gcp vm in case of error during create call [\#225](https://github.com/drone-runners/drone-runner-aws/pull/225) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- release prep for rc28 [\#228](https://github.com/drone-runners/drone-runner-aws/pull/228) ([eoinmcafee00](https://github.com/eoinmcafee00))
+- Add leveldb support for storage driver [\#216](https://github.com/drone-runners/drone-runner-aws/pull/216) ([shubham149](https://github.com/shubham149))
+- Changes in cloud init script for installing tmate [\#189](https://github.com/drone-runners/drone-runner-aws/pull/189) ([HenAmar](https://github.com/HenAmar))
+
 ## [v1.0.0-rc27](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc27) (2023-01-02)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc26...v1.0.0-rc27)
