@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.0.0-rc30](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc30) (2023-01-18)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc29...v1.0.0-rc30)
+
+**Implemented enhancements:**
+
+- Reduce lock time for hibernate support [\#232](https://github.com/drone-runners/drone-runner-aws/pull/232) ([shubham149](https://github.com/shubham149))
+
+**Merged pull requests:**
+
+- rc30 prep [\#236](https://github.com/drone-runners/drone-runner-aws/pull/236) ([shubham149](https://github.com/shubham149))
+
 ## [v1.0.0-rc29](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc29) (2023-01-18)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc28...v1.0.0-rc29)
