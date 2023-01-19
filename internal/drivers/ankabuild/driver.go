@@ -72,10 +72,9 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		request.NodeID = c.nodeID
 	}
 
-	// retrieve maxRetries from context and use it to call CreateVM
-	maxRetries := ctx.Value("maxRetries").(int)
-	retryInterval := ctx.Value("retryInterval").(time.Duration)
-	retryIntervalFind := ctx.Value("retryIntervalFind").(time.Duration)
+	maxRetries := 3
+	retryInterval := 5 * time.Second
+	retryIntervalFind := 5 * time.Second
 	vm, err := c.CreateVM(ctx, request, maxRetries, retryInterval, retryIntervalFind)
 	if err != nil {
 		return nil, err
