@@ -78,7 +78,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	vm, err := c.CreateVM(ctx, request, maxRetries, retryInterval, retryIntervalFind)
 	if err != nil {
 		return nil, err
-	} //nolint:gomnd
+	}
 
 	inst := vm.Body
 
@@ -120,14 +120,13 @@ func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetri
 				logrus.Infof("ankabuild: failed to create vm, retrying in %v seconds", retryInterval.Seconds())
 				retry++
 				time.Sleep(retryInterval)
-				retryInterval = retryInterval * 2
+				retryInterval *= 2
 				continue
 			} else {
 				return nil, fmt.Errorf("failed to create vm after %d retries: %v", maxRetries, err)
 			}
 		}
 		var id = response.Body[0]
-		vm = &vmResponse{}
 		vm, _ = c.FindVM(ctx, id, retryIntervalFind)
 		if err != nil {
 			return nil, err
