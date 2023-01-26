@@ -378,7 +378,7 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 			return err
 		}
 		free = append(free, hibernating...)
-		var instanceIDs []*types.Instance
+		var instances []*types.Instance
 
 		if destroyBusy {
 			for _, inst := range busy {

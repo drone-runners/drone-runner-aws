@@ -147,7 +147,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	inst, err := p.create(ctx, opts, name)
 	if err != nil {
-		defer p.Destroy(context.Background(), name) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{inst}) //nolint:errcheck
 		return nil, err
 	}
 	return inst, nil

@@ -15,8 +15,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers/noop"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/nomad"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/noop"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -259,18 +259,22 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-<<<<<<< HEAD
 		case string(types.Noop):
 			var noopBuild, ok = instance.Spec.(*config.Noop)
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
+
 			driver, err := noop.New(
 				noop.WithRootDirectory(),
 				noop.WithHibernate(noopBuild.Hibernate),
 			)
-=======
->>>>>>> 937be3b (add node ID in database schema, clean up code)
+			if err != nil {
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
 		case string(types.Nomad):
 			var nomadConfig, ok = instance.Spec.(*config.Nomad)
 			if !ok {

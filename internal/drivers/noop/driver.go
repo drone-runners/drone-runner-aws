@@ -59,7 +59,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instanceIDs ...string) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
 	time.Sleep(time.Duration(p.destroyWaitSecs) * time.Second)
 	return nil
 }

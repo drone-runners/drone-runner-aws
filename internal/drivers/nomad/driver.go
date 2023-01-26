@@ -19,6 +19,11 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
+var (
+	ignitePath              = "/usr/local/bin/ignite"
+	clientDisconnectTimeout = 4 * time.Minute
+)
+
 type config struct {
 	address        string
 	vmImage        string
@@ -31,6 +36,8 @@ type config struct {
 	client         *api.Client
 }
 
+// SetPlatformDefaults comes up with default values of the platform
+// in case they are not set.
 func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 	if platform.Arch == "" {
 		platform.Arch = oshelp.ArchAMD64
@@ -85,8 +92,9 @@ func (p *config) Ping(ctx context.Context) error {
 }
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
-// TODO (Vistaar): Handle cleanup in cases of partial execution of tasks and errors - idempotency is required
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+// This function is idempotent - any errors in between will cleanup the created VMs.
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
+	opts.Arch = "amd64"
 	startupScript := generateStartupScript(opts)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
 	vm := strings.ToLower(random(20))
@@ -98,7 +106,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
 
-	runCmd := fmt.Sprintf("/usr/local/bin/ignite run %s --name %s --cpus %s --memory %s --ssh --ports $%s:%s --copy-files %s:%s",
+	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %s --memory %s --size 50GB --ssh --runtime=docker --ports $%s:%s --copy-files %s:%s",
+		ignitePath,
 		p.vmImage,
 		vm,
 		p.vmCpus,
@@ -112,10 +121,15 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Name:        stringToPtr(vm),
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
+		// TODO (Vistaar): This can be updated once we have more data points
+		Reschedule: &api.ReschedulePolicy{
+			Attempts:  intToPtr(0),
+			Unlimited: boolToPtr(false),
+		},
 		TaskGroups: []*api.TaskGroup{
 			{
 				Networks:                  []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: vm}}}},
-				StopAfterClientDisconnect: durationToPtr(4 * time.Minute),
+				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -143,12 +157,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 							"args":    []string{"-c", runCmd},
 						},
 					},
+
 					{
 						Name:   "ignite_exec",
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite exec %s 'cat %s | base64 --decode | bash'", vm, vmPath)},
+							"args":    []string{"-c", fmt.Sprintf("%s exec %s 'cat %s | base64 --decode | bash'", ignitePath, vm, vmPath)},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -171,19 +186,21 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			},
 		},
 	}
+
 	logr.Debugln("nomad: submitting job to nomad")
-	_, _, err = p.client.Jobs().Register(job, nil)
+	_, _, err := p.client.Jobs().Register(job, nil)
 	if err != nil {
 		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
 	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
-	_, err = pollForJob(ctx, jobID, p.client, logr, 5*time.Minute, true) // TODO (Vistaar): validate this timeout
+	_, err = pollForJob(ctx, jobID, p.client, logr, 20*time.Minute, true) // TODO (Vistaar): validate this timeout
 	if err != nil {
 		return nil, err
 	}
 	logr.Debugln("nomad: job marked as finished")
 
-	// Get the allocation corresponding to this job submission
+	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
+	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
 	l, _, err := p.client.Jobs().Allocations(jobID, false, nil)
 	if err != nil {
 		return nil, err
@@ -197,53 +214,69 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if id == "" || allocID == "" {
 		return nil, errors.New("nomad: could not find an allocation identifier for the job")
 	}
-	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
-	if err != nil {
-		logr.WithError(err).Errorln("nomad: could not get allocation information")
-		return nil, err
-	}
 
-	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
-	if err != nil {
-		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the init job")
-		return nil, err
-	}
-
-	ip := strings.Split(n.HTTPAddr, ":")[0]
-	if net.ParseIP(ip) == nil {
-		return nil, fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
-	}
-
-	// Not expected - if nomad is unable to find a port, it should not run the job at all.
-	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
-		return nil, errors.New("could not assign an available port as part of the job")
-	}
-
-	liteEnginePort := alloc.Resources.Networks[0].DynamicPorts[0].Value
-	// sanity check
-	if liteEnginePort <= 0 || liteEnginePort > 65535 {
-		err := fmt.Errorf("nomad: port %d generated is not a valid port", liteEnginePort)
-		logr.Errorln(err)
-		return nil, err
-	}
-
-	logr.WithField("node_ip", ip).WithField("node_port", liteEnginePort).Traceln("nomad: successfully created instance")
-
-	return &types.Instance{
+	// For Nomad, the node identifier (where the init task executed)
+	// is needed to route the destroy call to the right machine.
+	// Once the ID has been identified, any error with the Nomad API after this point can be
+	// logged and we can issue a destroy call to clean up the existing state.
+	instance := &types.Instance{
 		ID:       vm,
 		NodeID:   id,
-		Name:     id, // TODO: Move this to a separate field
+		Name:     vm,
 		Platform: opts.Platform,
 		State:    types.StateCreated,
-		Address:  ip,
 		CACert:   opts.CACert,
 		CAKey:    opts.CAKey,
 		TLSCert:  opts.TLSCert,
 		TLSKey:   opts.TLSKey,
 		Provider: types.Nomad,
 		Pool:     opts.PoolName,
-		Port:     int64(liteEnginePort),
-	}, nil
+	}
+	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
+	if err != nil {
+		logr.WithError(err).Errorln("nomad: could not get allocation information")
+		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		return nil, err
+	}
+
+	// Not expected - if nomad is unable to find a port, it should not run the job at all.
+	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
+		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		return nil, errors.New("could not assign an available port as part of the job")
+	}
+
+	liteEnginePort := alloc.Resources.Networks[0].DynamicPorts[0].Value
+
+	// sanity check
+	if liteEnginePort <= 0 || liteEnginePort > 65535 {
+		err := fmt.Errorf("nomad: port %d generated is not a valid port", liteEnginePort)
+		logr.Errorln(err)
+		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		return nil, err
+	}
+
+	// If the port is valid, set it as the instance port
+	instance.Port = int64(liteEnginePort)
+
+	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
+	if err != nil {
+		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the init job")
+		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		return nil, err
+	}
+
+	ip := strings.Split(n.HTTPAddr, ":")[0]
+	if net.ParseIP(ip) == nil {
+		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		return nil, fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
+	}
+
+	// If the IP is a valid parsed IP, set it as the instance IP
+	instance.Address = ip
+
+	logr.WithField("node_ip", ip).WithField("node_port", liteEnginePort).Traceln("nomad: successfully created instance")
+
+	return instance, nil
 }
 
 // Destroy destroys the VM in the bare metal machine
@@ -260,8 +293,9 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			Operand: "=",
 		}
 		job := &api.Job{
-			ID:          &jobID,
-			Name:        stringToPtr(random(20)),
+			ID:   &jobID,
+			Name: stringToPtr(random(20)),
+
 			Type:        stringToPtr("batch"),
 			Datacenters: []string{"dc1"},
 			Constraints: []*api.Constraint{
@@ -269,6 +303,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			},
 			TaskGroups: []*api.TaskGroup{
 				{
+					StopAfterClientDisconnect: &clientDisconnectTimeout,
 					RestartPolicy: &api.RestartPolicy{
 						Attempts: intToPtr(3),
 					},
@@ -276,11 +311,23 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					Count: intToPtr(1),
 					Tasks: []*api.Task{
 						{
-							Name:   "ignite_delete",
+							Name:   "ignite_kill",
 							Driver: "raw_exec",
 							Config: map[string]interface{}{
 								"command": "/usr/bin/su",
-								"args":    []string{"-c", fmt.Sprintf("/usr/local/bin/ignite kill %s", instance.ID)},
+								"args":    []string{"-c", fmt.Sprintf("%s kill %s", ignitePath, instance.ID)},
+							},
+						},
+						{
+							Name:   "ignite_rm",
+							Driver: "raw_exec",
+							Config: map[string]interface{}{
+								"command": "/usr/bin/su",
+								"args":    []string{"-c", fmt.Sprintf("%s rm %s", ignitePath, instance.ID)},
+							},
+							Lifecycle: &api.TaskLifecycle{
+								Sidecar: false,
+								Hook:    "poststop",
 							},
 						},
 					},
@@ -339,11 +386,11 @@ L:
 			var qm *api.QueryMeta
 			// Get the job status
 			job, qm, err = client.Jobs().Info(id, q)
-			if job == nil {
-				continue
-			}
 			if err != nil {
 				logr.WithError(err).WithField("job_id", id).Error("could not retrieve job information")
+				continue
+			}
+			if job == nil {
 				continue
 			}
 			waitIndex = qm.LastIndex
@@ -390,6 +437,5 @@ func generateStartupScript(opts *types.InstanceCreateOpts) string {
 		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
 		PluginBinaryURI:      opts.PluginBinaryURI,
 	}
-
 	return cloudinit.LinuxBash(params)
 }
