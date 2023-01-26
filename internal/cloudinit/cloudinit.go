@@ -90,12 +90,16 @@ chmod 0600 {{ .KeyPath }}
 /usr/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
 chmod 777 /usr/bin/lite-engine
 touch $HOME/.env
-echo "SKIP_PREPARE_SERVER=true" >> .env;
+echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
 wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
 chmod 777 /usr/bin/plugin
 {{ end }}
+
+systemctl disable docker.service
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+service docker start
 
 /usr/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
@@ -143,6 +147,8 @@ wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}"
 chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
+
+
 
 {{ if .PluginBinaryURI }}
 wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin

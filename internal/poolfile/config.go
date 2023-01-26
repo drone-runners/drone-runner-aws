@@ -33,7 +33,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 
 	for i := range poolFile.Instances {
 		instance := poolFile.Instances[i]
-		fmt.Printf("instance type is: %s", instance.Type)
 		switch instance.Type {
 		case string(types.VMFusion):
 			var v, ok = instance.Spec.(*config.VMFusion)

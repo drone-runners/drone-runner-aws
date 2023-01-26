@@ -5,17 +5,22 @@ import (
 	"time"
 )
 
-// stringToPtr returns the pointer to a string
+// stringToPtr returns a pointer to a string
 func stringToPtr(s string) *string {
 	return &s
 }
 
-// intToPtr returns the pointer to a int
+// intToPtr returns a pointer to a int
 func intToPtr(i int) *int {
 	return &i
 }
 
-// durationToPtr returns the pointer to a int
+// boolToPtr returns a pointer to a bool
+func boolToPtr(b bool) *bool {
+	return &b
+}
+
+// durationToPtr returns a pointer to a duration
 func durationToPtr(d time.Duration) *time.Duration {
 	return &d
 }
