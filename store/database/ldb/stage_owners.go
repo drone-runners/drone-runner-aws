@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"fmt"
 
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -27,7 +26,7 @@ func (s StageOwnerStore) getKey(id string) string {
 	return ssKeyPrefix + id
 }
 
-func (s StageOwnerStore) Find(_ context.Context, id, poolName string) (*types.StageOwner, error) {
+func (s StageOwnerStore) Find(_ context.Context, id string) (*types.StageOwner, error) {
 	key := s.getKey(id)
 	data, err := s.db.Get([]byte(key), nil)
 	if err != nil {
@@ -38,11 +37,7 @@ func (s StageOwnerStore) Find(_ context.Context, id, poolName string) (*types.St
 	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(dst); err != nil {
 		return nil, err
 	}
-
-	if dst.PoolName == poolName {
-		return dst, nil
-	}
-	return nil, fmt.Errorf("found stage id %s bound to different pool: %s from input: %s", id, dst.PoolName, poolName)
+	return dst, nil
 }
 
 func (s StageOwnerStore) Create(_ context.Context, stageOwner *types.StageOwner) error {

@@ -5,8 +5,9 @@ import (
 	"fmt"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	errors "github.com/drone-runners/drone-runner-aws/internal/types"
+	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,22 +17,28 @@ type VMCleanupRequest struct {
 }
 
 func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, poolManager *drivers.Manager) error {
-	if r.PoolID == "" {
-		return errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
-	}
+	// if r.PoolID == "" {
+	// 	return errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
+	// }
 
 	if r.StageRuntimeID == "" {
-		return errors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
+		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
+
+	entity, err := s.Find(ctx, r.StageRuntimeID)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+	}
+	poolID := entity.PoolName
 
 	logr := logrus.
 		WithField("stage_runtime_id", r.StageRuntimeID).
-		WithField("pool", r.PoolID).
+		WithField("pool", poolID).
 		WithField("api", "dlite:destroy")
 
 	logr.Traceln("starting the destroy process")
 
-	inst, err := poolManager.GetInstanceByStageID(ctx, r.PoolID, r.StageRuntimeID)
+	inst, err := poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
 	if err != nil {
 		return fmt.Errorf("cannot get the instance by tag: %w", err)
 	}
@@ -49,11 +56,10 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.Traceln("destroyed instance")
 
 	envState().Delete(r.StageRuntimeID)
-	exists, _ := s.Find(ctx, r.StageRuntimeID, r.PoolID)
-	if exists != nil {
-		if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
-			logr.WithError(err).Errorln("failed to delete stage owner entity")
-		}
+
+	if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
+		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
+
 	return nil
 }

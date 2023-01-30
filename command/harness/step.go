@@ -6,18 +6,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	errors "github.com/drone-runners/drone-runner-aws/internal/types"
+	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -34,20 +35,22 @@ var (
 	stepTimeout = 4 * time.Hour
 )
 
-func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig, poolManager *drivers.Manager) (*api.PollStepResponse, error) {
+func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
-		return nil, errors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
+		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
 	}
 
-	if r.PoolID == "" {
-		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
+	entity, err := s.Find(ctx, r.StageRuntimeID)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 	}
 
+	poolID := entity.PoolName
 	logr := logrus.
 		WithField("api", "dlite:step").
 		WithField("stage_runtime_id", r.StageRuntimeID).
 		WithField("step_id", r.StartStepRequest.ID).
-		WithField("pool", r.PoolID).
+		WithField("pool", poolID).
 		WithField("correlation_id", r.CorrelationID)
 
 	setPrevStepExportEnvs(r)
@@ -66,7 +69,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 			r.Volumes = append(r.Volumes, mount)
 		}
 	}
-	inst, err := getInstance(ctx, r, poolManager)
+	inst, err := getInstance(ctx, poolID, r.StageRuntimeID, r.InstanceID, poolManager)
 	if err != nil {
 		return nil, err
 	}
@@ -127,19 +130,20 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, env *config.EnvConfig,
 	return pollResponse, nil
 }
 
-func getInstance(ctx context.Context, r *ExecuteVMRequest, poolManager *drivers.Manager) (
+func getInstance(ctx context.Context, poolID, stageRuntimeID,
+	instanceID string, poolManager *drivers.Manager) (
 	*types.Instance, error) {
-	if r.InstanceID != "" {
-		inst, err := poolManager.Find(ctx, r.InstanceID)
+	if instanceID != "" {
+		inst, err := poolManager.Find(ctx, instanceID)
 		if err != nil {
-			return nil, fmt.Errorf("cannot get the instance by Id %s : %w", r.InstanceID, err)
+			return nil, fmt.Errorf("cannot get the instance by Id %s : %w", instanceID, err)
 		}
 		return inst, nil
 	}
 
-	inst, err := poolManager.GetInstanceByStageID(ctx, r.PoolID, r.StageRuntimeID)
+	inst, err := poolManager.GetInstanceByStageID(ctx, poolID, stageRuntimeID)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get the instance by stageId %s: %w", r.StageRuntimeID, err)
+		return nil, fmt.Errorf("cannot get the instance by stageId %s: %w", stageRuntimeID, err)
 	}
 	return inst, nil
 }

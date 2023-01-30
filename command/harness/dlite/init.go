@@ -70,7 +70,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Services[i].IPAddress = setupResp.IPAddress
 		req.Services[i].CorrelationID = task.ID
 		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
-		resp, err := harness.HandleStep(ctx, req.Services[i], &t.c.env, t.c.poolManager)
+		resp, err := harness.HandleStep(ctx, req.Services[i], t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
 		if err != nil {
 			status.Status = Error
 			status.ErrorMessage = err.Error()
