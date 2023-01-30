@@ -381,15 +381,11 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 		var instances []*types.Instance
 
 		if destroyBusy {
-			for _, inst := range busy {
-				instances = append(instances, inst)
-			}
+			instances = append(instances, busy...)
 		}
 
 		if destroyFree {
-			for _, inst := range free {
-				instances = append(instances, inst)
-			}
+			instances = append(instances, free...)
 		}
 
 		if len(instances) == 0 {

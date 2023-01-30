@@ -22,6 +22,9 @@ import (
 var (
 	ignitePath              = "/usr/local/bin/ignite"
 	clientDisconnectTimeout = 4 * time.Minute
+	destroyTimeout          = 10 * time.Minute
+	destroyRetryAttempts    = 3
+	initTimeout             = 20 * time.Minute // TODO (Vistaar): validate this timeout
 )
 
 type config struct {
@@ -94,10 +97,9 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
-	opts.Arch = "amd64"
 	startupScript := generateStartupScript(opts)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
-	vm := strings.ToLower(random(20))
+	vm := strings.ToLower(random(20)) //nolint:gomnd
 
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
@@ -193,7 +195,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
 	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
-	_, err = pollForJob(ctx, jobID, p.client, logr, 20*time.Minute, true) // TODO (Vistaar): validate this timeout
+	_, err = pollForJob(ctx, jobID, p.client, logr, initTimeout, true)
 	if err != nil {
 		return nil, err
 	}
@@ -235,13 +237,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
 	if err != nil {
 		logr.WithError(err).Errorln("nomad: could not get allocation information")
-		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, err
 	}
 
 	// Not expected - if nomad is unable to find a port, it should not run the job at all.
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
-		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, errors.New("could not assign an available port as part of the job")
 	}
 
@@ -249,9 +251,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	// sanity check
 	if liteEnginePort <= 0 || liteEnginePort > 65535 {
-		err := fmt.Errorf("nomad: port %d generated is not a valid port", liteEnginePort)
+		err = fmt.Errorf("nomad: port %d generated is not a valid port", liteEnginePort)
 		logr.Errorln(err)
-		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, err
 	}
 
@@ -261,13 +263,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
 	if err != nil {
 		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the init job")
-		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, err
 	}
 
 	ip := strings.Split(n.HTTPAddr, ":")[0]
 	if net.ParseIP(ip) == nil {
-		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
 	}
 
@@ -294,7 +296,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 		}
 		job := &api.Job{
 			ID:   &jobID,
-			Name: stringToPtr(random(20)),
+			Name: stringToPtr(random(20)), //nolint:gomnd
 
 			Type:        stringToPtr("batch"),
 			Datacenters: []string{"dc1"},
@@ -305,7 +307,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 				{
 					StopAfterClientDisconnect: &clientDisconnectTimeout,
 					RestartPolicy: &api.RestartPolicy{
-						Attempts: intToPtr(3),
+						Attempts: intToPtr(destroyRetryAttempts),
 					},
 					Name:  stringToPtr("delete_vm_grp"),
 					Count: intToPtr(1),
@@ -339,7 +341,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			return err
 		}
 		logr.Debugln("nomad: started polling for destroy job")
-		_, err = pollForJob(ctx, jobID, p.client, logr, 10*time.Minute, true)
+		_, err = pollForJob(ctx, jobID, p.client, logr, destroyTimeout, true)
 		if err != nil {
 			logr.WithError(err).Errorln("nomad: could not complete destroy job")
 			return err
@@ -369,11 +371,11 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 // pollForJob polls on the status of the job and returns back once it is in a terminal state.
 // if remove is set to true, it deregisters the job in case it either exceeds the timeout or the context is marked as Done
 // it returns an error if the job did not reach the terminal state
-func pollForJob(ctx context.Context, id string, client *api.Client, logr logger.Logger, timeout time.Duration, remove bool) (*api.Job, error) {
+func pollForJob(ctx context.Context, id string, client *api.Client, logr logger.Logger, timeout time.Duration, remove bool) (*api.Job, error) { //nolint:unparam
 	maxPollTime := time.After(timeout)
 	var job *api.Job
 	var err error
-	var waitIndex uint64 = 0
+	var waitIndex uint64
 L:
 	for {
 		select {
