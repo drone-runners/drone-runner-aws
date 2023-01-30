@@ -69,7 +69,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
-		logr = log.WithField("pool", r.PoolID)
+		logr = log.WithField("pool", pool)
 
 		ctx = logger.WithContext(ctx, logger.Logrus(logr))
 	}
