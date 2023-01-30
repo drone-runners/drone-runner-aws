@@ -41,7 +41,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 	}
 
 	entity, err := s.Find(ctx, r.StageRuntimeID)
-	if err != nil {
+	if err != nil || entity == nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 	}
 

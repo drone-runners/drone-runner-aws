@@ -26,7 +26,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	}
 
 	entity, err := s.Find(ctx, r.StageRuntimeID)
-	if err != nil {
+	if err != nil || entity == nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 	}
 	poolID := entity.PoolName
@@ -50,7 +50,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_id", inst.ID).
 		WithField("instance_name", inst.Name)
 
-	if err = poolManager.Destroy(ctx, r.PoolID, inst.ID); err != nil {
+	if err = poolManager.Destroy(ctx, poolID, inst.ID); err != nil {
 		return fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Traceln("destroyed instance")
