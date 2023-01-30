@@ -17,10 +17,6 @@ type VMCleanupRequest struct {
 }
 
 func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, poolManager *drivers.Manager) error {
-	// if r.PoolID == "" {
-	// 	return errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
-	// }
-
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}

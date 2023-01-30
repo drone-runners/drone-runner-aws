@@ -15,7 +15,7 @@ func (pma *PoolMapperByAccount) Decode(value string) error {
 	for _, pair := range pairs {
 		p := PoolMap{}
 		kvpair := strings.Split(pair, "=")
-		if len(kvpair) != 2 {
+		if len(kvpair) != 2 { //nolint:gomnd
 			return fmt.Errorf("invalid map item: %q", pair)
 		}
 		err := json.Unmarshal([]byte(kvpair[1]), &p)

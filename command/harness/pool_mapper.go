@@ -17,12 +17,13 @@ func fetchPool(accountID, inputPool string, p config.PoolMapperByAccount) string
 		return inputPool
 	}
 
-	if v, ok := poolMap[inputPool]; !ok {
+	v, ok := poolMap[inputPool]
+	if !ok {
 		return inputPool
-	} else {
-		logrus.WithField("old_pool", inputPool).
-			WithField("updated_pool", v).
-			Info("Updated the pool")
-		return v
 	}
+
+	logrus.WithField("old_pool", inputPool).
+		WithField("updated_pool", v).
+		Info("Updated the pool")
+	return v
 }

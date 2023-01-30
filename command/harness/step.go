@@ -57,7 +57,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 	// add global volumes as mounts only if image is specified
 	if r.Image != "" {
 		for _, pair := range env.Runner.Volumes {
-			src, dest, _, err := resource.ParseVolume(pair)
+			src, dest, _, err := resource.ParseVolume(pair) //nolint:govet
 			if err != nil {
 				logr.Warn(err)
 				continue
