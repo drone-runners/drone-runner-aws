@@ -23,7 +23,6 @@ func (pma *PoolMapperByAccount) Decode(value string) error {
 			return fmt.Errorf("invalid map json: %w", err)
 		}
 		m[kvpair[0]] = p
-
 	}
 	*pma = PoolMapperByAccount(m)
 	return nil
