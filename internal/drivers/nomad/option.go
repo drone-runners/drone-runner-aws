@@ -58,3 +58,12 @@ func WithCpus(s string) Option {
 		}
 	}
 }
+
+func WithDiskSize(s string) Option {
+	return func(p *config) {
+		p.vmDiskSize = s
+		if p.vmDiskSize == "" {
+			p.vmDiskSize = "50GB"
+		}
+	}
+}

@@ -32,6 +32,7 @@ type config struct {
 	vmImage        string
 	vmMemory       string
 	vmCpus         string
+	vmDiskSize     string
 	caCertPath     string
 	clientCertPath string
 	clientKeyPath  string
@@ -108,12 +109,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
 
-	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %s --memory %s --size 50GB --ssh --runtime=docker --ports $%s:%s --copy-files %s:%s",
+	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %s --memory %s --size %s --ssh --runtime=docker --ports $%s:%s --copy-files %s:%s",
 		ignitePath,
 		p.vmImage,
 		vm,
 		p.vmCpus,
 		p.vmMemory,
+		p.vmDiskSize,
 		port,
 		strconv.Itoa(lehelper.LiteEnginePort),
 		hostPath,

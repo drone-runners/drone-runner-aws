@@ -148,8 +148,6 @@ chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
 
-
-
 {{ if .PluginBinaryURI }}
 wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin
 chmod 777 /usr/local/bin/plugin
