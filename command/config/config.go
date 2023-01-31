@@ -109,9 +109,10 @@ type (
 	}
 
 	NomadVM struct {
-		Image  string `json:"image" yaml:"image"`
-		Memory string `json:"memory" yaml:"memory"`
-		Cpus   string `json:"cpus" yaml:"cpus"`
+		Image    string `json:"image" yaml:"image"`
+		Memory   string `json:"memory" yaml:"memory"`
+		Cpus     string `json:"cpus" yaml:"cpus"`
+		DiskSize string `json:"disk_size" yaml:"disk_size"`
 	}
 
 	// Azure specifies the configuration for an Azure instance.
