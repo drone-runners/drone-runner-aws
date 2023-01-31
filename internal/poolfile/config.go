@@ -15,6 +15,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/azure"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/digitalocean"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/google"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers/nomad"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/noop"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
@@ -274,8 +275,28 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
+		case string(types.Nomad):
+			var nomadConfig, ok = instance.Spec.(*config.Nomad)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			driver, err := nomad.New(nomad.WithAddress(nomadConfig.Server.Address),
+				nomad.WithCaCertPath(nomadConfig.Server.CaCertPath),
+				nomad.WithClientCertPath(nomadConfig.Server.ClientCertPath),
+				nomad.WithClientKeyPath(nomadConfig.Server.ClientKeyPath),
+				nomad.WithInsecure(nomadConfig.Server.Insecure),
+				nomad.WithCpus(nomadConfig.VM.Cpus),
+				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
+				nomad.WithMemory(nomadConfig.VM.Memory),
+				nomad.WithImage(nomadConfig.VM.Image))
+			if err != nil {
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
 		default:
-			return nil, fmt.Errorf("unknown instance type %s", instance.Type)
+			return nil, fmt.Errorf("unknown instance tip %s", instance.Type)
 		}
 	}
 	return pools, nil

@@ -95,6 +95,26 @@ type (
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
 	}
 
+	Nomad struct {
+		Server NomadServer `json:"server" yaml:"server"`
+		VM     NomadVM     `json:"vm" yaml:"vm"`
+	}
+
+	NomadServer struct {
+		Address        string `json:"address" yaml:"address"`
+		Insecure       bool   `json:"insecure,omitempty" yaml:"insecure" default:"false"`
+		CaCertPath     string `json:"ca_cert_path,omitempty" yaml:"ca_cert_path"`
+		ClientKeyPath  string `json:"client_key_path,omitempty" yaml:"client_key_path"`
+		ClientCertPath string `json:"client_cert_path,omitempty" yaml:"client_cert_path"`
+	}
+
+	NomadVM struct {
+		Image    string `json:"image" yaml:"image"`
+		Memory   string `json:"memory" yaml:"memory"`
+		Cpus     string `json:"cpus" yaml:"cpus"`
+		DiskSize string `json:"disk_size" yaml:"disk_size"`
+	}
+
 	// Azure specifies the configuration for an Azure instance.
 	Azure struct {
 		Account           AzureAccount      `json:"account,omitempty"`
@@ -424,6 +444,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		s.Spec = new(VMFusion)
 	case string(types.Noop):
 		s.Spec = new(Noop)
+	case string(types.Nomad):
+		s.Spec = new(Nomad)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}

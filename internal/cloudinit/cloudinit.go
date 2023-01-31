@@ -74,6 +74,36 @@ func Custom(templateText string, params *Params) (payload string, err error) {
 	return payload, nil
 }
 
+const linuxScript = `
+#!/usr/bin/bash
+mkdir {{ .CertDir }}
+
+echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
+chmod 0600 {{ .CaCertPath }}
+
+echo {{ .TLSCert | base64 }} | base64 -d  >> {{ .CertPath }}
+chmod 0600 {{ .CertPath }}
+
+echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
+chmod 0600 {{ .KeyPath }}
+
+/usr/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
+chmod 777 /usr/bin/lite-engine
+touch $HOME/.env
+echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
+
+{{ if .PluginBinaryURI }}
+wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+chmod 777 /usr/bin/plugin
+{{ end }}
+
+systemctl disable docker.service
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+service docker start
+
+/usr/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+`
+
 const macScript = `
 #!/usr/bin/env bash
 mkdir /tmp/certs/
@@ -128,6 +158,7 @@ chmod 777 /usr/local/bin/plugin
 
 var macTemplate = template.Must(template.New("mac").Funcs(funcs).Parse(macScript))
 var macArm64Template = template.Must(template.New("mac-arm64").Funcs(funcs).Parse(macArm64Script))
+var linuxBashTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(linuxScript))
 
 func Mac(params *Params) (payload string) {
 	sb := &strings.Builder{}
@@ -160,6 +191,36 @@ func Mac(params *Params) (payload string) {
 			err = fmt.Errorf("failed to execute mac amd64 template to get init script: %w", err)
 			panic(err)
 		}
+	}
+	return sb.String()
+}
+
+// This generates a bash startup script for linux
+func LinuxBash(params *Params) (payload string) {
+	sb := &strings.Builder{}
+
+	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
+	certPath := filepath.Join(certsDir, "server-cert.pem")
+	keyPath := filepath.Join(certsDir, "server-key.pem")
+
+	var p = struct {
+		Params
+		CaCertPath string
+		CertPath   string
+		CertDir    string
+		KeyPath    string
+	}{
+		Params:     *params,
+		CaCertPath: caCertPath,
+		CertDir:    certsDir,
+		CertPath:   certPath,
+		KeyPath:    keyPath,
+	}
+
+	err := linuxBashTemplate.Execute(sb, p)
+	if err != nil {
+		err = fmt.Errorf("failed to execute linux bash template to get init script: %w", err)
+		panic(err)
 	}
 	return sb.String()
 }
