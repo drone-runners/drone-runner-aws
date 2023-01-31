@@ -245,8 +245,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	// Not expected - if nomad is unable to find a port, it should not run the job at all.
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
+		err = fmt.Errorf("nomad: could not allocate network and ports for job")
+		logr.Errorln(err)
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, errors.New("could not assign an available port as part of the job")
+		return nil, err
 	}
 
 	liteEnginePort := alloc.Resources.Networks[0].DynamicPorts[0].Value
@@ -271,8 +273,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	ip := strings.Split(n.HTTPAddr, ":")[0]
 	if net.ParseIP(ip) == nil {
+		err = fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
+		logr.Errorln(err)
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
+		return nil, err
 	}
 
 	// If the IP is a valid parsed IP, set it as the instance IP
