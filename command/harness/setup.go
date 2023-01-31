@@ -42,14 +42,14 @@ var (
 
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*SetupVMResponse, error) {
 	stageRuntimeID := r.ID
-	pool := r.PoolID
 	if stageRuntimeID == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
 
-	if pool == "" {
+	if r.PoolID == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
+	pool := fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, env.Dlite.PoolMapByAccount)
 
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
@@ -69,7 +69,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
-		logr = log.WithField("pool", r.PoolID)
+		logr = log.WithField("pool", pool)
 
 		ctx = logger.WithContext(ctx, logger.Logrus(logr))
 	}
@@ -100,7 +100,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, fmt.Errorf("%s pool not defined", pool)
 	}
 
-	_, findErr := s.Find(ctx, stageRuntimeID, pool)
+	_, findErr := s.Find(ctx, stageRuntimeID)
 	if findErr != nil {
 		if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {
 			return nil, fmt.Errorf("could not create stage owner entity: %w", err)

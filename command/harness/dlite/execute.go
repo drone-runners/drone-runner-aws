@@ -47,7 +47,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.ExecuteVMRequest.CorrelationID = task.ID
-	stepResp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, &t.c.env, t.c.poolManager)
+	stepResp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
 	if err != nil {
 		logr.WithError(err).Error("could not execute step:")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)

@@ -19,9 +19,9 @@ type StageOwnerStore struct {
 	db *sqlx.DB
 }
 
-func (s StageOwnerStore) Find(_ context.Context, id, poolName string) (*types.StageOwner, error) {
+func (s StageOwnerStore) Find(_ context.Context, id string) (*types.StageOwner, error) {
 	dst := new(types.StageOwner)
-	err := s.db.Get(dst, stageOwnerFindByID, id, poolName)
+	err := s.db.Get(dst, stageOwnerFindByID, id)
 	return dst, err
 }
 
@@ -58,7 +58,6 @@ FROM stage_owner
 
 const stageOwnerFindByID = stageOnwerBase + `
 WHERE stage_id = $1
-AND pool_name = $2
 `
 
 const stageOwnerInsert = `

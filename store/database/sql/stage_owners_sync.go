@@ -17,10 +17,10 @@ func NewStageOwnerStoreSync(stageOwnerStore *StageOwnerStore) *StageOwnerStoreSy
 
 type StageOwnerStoreSync struct{ base *StageOwnerStore }
 
-func (i StageOwnerStoreSync) Find(ctx context.Context, id, poolName string) (*types.StageOwner, error) {
+func (i StageOwnerStoreSync) Find(ctx context.Context, id string) (*types.StageOwner, error) {
 	mutex.RLock()
 	defer mutex.RUnlock()
-	return i.base.Find(ctx, id, poolName)
+	return i.base.Find(ctx, id)
 }
 
 func (i StageOwnerStoreSync) Create(ctx context.Context, stageOwner *types.StageOwner) error {

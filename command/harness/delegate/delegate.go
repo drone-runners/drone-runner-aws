@@ -148,9 +148,15 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 
 	stageID := r.URL.Query().Get("stageId")
 	if stageID != "" {
-		_, err := c.stageOwnerStore.Find(context.Background(), stageID, poolName)
+		entity, err := c.stageOwnerStore.Find(context.Background(), stageID)
 		if err != nil {
 			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Error("failed to find the stage in store")
+			httprender.OK(w, poolOwnerResponse{Owner: false})
+			return
+		}
+
+		if entity.PoolName != poolName {
+			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Errorf("found stage with different pool: %s", entity.PoolName)
 			httprender.OK(w, poolOwnerResponse{Owner: false})
 			return
 		}
@@ -184,7 +190,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, err := harness.HandleStep(ctx, req, &c.env, c.poolManager)
+	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("step_id", req.ID).
 			WithError(err).Error("could not execute step on VM")
