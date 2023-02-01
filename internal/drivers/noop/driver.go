@@ -97,3 +97,7 @@ func (p *config) DriverName() string {
 func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
+
+func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
+	return true, nil
+}

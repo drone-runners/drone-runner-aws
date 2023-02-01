@@ -252,6 +252,10 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
+func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
+	return true, nil
+}
+
 func commandCopyFileToGuest(ctx context.Context, src, dest, username, password, path string) *exec.Cmd {
 	return exec.CommandContext(ctx, vmrunbin, "-gu", username, "-gp", password, "copyFileFromHostToGuest", path, src, dest)
 }

@@ -374,6 +374,10 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return "", nil
 }
 
+func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
+	return true, nil
+}
+
 // pollForJob polls on the status of the job and returns back once it is in a terminal state.
 // if remove is set to true, it deregisters the job in case it either exceeds the timeout or the context is marked as Done
 // it returns an error if the job did not reach the terminal state

@@ -327,6 +327,12 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName string, en
 	})
 
 	inst := free[0]
+	exists, _ := pool.Driver.InstanceExists(ctx, inst.ID)
+	if !exists {
+		pool.Unlock()
+		_ = m.instanceStore.Delete(ctx, inst.ID)
+		return m.Provision(ctx, poolName, serverName, env)
+	}
 	inst.State = types.StateInUse
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {

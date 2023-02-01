@@ -31,7 +31,8 @@ type Driver interface {
 	Ping(ctx context.Context) error
 	// Logs returns the console logs for the instance.
 	Logs(ctx context.Context, instanceID string) (string, error)
-
+	// InstanceExists on provisioning check db instance still exists in cloud
+	InstanceExists(ctx context.Context, instanceID string) (bool, error)
 	RootDir() string
 	DriverName() string
 	CanHibernate() bool

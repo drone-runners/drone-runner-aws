@@ -330,6 +330,10 @@ func (c *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
+func (c *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
+	return true, nil
+}
+
 func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts) types.Instance {
 	return types.Instance{
 		ID:           *vm.Name,

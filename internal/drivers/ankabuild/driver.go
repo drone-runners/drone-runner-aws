@@ -34,6 +34,7 @@ const (
 	scriptFailHandler      = 2
 	scriptTimeout          = 200
 	ankaRunning            = "Running"
+	statusStarted          = "Started"
 )
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -101,6 +102,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:  inst.TS.Unix(),
 		Updated:  time.Now().Unix(),
 		Port:     int64(port),
+		NodeID:   inst.NodeID,
 	}
 	logr.
 		WithField("ip", inst.Vminfo.HostIP).
@@ -241,4 +243,15 @@ func (c *config) DriverName() string {
 
 func (c *config) CanHibernate() bool {
 	return false
+}
+
+func (c *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
+	instance, err := c.ankaClient.VMFind(ctx, instanceID)
+	if instance == nil || err != nil {
+		return false, nil
+	}
+	if instance.Body.InstanceState != statusStarted {
+		return false, nil
+	}
+	return true, nil
 }
