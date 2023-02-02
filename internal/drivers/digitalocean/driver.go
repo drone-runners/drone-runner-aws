@@ -236,8 +236,8 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
-func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
-	return true, nil
+func (p *config) InstanceExists(ctx context.Context, instanceID string) bool {
+	return true
 }
 
 // helper function returns a new digitalocean client.

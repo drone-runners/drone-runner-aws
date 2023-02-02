@@ -34,7 +34,8 @@ const (
 	scriptFailHandler      = 2
 	scriptTimeout          = 200
 	ankaRunning            = "Running"
-	statusStarted          = "Started"
+	statusTerminating      = "Terminating"
+	statusTerminated       = "Terminated"
 )
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -245,13 +246,11 @@ func (c *config) CanHibernate() bool {
 	return false
 }
 
-func (c *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
+func (c *config) InstanceExists(ctx context.Context, instanceID string) bool {
 	instance, err := c.ankaClient.VMFind(ctx, instanceID)
-	if instance == nil || err != nil {
-		return false, nil
+	if instance == nil || err != nil || instance.Body.InstanceState == statusTerminated || instance.Body.InstanceState == statusTerminating {
+		logrus.Infof("Anka Build: instance %s does not exist", instanceID)
+		return false
 	}
-	if instance.Body.InstanceState != statusStarted {
-		return false, nil
-	}
-	return true, nil
+	return true
 }

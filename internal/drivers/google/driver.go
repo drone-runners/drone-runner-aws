@@ -502,8 +502,8 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 	}
 }
 
-func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
-	return true, nil
+func (p *config) InstanceExists(ctx context.Context, instanceID string) bool {
+	return true
 }
 
 func (p *config) findInstanceZone(ctx context.Context, instanceID string) (

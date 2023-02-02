@@ -327,12 +327,19 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName string, en
 	})
 
 	inst := free[0]
-	exists, _ := pool.Driver.InstanceExists(ctx, inst.ID)
-	if !exists {
-		pool.Unlock()
-		_ = m.instanceStore.Delete(ctx, inst.ID)
-		return m.Provision(ctx, poolName, serverName, env)
+	var maxAttempts = 3
+	counter := 0
+	for ; counter < maxAttempts; counter++ {
+		if !pool.Driver.InstanceExists(ctx, inst.ID) {
+			pool.Unlock()
+			_ = m.instanceStore.Delete(ctx, inst.ID)
+			if counter == maxAttempts-1 {
+				return nil, fmt.Errorf("provisioning failed after %d attempts", maxAttempts)
+			}
+			return m.Provision(ctx, poolName, serverName, env)
+		}
 	}
+
 	inst.State = types.StateInUse
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {

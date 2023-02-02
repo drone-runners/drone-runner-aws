@@ -374,8 +374,8 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return "", nil
 }
 
-func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
-	return true, nil
+func (p *config) InstanceExists(ctx context.Context, instanceID string) bool {
+	return true
 }
 
 // pollForJob polls on the status of the job and returns back once it is in a terminal state.

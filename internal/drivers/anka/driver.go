@@ -215,8 +215,8 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
-func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
-	return true, nil
+func (p *config) InstanceExists(ctx context.Context, instanceID string) bool {
+	return true
 }
 
 func commandCloneVM(ctx context.Context, vmID, newVMName string) *exec.Cmd {

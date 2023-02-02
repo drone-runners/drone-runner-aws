@@ -491,8 +491,8 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return p.getIP(awsInstance), nil
 }
 
-func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
-	return true, nil
+func (p *config) InstanceExists(ctx context.Context, instanceID string) bool {
+	return true
 }
 
 func (p *config) getIP(amazonInstance *ec2.Instance) string {

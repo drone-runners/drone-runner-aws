@@ -98,6 +98,6 @@ func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
 
-func (p *config) InstanceExists(ctx context.Context, instanceID string) (bool, error) {
-	return true, nil
+func (p *config) InstanceExists(ctx context.Context, instanceID string) bool {
+	return true
 }

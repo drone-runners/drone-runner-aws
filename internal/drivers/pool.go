@@ -32,7 +32,7 @@ type Driver interface {
 	// Logs returns the console logs for the instance.
 	Logs(ctx context.Context, instanceID string) (string, error)
 	// InstanceExists on provisioning check db instance still exists in cloud
-	InstanceExists(ctx context.Context, instanceID string) (bool, error)
+	InstanceExists(ctx context.Context, instanceID string) bool
 	RootDir() string
 	DriverName() string
 	CanHibernate() bool
