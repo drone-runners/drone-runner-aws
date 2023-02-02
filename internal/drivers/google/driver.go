@@ -147,7 +147,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	inst, err := p.create(ctx, opts, name)
 	if err != nil {
-		defer p.Destroy(context.Background(), []*types.Instance{inst}) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}) //nolint:errcheck
 		return nil, err
 	}
 	return inst, nil
@@ -343,7 +343,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 
 	for _, instanceID := range instanceIDs {
 		logr := logger.FromContext(ctx).
-			WithField("id", instanceIDs).
+			WithField("id", instanceID).
 			WithField("cloud", types.Google)
 		zone, err := p.findInstanceZone(ctx, instanceID)
 		if err != nil {
@@ -363,6 +363,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 				logr.WithError(err).Errorln("google: failed to delete the VM")
 			}
 		}
+		logr.Info("google: sent delete instance request")
 	}
 	return
 }
