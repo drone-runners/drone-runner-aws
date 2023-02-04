@@ -97,6 +97,10 @@ wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /
 chmod 777 /usr/bin/plugin
 {{ end }}
 
+echo 600 > /proc/sys/net/ipv4/tcp_keepalive_time
+echo 60 > /proc/sys/net/ipv4/tcp_keepalive_intvl
+echo 20 > /proc/sys/net/ipv4/tcp_keepalive_probes
+
 systemctl disable docker.service
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 service docker start
