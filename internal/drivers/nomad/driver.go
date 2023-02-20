@@ -30,7 +30,7 @@ var (
 type config struct {
 	address        string
 	vmImage        string
-	vmMemory       string
+	vmMemoryGB     string
 	vmCpus         string
 	vmDiskSize     string
 	caCertPath     string
@@ -105,16 +105,26 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 	jobID := fmt.Sprintf("init_job_%s", vm)
+	resourceJobID := fmt.Sprintf("init_job_resources_%s", vm)
 	port := fmt.Sprintf("NOMAD_PORT_%s", vm)
+
+	cpus, err := strconv.Atoi(p.vmCpus)
+	if err != nil {
+		return nil, errors.New("could not convert VM cpus to integer")
+	}
+	memGB, err := strconv.Atoi(p.vmMemoryGB)
+	if err != nil {
+		return nil, errors.New("could not convert VM memory to integer")
+	}
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
 
-	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %s --memory %s --size %s --ssh --runtime=docker --ports $%s:%s --copy-files %s:%s",
+	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %d --memory %dGB --size %s --ssh --runtime=docker --ports $%s:%s --copy-files %s:%s",
 		ignitePath,
 		p.vmImage,
 		vm,
-		p.vmCpus,
-		p.vmMemory,
+		cpus,
+		memGB,
 		p.vmDiskSize,
 		port,
 		strconv.Itoa(lehelper.LiteEnginePort),
@@ -156,6 +166,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 					{
 						Name:   "ignite_run",
 						Driver: "raw_exec",
+						Resources: &api.Resources{
+							MemoryMB: intToPtr(memGB * 1000),
+							Cores:    intToPtr(cpus),
+						},
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", runCmd},
@@ -192,7 +206,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	}
 
 	logr.Debugln("nomad: submitting job to nomad")
-	_, _, err := p.client.Jobs().Register(job, nil)
+	_, _, err = p.client.Jobs().Register(job, nil)
 	if err != nil {
 		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
@@ -279,6 +293,86 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, err
 	}
 
+	encodedHealthCheckScript := base64.StdEncoding.EncodeToString([]byte(generateHealthCheckScript(instance.Port)))
+	hostPath = fmt.Sprintf("/usr/local/bin/%s_resource.sh", vm)
+
+	// This job stays alive until the lifecycle of the VM and makes sure Nomad is resource aware about the VMs.
+	resourceJob := &api.Job{
+		ID:          &resourceJobID,
+		Name:        stringToPtr(resourceJobID),
+		Type:        stringToPtr("batch"),
+		Datacenters: []string{"dc1"},
+		// TODO (Vistaar): This can be updated once we have more data points
+		Reschedule: &api.ReschedulePolicy{
+			Attempts:  intToPtr(0),
+			Unlimited: boolToPtr(false),
+		},
+		TaskGroups: []*api.TaskGroup{
+			{
+				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				RestartPolicy: &api.RestartPolicy{
+					Attempts: intToPtr(0),
+				},
+				Name:  stringToPtr(fmt.Sprintf("init_task_group_resource_%s", vm)),
+				Count: intToPtr(1),
+				Tasks: []*api.Task{
+					{
+						Name:   "create_health_check_script_on_host",
+						Driver: "raw_exec",
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedHealthCheckScript, hostPath)},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "prestart",
+						},
+					},
+					{
+
+						Name: "health_check_vm",
+						Resources: &api.Resources{
+							MemoryMB: intToPtr((memGB - 1) * 1000),
+							Cores:    intToPtr(cpus - 1),
+						},
+						Constraints: []*api.Constraint{
+							{
+								LTarget: "${node.unique.id}",
+								RTarget: id,
+								Operand: "=",
+							},
+						},
+						Driver: "raw_exec",
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", fmt.Sprintf("cat %s | base64 --decode | bash", hostPath)},
+						},
+					},
+					{
+						Name:   "remove_health_check_script_on_host",
+						Driver: "raw_exec",
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", fmt.Sprintf("rm %s", hostPath)},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "poststop",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Add the job to keep the resource loop busy in the background
+	go func() {
+		_, _, err = p.client.Jobs().Register(resourceJob, nil)
+		if err != nil {
+			logr.Errorf("nomad: could not register resource job, err: %w", err)
+		}
+	}()
+
 	// If the IP is a valid parsed IP, set it as the instance IP
 	instance.Address = ip
 
@@ -319,23 +413,15 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					Count: intToPtr(1),
 					Tasks: []*api.Task{
 						{
-							Name:   "ignite_kill",
+							Name: "ignite_kill_and_rm",
+							Resources: &api.Resources{
+								MemoryMB: intToPtr(100),
+								Cores:    intToPtr(1),
+							},
 							Driver: "raw_exec",
 							Config: map[string]interface{}{
 								"command": "/usr/bin/su",
-								"args":    []string{"-c", fmt.Sprintf("%s kill %s", ignitePath, instance.ID)},
-							},
-						},
-						{
-							Name:   "ignite_rm",
-							Driver: "raw_exec",
-							Config: map[string]interface{}{
-								"command": "/usr/bin/su",
-								"args":    []string{"-c", fmt.Sprintf("%s rm %s", ignitePath, instance.ID)},
-							},
-							Lifecycle: &api.TaskLifecycle{
-								Sidecar: false,
-								Hook:    "poststop",
+								"args":    []string{"-c", fmt.Sprintf("%s kill %s && %s rm %s", ignitePath, instance.ID, ignitePath, instance.ID)},
 							},
 						},
 					},
@@ -446,4 +532,22 @@ func generateStartupScript(opts *types.InstanceCreateOpts) string {
 		PluginBinaryURI:      opts.PluginBinaryURI,
 	}
 	return cloudinit.LinuxBash(params)
+}
+
+// To make nomad keep resources occupied until the VM is alive, we do a periodic health check
+// by checking whether the lite engine port on the VM is open or not.
+func generateHealthCheckScript(port int64) string {
+	return fmt.Sprintf(`
+#!/usr/bin/bash
+while true
+do
+nc -vz localhost %s
+if [ $? -eq 1 ]
+then
+    echo "The port check failed"
+	exit 1
+fi
+echo "Port check passed..."
+sleep 5
+done`, strconv.Itoa(int(port)))
 }

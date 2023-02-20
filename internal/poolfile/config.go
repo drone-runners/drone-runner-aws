@@ -287,7 +287,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				nomad.WithInsecure(nomadConfig.Server.Insecure),
 				nomad.WithCpus(nomadConfig.VM.Cpus),
 				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
-				nomad.WithMemory(nomadConfig.VM.Memory),
+				nomad.WithMemory(nomadConfig.VM.MemoryGB),
 				nomad.WithImage(nomadConfig.VM.Image))
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
