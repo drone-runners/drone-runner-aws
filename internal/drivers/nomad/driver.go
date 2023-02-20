@@ -98,6 +98,7 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
+	fmt.Println("creating VM... ")
 	startupScript := generateStartupScript(opts)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
 	vm := strings.ToLower(random(20)) //nolint:gomnd
@@ -409,7 +410,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					RestartPolicy: &api.RestartPolicy{
 						Attempts: intToPtr(destroyRetryAttempts),
 					},
-					Name:  stringToPtr("delete_vm_grp"),
+					Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", instance.ID)),
 					Count: intToPtr(1),
 					Tasks: []*api.Task{
 						{
