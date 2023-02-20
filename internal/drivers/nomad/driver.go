@@ -25,6 +25,8 @@ var (
 	destroyTimeout          = 10 * time.Minute
 	destroyRetryAttempts    = 3
 	initTimeout             = 20 * time.Minute // TODO (Vistaar): validate this timeout
+	destroyTaskMemory       = 100
+	gigsToMegs              = 1000
 )
 
 type config struct {
@@ -168,7 +170,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 						Name:   "ignite_run",
 						Driver: "raw_exec",
 						Resources: &api.Resources{
-							MemoryMB: intToPtr(memGB * 1000),
+							MemoryMB: intToPtr(memGB * gigsToMegs),
 							Cores:    intToPtr(cpus),
 						},
 						Config: map[string]interface{}{
@@ -333,7 +335,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 						Name: "health_check_vm",
 						Resources: &api.Resources{
-							MemoryMB: intToPtr((memGB - 1) * 1000),
+							MemoryMB: intToPtr((memGB - 1) * gigsToMegs),
 							Cores:    intToPtr(cpus - 1),
 						},
 						Constraints: []*api.Constraint{
@@ -416,7 +418,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 						{
 							Name: "ignite_kill_and_rm",
 							Resources: &api.Resources{
-								MemoryMB: intToPtr(100),
+								MemoryMB: intToPtr(destroyTaskMemory),
 								Cores:    intToPtr(1),
 							},
 							Driver: "raw_exec",
