@@ -24,9 +24,8 @@ var (
 	clientDisconnectTimeout = 4 * time.Minute
 	destroyTimeout          = 10 * time.Minute
 	destroyRetryAttempts    = 3
-	initTimeout             = 20 * time.Minute // TODO (Vistaar): validate this timeout
-	destroyTaskMemory       = 100
-	gigsToMegs              = 1000
+	initTimeout             = 10 * time.Minute // TODO (Vistaar): validate this timeout
+	destroyTaskMemoryMb     = 50
 )
 
 type config struct {
@@ -100,7 +99,6 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
-	fmt.Println("creating VM... ")
 	startupScript := generateStartupScript(opts)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
 	vm := strings.ToLower(random(20)) //nolint:gomnd
@@ -170,7 +168,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 						Name:   "ignite_run",
 						Driver: "raw_exec",
 						Resources: &api.Resources{
-							MemoryMB: intToPtr(memGB * gigsToMegs),
+							MemoryMB: intToPtr(convertGigsToMegs(memGB)),
 							Cores:    intToPtr(cpus),
 						},
 						Config: map[string]interface{}{
@@ -335,7 +333,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 						Name: "health_check_vm",
 						Resources: &api.Resources{
-							MemoryMB: intToPtr((memGB - 1) * gigsToMegs),
+							MemoryMB: intToPtr(convertGigsToMegs(memGB - 1)),
 							Cores:    intToPtr(cpus - 1),
 						},
 						Constraints: []*api.Constraint{
@@ -416,27 +414,28 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					Count: intToPtr(1),
 					Tasks: []*api.Task{
 						{
-							Name: "ignite_kill_and_rm",
+							Name: "ignite_stop_and_rm",
 							Resources: &api.Resources{
-								MemoryMB: intToPtr(destroyTaskMemory),
+								MemoryMB: intToPtr(destroyTaskMemoryMb),
 								Cores:    intToPtr(1),
 							},
 							Driver: "raw_exec",
 							Config: map[string]interface{}{
 								"command": "/usr/bin/su",
-								"args":    []string{"-c", fmt.Sprintf("%s kill %s && %s rm %s", ignitePath, instance.ID, ignitePath, instance.ID)},
+								"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s", ignitePath, instance.ID, ignitePath, instance.ID)},
 							},
 						},
 					},
 				},
 			}}
+		logr.Infoln("nomad: registering destroy job with nomad")
 		_, _, err := p.client.Jobs().Register(job, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("nomad: could not register destroy job")
 			return err
 		}
 		logr.Debugln("nomad: started polling for destroy job")
-		_, err = pollForJob(ctx, jobID, p.client, logr, destroyTimeout, true)
+		_, err = pollForJob(ctx, jobID, p.client, logr, destroyTimeout, false)
 		if err != nil {
 			logr.WithError(err).Errorln("nomad: could not complete destroy job")
 			return err
@@ -553,4 +552,8 @@ fi
 echo "Port check passed..."
 sleep 5
 done`, strconv.Itoa(int(port)))
+}
+
+func convertGigsToMegs(p int) int {
+	return p * 1000
 }
