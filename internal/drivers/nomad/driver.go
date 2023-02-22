@@ -23,11 +23,10 @@ import (
 var (
 	ignitePath              = "/usr/local/bin/ignite"
 	clientDisconnectTimeout = 4 * time.Minute
-	destroyTimeout          = 10 * time.Minute
 	destroyRetryAttempts    = 3
-	initTimeout             = 10 * time.Minute // TODO (Vistaar): validate this timeout
 	resourceJobTimeout      = 3 * time.Minute
-	destroyTaskMemoryMb     = 50
+	initTimeout             = 5 * time.Minute
+	destroyTimeout          = 10 * time.Minute
 	minNomadCpuMhz          = 1
 	minNomadMemoryMb        = 10
 	machineFrequencyMhz     = 5100 // TODO: Find a way to extract this from the node directly
@@ -239,6 +238,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, err
 	}
 
+	logr = logr.WithField("node_ip", ip).WithField("node_port", hostPort)
+
 	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %d --memory %dGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s",
 		ignitePath,
 		p.vmImage,
@@ -343,7 +344,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer p.deregisterJob(logr, resourceJobId, true)
 		return nil, err
 	}
-	logr.WithField("node_ip", ip).WithField("node_port", hostPort).Infoln("nomad: successfully created instance")
+	logr.Infoln("nomad: successfully created instance")
 
 	// For Nomad, the node identifier (where the init task executed)
 	// is needed to route the destroy call to the right machine.
