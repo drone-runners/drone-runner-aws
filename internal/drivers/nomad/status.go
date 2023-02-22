@@ -9,29 +9,36 @@ const (
 	Dead
 )
 
+const (
+	unknownStr = "unknown"
+	pendingStr = "pending"
+	runningStr = "running"
+	deadStr    = "dead"
+)
+
 func (s JobStatus) String() string {
 	switch s {
 	case Pending:
-		return "pending"
+		return pendingStr
 	case Running:
-		return "running"
+		return runningStr
 	case Dead:
-		return "dead"
+		return deadStr
 	case Unknown:
-		return "unknown"
+		return unknownStr
 	}
-	return "unknown" //nolint:goconst
+	return unknownStr
 }
 
 func Status(s string) JobStatus {
 	switch s {
-	case "pending":
+	case pendingStr:
 		return Pending
-	case "running":
+	case runningStr:
 		return Running
-	case "dead":
+	case deadStr:
 		return Dead
-	case "unknown":
+	case unknownStr:
 		return Unknown
 	}
 	return Unknown
