@@ -20,7 +20,7 @@ func (s JobStatus) String() string {
 	case Unknown:
 		return "unknown"
 	}
-	return "unknown"
+	return "unknown" //nolint:goconst
 }
 
 func Status(s string) JobStatus {

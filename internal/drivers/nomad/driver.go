@@ -335,13 +335,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Debugln("nomad: submitting VM creation job to nomad")
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
 	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
 	_, err = p.pollForJob(ctx, initjobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 	logr.Infoln("nomad: successfully created instance")
@@ -506,7 +506,7 @@ L:
 	// Deregister the job if remove is set as true
 	if remove {
 		go func() {
-			p.deregisterJob(logr, id, true)
+			p.deregisterJob(logr, id, true) //nolint:errcheck
 		}()
 	}
 
