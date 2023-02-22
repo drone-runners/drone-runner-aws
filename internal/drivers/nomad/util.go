@@ -23,3 +23,8 @@ func boolToPtr(b bool) *bool {
 func random(n int) string {
 	return uniuri.NewLen(n)
 }
+
+// convert gigs to megs
+func convertGigsToMegs(p int) int {
+	return p * 1000
+}

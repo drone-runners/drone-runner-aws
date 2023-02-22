@@ -17,6 +17,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/nomad/api"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 	destroyTimeout          = 10 * time.Minute
 	destroyRetryAttempts    = 3
 	initTimeout             = 10 * time.Minute // TODO (Vistaar): validate this timeout
+	resourceJobTimeout      = 3 * time.Minute
 	destroyTaskMemoryMb     = 50
 )
 
@@ -105,9 +107,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
-	jobID := fmt.Sprintf("init_job_%s", vm)
-	resourceJobID := fmt.Sprintf("init_job_resources_%s", vm)
-	port := fmt.Sprintf("NOMAD_PORT_%s", vm)
+	initjobId := initJobId(vm)
+	resourceJobId := resourceJobId(vm)
+
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("init_job_id", initjobId).WithField("resource_job_id", resourceJobId)
 
 	cpus, err := strconv.Atoi(p.vmCpus)
 	if err != nil {
@@ -118,22 +121,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, errors.New("could not convert VM memory to integer")
 	}
 
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("job_id", jobID)
-
-	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %d --memory %dGB --size %s --ssh --runtime=docker --ports $%s:%s --copy-files %s:%s",
-		ignitePath,
-		p.vmImage,
-		vm,
-		cpus,
-		memGB,
-		p.vmDiskSize,
-		port,
-		strconv.Itoa(lehelper.LiteEnginePort),
-		hostPath,
-		vmPath)
-	job := &api.Job{
-		ID:          &jobID,
-		Name:        stringToPtr(vm),
+	// This job stays alive to keep resources on nomad busy until the VM is destroyed
+	resourceJob := &api.Job{
+		ID:          &resourceJobId,
+		Name:        stringToPtr(resourceJobId),
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
 		// TODO (Vistaar): This can be updated once we have more data points
@@ -144,6 +135,132 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		TaskGroups: []*api.TaskGroup{
 			{
 				Networks:                  []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: vm}}}},
+				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				RestartPolicy: &api.RestartPolicy{
+					Attempts: intToPtr(0),
+				},
+				Name:  stringToPtr(fmt.Sprintf("init_task_group_resource_%s", vm)),
+				Count: intToPtr(1),
+				Tasks: []*api.Task{
+					{
+
+						Name: "sleep",
+						Resources: &api.Resources{
+							MemoryMB: intToPtr(convertGigsToMegs(memGB - 1)), // to keep resources available for the destroy jobs
+							Cores:    intToPtr(cpus - 1),
+						},
+						Driver: "raw_exec",
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", fmt.Sprintf("sleep 14400")}, // keep resources occupied for 4 hours
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logr.Infoln("nomad: finding a node which has available resources ... ")
+
+	_, _, err = p.client.Jobs().Register(resourceJob, nil)
+	if err != nil {
+		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
+	}
+	// If resources don't become available in `resourceJobTimeout`, we fail the step
+	_, err = p.pollForJob(ctx, resourceJobId, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
+	if err != nil {
+		return nil, fmt.Errorf("nomad: could not find a node with available resources, err: %w", err)
+	}
+	logr.Infoln("nomad: found a node with available resources")
+
+	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
+	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
+	l, _, err := p.client.Jobs().Allocations(resourceJobId, false, nil)
+	if err != nil {
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, err
+	}
+	if len(l) == 0 {
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, errors.New("nomad: no allocation found for the job")
+	}
+
+	id := l[0].NodeID
+	allocID := l[0].ID
+	if id == "" || allocID == "" {
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, errors.New("nomad: could not find an allocation identifier for the job")
+	}
+
+	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
+	if err != nil {
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, err
+	}
+
+	// Not expected - if nomad is unable to find a port, it should not run the job at all.
+	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
+		err = fmt.Errorf("nomad: could not allocate network and ports for job")
+		logr.Errorln(err)
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, err
+	}
+
+	hostPort := alloc.Resources.Networks[0].DynamicPorts[0].Value
+
+	// sanity check
+	if hostPort <= 0 || hostPort > 65535 {
+		err = fmt.Errorf("nomad: port %d generated is not a valid port", hostPort)
+		logr.Errorln(err)
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, err
+	}
+
+	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
+	if err != nil {
+		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the resource job")
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, err
+	}
+
+	ip := strings.Split(n.HTTPAddr, ":")[0]
+	if net.ParseIP(ip) == nil {
+		err = fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
+		logr.Errorln(err)
+		defer p.deregisterJob(logr, resourceJobId, true)
+		return nil, err
+	}
+
+	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %d --memory %dGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s",
+		ignitePath,
+		p.vmImage,
+		vm,
+		cpus,
+		memGB,
+		p.vmDiskSize,
+		hostPort,
+		strconv.Itoa(lehelper.LiteEnginePort),
+		hostPath,
+		vmPath)
+	initJob := &api.Job{
+		ID:          &initjobId,
+		Name:        stringToPtr(vm),
+		Type:        stringToPtr("batch"),
+		Datacenters: []string{"dc1"},
+		Constraints: []*api.Constraint{
+			&api.Constraint{
+				LTarget: "${node.unique.id}",
+				RTarget: id,
+				Operand: "=",
+			},
+		},
+		// TODO (Vistaar): This can be updated once we have more data points
+		Reschedule: &api.ReschedulePolicy{
+			Attempts:  intToPtr(0),
+			Unlimited: boolToPtr(false),
+		},
+		TaskGroups: []*api.TaskGroup{
+			{
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
@@ -167,10 +284,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 					{
 						Name:   "ignite_run",
 						Driver: "raw_exec",
-						Resources: &api.Resources{
-							MemoryMB: intToPtr(convertGigsToMegs(memGB)),
-							Cores:    intToPtr(cpus),
-						},
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", runCmd},
@@ -206,39 +319,25 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		},
 	}
 
-	logr.Debugln("nomad: submitting job to nomad")
-	_, _, err = p.client.Jobs().Register(job, nil)
+	logr.Debugln("nomad: submitting VM creation job to nomad")
+	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
+		defer p.deregisterJob(logr, resourceJobId, true)
 		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
 	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
-	_, err = pollForJob(ctx, jobID, p.client, logr, initTimeout, true)
+	_, err = p.pollForJob(ctx, initjobId, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
+		defer p.deregisterJob(logr, resourceJobId, true)
 		return nil, err
 	}
-	logr.Debugln("nomad: job marked as finished")
-
-	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
-	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
-	l, _, err := p.client.Jobs().Allocations(jobID, false, nil)
-	if err != nil {
-		return nil, err
-	}
-	if len(l) == 0 {
-		return nil, errors.New("nomad: no allocation found for the job")
-	}
-
-	id := l[0].NodeID
-	allocID := l[0].ID
-	if id == "" || allocID == "" {
-		return nil, errors.New("nomad: could not find an allocation identifier for the job")
-	}
+	logr.WithField("node_ip", ip).WithField("node_port", hostPort).Infoln("nomad: successfully created instance")
 
 	// For Nomad, the node identifier (where the init task executed)
 	// is needed to route the destroy call to the right machine.
 	// Once the ID has been identified, any error with the Nomad API after this point can be
 	// logged and we can issue a destroy call to clean up the existing state.
-	instance := &types.Instance{
+	return &types.Instance{
 		ID:       vm,
 		NodeID:   id,
 		Name:     vm,
@@ -250,146 +349,20 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		TLSKey:   opts.TLSKey,
 		Provider: types.Nomad,
 		Pool:     opts.PoolName,
-	}
-	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
-	if err != nil {
-		logr.WithError(err).Errorln("nomad: could not get allocation information")
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, err
-	}
-
-	// Not expected - if nomad is unable to find a port, it should not run the job at all.
-	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
-		err = fmt.Errorf("nomad: could not allocate network and ports for job")
-		logr.Errorln(err)
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, err
-	}
-
-	liteEnginePort := alloc.Resources.Networks[0].DynamicPorts[0].Value
-
-	// sanity check
-	if liteEnginePort <= 0 || liteEnginePort > 65535 {
-		err = fmt.Errorf("nomad: port %d generated is not a valid port", liteEnginePort)
-		logr.Errorln(err)
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, err
-	}
-
-	// If the port is valid, set it as the instance port
-	instance.Port = int64(liteEnginePort)
-
-	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
-	if err != nil {
-		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the init job")
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, err
-	}
-
-	ip := strings.Split(n.HTTPAddr, ":")[0]
-	if net.ParseIP(ip) == nil {
-		err = fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
-		logr.Errorln(err)
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, err
-	}
-
-	encodedHealthCheckScript := base64.StdEncoding.EncodeToString([]byte(generateHealthCheckScript(instance.Port)))
-	hostPath = fmt.Sprintf("/usr/local/bin/%s_resource.sh", vm)
-
-	// This job stays alive until the lifecycle of the VM and makes sure Nomad is resource aware about the VMs.
-	resourceJob := &api.Job{
-		ID:          &resourceJobID,
-		Name:        stringToPtr(resourceJobID),
-		Type:        stringToPtr("batch"),
-		Datacenters: []string{"dc1"},
-		// TODO (Vistaar): This can be updated once we have more data points
-		Reschedule: &api.ReschedulePolicy{
-			Attempts:  intToPtr(0),
-			Unlimited: boolToPtr(false),
-		},
-		TaskGroups: []*api.TaskGroup{
-			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
-				RestartPolicy: &api.RestartPolicy{
-					Attempts: intToPtr(0),
-				},
-				Name:  stringToPtr(fmt.Sprintf("init_task_group_resource_%s", vm)),
-				Count: intToPtr(1),
-				Tasks: []*api.Task{
-					{
-						Name:   "create_health_check_script_on_host",
-						Driver: "raw_exec",
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedHealthCheckScript, hostPath)},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "prestart",
-						},
-					},
-					{
-
-						Name: "health_check_vm",
-						Resources: &api.Resources{
-							MemoryMB: intToPtr(convertGigsToMegs(memGB - 1)),
-							Cores:    intToPtr(cpus - 1),
-						},
-						Constraints: []*api.Constraint{
-							{
-								LTarget: "${node.unique.id}",
-								RTarget: id,
-								Operand: "=",
-							},
-						},
-						Driver: "raw_exec",
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("cat %s | base64 --decode | bash", hostPath)},
-						},
-					},
-					{
-						Name:   "remove_health_check_script_on_host",
-						Driver: "raw_exec",
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("rm %s", hostPath)},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "poststop",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Add the job to keep the resource loop busy in the background
-	go func() {
-		_, _, err = p.client.Jobs().Register(resourceJob, nil)
-		if err != nil {
-			logr.Errorf("nomad: could not register resource job, err: %w", err)
-		}
-	}()
-
-	// If the IP is a valid parsed IP, set it as the instance IP
-	instance.Address = ip
-
-	logr.WithField("node_ip", ip).WithField("node_port", liteEnginePort).Traceln("nomad: successfully created instance")
-
-	return instance, nil
+		Port:     int64(hostPort),
+		Address:  ip,
+	}, nil
 }
 
 // Destroy destroys the VM in the bare metal machine
 func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
 	for _, instance := range instances {
-		jobID := fmt.Sprintf("destroy_job_%s", instance.ID)
+		jobID := destroyJobID(instance.ID)
+		resourceJobID := resourceJobId(instance.ID)
 		logr := logger.FromContext(ctx).
 			WithField("instance_id", instance.ID).
 			WithField("instance_node_id", instance.NodeID).
-			WithField("job_id", jobID)
+			WithField("job_id", jobID).WithField("resource_job_id", resourceJobID)
 		constraint := &api.Constraint{
 			LTarget: "${node.unique.id}",
 			RTarget: instance.NodeID,
@@ -435,12 +408,18 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			return err
 		}
 		logr.Debugln("nomad: started polling for destroy job")
-		_, err = pollForJob(ctx, jobID, p.client, logr, destroyTimeout, false)
+		_, err = p.pollForJob(ctx, jobID, logr, destroyTimeout, false, []JobStatus{Dead})
 		if err != nil {
 			logr.WithError(err).Errorln("nomad: could not complete destroy job")
 			return err
 		}
-		logr.Debugln("nomad: destroy task finished")
+		logr.Debugln("nomad: removed VM, freeing up resources ... ")
+		err = p.deregisterJob(logr, resourceJobId(instance.ID), true)
+		if err == nil {
+			logr.Debugln("nomad: freed up resources")
+		} else {
+			logr.WithError(err).Errorln("nomad: could not free up resources")
+		}
 	}
 	return nil
 }
@@ -462,11 +441,15 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return "", nil
 }
 
-// pollForJob polls on the status of the job and returns back once it is in a terminal state.
-// if remove is set to true, it deregisters the job in case it either exceeds the timeout or the context is marked as Done
-// it returns an error if the job did not reach the terminal state
-func pollForJob(ctx context.Context, id string, client *api.Client, logr logger.Logger, timeout time.Duration, remove bool) (*api.Job, error) { //nolint:unparam
+// pollForJob polls on the status of the job and returns back once
+// it is in a terminal state. 'Dead' is always considered a terminal state.
+// if remove is set to true, it deregisters the job in case the job hasn't reached a terminal state
+// before the timeout or before the context is marked as Done.
+// An error is returned if the job did not reach a terminal state
+func (p *config) pollForJob(ctx context.Context, id string, logr logger.Logger, timeout time.Duration, remove bool, terminalStates []JobStatus) (*api.Job, error) { //nolint:unparam
+	terminalStates = append(terminalStates, Dead) // we always return from poll if the job is dead
 	maxPollTime := time.After(timeout)
+	terminal := false
 	var job *api.Job
 	var err error
 	var waitIndex uint64
@@ -481,7 +464,7 @@ L:
 			q := &api.QueryOptions{WaitTime: 15 * time.Second, WaitIndex: waitIndex}
 			var qm *api.QueryMeta
 			// Get the job status
-			job, qm, err = client.Jobs().Info(id, q)
+			job, qm, err = p.client.Jobs().Info(id, q)
 			if err != nil {
 				logr.WithError(err).WithField("job_id", id).Error("could not retrieve job information")
 				continue
@@ -490,15 +473,14 @@ L:
 				continue
 			}
 			waitIndex = qm.LastIndex
+			status := Status(*job.Status)
 
-			// Check the job status
-			if *job.Status == "running" {
-				logr.WithField("job_id", id).Traceln("job is running")
-			} else if *job.Status == "pending" {
-				logr.WithField("job_id", id).Traceln("job is in pending state")
-			} else if *job.Status == "dead" {
-				logr.WithField("job_id", id).Traceln("job is finished")
+			if slices.Contains(terminalStates, status) {
+				logr.WithField("job_id", id).WithField("status", status).Traceln("nomad: job reached a terminal state")
+				terminal = true
 				break L
+			} else {
+				logr.WithField("job_id", id).WithField("status", status).Traceln("nomad: job status updated")
 			}
 		}
 	}
@@ -506,21 +488,32 @@ L:
 		logr.WithField("job_id", id).Errorln("could not poll for job")
 		return job, errors.New("could not poll for job")
 	}
-	if *job.Status == "running" || *job.Status == "pending" {
-		// Kill the job as it has reached its timeout and still not completed.
-		// Nomad does not offer a way to set a max runtime on jobs: https://github.com/hashicorp/nomad/issues/1782
-		if !remove {
-			return job, errors.New("job never reached terminal state")
-		}
-		_, _, err = client.Jobs().Deregister(id, true, &api.WriteOptions{})
-		if err != nil {
-			logr.WithField("job_id", id).WithError(err).Errorln("job timed out but could still not be deregistered")
-		} else {
-			logr.WithField("job_id", id).Infoln("successfully deregistered long running job")
-		}
-		return job, fmt.Errorf("job never reached terminal status, deregister error: %s", err)
+	// If a terminal state was reached, we return back
+	if terminal {
+		return job, nil
 	}
-	return job, nil
+
+	// Deregister the job if remove is set as true
+	if remove {
+		go func() {
+			p.deregisterJob(logr, id, true)
+		}()
+	}
+
+	return job, errors.New("nomad: job never reached terminal state")
+}
+
+// deregisterJob stops the job in Nomad
+// if purge is set to true, it gc's it from nomad state as well
+func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error {
+	logr.WithField("job_id", id).WithField("purge", purge).Traceln("nomad: trying to deregister job")
+	_, _, err := p.client.Jobs().Deregister(id, true, &api.WriteOptions{})
+	if err != nil {
+		logr.WithField("job_id", id).WithField("purge", purge).WithError(err).Errorln("nomad: could not deregister job")
+		return err
+	}
+	logr.WithField("job_id", id).WithField("purge", purge).Infoln("nomad: successfully deregistered job")
+	return nil
 }
 
 func generateStartupScript(opts *types.InstanceCreateOpts) string {
@@ -536,24 +529,17 @@ func generateStartupScript(opts *types.InstanceCreateOpts) string {
 	return cloudinit.LinuxBash(params)
 }
 
-// To make nomad keep resources occupied until the VM is alive, we do a periodic health check
-// by checking whether the lite engine port on the VM is open or not.
-func generateHealthCheckScript(port int64) string {
-	return fmt.Sprintf(`
-#!/usr/bin/bash
-while true
-do
-nc -vz localhost %s
-if [ $? -eq 1 ]
-then
-    echo "The port check failed"
-	exit 1
-fi
-echo "Port check passed..."
-sleep 5
-done`, strconv.Itoa(int(port)))
+// generate a job ID for a destroy job
+func destroyJobID(s string) string {
+	return fmt.Sprintf("destroy_job_%s", s)
 }
 
-func convertGigsToMegs(p int) int {
-	return p * 1000
+// geenrate a job ID for a init job
+func initJobId(s string) string {
+	return fmt.Sprintf("init_job_%s", s)
+}
+
+// generate a job ID for a resource job
+func resourceJobId(s string) string {
+	return fmt.Sprintf("init_job_resources_%s", s)
 }
