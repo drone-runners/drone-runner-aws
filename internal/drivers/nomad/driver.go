@@ -357,6 +357,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		TLSKey:   opts.TLSKey,
 		Provider: types.Nomad,
 		Pool:     opts.PoolName,
+		Started:  time.Now().Unix(),
+		Updated:  time.Now().Unix(),
 		Port:     int64(hostPort),
 		Address:  ip,
 	}
