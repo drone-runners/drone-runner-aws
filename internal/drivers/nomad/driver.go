@@ -126,7 +126,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// TODO: Check if this logic can be made better
 	// We want to keep some buffer for other tasks to come in (which require minimum cpu and memory)
 	cpu := machineFrequencyMhz*cpus - 109
-	mem := convertGigsToMegs(memGB) - 109
+	mem := convertGigsToMegs(memGB) - 53
 
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	resourceJob := &api.Job{
