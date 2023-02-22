@@ -27,8 +27,8 @@ var (
 	resourceJobTimeout      = 3 * time.Minute
 	initTimeout             = 5 * time.Minute
 	destroyTimeout          = 10 * time.Minute
-	minNomadCPUMhz          = 1
-	minNomadMemoryMb        = 10
+	minNomadCPUMhz          = 40
+	minNomadMemoryMb        = 20
 	machineFrequencyMhz     = 5100 // TODO: Find a way to extract this from the node directly
 )
 
@@ -110,6 +110,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 	initjobID := initJobID(vm)
+	initTaskGroup := fmt.Sprintf("init_task_group_%s", vm)
 	resourceJobID := resourceJobID(vm)
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("init_job_id", initjobID).WithField("resource_job_id", resourceJobID)
@@ -123,7 +124,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, errors.New("could not convert VM memory to integer")
 	}
 
-	// TODO: Check if this logic can be made better
+	// TODO: Check if this logic can be made better, although we are bounded by some limitations of Nomad scheduling
 	// We want to keep some buffer for other tasks to come in (which require minimum cpu and memory)
 	cpu := machineFrequencyMhz*cpus - 109
 	mem := convertGigsToMegs(memGB) - 53
@@ -263,7 +264,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 				Operand: "=",
 			},
 		},
-		// TODO (Vistaar): This can be updated once we have more data points
 		Reschedule: &api.ReschedulePolicy{
 			Attempts:  intToPtr(0),
 			Unlimited: boolToPtr(false),
@@ -274,7 +274,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
-				Name:  stringToPtr(fmt.Sprintf("init_task_group_%s", vm)),
+				Name:  stringToPtr(initTaskGroup),
 				Count: intToPtr(1),
 				Tasks: []*api.Task{
 					{
@@ -344,13 +344,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
-	logr.Infoln("nomad: successfully created instance")
 
-	// For Nomad, the node identifier (where the init task executed)
-	// is needed to route the destroy call to the right machine.
-	// Once the ID has been identified, any error with the Nomad API after this point can be
-	// logged and we can issue a destroy call to clean up the existing state.
-	return &types.Instance{
+	instance := &types.Instance{
 		ID:       vm,
 		NodeID:   id,
 		Name:     vm,
@@ -364,7 +359,21 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Pool:     opts.PoolName,
 		Port:     int64(hostPort),
 		Address:  ip,
-	}, nil
+	}
+
+	// Get summary of job to make sure all tasks passed
+	summary, _, err := p.client.Jobs().Summary(initjobID, &api.QueryOptions{})
+	if err != nil {
+		logr.WithError(err).Errorln("nomad: failed to init VM")
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		return nil, err
+	}
+	if summary.Summary[initTaskGroup].Failed > 0 {
+		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		return nil, fmt.Errorf("nomad: failed to create a VM to run the build")
+	}
+
+	return instance, nil
 }
 
 // Destroy destroys the VM in the bare metal machine
@@ -411,6 +420,13 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					},
 				},
 			}}
+		logr.Debugln("nomad: removed VM, freeing up resources ... ")
+		err = p.deregisterJob(logr, resourceJobID, true)
+		if err == nil {
+			logr.Debugln("nomad: freed up resources")
+		} else {
+			logr.WithError(err).Errorln("nomad: could not free up resources")
+		}
 		logr.Infoln("nomad: registering destroy job with nomad")
 		_, _, err := p.client.Jobs().Register(job, nil)
 		if err != nil {
@@ -422,13 +438,6 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 		if err != nil {
 			logr.WithError(err).Errorln("nomad: could not complete destroy job")
 			return err
-		}
-		logr.Debugln("nomad: removed VM, freeing up resources ... ")
-		err = p.deregisterJob(logr, resourceJobID, true)
-		if err == nil {
-			logr.Debugln("nomad: freed up resources")
-		} else {
-			logr.WithError(err).Errorln("nomad: could not free up resources")
 		}
 	}
 	return nil
@@ -489,8 +498,6 @@ L:
 				logr.WithField("job_id", id).WithField("status", status).Traceln("nomad: job reached a terminal state")
 				terminal = true
 				break L
-			} else {
-				logr.WithField("job_id", id).WithField("status", status).Traceln("nomad: job status updated")
 			}
 		}
 	}
