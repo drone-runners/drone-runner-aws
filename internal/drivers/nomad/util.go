@@ -26,5 +26,5 @@ func random(n int) string {
 
 // convert gigs to megs
 func convertGigsToMegs(p int) int {
-	return p * 1000
+	return p * 1024
 }

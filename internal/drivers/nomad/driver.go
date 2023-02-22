@@ -28,6 +28,9 @@ var (
 	initTimeout             = 10 * time.Minute // TODO (Vistaar): validate this timeout
 	resourceJobTimeout      = 3 * time.Minute
 	destroyTaskMemoryMb     = 50
+	minNomadCpuMhz          = 1
+	minNomadMemoryMb        = 10
+	machineFrequencyMhz     = 5100 // TODO: Find a way to extract this from the node directly
 )
 
 type config struct {
@@ -121,6 +124,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, errors.New("could not convert VM memory to integer")
 	}
 
+	// TODO: Check if this logic can be made better
+	// We want to keep some buffer for other tasks to come in (which require minimum cpu and memory)
+	cpu := machineFrequencyMhz*cpus - 109
+	mem := convertGigsToMegs(memGB) - 109
+
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	resourceJob := &api.Job{
 		ID:          &resourceJobId,
@@ -146,8 +154,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 						Name: "sleep",
 						Resources: &api.Resources{
-							MemoryMB: intToPtr(convertGigsToMegs(memGB - 1)), // to keep resources available for the destroy jobs
-							Cores:    intToPtr(cpus - 1),
+							MemoryMB: intToPtr(mem), // to keep resources available for the destroy jobs
+							CPU:      intToPtr(cpu), // keep some buffer for destroy and init tasks
 						},
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
@@ -248,7 +256,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
 		Constraints: []*api.Constraint{
-			&api.Constraint{
+			{
 				LTarget: "${node.unique.id}",
 				RTarget: id,
 				Operand: "=",
@@ -269,8 +277,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 				Count: intToPtr(1),
 				Tasks: []*api.Task{
 					{
-						Name:   "create_startup_script_on_host",
-						Driver: "raw_exec",
+						Name:      "create_startup_script_on_host",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedStartupScript, hostPath)},
@@ -282,8 +291,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 					},
 
 					{
-						Name:   "ignite_run",
-						Driver: "raw_exec",
+						Name:      "ignite_run",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", runCmd},
@@ -291,8 +301,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 					},
 
 					{
-						Name:   "ignite_exec",
-						Driver: "raw_exec",
+						Name:      "ignite_exec",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", fmt.Sprintf("%s exec %s 'cat %s | base64 --decode | bash'", ignitePath, vm, vmPath)},
@@ -303,8 +314,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 						},
 					},
 					{
-						Name:   "cleanup_startup_script_from_host",
-						Driver: "raw_exec",
+						Name:      "cleanup_startup_script_from_host",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", fmt.Sprintf("rm %s", hostPath)},
@@ -387,12 +399,9 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					Count: intToPtr(1),
 					Tasks: []*api.Task{
 						{
-							Name: "ignite_stop_and_rm",
-							Resources: &api.Resources{
-								MemoryMB: intToPtr(destroyTaskMemoryMb),
-								Cores:    intToPtr(1),
-							},
-							Driver: "raw_exec",
+							Name:      "ignite_stop_and_rm",
+							Resources: minNomadResources(),
+							Driver:    "raw_exec",
 							Config: map[string]interface{}{
 								"command": "/usr/bin/su",
 								"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s", ignitePath, instance.ID, ignitePath, instance.ID)},
@@ -441,8 +450,8 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	return "", nil
 }
 
-// pollForJob polls on the status of the job and returns back once
-// it is in a terminal state. 'Dead' is always considered a terminal state.
+// pollForJob polls on the status of the job and returns back once it is in a terminal state.
+// note: a dead job is always considered to be in a terminal state
 // if remove is set to true, it deregisters the job in case the job hasn't reached a terminal state
 // before the timeout or before the context is marked as Done.
 // An error is returned if the job did not reach a terminal state
@@ -542,4 +551,11 @@ func initJobId(s string) string {
 // generate a job ID for a resource job
 func resourceJobId(s string) string {
 	return fmt.Sprintf("init_job_resources_%s", s)
+}
+
+func minNomadResources() *api.Resources {
+	return &api.Resources{
+		CPU:      intToPtr(minNomadCpuMhz),
+		MemoryMB: intToPtr(minNomadMemoryMb),
+	}
 }
