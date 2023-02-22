@@ -4,6 +4,10 @@ import (
 	"github.com/dchest/uniuri"
 )
 
+const (
+	gigsToMegs = 1024
+)
+
 // stringToPtr returns a pointer to a string
 func stringToPtr(s string) *string {
 	return &s
@@ -26,5 +30,5 @@ func random(n int) string {
 
 // convert gigs to megs
 func convertGigsToMegs(p int) int {
-	return p * 1024
+	return p * gigsToMegs
 }

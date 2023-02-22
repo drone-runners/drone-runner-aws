@@ -27,7 +27,7 @@ var (
 	resourceJobTimeout      = 3 * time.Minute
 	initTimeout             = 5 * time.Minute
 	destroyTimeout          = 10 * time.Minute
-	minNomadCpuMhz          = 1
+	minNomadCPUMhz          = 1
 	minNomadMemoryMb        = 10
 	machineFrequencyMhz     = 5100 // TODO: Find a way to extract this from the node directly
 )
@@ -109,10 +109,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
-	initjobId := initJobId(vm)
-	resourceJobId := resourceJobId(vm)
+	initjobID := initJobID(vm)
+	resourceJobID := resourceJobID(vm)
 
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("init_job_id", initjobId).WithField("resource_job_id", resourceJobId)
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("init_job_id", initjobID).WithField("resource_job_id", resourceJobID)
 
 	cpus, err := strconv.Atoi(p.vmCpus)
 	if err != nil {
@@ -130,8 +130,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	resourceJob := &api.Job{
-		ID:          &resourceJobId,
-		Name:        stringToPtr(resourceJobId),
+		ID:          &resourceJobID,
+		Name:        stringToPtr(resourceJobID),
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
 		// TODO (Vistaar): This can be updated once we have more data points
@@ -159,7 +159,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("sleep 14400")}, // keep resources occupied for 4 hours
+							"args":    []string{"-c", "sleep 14400"}, // keep resources occupied for 4 hours
 						},
 					},
 				},
@@ -174,7 +174,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `resourceJobTimeout`, we fail the step
-	_, err = p.pollForJob(ctx, resourceJobId, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
+	_, err = p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
 		return nil, fmt.Errorf("nomad: could not find a node with available resources, err: %w", err)
 	}
@@ -182,26 +182,26 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
-	l, _, err := p.client.Jobs().Allocations(resourceJobId, false, nil)
+	l, _, err := p.client.Jobs().Allocations(resourceJobID, false, nil)
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 	if len(l) == 0 {
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, errors.New("nomad: no allocation found for the job")
 	}
 
 	id := l[0].NodeID
 	allocID := l[0].ID
 	if id == "" || allocID == "" {
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, errors.New("nomad: could not find an allocation identifier for the job")
 	}
 
 	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 
@@ -209,7 +209,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
 		err = fmt.Errorf("nomad: could not allocate network and ports for job")
 		logr.Errorln(err)
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 
@@ -219,14 +219,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if hostPort <= 0 || hostPort > 65535 {
 		err = fmt.Errorf("nomad: port %d generated is not a valid port", hostPort)
 		logr.Errorln(err)
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 
 	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
 	if err != nil {
 		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the resource job")
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 
@@ -234,7 +234,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if net.ParseIP(ip) == nil {
 		err = fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
 		logr.Errorln(err)
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 
@@ -252,7 +252,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		hostPath,
 		vmPath)
 	initJob := &api.Job{
-		ID:          &initjobId,
+		ID:          &initjobID,
 		Name:        stringToPtr(vm),
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
@@ -335,13 +335,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Debugln("nomad: submitting VM creation job to nomad")
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true)
 		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
 	}
 	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
-	_, err = p.pollForJob(ctx, initjobId, logr, initTimeout, true, []JobStatus{Dead})
+	_, err = p.pollForJob(ctx, initjobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobId, true)
+		defer p.deregisterJob(logr, resourceJobID, true)
 		return nil, err
 	}
 	logr.Infoln("nomad: successfully created instance")
@@ -371,7 +371,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
 	for _, instance := range instances {
 		jobID := destroyJobID(instance.ID)
-		resourceJobID := resourceJobId(instance.ID)
+		resourceJobID := resourceJobID(instance.ID)
 		logr := logger.FromContext(ctx).
 			WithField("instance_id", instance.ID).
 			WithField("instance_node_id", instance.NodeID).
@@ -424,7 +424,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			return err
 		}
 		logr.Debugln("nomad: removed VM, freeing up resources ... ")
-		err = p.deregisterJob(logr, resourceJobId(instance.ID), true)
+		err = p.deregisterJob(logr, resourceJobID, true)
 		if err == nil {
 			logr.Debugln("nomad: freed up resources")
 		} else {
@@ -515,7 +515,7 @@ L:
 
 // deregisterJob stops the job in Nomad
 // if purge is set to true, it gc's it from nomad state as well
-func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error {
+func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error { //nolint:unparam
 	logr.WithField("job_id", id).WithField("purge", purge).Traceln("nomad: trying to deregister job")
 	_, _, err := p.client.Jobs().Deregister(id, true, &api.WriteOptions{})
 	if err != nil {
@@ -545,18 +545,18 @@ func destroyJobID(s string) string {
 }
 
 // geenrate a job ID for a init job
-func initJobId(s string) string {
+func initJobID(s string) string {
 	return fmt.Sprintf("init_job_%s", s)
 }
 
 // generate a job ID for a resource job
-func resourceJobId(s string) string {
+func resourceJobID(s string) string {
 	return fmt.Sprintf("init_job_resources_%s", s)
 }
 
 func minNomadResources() *api.Resources {
 	return &api.Resources{
-		CPU:      intToPtr(minNomadCpuMhz),
+		CPU:      intToPtr(minNomadCPUMhz),
 		MemoryMB: intToPtr(minNomadMemoryMb),
 	}
 }

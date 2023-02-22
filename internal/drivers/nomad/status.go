@@ -17,6 +17,8 @@ func (s JobStatus) String() string {
 		return "running"
 	case Dead:
 		return "dead"
+	case Unknown:
+		return "unknown"
 	}
 	return "unknown"
 }
@@ -29,6 +31,8 @@ func Status(s string) JobStatus {
 		return Running
 	case "dead":
 		return Dead
+	case "unknown":
+		return Unknown
 	}
 	return Unknown
 }
