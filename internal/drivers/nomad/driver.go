@@ -106,6 +106,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	startupScript := generateStartupScript(opts)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
 	vm := strings.ToLower(random(20)) //nolint:gomnd
+	portLabel := vm
 
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
@@ -129,7 +130,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	cpu := machineFrequencyMhz*cpus - 109
 	mem := convertGigsToMegs(memGB) - 53
 
+	sleepTime := resourceJobTimeout + initTimeout + 2*time.Minute // add 2 minutes for a buffer
+
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
+	// It sleeps until the max VM creation timeout, after which it periodically checks whether the VM is alive or not
 	resourceJob := &api.Job{
 		ID:          &resourceJobID,
 		Name:        stringToPtr(resourceJobID),
@@ -142,7 +146,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks:                  []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: vm}}}},
+				Networks:                  []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: portLabel}}}},
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
@@ -152,7 +156,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 				Tasks: []*api.Task{
 					{
 
-						Name: "sleep",
+						Name: "sleep_and_ping",
 						Resources: &api.Resources{
 							MemoryMB: intToPtr(mem), // to keep resources available for the destroy jobs
 							CPU:      intToPtr(cpu), // keep some buffer for destroy and init tasks
@@ -160,7 +164,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", "sleep 14400"}, // keep resources occupied for 4 hours
+							"args":    []string{"-c", generateHealthCheckScript(sleepTime, fmt.Sprintf("$NOMAD_PORT_%s", portLabel))},
 						},
 					},
 				},
@@ -568,4 +572,26 @@ func minNomadResources() *api.Resources {
 		CPU:      intToPtr(minNomadCPUMhz),
 		MemoryMB: intToPtr(minNomadMemoryMb),
 	}
+}
+
+// To make nomad keep resources occupied until the VM is alive, we do a periodic health check
+// by checking whether the lite engine port on the VM is open or not.
+func generateHealthCheckScript(sleep time.Duration, port string) string {
+	sleepSecs := sleep.Seconds()
+	return fmt.Sprintf(`
+#!/usr/bin/bash
+echo "sleeping..."
+sleep %f
+echo "done sleeping"
+while true
+do
+nc -vz localhost %s
+if [ $? -eq 1 ]
+then
+    echo "The port check failed"
+	exit 1
+fi
+echo "Port check passed..."
+sleep 30
+done`, sleepSecs, port)
 }
