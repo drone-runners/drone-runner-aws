@@ -371,8 +371,18 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	summary, _, err := p.client.Jobs().Summary(initjobID, &api.QueryOptions{})
 	if err != nil {
 		logr.WithError(err).Errorln("nomad: failed to init VM")
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, err
+	}
+
+	// If the summary is invalid or any of the tasks have failed, return an error
+	if summary == nil || summary.Summary == nil {
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		return nil, errors.New("could not get summary of the job")
+	}
+	if _, ok := summary.Summary[initTaskGroup]; !ok {
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		return nil, errors.New("could not get summary of the init task group")
 	}
 	if summary.Summary[initTaskGroup].Failed > 0 {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
