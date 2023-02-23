@@ -371,7 +371,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, err
 	}
 	if summary.Summary[initTaskGroup].Failed > 0 {
-		defer p.Destroy(context.Background(), []*types.Instance{instance})
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("nomad: failed to create a VM to run the build")
 	}
 
