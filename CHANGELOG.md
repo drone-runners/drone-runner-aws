@@ -1,5 +1,26 @@
 # Changelog
 
+## [v1.0.0-rc31-testing](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc31-testing) (2023-02-20)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.32...v1.0.0-rc31-testing)
+
+## [v1.0.0-rc.32](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.32) (2023-02-10)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc31-custom...v1.0.0-rc.32)
+
+**Merged pull requests:**
+
+- \(maint\): rc32 prep [\#243](https://github.com/drone-runners/drone-runner-aws/pull/243) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- upgrade lite engine version to increase health check timeout [\#242](https://github.com/drone-runners/drone-runner-aws/pull/242) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- \[feat\]: \[CI-6692\]: Upgrade lite engine [\#240](https://github.com/drone-runners/drone-runner-aws/pull/240) ([anurag-harness](https://github.com/anurag-harness))
+- Fix cleanup on google create vm [\#238](https://github.com/drone-runners/drone-runner-aws/pull/238) ([shubham149](https://github.com/shubham149))
+- Add input config to map pools for an account to a separate value [\#237](https://github.com/drone-runners/drone-runner-aws/pull/237) ([shubham149](https://github.com/shubham149))
+- Add nomad driver for bare metal integration [\#222](https://github.com/drone-runners/drone-runner-aws/pull/222) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc31-custom](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc31-custom) (2023-01-30)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc31...v1.0.0-rc31-custom)
+
 ## [v1.0.0-rc31](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc31) (2023-01-19)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc30...v1.0.0-rc31)
