@@ -124,8 +124,10 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instance.ID)
 			if logErr != nil {
 				logr.WithError(logErr).Errorln("failed to fetch console output logs")
+			} else {
+				logrus.WithField("id", instance.ID).
+					WithField("instance_name", instance.Name).Infof("serial console output: %s", out)
 			}
-			logrus.WithField("id", instance.ID).WithField("instance_name", instance.Name).Infof("serial console output: %s", out)
 		}
 		errCleanUp := poolManager.Destroy(context.Background(), pool, instance.ID)
 		if errCleanUp != nil {
