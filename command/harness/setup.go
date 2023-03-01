@@ -119,7 +119,16 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		WithField("instance_name", instance.Name)
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
-	cleanUpFn := func() {
+	cleanUpFn := func(consoleLogs bool) {
+		if consoleLogs {
+			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instance.ID)
+			if logErr != nil {
+				logr.WithError(logErr).Errorln("failed to fetch console output logs")
+			} else {
+				logrus.WithField("id", instance.ID).
+					WithField("instance_name", instance.Name).Infof("serial console output: %s", out)
+			}
+		}
 		errCleanUp := poolManager.Destroy(context.Background(), pool, instance.ID)
 		if errCleanUp != nil {
 			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
@@ -129,7 +138,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	if instance.IsHibernated {
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID)
 		if err != nil {
-			go cleanUpFn()
+			go cleanUpFn(false)
 			return nil, fmt.Errorf("failed to start the instance up")
 		}
 	}
@@ -138,26 +147,26 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	instance.Updated = time.Now().Unix()
 	err = poolManager.Update(ctx, instance)
 	if err != nil {
-		go cleanUpFn()
+		go cleanUpFn(false)
 		return nil, fmt.Errorf("failed to tag: %w", err)
 	}
 
 	err = poolManager.SetInstanceTags(ctx, pool, instance, r.Tags)
 	if err != nil {
-		go cleanUpFn()
+		go cleanUpFn(false)
 		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
 	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Port)
 	if err != nil {
-		go cleanUpFn()
+		go cleanUpFn(false)
 		return nil, fmt.Errorf("failed to create LE client: %w", err)
 	}
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
 	if _, err = client.RetryHealth(ctx, setupTimeout); err != nil {
-		go cleanUpFn()
+		go cleanUpFn(true)
 		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
@@ -171,7 +180,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 	setupResponse, err := client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
-		go cleanUpFn()
+		go cleanUpFn(true)
 		return nil, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 

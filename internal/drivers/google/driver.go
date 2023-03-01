@@ -124,7 +124,21 @@ func (p *config) CanHibernate() bool {
 }
 
 func (p *config) Logs(ctx context.Context, instance string) (string, error) {
-	return "", nil
+	zone, err := p.findInstanceZone(ctx, instance)
+	if err != nil {
+		return "", err
+	}
+
+	output, err := p.service.Instances.GetSerialPortOutput(p.projectID, zone, instance).Context(ctx).Do()
+	if err != nil {
+		return "", err
+	}
+
+	if output == nil {
+		return "", fmt.Errorf("nil value for serial console output")
+	}
+
+	return output.Contents, nil
 }
 
 func (p *config) Ping(ctx context.Context) error {
