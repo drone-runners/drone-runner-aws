@@ -25,6 +25,7 @@ import (
 type SetupVMRequest struct {
 	ID               string            `json:"id"` // stage runtime ID
 	PoolID           string            `json:"pool_id"`
+	FallbackPoolIDs  []string          `json:"fallback_pool_ids"`
 	Tags             map[string]string `json:"tags"`
 	CorrelationID    string            `json:"correlation_id"`
 	LogKey           string            `json:"log_key"`
@@ -37,7 +38,7 @@ type SetupVMResponse struct {
 }
 
 var (
-	setupTimeout = 20 * time.Minute
+	setupTimeout = 10 * time.Minute
 )
 
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*SetupVMResponse, error) {
@@ -49,7 +50,6 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	if r.PoolID == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
-	pool := fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, env.Dlite.PoolMapByAccount)
 
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
@@ -57,7 +57,6 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").
-			WithField("pool", pool).
 			WithField("correlationID", r.CorrelationID)
 	} else {
 		wc := getStreamLogger(r.SetupRequest.LogConfig, r.LogKey, r.CorrelationID)
@@ -69,14 +68,10 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
-		logr = log.WithField("pool", pool)
+		logr = log.WithField("stage_runtime_id", stageRuntimeID)
 
 		ctx = logger.WithContext(ctx, logger.Logrus(logr))
 	}
-
-	logr = logr.WithField("stage_runtime_id", stageRuntimeID)
-
-	logr.Traceln("starting the setup process")
 
 	// append global volumes to the setup request.
 	for _, pair := range env.Runner.Volumes {
@@ -96,22 +91,56 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		r.Volumes = append(r.Volumes, &vol)
 	}
 
-	if !poolManager.Exists(pool) {
-		return nil, fmt.Errorf("%s pool not defined", pool)
-	}
+	pools := []string{}
+	pools = append(pools, r.PoolID)
+	pools = append(pools, r.FallbackPoolIDs...)
 
-	_, findErr := s.Find(ctx, stageRuntimeID)
-	if findErr != nil {
-		if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {
-			return nil, fmt.Errorf("could not create stage owner entity: %w", err)
+	fmt.Println("pools are: ", pools)
+
+	var poolErr error
+	var err error
+	var selectedPool string
+	var instance *types.Instance
+	foundPool := false
+
+	for _, p := range pools {
+		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
+		logr.WithField("pool_id", pool).Traceln("starting the setup process")
+
+		if !poolManager.Exists(pool) {
+			logr.WithField("pool_id", pool).Errorln("pool does not exist")
+			continue
 		}
+
+		_, findErr := s.Find(ctx, stageRuntimeID)
+		if findErr != nil {
+			if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {
+				poolErr = fmt.Errorf("could not create stage owner entity: %w", err)
+				logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not create stage owner entity")
+				continue
+			}
+		}
+
+		instance, err = poolManager.Provision(ctx, pool, env.Runner.Name, env)
+		if err != nil {
+			logr.WithError(err).WithField("pool_id", p).Errorln("failed to provision instance")
+			poolErr = err
+			if derr := s.Delete(ctx, stageRuntimeID); derr != nil {
+				logr.WithField("pool_id", pool).WithError(derr).Errorln("could not remove stage ID mapping after provision failure")
+			}
+			continue
+		}
+		// Successfully provisioned an instance out of the listed pools
+		foundPool = true
+		selectedPool = pool
+		break
 	}
 
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, env)
-	if err != nil {
-		logr.WithError(err).Errorln("failed to provision instance")
-		return nil, err
+	if !foundPool {
+		return nil, fmt.Errorf("could not find appropriate pool: %w", poolErr)
 	}
+
+	logr = logr.WithField("pool_id", selectedPool)
 
 	logr = logr.
 		WithField("ip", instance.Address).
@@ -121,7 +150,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpFn := func(consoleLogs bool) {
 		if consoleLogs {
-			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instance.ID)
+			out, logErr := poolManager.InstanceLogs(context.Background(), selectedPool, instance.ID)
 			if logErr != nil {
 				logr.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
@@ -129,14 +158,14 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 					WithField("instance_name", instance.Name).Infof("serial console output: %s", out)
 			}
 		}
-		errCleanUp := poolManager.Destroy(context.Background(), pool, instance.ID)
+		errCleanUp := poolManager.Destroy(context.Background(), selectedPool, instance.ID)
 		if errCleanUp != nil {
 			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
 		}
 	}
 
 	if instance.IsHibernated {
-		instance, err = poolManager.StartInstance(ctx, pool, instance.ID)
+		instance, err = poolManager.StartInstance(ctx, selectedPool, instance.ID)
 		if err != nil {
 			go cleanUpFn(false)
 			return nil, fmt.Errorf("failed to start the instance up")
@@ -151,7 +180,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, fmt.Errorf("failed to tag: %w", err)
 	}
 
-	err = poolManager.SetInstanceTags(ctx, pool, instance, r.Tags)
+	err = poolManager.SetInstanceTags(ctx, selectedPool, instance, r.Tags)
 	if err != nil {
 		go cleanUpFn(false)
 		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
