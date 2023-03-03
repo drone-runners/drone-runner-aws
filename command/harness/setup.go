@@ -95,8 +95,6 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	pools = append(pools, r.PoolID)
 	pools = append(pools, r.FallbackPoolIDs...)
 
-	fmt.Println("pools are: ", pools)
-
 	var poolErr error
 	var err error
 	var selectedPool string
@@ -114,8 +112,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 		_, findErr := s.Find(ctx, stageRuntimeID)
 		if findErr != nil {
-			if err := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); err != nil {
-				poolErr = fmt.Errorf("could not create stage owner entity: %w", err)
+			if cerr := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); cerr != nil {
+				poolErr = fmt.Errorf("could not create stage owner entity: %w", cerr)
 				logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not create stage owner entity")
 				continue
 			}
@@ -137,7 +135,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	}
 
 	if !foundPool {
-		return nil, fmt.Errorf("could not find appropriate pool: %w", poolErr)
+		return nil, fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
 	logr = logr.WithField("pool_id", selectedPool)
@@ -146,6 +144,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name)
+
+	logr.WithField("selected_pool", selectedPool).WithField("tried_pools", pools).Traceln("successfully provisioned VM in pool")
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpFn := func(consoleLogs bool) {
