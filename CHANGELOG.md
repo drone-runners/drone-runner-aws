@@ -1,8 +1,21 @@
 # Changelog
 
-## [v1.0.0-rc31-testing](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc31-testing) (2023-02-20)
+## [v1.0.0-rc.34](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.34) (2023-02-28)
 
-[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.32...v1.0.0-rc31-testing)
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.33...v1.0.0-rc.34)
+
+**Merged pull requests:**
+
+- update le and plugin binary version [\#247](https://github.com/drone-runners/drone-runner-aws/pull/247) ([raghavharness](https://github.com/raghavharness))
+- Add scheduling logic for nomad driver [\#245](https://github.com/drone-runners/drone-runner-aws/pull/245) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.33](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.33) (2023-02-20)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.32...v1.0.0-rc.33)
+
+**Merged pull requests:**
+
+- bump plugin binary to latest [\#244](https://github.com/drone-runners/drone-runner-aws/pull/244) ([eoinmcafee00](https://github.com/eoinmcafee00))
 
 ## [v1.0.0-rc.32](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.32) (2023-02-10)
 
