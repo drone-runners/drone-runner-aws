@@ -49,7 +49,7 @@ type config struct {
 	volumeType    string
 	volumeSize    int64
 	volumeIops    int64
-	kmsKeyId      string
+	kmsKeyID      string
 	deviceName    string
 	iamProfileArn string
 	tags          map[string]string // user defined tags
@@ -275,9 +275,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if p.volumeType == "io1" {
 		for _, blockDeviceMapping := range in.BlockDeviceMappings {
 			blockDeviceMapping.Ebs.Iops = aws.Int64(p.volumeIops)
-			if p.kmsKeyId != "" {
+			if p.kmsKeyID != "" {
 				blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
-				blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyId)
+				blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyID)
 			}
 		}
 	}
@@ -285,8 +285,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if p.CanHibernate() {
 		for _, blockDeviceMapping := range in.BlockDeviceMappings {
 			blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
-			if p.kmsKeyId != "" {
-				blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyId)
+			if p.kmsKeyID != "" {
+				blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyID)
 			}
 		}
 
