@@ -222,7 +222,7 @@ type (
 		Size     int64  `json:"size,omitempty" yaml:"size,omitempty"`
 		Type     string `json:"type,omitempty" yaml:"type,omitempty"`
 		Iops     int64  `json:"iops,omitempty" yaml:"iops,omitempty"`
-		KmsKeyId string `json:"kms_key_id,omitempty" yaml:"kms_key_id,omitempty"`
+		KmsKeyID string `json:"kms_key_id,omitempty" yaml:"kms_key_id,omitempty"`
 	}
 )
 
