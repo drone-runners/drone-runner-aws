@@ -285,6 +285,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if p.CanHibernate() {
 		for _, blockDeviceMapping := range in.BlockDeviceMappings {
 			blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
+			if p.kmsKeyId != "" {
+				blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyId)
+			}
 		}
 
 		in.HibernationOptions = &ec2.HibernationOptionsRequest{
