@@ -208,6 +208,13 @@ func WithVolumeIops(iops int64, diskType string) Option {
 	}
 }
 
+// WithKMSKeyId returns an option to set encryption key for a disk.
+func WithKMSKeyId(kmsKeyId string) Option {
+	return func(p *config) {
+		p.kmsKeyId = kmsKeyId
+	}
+}
+
 // WithIamProfileArn returns an option to set the iam profile arn.
 func WithIamProfileArn(t string) Option {
 	return func(p *config) {
