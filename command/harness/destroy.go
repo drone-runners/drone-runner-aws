@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
+
+	"github.com/cenkalti/backoff/v4"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
