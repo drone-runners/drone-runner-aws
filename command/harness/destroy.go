@@ -3,12 +3,19 @@ package harness
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
+
+	"github.com/cenkalti/backoff/v4"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+)
+
+var (
+	destroyTimeout = 10 * time.Minute
 )
 
 type VMCleanupRequest struct {
@@ -20,7 +27,29 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
+	// We do retries on destroy in case a destroy call comes while an initialize call is still happening.
+	cnt := 0
+	b := createBackoff(destroyTimeout)
+	for {
+		duration := b.NextBackOff()
+		err := handleDestroy(ctx, r, s, poolManager, cnt)
+		if err != nil {
+			logrus.WithError(err).
+				WithField("retry_count", cnt).
+				WithField("stage_runtime_id", r.StageRuntimeID).
+				Errorln("could not destroy VM")
+			if duration == backoff.Stop {
+				return err
+			}
+			time.Sleep(duration)
+			cnt++
+			continue
+		}
+		return nil
+	}
+}
 
+func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, poolManager *drivers.Manager, retryCount int) error {
 	entity, err := s.Find(ctx, r.StageRuntimeID)
 	if err != nil || entity == nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
@@ -30,7 +59,8 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr := logrus.
 		WithField("stage_runtime_id", r.StageRuntimeID).
 		WithField("pool", poolID).
-		WithField("api", "dlite:destroy")
+		WithField("api", "dlite:destroy").
+		WithField("retry_count", retryCount)
 
 	logr.Traceln("starting the destroy process")
 
@@ -58,4 +88,10 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	}
 
 	return nil
+}
+
+func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
+	exp := backoff.NewExponentialBackOff()
+	exp.MaxElapsedTime = maxElapsedTime
+	return exp
 }
