@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.0.0-rc.35](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.35) (2023-03-07)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.34...v1.0.0-rc.35)
+
+**Merged pull requests:**
+
+- release prep v1.0.0-rc.35 [\#250](https://github.com/drone-runners/drone-runner-aws/pull/250) ([shubham149](https://github.com/shubham149))
+- add fallback pool logic for harness setup request [\#249](https://github.com/drone-runners/drone-runner-aws/pull/249) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- Log serial console output for failed vm setup [\#248](https://github.com/drone-runners/drone-runner-aws/pull/248) ([shubham149](https://github.com/shubham149))
+
 ## [v1.0.0-rc.34](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.34) (2023-02-28)
 
 [Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.33...v1.0.0-rc.34)
