@@ -127,9 +127,12 @@ func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetri
 			}
 		}
 		var id = response.Body[0]
-		vm, _ = c.FindVM(ctx, id, retryIntervalFind)
+		vm, err = c.FindVM(ctx, id, retryIntervalFind)
 		if err != nil {
 			return nil, err
+		}
+		if vm == nil {
+			return nil, fmt.Errorf("ankabuild: nil vm response returned")
 		}
 		if vm.Body.InstanceState != "Started" {
 			logrus.Errorf("ankabuild: deleting vm: %s", vm.Body.InstanceID)
