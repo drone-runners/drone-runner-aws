@@ -291,7 +291,10 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),
 				nomad.WithImage(nomadConfig.VM.Image))
 			if err != nil {
-				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
+				// TODO: We should return error here once bare metal has been tested on production
+				// Ignoring errors here for now to not cause production outages in case of nomad connectivity issues
+				logrus.WithError(err).Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name)
+				return nil, nil
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
