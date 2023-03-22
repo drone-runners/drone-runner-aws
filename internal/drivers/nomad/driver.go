@@ -364,8 +364,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	_, err = p.pollForJob(ctx, initjobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		// Destroy the VM if it's in a partially created state
-		defer p.Destroy(context.Background(), []*types.Instance{instance})
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer p.deregisterJob(logr, resourceJobID, true)                   //nolint:errcheck
 		return nil, err
 	}
 
