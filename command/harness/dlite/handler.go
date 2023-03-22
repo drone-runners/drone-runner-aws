@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/poller"
 )
