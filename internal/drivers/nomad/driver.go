@@ -336,19 +336,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		},
 	}
 
-	logr.Debugln("nomad: submitting VM creation job to nomad")
-	_, _, err = p.client.Jobs().Register(initJob, nil)
-	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
-	}
-	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
-	_, err = p.pollForJob(ctx, initjobID, logr, initTimeout, true, []JobStatus{Dead})
-	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, err
-	}
-
 	instance := &types.Instance{
 		ID:       vm,
 		NodeID:   id,
@@ -365,6 +352,21 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Updated:  time.Now().Unix(),
 		Port:     int64(hostPort),
 		Address:  ip,
+	}
+
+	logr.Debugln("nomad: submitting VM creation job to nomad")
+	_, _, err = p.client.Jobs().Register(initJob, nil)
+	if err != nil {
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
+	}
+	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
+	_, err = p.pollForJob(ctx, initjobID, logr, initTimeout, true, []JobStatus{Dead})
+	if err != nil {
+		// Destroy the VM if it's in a partially created state
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer p.deregisterJob(logr, resourceJobID, true)                   //nolint:errcheck
+		return nil, err
 	}
 
 	// Get summary of job to make sure all tasks passed
