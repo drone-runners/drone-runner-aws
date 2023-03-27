@@ -418,6 +418,9 @@ if (test-path($profile) -eq "false")
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
 
+Invoke-WebRequest -Uri "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile "C:\Program Files\lite-engine\plugin.exe"
+$env:Path = 'C:\Program Files\lite-engine;' + $env:Path
+
 # Refresh the PSEnviroment
 refreshenv
 
