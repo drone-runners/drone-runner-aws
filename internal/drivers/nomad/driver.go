@@ -172,18 +172,18 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		},
 	}
 
-	logr.Infoln("nomad: finding a node which has available resources ... ")
+	logr.Infoln("scheduler: finding a node which has available resources ... ")
 
 	_, _, err = p.client.Jobs().Register(resourceJob, nil)
 	if err != nil {
-		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `resourceJobTimeout`, we fail the step
 	_, err = p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
-		return nil, fmt.Errorf("nomad: could not find a node with available resources, err: %w", err)
+		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
 	}
-	logr.Infoln("nomad: found a node with available resources")
+	logr.Infoln("scheduler: found a node with available resources")
 
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
@@ -194,14 +194,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	}
 	if len(l) == 0 {
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, errors.New("nomad: no allocation found for the job")
+		return nil, errors.New("scheduler: no allocation found for the job")
 	}
 
 	id := l[0].NodeID
 	allocID := l[0].ID
 	if id == "" || allocID == "" {
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, errors.New("nomad: could not find an allocation identifier for the job")
+		return nil, errors.New("scheduler: could not find an allocation identifier for the job")
 	}
 
 	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
@@ -212,7 +212,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	// Not expected - if nomad is unable to find a port, it should not run the job at all.
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
-		err = fmt.Errorf("nomad: could not allocate network and ports for job")
+		err = fmt.Errorf("scheduler: could not allocate network and ports for job")
 		logr.Errorln(err)
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
@@ -222,7 +222,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	// sanity check
 	if hostPort <= 0 || hostPort > 65535 {
-		err = fmt.Errorf("nomad: port %d generated is not a valid port", hostPort)
+		err = fmt.Errorf("scheduler: port %d generated is not a valid port", hostPort)
 		logr.Errorln(err)
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
@@ -230,14 +230,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
 	if err != nil {
-		logr.WithError(err).Errorln("nomad: could not get information about the node which picked up the resource job")
+		logr.WithError(err).Errorln("scheduler: could not get information about the node which picked up the resource job")
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
 	}
 
 	ip := strings.Split(n.HTTPAddr, ":")[0]
 	if net.ParseIP(ip) == nil {
-		err = fmt.Errorf("nomad: could not parse client machine IP: %s", ip)
+		err = fmt.Errorf("scheduler: could not parse client machine IP: %s", ip)
 		logr.Errorln(err)
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
 		return nil, err
@@ -354,13 +354,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Address:  ip,
 	}
 
-	logr.Debugln("nomad: submitting VM creation job to nomad")
+	logr.Debugln("scheduler: submitting VM creation job to nomad")
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
 		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, fmt.Errorf("nomad: could not register job, err: %w", err)
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
-	logr.Debugln("nomad: successfully submitted job to nomad, started polling for job status")
+	logr.Debugln("scheduler: successfully submitted job to nomad, started polling for job status")
 	_, err = p.pollForJob(ctx, initjobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		// Destroy the VM if it's in a partially created state
@@ -372,7 +372,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// Get summary of job to make sure all tasks passed
 	summary, _, err := p.client.Jobs().Summary(initjobID, &api.QueryOptions{})
 	if err != nil {
-		logr.WithError(err).Errorln("nomad: failed to init VM")
+		logr.WithError(err).Errorln("scheduler: failed to init VM")
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, err
 	}
@@ -388,7 +388,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	}
 	if summary.Summary[initTaskGroup].Failed > 0 {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("nomad: failed to create a VM to run the build")
+		return nil, fmt.Errorf("scheduler: failed to create a VM to run the build")
 	}
 
 	return instance, nil
@@ -438,23 +438,23 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 					},
 				},
 			}}
-		logr.Debugln("nomad: removed VM, freeing up resources ... ")
+		logr.Debugln("scheduler: removed VM, freeing up resources ... ")
 		err = p.deregisterJob(logr, resourceJobID, true)
 		if err == nil {
-			logr.Debugln("nomad: freed up resources")
+			logr.Debugln("scheduler: freed up resources")
 		} else {
-			logr.WithError(err).Errorln("nomad: could not free up resources")
+			logr.WithError(err).Errorln("scheduler: could not free up resources")
 		}
-		logr.Infoln("nomad: registering destroy job with nomad")
+		logr.Infoln("scheduler: registering destroy job with nomad")
 		_, _, err := p.client.Jobs().Register(job, nil)
 		if err != nil {
-			logr.WithError(err).Errorln("nomad: could not register destroy job")
+			logr.WithError(err).Errorln("scheduler: could not register destroy job")
 			return err
 		}
-		logr.Debugln("nomad: started polling for destroy job")
+		logr.Debugln("scheduler: started polling for destroy job")
 		_, err = p.pollForJob(ctx, jobID, logr, destroyTimeout, false, []JobStatus{Dead})
 		if err != nil {
-			logr.WithError(err).Errorln("nomad: could not complete destroy job")
+			logr.WithError(err).Errorln("scheduler: could not complete destroy job")
 			return err
 		}
 	}
@@ -513,7 +513,7 @@ L:
 			status := Status(*job.Status)
 
 			if slices.Contains(terminalStates, status) {
-				logr.WithField("job_id", id).WithField("status", status).Traceln("nomad: job reached a terminal state")
+				logr.WithField("job_id", id).WithField("status", status).Traceln("scheduler: job reached a terminal state")
 				terminal = true
 				break L
 			}
@@ -535,19 +535,19 @@ L:
 		}()
 	}
 
-	return job, errors.New("nomad: job never reached terminal state")
+	return job, errors.New("scheduler: job never reached terminal state")
 }
 
 // deregisterJob stops the job in Nomad
 // if purge is set to true, it gc's it from nomad state as well
 func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error { //nolint:unparam
-	logr.WithField("job_id", id).WithField("purge", purge).Traceln("nomad: trying to deregister job")
+	logr.WithField("job_id", id).WithField("purge", purge).Traceln("scheduler: trying to deregister job")
 	_, _, err := p.client.Jobs().Deregister(id, true, &api.WriteOptions{})
 	if err != nil {
-		logr.WithField("job_id", id).WithField("purge", purge).WithError(err).Errorln("nomad: could not deregister job")
+		logr.WithField("job_id", id).WithField("purge", purge).WithError(err).Errorln("scheduler: could not deregister job")
 		return err
 	}
-	logr.WithField("job_id", id).WithField("purge", purge).Infoln("nomad: successfully deregistered job")
+	logr.WithField("job_id", id).WithField("purge", purge).Infoln("scheduler: successfully deregistered job")
 	return nil
 }
 
