@@ -104,17 +104,8 @@ func (p *config) Ping(ctx context.Context) error {
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
 	startupScript := generateStartupScript(opts)
-	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
+
 	vm := strings.ToLower(random(20)) //nolint:gomnd
-	portLabel := vm
-
-	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
-	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
-	initjobID := initJobID(vm)
-	initTaskGroup := fmt.Sprintf("init_task_group_%s", vm)
-	resourceJobID := resourceJobID(vm)
-
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("init_job_id", initjobID).WithField("resource_job_id", resourceJobID)
 
 	cpus, err := strconv.Atoi(p.vmCpus)
 	if err != nil {
@@ -125,18 +116,117 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, errors.New("could not convert VM memory to integer")
 	}
 
+	// Create a resource job which occupies resources until the VM is alive to avoid
+	// oversubscribing the node
+	resourceJob, resourceJobID := resourceJob(cpus, memGB, vm)
+
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("resource_job_id", resourceJobID)
+
+	logr.Infoln("scheduler: finding a node which has available resources ... ")
+
+	_, _, err = p.client.Jobs().Register(resourceJob, nil)
+	if err != nil {
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
+	}
+	// If resources don't become available in `resourceJobTimeout`, we fail the step
+	_, err = p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
+	if err != nil {
+		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
+	}
+	logr.Infoln("scheduler: found a node with available resources")
+
+	// get the machine details where the resource job was allocated
+	ip, id, hostPort, err := p.fetchMachine(logr, resourceJobID)
+	if err != nil {
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		return nil, err
+	}
+
+	// create a VM on the same machine where the resource job was allocated
+	initJob, initJobID, initTaskGroup := p.initJob(vm, startupScript, hostPort, id)
+
+	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", hostPort)
+
+	instance := &types.Instance{
+		ID:       vm,
+		NodeID:   id,
+		Name:     vm,
+		Platform: opts.Platform,
+		State:    types.StateCreated,
+		CACert:   opts.CACert,
+		CAKey:    opts.CAKey,
+		TLSCert:  opts.TLSCert,
+		TLSKey:   opts.TLSKey,
+		Provider: types.Nomad,
+		Pool:     opts.PoolName,
+		Started:  time.Now().Unix(),
+		Updated:  time.Now().Unix(),
+		Port:     int64(hostPort),
+		Address:  ip,
+	}
+
+	logr.Debugln("scheduler: submitting VM creation job to nomad")
+	_, _, err = p.client.Jobs().Register(initJob, nil)
+	if err != nil {
+		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
+	}
+	logr.Debugln("scheduler: successfully submitted job to nomad, started polling for job status")
+	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
+	if err != nil {
+		// Destroy the VM if it's in a partially created state
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		return nil, err
+	}
+
+	// Make sure all subtasks in the init job passed
+	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
+	if err != nil {
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		return nil, fmt.Errorf("scheduler: init job failed with error: %s", err)
+	}
+
+	return instance, nil
+}
+
+// checkTaskGroupStatus verifies whether there were any tasks inside the task group which failed
+func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
+	// Get summary of job to make sure all tasks passed
+	summary, _, err := p.client.Jobs().Summary(jobID, &api.QueryOptions{})
+	if err != nil {
+		return errors.New("could not get summary of the job")
+	}
+
+	// If the summary is invalid or any of the tasks have failed, return an error
+	if summary == nil || summary.Summary == nil {
+		return errors.New("could not get summary of the job")
+	}
+	if _, ok := summary.Summary[taskGroup]; !ok {
+		return errors.New("could not get summary of the task group")
+	}
+	if summary.Summary[taskGroup].Failed > 0 {
+		return fmt.Errorf("found failed tasks")
+	}
+	return nil
+}
+
+// resourceJob creates a job which occupies resources until the VM lifecycle
+func resourceJob(cpus, memGB int, vm string) (*api.Job, string) {
+	id := resourceJobID(vm)
+	portLabel := vm
+
+	sleepTime := resourceJobTimeout + initTimeout + 2*time.Minute // add 2 minutes for a buffer
+
 	// TODO: Check if this logic can be made better, although we are bounded by some limitations of Nomad scheduling
 	// We want to keep some buffer for other tasks to come in (which require minimum cpu and memory)
 	cpu := machineFrequencyMhz*cpus - 109
 	mem := convertGigsToMegs(memGB) - 53
 
-	sleepTime := resourceJobTimeout + initTimeout + 2*time.Minute // add 2 minutes for a buffer
-
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	// It sleeps until the max VM creation timeout, after which it periodically checks whether the VM is alive or not
-	resourceJob := &api.Job{
-		ID:          &resourceJobID,
-		Name:        stringToPtr(resourceJobID),
+	job := &api.Job{
+		ID:          &id,
+		Name:        stringToPtr(id),
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
 		// TODO (Vistaar): This can be updated once we have more data points
@@ -171,86 +261,83 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 			},
 		},
 	}
+	return job, id
+}
 
-	logr.Infoln("scheduler: finding a node which has available resources ... ")
-
-	_, _, err = p.client.Jobs().Register(resourceJob, nil)
-	if err != nil {
-		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
-	}
-	// If resources don't become available in `resourceJobTimeout`, we fail the step
-	_, err = p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
-	if err != nil {
-		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
-	}
-	logr.Infoln("scheduler: found a node with available resources")
-
+// fetchMachine returns details of the machine where the job has been allocated
+func (p *config) fetchMachine(logr logger.Logger, id string) (string, string, int, error) {
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
-	l, _, err := p.client.Jobs().Allocations(resourceJobID, false, nil)
+	var ip, nodeID string
+	var port int
+	l, _, err := p.client.Jobs().Allocations(id, false, nil)
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, err
+		return ip, nodeID, port, err
 	}
 	if len(l) == 0 {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, errors.New("scheduler: no allocation found for the job")
+		return ip, nodeID, port, errors.New("scheduler: no allocation found for the job")
 	}
 
-	id := l[0].NodeID
+	nodeID = l[0].NodeID
 	allocID := l[0].ID
-	if id == "" || allocID == "" {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, errors.New("scheduler: could not find an allocation identifier for the job")
+	if nodeID == "" || allocID == "" {
+		return ip, nodeID, port, errors.New("scheduler: could not find an allocation identifier for the job")
 	}
 
 	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, err
+		return ip, nodeID, port, err
 	}
 
 	// Not expected - if nomad is unable to find a port, it should not run the job at all.
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
 		err = fmt.Errorf("scheduler: could not allocate network and ports for job")
 		logr.Errorln(err)
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, err
+		return ip, nodeID, port, err
 	}
 
-	hostPort := alloc.Resources.Networks[0].DynamicPorts[0].Value
+	port = alloc.Resources.Networks[0].DynamicPorts[0].Value
 
 	// sanity check
-	if hostPort <= 0 || hostPort > 65535 {
-		err = fmt.Errorf("scheduler: port %d generated is not a valid port", hostPort)
+	if port <= 0 || port > 65535 {
+		err = fmt.Errorf("scheduler: port %d generated is not a valid port", port)
 		logr.Errorln(err)
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, err
+		return ip, nodeID, port, err
 	}
 
-	n, _, err := p.client.Nodes().Info(id, &api.QueryOptions{})
+	n, _, err := p.client.Nodes().Info(nodeID, &api.QueryOptions{})
 	if err != nil {
 		logr.WithError(err).Errorln("scheduler: could not get information about the node which picked up the resource job")
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, err
+		return ip, nodeID, port, err
 	}
 
-	ip := strings.Split(n.HTTPAddr, ":")[0]
+	ip = strings.Split(n.HTTPAddr, ":")[0]
 	if net.ParseIP(ip) == nil {
 		err = fmt.Errorf("scheduler: could not parse client machine IP: %s", ip)
 		logr.Errorln(err)
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, err
+		return ip, nodeID, port, err
 	}
 
-	logr = logr.WithField("node_ip", ip).WithField("node_port", hostPort)
+	return ip, nodeID, port, nil
+}
 
-	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %d --memory %dGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s",
+// initJob creates a job which is targeted to a specific node. The job does the following:
+//  1. Starts a VM with the provided config
+//  2. Runs a startup script inside the VM
+func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) (*api.Job, string, string) {
+	initjobID := initJobID(vm)
+	initTaskGroup := fmt.Sprintf("init_task_group_%s", vm)
+	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
+
+	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
+	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
+
+	runCmd := fmt.Sprintf("%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s",
 		ignitePath,
 		p.vmImage,
 		vm,
-		cpus,
-		memGB,
+		p.vmCpus,
+		p.vmMemoryGB,
 		p.vmDiskSize,
 		hostPort,
 		strconv.Itoa(lehelper.LiteEnginePort),
@@ -264,7 +351,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Constraints: []*api.Constraint{
 			{
 				LTarget: "${node.unique.id}",
-				RTarget: id,
+				RTarget: nodeID,
 				Operand: "=",
 			},
 		},
@@ -335,63 +422,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 			},
 		},
 	}
-
-	instance := &types.Instance{
-		ID:       vm,
-		NodeID:   id,
-		Name:     vm,
-		Platform: opts.Platform,
-		State:    types.StateCreated,
-		CACert:   opts.CACert,
-		CAKey:    opts.CAKey,
-		TLSCert:  opts.TLSCert,
-		TLSKey:   opts.TLSKey,
-		Provider: types.Nomad,
-		Pool:     opts.PoolName,
-		Started:  time.Now().Unix(),
-		Updated:  time.Now().Unix(),
-		Port:     int64(hostPort),
-		Address:  ip,
-	}
-
-	logr.Debugln("scheduler: submitting VM creation job to nomad")
-	_, _, err = p.client.Jobs().Register(initJob, nil)
-	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
-	}
-	logr.Debugln("scheduler: successfully submitted job to nomad, started polling for job status")
-	_, err = p.pollForJob(ctx, initjobID, logr, initTimeout, true, []JobStatus{Dead})
-	if err != nil {
-		// Destroy the VM if it's in a partially created state
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		defer p.deregisterJob(logr, resourceJobID, true)                   //nolint:errcheck
-		return nil, err
-	}
-
-	// Get summary of job to make sure all tasks passed
-	summary, _, err := p.client.Jobs().Summary(initjobID, &api.QueryOptions{})
-	if err != nil {
-		logr.WithError(err).Errorln("scheduler: failed to init VM")
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, err
-	}
-
-	// If the summary is invalid or any of the tasks have failed, return an error
-	if summary == nil || summary.Summary == nil {
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, errors.New("could not get summary of the job")
-	}
-	if _, ok := summary.Summary[initTaskGroup]; !ok {
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, errors.New("could not get summary of the init task group")
-	}
-	if summary.Summary[initTaskGroup].Failed > 0 {
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: failed to create a VM to run the build")
-	}
-
-	return instance, nil
+	return initJob, initjobID, initTaskGroup
 }
 
 // Destroy destroys the VM in the bare metal machine
