@@ -2,15 +2,18 @@ package lehelper
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 )
 
 const (
-	LiteEnginePort = 9079
+	LiteEnginePort  = 9079
+	MockStepTimeout = 2 * time.Minute
 )
 
 func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
@@ -39,8 +42,11 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	return userdata
 }
 
-func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64) (*lehttp.HTTPClient, error) {
+func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64, mock bool) (lehttp.Client, error) {
 	leURL := fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
+	if mock {
+		return lehttp.NewNoopClient(&api.PollStepResponse{}, nil, 2*time.Minute), nil
+	}
 	return lehttp.NewHTTPClient(leURL,
 		runnerName, string(instance.CACert),
 		string(instance.TLSCert), string(instance.TLSKey))

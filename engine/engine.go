@@ -99,7 +99,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 	// required for anka build where the port is dynamic
-	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port)
+	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port, e.config.LiteEngine.EnableMock)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return err
@@ -197,7 +197,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		logr.WithError(err).Errorln("cannot find instance")
 		return nil, err
 	}
-	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port)
+	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port, e.config.LiteEngine.EnableMock)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return nil, err
