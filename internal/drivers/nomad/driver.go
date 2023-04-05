@@ -113,7 +113,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	}
 	memGB, err := strconv.Atoi(p.vmMemoryGB)
 	if err != nil {
-		return nil, errors.New("could not convert VM memory to integer")
+		return nil, errors.New("could  not convert VM memory to integer")
 	}
 
 	// Create a resource job which occupies resources until the VM is alive to avoid
@@ -211,8 +211,8 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func resourceJob(cpus, memGB int, vm string) (*api.Job, string) {
-	id := resourceJobID(vm)
+func resourceJob(cpus, memGB int, vm string) (job *api.Job, id string) {
+	id = resourceJobID(vm)
 	portLabel := vm
 
 	sleepTime := resourceJobTimeout + initTimeout + 2*time.Minute // add 2 minutes for a buffer
@@ -224,7 +224,7 @@ func resourceJob(cpus, memGB int, vm string) (*api.Job, string) {
 
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	// It sleeps until the max VM creation timeout, after which it periodically checks whether the VM is alive or not
-	job := &api.Job{
+	job = &api.Job{
 		ID:          &id,
 		Name:        stringToPtr(id),
 		Type:        stringToPtr("batch"),
@@ -265,11 +265,9 @@ func resourceJob(cpus, memGB int, vm string) (*api.Job, string) {
 }
 
 // fetchMachine returns details of the machine where the job has been allocated
-func (p *config) fetchMachine(logr logger.Logger, id string) (string, string, int, error) {
+func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string, port int, err error) {
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
-	var ip, nodeID string
-	var port int
 	l, _, err := p.client.Jobs().Allocations(id, false, nil)
 	if err != nil {
 		return ip, nodeID, port, err
@@ -324,9 +322,9 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (string, string, in
 // initJob creates a job which is targeted to a specific node. The job does the following:
 //  1. Starts a VM with the provided config
 //  2. Runs a startup script inside the VM
-func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) (*api.Job, string, string) {
-	initjobID := initJobID(vm)
-	initTaskGroup := fmt.Sprintf("init_task_group_%s", vm)
+func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) (job *api.Job, id, group string) {
+	id = initJobID(vm)
+	group = fmt.Sprintf("init_task_group_%s", vm)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
 
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
@@ -343,8 +341,8 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 		strconv.Itoa(lehelper.LiteEnginePort),
 		hostPath,
 		vmPath)
-	initJob := &api.Job{
-		ID:          &initjobID,
+	job = &api.Job{
+		ID:          &id,
 		Name:        stringToPtr(vm),
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
@@ -365,7 +363,7 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
-				Name:  stringToPtr(initTaskGroup),
+				Name:  stringToPtr(group),
 				Count: intToPtr(1),
 				Tasks: []*api.Task{
 					{
@@ -422,7 +420,7 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 			},
 		},
 	}
-	return initJob, initjobID, initTaskGroup
+	return job, id, group
 }
 
 // Destroy destroys the VM in the bare metal machine
