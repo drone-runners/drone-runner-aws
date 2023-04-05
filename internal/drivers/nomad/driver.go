@@ -423,58 +423,66 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 	return job, id, group
 }
 
+// destroyJob returns a job targeted to the given node which stops and removes the VM
+func destroyJob(vm, nodeID string) (job *api.Job, id string) {
+	id = destroyJobID(vm)
+	constraint := &api.Constraint{
+		LTarget: "${node.unique.id}",
+		RTarget: nodeID,
+		Operand: "=",
+	}
+	job = &api.Job{
+		ID:   &id,
+		Name: stringToPtr(random(20)), //nolint:gomnd
+
+		Type:        stringToPtr("batch"),
+		Datacenters: []string{"dc1"},
+		Constraints: []*api.Constraint{
+			constraint,
+		},
+		TaskGroups: []*api.TaskGroup{
+			{
+				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				RestartPolicy: &api.RestartPolicy{
+					Attempts: intToPtr(destroyRetryAttempts),
+				},
+				Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", vm)),
+				Count: intToPtr(1),
+				Tasks: []*api.Task{
+					{
+						Name:      "ignite_stop_and_rm",
+						Resources: minNomadResources(),
+						Driver:    "raw_exec",
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s", ignitePath, vm, ignitePath, vm)},
+						},
+					},
+				},
+			},
+		}}
+	return job, id
+}
+
 // Destroy destroys the VM in the bare metal machine
 func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
 	for _, instance := range instances {
-		jobID := destroyJobID(instance.ID)
+		job, jobID := destroyJob(instance.ID, instance.NodeID)
+
 		resourceJobID := resourceJobID(instance.ID)
 		logr := logger.FromContext(ctx).
 			WithField("instance_id", instance.ID).
 			WithField("instance_node_id", instance.NodeID).
 			WithField("job_id", jobID).WithField("resource_job_id", resourceJobID)
-		constraint := &api.Constraint{
-			LTarget: "${node.unique.id}",
-			RTarget: instance.NodeID,
-			Operand: "=",
-		}
-		job := &api.Job{
-			ID:   &jobID,
-			Name: stringToPtr(random(20)), //nolint:gomnd
 
-			Type:        stringToPtr("batch"),
-			Datacenters: []string{"dc1"},
-			Constraints: []*api.Constraint{
-				constraint,
-			},
-			TaskGroups: []*api.TaskGroup{
-				{
-					StopAfterClientDisconnect: &clientDisconnectTimeout,
-					RestartPolicy: &api.RestartPolicy{
-						Attempts: intToPtr(destroyRetryAttempts),
-					},
-					Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", instance.ID)),
-					Count: intToPtr(1),
-					Tasks: []*api.Task{
-						{
-							Name:      "ignite_stop_and_rm",
-							Resources: minNomadResources(),
-							Driver:    "raw_exec",
-							Config: map[string]interface{}{
-								"command": "/usr/bin/su",
-								"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s", ignitePath, instance.ID, ignitePath, instance.ID)},
-							},
-						},
-					},
-				},
-			}}
-		logr.Debugln("scheduler: removed VM, freeing up resources ... ")
+		logr.Debugln("scheduler: freeing up resources ... ")
 		err = p.deregisterJob(logr, resourceJobID, true)
 		if err == nil {
 			logr.Debugln("scheduler: freed up resources")
 		} else {
 			logr.WithError(err).Errorln("scheduler: could not free up resources")
 		}
-		logr.Infoln("scheduler: registering destroy job with nomad")
+		logr.Infoln("scheduler: freed up resources, submitting destroy job")
 		_, _, err := p.client.Jobs().Register(job, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("scheduler: could not register destroy job")
