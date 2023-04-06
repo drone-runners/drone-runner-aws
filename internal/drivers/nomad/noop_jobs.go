@@ -11,11 +11,11 @@ import (
 
 // initJobNoop creates a job which is targeted to a node. It doesn't create or run a VM,
 // all it does is sleep for 30 seconds (approximate time of VM creation). This job can be used for scale testing.
-func (p *config) initJobNoop(vm, startupScript string, hostPort int, nodeID string) (*api.Job, string, string) {
-	initjobID := initJobID(vm)
-	initTaskGroup := fmt.Sprintf("init_task_group_%s", vm)
+func (p *config) initJobNoop(vm, startupScript string, hostPort int, nodeID string) (initJob *api.Job, initjobID string, initTaskGroup string) {
+	initjobID = initJobID(vm)
+	initTaskGroup = fmt.Sprintf("init_task_group_%s", vm)
 
-	initJob := &api.Job{
+	initJob = &api.Job{
 		ID:          &initjobID,
 		Name:        stringToPtr(vm),
 		Type:        stringToPtr("batch"),
@@ -46,7 +46,7 @@ func (p *config) initJobNoop(vm, startupScript string, hostPort int, nodeID stri
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("sleep 7")},
+							"args":    []string{"-c", "sleep 7"},
 						},
 					},
 				},
@@ -57,7 +57,7 @@ func (p *config) initJobNoop(vm, startupScript string, hostPort int, nodeID stri
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJobNoop(cpus, memGB int, vm string) (job *api.Job, id string) {
+func (p *config) resourceJobNoop(cpus, memGB int, vm string) (job *api.Job, id string) { //nolint:unparam
 	id = resourceJobID(vm)
 	portLabel := vm
 
