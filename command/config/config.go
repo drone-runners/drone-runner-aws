@@ -98,7 +98,6 @@ type (
 	Nomad struct {
 		Server NomadServer `json:"server" yaml:"server"`
 		VM     NomadVM     `json:"vm" yaml:"vm"`
-		Noop   bool        `json:"noop" yaml:"noop"`
 	}
 
 	NomadServer struct {
@@ -114,6 +113,7 @@ type (
 		MemoryGB string `json:"mem_gb" yaml:"mem_gb"`
 		Cpus     string `json:"cpus" yaml:"cpus"`
 		DiskSize string `json:"disk_size" yaml:"disk_size"`
+		Noop     bool   `json:"noop" yaml:"noop"`
 	}
 
 	// Azure specifies the configuration for an Azure instance.
