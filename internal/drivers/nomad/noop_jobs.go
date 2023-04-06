@@ -11,7 +11,7 @@ import (
 
 // initJobNoop creates a job which is targeted to a node. It doesn't create or run a VM,
 // all it does is sleep for 30 seconds (approximate time of VM creation). This job can be used for scale testing.
-func (p *config) initJobNoop(vm, startupScript string, hostPort int, nodeID string) (initJob *api.Job, initjobID, initTaskGroup string) {
+func (p *config) initJobNoop(vm, startupScript string, hostPort int, nodeID string) (initJob *api.Job, initjobID, initTaskGroup string) { //nolint:unparam
 	initjobID = initJobID(vm)
 	initTaskGroup = fmt.Sprintf("init_task_group_%s", vm)
 
