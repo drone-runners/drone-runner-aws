@@ -41,6 +41,12 @@ func WithImage(s string) Option {
 	}
 }
 
+func WithNoop(b bool) Option {
+	return func(p *config) {
+		p.noop = b
+	}
+}
+
 func WithMemory(s string) Option {
 	return func(p *config) {
 		p.vmMemoryGB = s

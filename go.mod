@@ -24,7 +24,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.6
+	github.com/harness/lite-engine v0.5.7
 	github.com/hashicorp/nomad/api v0.0.0-20230323222826-fffdbdff06d1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1

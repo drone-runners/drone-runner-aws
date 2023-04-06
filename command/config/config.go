@@ -113,6 +113,7 @@ type (
 		MemoryGB string `json:"mem_gb" yaml:"mem_gb"`
 		Cpus     string `json:"cpus" yaml:"cpus"`
 		DiskSize string `json:"disk_size" yaml:"disk_size"`
+		Noop     bool   `json:"noop" yaml:"noop"`
 	}
 
 	// Azure specifies the configuration for an Azure instance.
@@ -309,7 +310,6 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		LiteEnginePath       string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.6/"`
 		DefaultDriver        string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
 		ReusePool            bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge           int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
@@ -319,6 +319,12 @@ type EnvConfig struct {
 		EnableAutoPool       bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		HarnessTestBinaryURI string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
 		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.1.6-beta"`
+	}
+
+	LiteEngine struct {
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.7/"`
+		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
+		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
 
 	Server struct {

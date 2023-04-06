@@ -42,6 +42,7 @@ type config struct {
 	clientCertPath string
 	clientKeyPath  string
 	insecure       bool
+	noop           bool
 	client         *api.Client
 }
 
@@ -118,7 +119,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
-	resourceJob, resourceJobID := resourceJob(cpus, memGB, vm)
+	var resourceJob *api.Job
+	var resourceJobID string
+	if p.noop {
+		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm)
+	} else {
+		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm)
+	}
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("resource_job_id", resourceJobID)
 
@@ -143,7 +150,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	}
 
 	// create a VM on the same machine where the resource job was allocated
-	initJob, initJobID, initTaskGroup := p.initJob(vm, startupScript, hostPort, id)
+	var initJob *api.Job
+	var initJobID, initTaskGroup string
+	if p.noop {
+		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, startupScript, hostPort, id)
+	} else {
+		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, hostPort, id)
+	}
 
 	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", hostPort)
 
@@ -211,7 +224,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func resourceJob(cpus, memGB int, vm string) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB int, vm string) (job *api.Job, id string) {
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -424,7 +437,7 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
-func destroyJob(vm, nodeID string) (job *api.Job, id string) {
+func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
@@ -467,7 +480,13 @@ func destroyJob(vm, nodeID string) (job *api.Job, id string) {
 // Destroy destroys the VM in the bare metal machine
 func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
 	for _, instance := range instances {
-		job, jobID := destroyJob(instance.ID, instance.NodeID)
+		var job *api.Job
+		var jobID string
+		if p.noop {
+			job, jobID = p.destroyJobNoop(instance.ID, instance.NodeID)
+		} else {
+			job, jobID = p.destroyJob(instance.ID, instance.NodeID)
+		}
 
 		resourceJobID := resourceJobID(instance.ID)
 		logr := logger.FromContext(ctx).

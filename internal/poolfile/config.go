@@ -289,7 +289,8 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				nomad.WithCpus(nomadConfig.VM.Cpus),
 				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),
-				nomad.WithImage(nomadConfig.VM.Image))
+				nomad.WithImage(nomadConfig.VM.Image),
+				nomad.WithNoop(nomadConfig.VM.Noop))
 			if err != nil {
 				// TODO: We should return error here once bare metal has been tested on production
 				// Ignoring errors here for now to not cause production outages in case of nomad connectivity issues
