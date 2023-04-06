@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	LiteEnginePort  = 9079
-	MockStepTimeout = 2 * time.Minute
+	LiteEnginePort = 9079
 )
 
 func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
