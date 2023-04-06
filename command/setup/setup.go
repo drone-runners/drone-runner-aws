@@ -183,7 +183,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("setup: unable to start instance")
 	}
 	// create an LE client so we can test the instance
-	leClient, leErr := lehelper.GetClient(instance, runnerName, instance.Port, env.LiteEngine.EnableMock)
+	leClient, leErr := lehelper.GetClient(instance, runnerName, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if leErr != nil {
 		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)

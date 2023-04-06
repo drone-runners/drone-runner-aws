@@ -3,7 +3,6 @@ module github.com/drone-runners/drone-runner-aws
 go 1.19
 
 replace github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.20200309214505-aa6a9891b09c+incompatible
-replace github.com/harness/lite-engine => /Users/vistaarjuneja/lite-engine
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.4.0
@@ -25,7 +24,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.6
+	github.com/harness/lite-engine v0.5.7
 	github.com/hashicorp/nomad/api v0.0.0-20230323222826-fffdbdff06d1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
