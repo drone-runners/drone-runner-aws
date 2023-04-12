@@ -24,14 +24,15 @@ var version = "v1.0.0-rc.1"
 // empty context
 var nocontext = context.Background()
 
-func other() {
-	a := 20
-	fmt.Println(a)
+// PrintAppDetails prints some information about the app
+func PrintAppDetails(app *kingpin.Application) {
+	fmt.Printf("help: %s\n", app.Help)
 }
 
 // Command parses the command line arguments and then executes a subcommand program.
 func Command() {
 	app := kingpin.New("drone", "drone aws runner")
+	PrintAppDetails(app)
 	registerCompile(app)
 	registerExec(app)
 	daemon.Register(app)
