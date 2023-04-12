@@ -6,7 +6,6 @@ package command
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
@@ -23,11 +22,6 @@ var version = "v1.0.0-rc.1"
 
 // empty context
 var nocontext = context.Background()
-
-// PrintAppDetails prints some information about the app
-func PrintAppDetails(app *kingpin.Application) {
-	fmt.Printf("help: %s\n", app.Help)
-}
 
 // Command parses the command line arguments and then executes a subcommand program.
 func Command() {
