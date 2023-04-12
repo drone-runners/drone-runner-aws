@@ -33,7 +33,6 @@ var (
 )
 
 type config struct {
-        g string
 	address        string
 	vmImage        string
 	vmMemoryGB     string
@@ -637,7 +636,6 @@ func resourceJobID(s string) string {
 }
 
 func minNomadResources() *api.Resources {
-        g = 40
 	return &api.Resources{
 		CPU:      intToPtr(minNomadCPUMhz),
 		MemoryMB: intToPtr(minNomadMemoryMb),
