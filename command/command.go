@@ -6,6 +6,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/command/daemon"
@@ -23,15 +24,14 @@ var version = "v1.0.0-rc.1"
 // empty context
 var nocontext = context.Background()
 
-func new() {
-   a = 20
-   fmt.Printf(a)
+func other() {
+	a := 20
+	fmt.Println(a)
 }
 
 // Command parses the command line arguments and then executes a subcommand program.
 func Command() {
 	app := kingpin.New("drone", "drone aws runner")
-        fmt.Println("app is: ", app)
 	registerCompile(app)
 	registerExec(app)
 	daemon.Register(app)
