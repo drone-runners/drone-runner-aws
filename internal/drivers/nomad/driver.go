@@ -145,7 +145,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// get the machine details where the resource job was allocated
 	ip, id, hostPort, err := p.fetchMachine(logr, resourceJobID)
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, err
 	}
 
@@ -181,7 +181,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Debugln("scheduler: submitting VM creation job to nomad")
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, true) //nolint:errcheck
+		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	logr.Debugln("scheduler: successfully submitted job to nomad, started polling for job status")
@@ -495,7 +495,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			WithField("job_id", jobID).WithField("resource_job_id", resourceJobID)
 
 		logr.Debugln("scheduler: freeing up resources ... ")
-		err = p.deregisterJob(logr, resourceJobID, true)
+		err = p.deregisterJob(logr, resourceJobID, false)
 		if err == nil {
 			logr.Debugln("scheduler: freed up resources")
 		} else {
@@ -587,7 +587,7 @@ L:
 	// Deregister the job if remove is set as true
 	if remove {
 		go func() {
-			p.deregisterJob(logr, id, true) //nolint:errcheck
+			p.deregisterJob(logr, id, false) //nolint:errcheck
 		}()
 	}
 
