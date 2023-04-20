@@ -75,9 +75,9 @@ func WithRootDirectory(dir string) Option {
 	}
 }
 
-func WithRegistryURI(url string) Option {
+func WithControllerURI(url string) Option {
 	return func(p *config) {
-		p.registryURL = url
+		p.controllerURL = url
 	}
 }
 
@@ -96,5 +96,11 @@ func WithTag(tag string) Option {
 func WithAuthToken(token string) Option {
 	return func(p *config) {
 		p.authToken = token
+	}
+}
+
+func WithGroupID(groupID string) Option {
+	return func(p *config) {
+		p.groupID = groupID
 	}
 }

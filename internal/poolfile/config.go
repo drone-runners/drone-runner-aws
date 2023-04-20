@@ -249,10 +249,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				ankabuild.WithRootDirectory(ankaBuild.RootDirectory),
 				ankabuild.WithUserData(ankaBuild.UserData, ankaBuild.UserDataPath),
 				ankabuild.WithVMID(ankaBuild.VMID),
-				ankabuild.WithRegistryURI(ankaBuild.RegistryURL),
+				ankabuild.WithControllerURI(ankaBuild.RegistryURL),
 				ankabuild.WithNodeID(ankaBuild.NodeID),
 				ankabuild.WithTag(ankaBuild.Tag),
 				ankabuild.WithAuthToken(ankaBuild.AuthToken),
+				ankabuild.WithGroupID(ankaBuild.GroupID),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)

@@ -93,6 +93,7 @@ type (
 		NodeID        string `json:"node_id,omitempty" yaml:"node_id"`
 		Tag           string `json:"tag,omitempty" yaml:"tag"`
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
+		GroupID       string `json:"group_id,omitempty" yaml:"group_id"`
 	}
 
 	Nomad struct {
@@ -423,17 +424,8 @@ func FromEnviron() (EnvConfig, error) {
 	return config, nil
 }
 
-// UnmarshalJSON implement the json.Unmarshaler interface.
-func (s *Instance) UnmarshalJSON(data []byte) error {
-	type S Instance
-	type T struct {
-		*S
-		Spec json.RawMessage `json:"spec"`
-	}
-	obj := &T{S: (*S)(s)}
-	if err := json.Unmarshal(data, obj); err != nil {
-		return err
-	}
+// Populates the Spec field of the Instance struct based on the Type field.
+func (s *Instance) populateSpec() error {
 	switch s.Type {
 	case string(types.Amazon), "aws":
 		s.Spec = new(Amazon)
@@ -456,5 +448,24 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}
+	return nil
+}
+
+// UnmarshalJSON implement the json.Unmarshaler interface.
+func (s *Instance) UnmarshalJSON(data []byte) error {
+	type S Instance
+	type T struct {
+		*S
+		Spec json.RawMessage `json:"spec"`
+	}
+	obj := &T{S: (*S)(s)}
+	if err := json.Unmarshal(data, obj); err != nil {
+		return err
+	}
+
+	if err := s.populateSpec(); err != nil {
+		return err
+	}
+
 	return json.Unmarshal(obj.Spec, s.Spec)
 }
