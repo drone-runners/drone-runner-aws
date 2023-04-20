@@ -90,9 +90,11 @@ type (
 		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 		RegistryURL   string `json:"registry_url,omitempty" yaml:"registry_url"`
+		ControllerURL string `json:"controller_url,omitempty" yaml:"controller_url"`
 		NodeID        string `json:"node_id,omitempty" yaml:"node_id"`
 		Tag           string `json:"tag,omitempty" yaml:"tag"`
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
+		GroupID       string `json:"group_id,omitempty" yaml:"group_id"`
 	}
 
 	Nomad struct {
@@ -417,16 +419,7 @@ func FromEnviron() (EnvConfig, error) {
 }
 
 // UnmarshalJSON implement the json.Unmarshaler interface.
-func (s *Instance) UnmarshalJSON(data []byte) error {
-	type S Instance
-	type T struct {
-		*S
-		Spec json.RawMessage `json:"spec"`
-	}
-	obj := &T{S: (*S)(s)}
-	if err := json.Unmarshal(data, obj); err != nil {
-		return err
-	}
+func (s *Instance) populateSpec() error {
 	switch s.Type {
 	case string(types.Amazon), "aws":
 		s.Spec = new(Amazon)
@@ -449,5 +442,42 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}
+	return nil
+}
+
+// For Instance struct
+func (s *Instance) UnmarshalJSON(data []byte) error {
+	type S Instance
+	type T struct {
+		*S
+		Spec json.RawMessage `json:"spec"`
+	}
+	obj := &T{S: (*S)(s)}
+	if err := json.Unmarshal(data, obj); err != nil {
+		return err
+	}
+
+	if err := s.populateSpec(); err != nil {
+		return err
+	}
+
 	return json.Unmarshal(obj.Spec, s.Spec)
+}
+
+type AliasAnkaBuild AnkaBuild
+
+// UnmarshalJSON required for backwards compatibility
+// with the old registry_url field.
+func (m *AnkaBuild) UnmarshalJSON(data []byte) error {
+	var alias AliasAnkaBuild
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+
+	if alias.RegistryURL != "" && alias.ControllerURL == "" {
+		alias.ControllerURL = alias.RegistryURL
+	}
+
+	*m = AnkaBuild(alias)
+	return nil
 }
