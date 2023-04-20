@@ -425,7 +425,7 @@ func FromEnviron() (EnvConfig, error) {
 	return config, nil
 }
 
-// UnmarshalJSON implement the json.Unmarshaler interface.
+// Populates the Spec field of the Instance struct based on the Type field.
 func (s *Instance) populateSpec() error {
 	switch s.Type {
 	case string(types.Amazon), "aws":
@@ -452,7 +452,7 @@ func (s *Instance) populateSpec() error {
 	return nil
 }
 
-// For Instance struct
+// UnmarshalJSON implement the json.Unmarshaler interface.
 func (s *Instance) UnmarshalJSON(data []byte) error {
 	type S Instance
 	type T struct {
@@ -473,7 +473,8 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 
 type AliasAnkaBuild AnkaBuild
 
-// UnmarshalJSON required for backwards compatibility
+// UnmarshalJSON implements the json.Unmarshaler interface.
+// required for backwards compatibility
 // with the old registry_url field.
 func (m *AnkaBuild) UnmarshalJSON(data []byte) error {
 	var alias AliasAnkaBuild
