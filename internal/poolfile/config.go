@@ -249,7 +249,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				ankabuild.WithRootDirectory(ankaBuild.RootDirectory),
 				ankabuild.WithUserData(ankaBuild.UserData, ankaBuild.UserDataPath),
 				ankabuild.WithVMID(ankaBuild.VMID),
-				ankabuild.WithControllerURI(ankaBuild.ControllerURL),
+				ankabuild.WithControllerURI(ankaBuild.RegistryURL),
 				ankabuild.WithNodeID(ankaBuild.NodeID),
 				ankabuild.WithTag(ankaBuild.Tag),
 				ankabuild.WithAuthToken(ankaBuild.AuthToken),
@@ -510,9 +510,9 @@ func createAnkaBuildPool(vmName, url, token string, minPoolSize, maxPoolSize int
 			OS:   oshelp.OSMac,
 		},
 		Spec: &config.AnkaBuild{
-			VMID:          vmName,
-			ControllerURL: url,
-			AuthToken:     token,
+			VMID:        vmName,
+			RegistryURL: url,
+			AuthToken:   token,
 		},
 	}
 	poolfile := config.PoolFile{

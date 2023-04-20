@@ -90,7 +90,6 @@ type (
 		UserData      string `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath  string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 		RegistryURL   string `json:"registry_url,omitempty" yaml:"registry_url"`
-		ControllerURL string `json:"controller_url,omitempty" yaml:"controller_url"`
 		NodeID        string `json:"node_id,omitempty" yaml:"node_id"`
 		Tag           string `json:"tag,omitempty" yaml:"tag"`
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
@@ -469,23 +468,4 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	}
 
 	return json.Unmarshal(obj.Spec, s.Spec)
-}
-
-type AliasAnkaBuild AnkaBuild
-
-// UnmarshalJSON implements the json.Unmarshaler interface.
-// required for backwards compatibility
-// with the old registry_url field.
-func (m *AnkaBuild) UnmarshalJSON(data []byte) error {
-	var alias AliasAnkaBuild
-	if err := json.Unmarshal(data, &alias); err != nil {
-		return err
-	}
-
-	if alias.RegistryURL != "" && alias.ControllerURL == "" {
-		alias.ControllerURL = alias.RegistryURL
-	}
-
-	*m = AnkaBuild(alias)
-	return nil
 }
