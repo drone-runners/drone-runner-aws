@@ -37,14 +37,11 @@ func New(enableAutoPool bool) *Linter {
 }
 
 // Lint executes the linting rules for the pipeline configuration.
-func (l *Linter) Lint(pipeline manifest.Resource, repo *drone.Repo) error {
+func (l *Linter) Lint(pipeline manifest.Resource, _ *drone.Repo) error {
 	if err := checkPipeline(pipeline.(*resource.Pipeline)); err != nil {
 		return err
 	}
-	if err := checkPools(pipeline.(*resource.Pipeline), l.PoolManager, l.EnableAutoPool); err != nil {
-		return err
-	}
-	return nil
+	return checkPools(pipeline.(*resource.Pipeline), l.PoolManager, l.EnableAutoPool)
 }
 
 func checkPipeline(pipeline *resource.Pipeline) error {

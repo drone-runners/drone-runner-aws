@@ -4,6 +4,10 @@ import (
 	"github.com/dchest/uniuri"
 )
 
+const (
+	gigsToMegs = 1024
+)
+
 // stringToPtr returns a pointer to a string
 func stringToPtr(s string) *string {
 	return &s
@@ -22,4 +26,9 @@ func boolToPtr(b bool) *bool {
 // random generates a random string of length n
 func random(n int) string {
 	return uniuri.NewLen(n)
+}
+
+// convert gigs to megs
+func convertGigsToMegs(p int) int {
+	return p * gigsToMegs
 }
