@@ -24,9 +24,9 @@ var (
 	ignitePath              = "/usr/local/bin/ignite"
 	clientDisconnectTimeout = 4 * time.Minute
 	destroyRetryAttempts    = 3
-	resourceJobTimeout      = 3 * time.Minute
-	initTimeout             = 5 * time.Minute
-	destroyTimeout          = 10 * time.Minute
+	resourceJobTimeout      = 1 * time.Minute
+	initTimeout             = 2 * time.Minute
+	destroyTimeout          = 3 * time.Minute
 	minNomadCPUMhz          = 40
 	minNomadMemoryMb        = 20
 	machineFrequencyMhz     = 5100 // TODO: Find a way to extract this from the node directly
