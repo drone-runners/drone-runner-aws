@@ -397,7 +397,14 @@ func FromEnviron() (EnvConfig, error) {
 		config.Runner.Environ = map[string]string{}
 	}
 	if config.Runner.Name == "" {
-		config.Runner.Name, _ = os.Hostname()
+		hostname, _ := os.Hostname()
+		namespace := os.Getenv("NAMESPACE") // won't be set in local environment or docker
+
+		if namespace != "" { // Kubernetes environment
+			config.Runner.Name = fmt.Sprintf("%s.%s.svc.cluster.local", hostname, namespace)
+		} else {
+			config.Runner.Name = hostname
+		}
 	}
 	if config.Dashboard.Password == "" {
 		config.Dashboard.Disabled = true
