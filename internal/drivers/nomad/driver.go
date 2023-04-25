@@ -468,7 +468,7 @@ func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("%s stop -f %s && %s rm -f %s", ignitePath, vm, ignitePath, vm)},
+							"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s && %s stop -f %s && %s rm -f %s", ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)},
 						},
 					},
 				},
@@ -596,7 +596,7 @@ L:
 
 // deregisterJob stops the job in Nomad
 // if purge is set to true, it gc's it from nomad state as well
-func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error { //nolint:unparam
+func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error {
 	logr.WithField("job_id", id).WithField("purge", purge).Traceln("scheduler: trying to deregister job")
 	_, _, err := p.client.Jobs().Deregister(id, purge, &api.WriteOptions{})
 	if err != nil {
