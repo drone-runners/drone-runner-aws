@@ -196,7 +196,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: init job failed with error: %s", err)
+		return nil, fmt.Errorf("scheduler: init job failed with error: %s on Ip: %s", err, ip)
 	}
 
 	return instance, nil
@@ -468,7 +468,7 @@ func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s", ignitePath, vm, ignitePath, vm)},
+							"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s && %s stop -f %s && %s rm -f %s", ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)},
 						},
 					},
 				},
@@ -495,7 +495,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			WithField("job_id", jobID).WithField("resource_job_id", resourceJobID)
 
 		logr.Debugln("scheduler: freeing up resources ... ")
-		err = p.deregisterJob(logr, resourceJobID, false)
+		err = p.deregisterJob(logr, resourceJobID, true)
 		if err == nil {
 			logr.Debugln("scheduler: freed up resources")
 		} else {
@@ -587,7 +587,7 @@ L:
 	// Deregister the job if remove is set as true
 	if remove {
 		go func() {
-			p.deregisterJob(logr, id, false) //nolint:errcheck
+			p.deregisterJob(logr, id, true) //nolint:errcheck
 		}()
 	}
 
@@ -596,9 +596,9 @@ L:
 
 // deregisterJob stops the job in Nomad
 // if purge is set to true, it gc's it from nomad state as well
-func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error { //nolint:unparam
+func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error {
 	logr.WithField("job_id", id).WithField("purge", purge).Traceln("scheduler: trying to deregister job")
-	_, _, err := p.client.Jobs().Deregister(id, true, &api.WriteOptions{})
+	_, _, err := p.client.Jobs().Deregister(id, purge, &api.WriteOptions{})
 	if err != nil {
 		logr.WithField("job_id", id).WithField("purge", purge).WithError(err).Errorln("scheduler: could not deregister job")
 		return err
