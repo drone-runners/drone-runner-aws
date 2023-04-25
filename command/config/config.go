@@ -93,6 +93,7 @@ type (
 		NodeID        string `json:"node_id,omitempty" yaml:"node_id"`
 		Tag           string `json:"tag,omitempty" yaml:"tag"`
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
+		GroupID       string `json:"group_id,omitempty" yaml:"group_id"`
 	}
 
 	Nomad struct {
@@ -110,9 +111,10 @@ type (
 
 	NomadVM struct {
 		Image    string `json:"image" yaml:"image"`
-		Memory   string `json:"memory" yaml:"memory"`
+		MemoryGB string `json:"mem_gb" yaml:"mem_gb"`
 		Cpus     string `json:"cpus" yaml:"cpus"`
 		DiskSize string `json:"disk_size" yaml:"disk_size"`
+		Noop     bool   `json:"noop" yaml:"noop"`
 	}
 
 	// Azure specifies the configuration for an Azure instance.
@@ -219,9 +221,10 @@ type (
 
 	// disk provides disk size and type.
 	disk struct {
-		Size int64  `json:"size,omitempty" yaml:"size,omitempty"`
-		Type string `json:"type,omitempty" yaml:"type,omitempty"`
-		Iops int64  `json:"iops,omitempty" yaml:"iops,omitempty"`
+		Size     int64  `json:"size,omitempty" yaml:"size,omitempty"`
+		Type     string `json:"type,omitempty" yaml:"type,omitempty"`
+		Iops     int64  `json:"iops,omitempty" yaml:"iops,omitempty"`
+		KmsKeyID string `json:"kms_key_id,omitempty" yaml:"kms_key_id,omitempty"`
 	}
 )
 
@@ -308,7 +311,6 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		LiteEnginePath       string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.0/"`
 		DefaultDriver        string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
 		ReusePool            bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge           int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
@@ -317,7 +319,13 @@ type EnvConfig struct {
 		MaxPoolSize          int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool       bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		HarnessTestBinaryURI string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.1.5-alpha"`
+		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.2.1-beta"`
+	}
+
+	LiteEngine struct {
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.10/"`
+		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
+		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
 
 	Server struct {
@@ -416,17 +424,8 @@ func FromEnviron() (EnvConfig, error) {
 	return config, nil
 }
 
-// UnmarshalJSON implement the json.Unmarshaler interface.
-func (s *Instance) UnmarshalJSON(data []byte) error {
-	type S Instance
-	type T struct {
-		*S
-		Spec json.RawMessage `json:"spec"`
-	}
-	obj := &T{S: (*S)(s)}
-	if err := json.Unmarshal(data, obj); err != nil {
-		return err
-	}
+// Populates the Spec field of the Instance struct based on the Type field.
+func (s *Instance) populateSpec() error {
 	switch s.Type {
 	case string(types.Amazon), "aws":
 		s.Spec = new(Amazon)
@@ -449,5 +448,24 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}
+	return nil
+}
+
+// UnmarshalJSON implement the json.Unmarshaler interface.
+func (s *Instance) UnmarshalJSON(data []byte) error {
+	type S Instance
+	type T struct {
+		*S
+		Spec json.RawMessage `json:"spec"`
+	}
+	obj := &T{S: (*S)(s)}
+	if err := json.Unmarshal(data, obj); err != nil {
+		return err
+	}
+
+	if err := s.populateSpec(); err != nil {
+		return err
+	}
+
 	return json.Unmarshal(obj.Spec, s.Spec)
 }

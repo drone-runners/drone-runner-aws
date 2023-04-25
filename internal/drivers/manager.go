@@ -50,7 +50,7 @@ func New(
 		globalCtx:            globalContext,
 		instanceStore:        instanceStore,
 		runnerName:           env.Runner.Name,
-		liteEnginePath:       env.Settings.LiteEnginePath,
+		liteEnginePath:       env.LiteEngine.Path,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
 		pluginBinaryURI:      env.Settings.PluginBinaryURI,
 	}
@@ -286,7 +286,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 // This method and BuildPool method contain logic for maintaining pool size.
 func (m *Manager) Provision(ctx context.Context, poolName, serverName string, env *config.EnvConfig) (*types.Instance, error) {
 	m.runnerName = serverName
-	m.liteEnginePath = env.Settings.LiteEnginePath
+	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
 
 	pool := m.poolMap[poolName]

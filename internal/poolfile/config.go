@@ -98,6 +98,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				amazon.WithVolumeSize(a.Disk.Size),
 				amazon.WithVolumeType(a.Disk.Type),
 				amazon.WithVolumeIops(a.Disk.Iops, a.Disk.Type),
+				amazon.WithKMSKeyID(a.Disk.KmsKeyID),
 				amazon.WithIamProfileArn(a.IamProfileArn),
 				amazon.WithMarketType(a.MarketType),
 				amazon.WithTags(a.Tags),
@@ -248,10 +249,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				ankabuild.WithRootDirectory(ankaBuild.RootDirectory),
 				ankabuild.WithUserData(ankaBuild.UserData, ankaBuild.UserDataPath),
 				ankabuild.WithVMID(ankaBuild.VMID),
-				ankabuild.WithRegistryURI(ankaBuild.RegistryURL),
+				ankabuild.WithControllerURI(ankaBuild.RegistryURL),
 				ankabuild.WithNodeID(ankaBuild.NodeID),
 				ankabuild.WithTag(ankaBuild.Tag),
 				ankabuild.WithAuthToken(ankaBuild.AuthToken),
+				ankabuild.WithGroupID(ankaBuild.GroupID),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
@@ -287,10 +289,14 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				nomad.WithInsecure(nomadConfig.Server.Insecure),
 				nomad.WithCpus(nomadConfig.VM.Cpus),
 				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
-				nomad.WithMemory(nomadConfig.VM.Memory),
-				nomad.WithImage(nomadConfig.VM.Image))
+				nomad.WithMemory(nomadConfig.VM.MemoryGB),
+				nomad.WithImage(nomadConfig.VM.Image),
+				nomad.WithNoop(nomadConfig.VM.Noop))
 			if err != nil {
-				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
+				// TODO: We should return error here once bare metal has been tested on production
+				// Ignoring errors here for now to not cause production outages in case of nomad connectivity issues
+				logrus.WithError(err).Errorf("unable to create %s pool '%s'", instance.Type, instance.Name)
+				return nil, nil
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver

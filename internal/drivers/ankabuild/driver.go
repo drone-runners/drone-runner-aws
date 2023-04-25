@@ -17,16 +17,17 @@ import (
 )
 
 type config struct {
-	username    string
-	password    string
-	rootDir     string
-	vmID        string
-	userData    string
-	nodeID      string
-	registryURL string
-	authToken   string
-	tag         string
-	ankaClient  Client
+	username      string
+	password      string
+	rootDir       string
+	vmID          string
+	userData      string
+	nodeID        string
+	controllerURL string
+	authToken     string
+	tag           string
+	groupID       string
+	ankaClient    Client
 }
 
 const (
@@ -42,7 +43,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 		opt(c)
 	}
 	if c.ankaClient == nil {
-		c.ankaClient = NewClient(c.registryURL, c.authToken)
+		c.ankaClient = NewClient(c.controllerURL, c.authToken)
 	}
 	return c, nil
 }
@@ -70,6 +71,9 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 	if c.nodeID != "" {
 		request.NodeID = c.nodeID
+	}
+	if c.groupID != "" {
+		request.GroupID = c.groupID
 	}
 
 	maxRetries := 3
@@ -127,9 +131,12 @@ func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetri
 			}
 		}
 		var id = response.Body[0]
-		vm, _ = c.FindVM(ctx, id, retryIntervalFind)
+		vm, err = c.FindVM(ctx, id, retryIntervalFind)
 		if err != nil {
 			return nil, err
+		}
+		if vm == nil {
+			return nil, fmt.Errorf("ankabuild: nil vm response returned")
 		}
 		if vm.Body.InstanceState != "Started" {
 			logrus.Errorf("ankabuild: deleting vm: %s", vm.Body.InstanceID)
