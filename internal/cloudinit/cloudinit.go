@@ -273,11 +273,11 @@ runcmd:
 - 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
 - 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
 {{ else if eq .Platform.Arch "arm64" }}
-- 'wget https://github.com/tmate-io/tmate/releases/download/2.4.0/tmate-2.4.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
+- 'wget https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
 - 'tar -xf /addon/tmate.xz -C /addon/'
-- 'chmod 777  /addon/tmate-2.4.0-static-linux-arm64v8/tmate'
-- 'mv  /addon/tmate-2.4.0-static-linux-arm64v8/tmate /addon/tmate'
-- 'rm -rf /addon/tmate-2.4.0-static-linux-arm64v8/'
+- 'chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate'
+- 'mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate'
+- 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
 {{ end }}
 - 'rm -rf /addon/tmate.xz'
 {{ end }}`
@@ -323,11 +323,11 @@ runcmd:
 - 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
 - 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
 {{ else if eq .Platform.Arch "arm64" }}
-- 'wget https://github.com/tmate-io/tmate/releases/download/2.4.0/tmate-2.4.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
+- 'wget https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
 - 'tar -xf /addon/tmate.xz -C /addon/'
-- 'chmod 777  /addon/tmate-2.4.0-static-linux-arm64v8/tmate'
-- 'mv  /addon/tmate-2.4.0-static-linux-arm64v8/tmate /addon/tmate'
-- 'rm -rf /addon/tmate-2.4.0-static-linux-arm64v8/'
+- 'chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate'
+- 'mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate'
+- 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
 {{ end }}
 - 'rm -rf /addon/tmate.xz'
 {{ end }}`
