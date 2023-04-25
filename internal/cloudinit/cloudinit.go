@@ -90,6 +90,7 @@ chmod 0600 {{ .KeyPath }}
 /usr/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
 chmod 777 /usr/bin/lite-engine
 touch $HOME/.env
+cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
