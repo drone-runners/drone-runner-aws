@@ -364,6 +364,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 	if derr := m.Delete(ctx, instanceID); derr != nil {
 		logrus.Warnf("failed to delete instance %s from store with err: %s", instanceID, derr)
 	}
+	logrus.WithField("instance", instanceID).Infof("instance destroyed")
 	return nil
 }
 
