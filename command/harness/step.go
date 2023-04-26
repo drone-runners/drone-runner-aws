@@ -110,9 +110,9 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 			}
 		}
 	}
-	startStepResponse, err := client.StartStep(ctx, &r.StartStepRequest)
+	startStepResponse, err := client.RetryStartStep(ctx, &r.StartStepRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to call LE.StartStep: %w", err)
+		return nil, fmt.Errorf("failed to call LE.RetryStartStep: %w", err)
 	}
 
 	logr.WithField("startStepResponse", startStepResponse).Traceln("LE.StartStep complete")
