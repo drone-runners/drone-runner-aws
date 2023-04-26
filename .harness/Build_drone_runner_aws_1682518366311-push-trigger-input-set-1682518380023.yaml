@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_drone_runner_aws_1682518366311-push-trigger-input-set
+  identifier: Build_drone_runner_aws_1682518366311pushtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: test
+  pipeline:
+    identifier: Build_drone_runner_aws_1682518366311
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: <+trigger.branch>
