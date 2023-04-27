@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -154,13 +155,19 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			if logErr != nil {
 				logr.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
+				// Serial console output is limited to 60000 characters since stackdriver only supports 64KB per log entry
+				l := math.Min(float64(len(out)), 60000) //nolint:gomnd
 				logrus.WithField("id", instance.ID).
-					WithField("instance_name", instance.Name).Infof("serial console output: %s", out)
+					WithField("instance_name", instance.Name).
+					WithField("ip", instance.Address).
+					WithField("pool_id", selectedPool).
+					WithField("stage_runtime_id", stageRuntimeID).
+					Infof("serial console output: %s", out[len(out)-int(l):])
 			}
 		}
 		errCleanUp := poolManager.Destroy(context.Background(), selectedPool, instance.ID)
 		if errCleanUp != nil {
-			logr.WithError(errCleanUp).Errorln("failed to delete failed instance client")
+			logr.WithError(errCleanUp).Errorln("failed to cleanup instance on setup failure")
 		}
 	}
 

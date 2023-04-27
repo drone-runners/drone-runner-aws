@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_drone_runner_aws_1682518366311-pr-trigger-input-set
+  identifier: Build_drone_runner_aws_1682518366311prtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: test
+  pipeline:
+    identifier: Build_drone_runner_aws_1682518366311
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>
