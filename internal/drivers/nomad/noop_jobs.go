@@ -121,7 +121,7 @@ func (p *config) destroyJobNoop(vm, nodeID string) (job *api.Job, id string) {
 			{
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
-					Attempts: intToPtr(destroyRetryAttempts),
+					Attempts: intToPtr(0),
 				},
 				Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", vm)),
 				Count: intToPtr(1),
