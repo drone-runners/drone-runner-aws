@@ -468,7 +468,7 @@ func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("%s stop %s && %s rm %s && %s stop -f %s && %s rm -f %s", ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)},
+							"args":    []string{"-c", fmt.Sprintf("%s stop %s; %s rm %s; %s stop -f %s; %s rm -f %s", ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)},
 						},
 					},
 				},
