@@ -23,7 +23,6 @@ import (
 var (
 	ignitePath              = "/usr/local/bin/ignite"
 	clientDisconnectTimeout = 4 * time.Minute
-	destroyRetryAttempts    = 3
 	resourceJobTimeout      = 1 * time.Minute
 	initTimeout             = 2 * time.Minute
 	destroyTimeout          = 3 * time.Minute
@@ -457,7 +456,7 @@ func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 			{
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
-					Attempts: intToPtr(destroyRetryAttempts),
+					Attempts: intToPtr(0),
 				},
 				Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", vm)),
 				Count: intToPtr(1),
