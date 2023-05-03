@@ -26,6 +26,7 @@ var (
 	resourceJobTimeout      = 1 * time.Minute
 	initTimeout             = 2 * time.Minute
 	destroyTimeout          = 3 * time.Minute
+	destroyRetryAttempts    = 1
 	minNomadCPUMhz          = 40
 	minNomadMemoryMb        = 20
 	machineFrequencyMhz     = 5100 // TODO: Find a way to extract this from the node directly
@@ -456,7 +457,7 @@ func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 			{
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
-					Attempts: intToPtr(0),
+					Attempts: intToPtr(destroyRetryAttempts),
 				},
 				Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", vm)),
 				Count: intToPtr(1),
@@ -467,7 +468,7 @@ func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("%s stop %s; %s rm %s; %s stop -f %s; %s rm -f %s", ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)},
+							"args":    []string{"-c", generateDestroyCommand(vm)},
 						},
 					},
 				},
@@ -661,4 +662,14 @@ fi
 echo "Port check passed..."
 sleep 30
 done`, sleepSecs, port)
+}
+
+func generateDestroyCommand(vm string) string {
+	// Try to force stop and remove if graceful case doesn't work
+	return fmt.Sprintf(`
+	    %s stop %s; %s rm %s
+		if [ $? -ne 0 ]; then
+		  %s stop -f %s; %s rm -f %s
+		fi
+	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)
 }
