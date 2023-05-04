@@ -87,7 +87,7 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
-fallocate -l 10G /swapfile
+fallocate -l 30G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
 swapon /swapfile
