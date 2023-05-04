@@ -182,21 +182,21 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s", err, ip)
 	}
 	logr.Debugln("scheduler: successfully submitted job to nomad, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		// Destroy the VM if it's in a partially created state
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, err
+		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s", err, ip)
 	}
 
 	// Make sure all subtasks in the init job passed
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: init job failed with error: %s on Ip: %s", err, ip)
+		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s", err, ip)
 	}
 
 	return instance, nil
