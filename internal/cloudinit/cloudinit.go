@@ -87,6 +87,11 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
+fallocate -l 30G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+
 /usr/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
 chmod 777 /usr/bin/lite-engine
 touch $HOME/.env
