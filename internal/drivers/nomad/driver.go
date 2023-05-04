@@ -23,8 +23,8 @@ import (
 var (
 	ignitePath              = "/usr/local/bin/ignite"
 	clientDisconnectTimeout = 4 * time.Minute
-	resourceJobTimeout      = 1 * time.Minute
-	initTimeout             = 2 * time.Minute
+	resourceJobTimeout      = 2 * time.Minute
+	initTimeout             = 3 * time.Minute
 	destroyTimeout          = 3 * time.Minute
 	destroyRetryAttempts    = 1
 	minNomadCPUMhz          = 40
@@ -495,7 +495,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 			WithField("job_id", jobID).WithField("resource_job_id", resourceJobID)
 
 		logr.Debugln("scheduler: freeing up resources ... ")
-		err = p.deregisterJob(logr, resourceJobID, true)
+		err = p.deregisterJob(logr, resourceJobID, false)
 		if err == nil {
 			logr.Debugln("scheduler: freed up resources")
 		} else {
@@ -587,7 +587,7 @@ L:
 	// Deregister the job if remove is set as true
 	if remove {
 		go func() {
-			p.deregisterJob(logr, id, true) //nolint:errcheck
+			p.deregisterJob(logr, id, false) //nolint:errcheck
 		}()
 	}
 
@@ -596,7 +596,7 @@ L:
 
 // deregisterJob stops the job in Nomad
 // if purge is set to true, it gc's it from nomad state as well
-func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error {
+func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error { //nolint:unparam
 	logr.WithField("job_id", id).WithField("purge", purge).Traceln("scheduler: trying to deregister job")
 	_, _, err := p.client.Jobs().Deregister(id, purge, &api.WriteOptions{})
 	if err != nil {
