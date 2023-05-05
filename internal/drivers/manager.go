@@ -25,6 +25,7 @@ type (
 	Manager struct {
 		globalCtx            context.Context
 		poolMap              map[string]*poolEntry
+		certsCache           *certs.CertsCache
 		strategy             Strategy
 		cleanupTimer         *time.Ticker
 		runnerName           string
@@ -49,6 +50,7 @@ func New(
 	return &Manager{
 		globalCtx:            globalContext,
 		instanceStore:        instanceStore,
+		certsCache:           certs.NewCertsCache(),
 		runnerName:           env.Runner.Name,
 		liteEnginePath:       env.LiteEngine.Path,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
@@ -514,7 +516,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	var inst *types.Instance
 
 	// generate certs
-	createOptions, err := certs.Generate(m.runnerName)
+	createOptions, err := m.certsCache.Get(m.runnerName)
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.Platform = pool.Platform
 	createOptions.PoolName = pool.Name
