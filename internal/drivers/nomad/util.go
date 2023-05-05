@@ -2,6 +2,7 @@ package nomad
 
 import (
 	"github.com/dchest/uniuri"
+	"github.com/hashicorp/nomad/api"
 )
 
 const (
@@ -31,4 +32,9 @@ func random(n int) string {
 // convert gigs to megs
 func convertGigsToMegs(p int) int {
 	return p * gigsToMegs
+}
+
+// check if job is completed
+func isTerminal(job *api.Job) bool {
+	return Status(*job.Status) == Dead
 }

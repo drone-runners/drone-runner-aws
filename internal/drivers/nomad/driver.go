@@ -136,9 +136,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `resourceJobTimeout`, we fail the step
-	_, err = p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
+	job, err := p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
 		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
+	}
+	if isTerminal(job) {
+		return nil, fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
 
@@ -539,7 +542,7 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 // if remove is set to true, it deregisters the job in case the job hasn't reached a terminal state
 // before the timeout or before the context is marked as Done.
 // An error is returned if the job did not reach a terminal state
-func (p *config) pollForJob(ctx context.Context, id string, logr logger.Logger, timeout time.Duration, remove bool, terminalStates []JobStatus) (*api.Job, error) { //nolint:unparam
+func (p *config) pollForJob(ctx context.Context, id string, logr logger.Logger, timeout time.Duration, remove bool, terminalStates []JobStatus) (*api.Job, error) {
 	terminalStates = append(terminalStates, Dead) // we always return from poll if the job is dead
 	maxPollTime := time.After(timeout)
 	terminal := false
