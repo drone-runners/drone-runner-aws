@@ -20,7 +20,7 @@ type CertsCache struct {
 // every expirationTime interval
 func NewCertsCache() *CertsCache {
 	// purge certs from the cache at expirationTime/3 intervals
-	c := cache.New(expirationTime, expirationTime/3)
+	c := cache.New(expirationTime, expirationTime/3) //nolint:gomnd
 	return &CertsCache{
 		expiry: expirationTime,
 		c:      c,
