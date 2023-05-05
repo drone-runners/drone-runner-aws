@@ -36,8 +36,5 @@ func convertGigsToMegs(p int) int {
 
 // check if job is completed
 func isTerminal(job *api.Job) bool {
-	if Status(*job.Status) == Dead {
-		return true
-	}
-	return false
+	return Status(*job.Status) == Dead
 }
