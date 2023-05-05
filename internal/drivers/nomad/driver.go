@@ -136,9 +136,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `resourceJobTimeout`, we fail the step
-	_, err = p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
+	job, err := p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
 		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
+	}
+	if isTerminal(job) {
+		return nil, fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
 
