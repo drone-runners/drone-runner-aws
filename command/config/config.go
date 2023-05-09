@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"unicode"
+	utf8 "unicode/utf8"
 
 	"github.com/drone-runners/drone-runner-aws/types"
 
@@ -400,7 +401,8 @@ func FromEnviron() (EnvConfig, error) {
 	if config.Runner.Name == "" {
 		hostname, _ := os.Hostname()
 		hostname = strings.ToLower(hostname)
-		if hostname == "" || !unicode.IsLower([]rune(hostname)[0]) {
+		r, _ := utf8.DecodeRuneInString(hostname)
+		if hostname == "" || !unicode.IsLower(r) {
 			config.Runner.Name = fmt.Sprintf("runner-%s", hostname)
 		} else {
 			config.Runner.Name = hostname
