@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"unicode"
 
 	"github.com/drone-runners/drone-runner-aws/types"
 
@@ -396,7 +398,13 @@ func FromEnviron() (EnvConfig, error) {
 		config.Runner.Environ = map[string]string{}
 	}
 	if config.Runner.Name == "" {
-		config.Runner.Name, _ = os.Hostname()
+		hostname, _ := os.Hostname()
+		hostname = strings.ToLower(hostname)
+		if hostname == "" || !unicode.IsLower([]rune(hostname)[0]) {
+			config.Runner.Name = fmt.Sprintf("runner-%s", hostname)
+		} else {
+			config.Runner.Name = hostname
+		}
 	}
 	if config.Dashboard.Password == "" {
 		config.Dashboard.Disabled = true
