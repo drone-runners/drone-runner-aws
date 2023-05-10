@@ -401,8 +401,8 @@ func FromEnviron() (EnvConfig, error) {
 	if config.Runner.Name == "" {
 		hostname, _ := os.Hostname()
 		hostname = strings.ToLower(hostname)
-		r, _ := utf8.DecodeRuneInString(hostname)
-		if hostname == "" || !unicode.IsLower(r) {
+		r, size := utf8.DecodeRuneInString(hostname)
+		if !(size > 0 && unicode.IsLower(r)) {
 			config.Runner.Name = fmt.Sprintf("runner-%s", hostname)
 		} else {
 			config.Runner.Name = hostname
