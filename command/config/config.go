@@ -400,6 +400,7 @@ func FromEnviron() (EnvConfig, error) {
 	}
 	if config.Runner.Name == "" {
 		hostname, _ := os.Hostname()
+		// check if first character in hostname is lowercase
 		hostname = strings.ToLower(hostname)
 		r, size := utf8.DecodeRuneInString(hostname)
 		if !(size > 0 && unicode.IsLower(r)) {
