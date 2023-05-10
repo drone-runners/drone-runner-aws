@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"unicode"
+	utf8 "unicode/utf8"
 
 	"github.com/drone-runners/drone-runner-aws/types"
 
@@ -396,7 +399,15 @@ func FromEnviron() (EnvConfig, error) {
 		config.Runner.Environ = map[string]string{}
 	}
 	if config.Runner.Name == "" {
-		config.Runner.Name, _ = os.Hostname()
+		hostname, _ := os.Hostname()
+		// check if first character in hostname is lowercase
+		hostname = strings.ToLower(hostname)
+		r, size := utf8.DecodeRuneInString(hostname)
+		if !(size > 0 && unicode.IsLower(r)) {
+			config.Runner.Name = fmt.Sprintf("runner-%s", hostname)
+		} else {
+			config.Runner.Name = hostname
+		}
 	}
 	if config.Dashboard.Password == "" {
 		config.Dashboard.Disabled = true
