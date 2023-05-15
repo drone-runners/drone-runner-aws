@@ -24,7 +24,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.16
+	github.com/harness/lite-engine v0.5.17
 	github.com/hashicorp/nomad/api v0.0.0-20230421025320-b4e6a70fe69b
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
@@ -63,12 +63,14 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/icrowley/fake v0.0.0-20221112152111-d7b7e2276db2 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect
@@ -92,7 +94,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/natessilva/dag v0.0.0-20180124060714-7194b8dcc5c4 // indirect
