@@ -372,35 +372,48 @@ func (m *Manager) BuildPools(ctx context.Context) error {
 	return m.forEach(ctx, m.buildPoolWithMutex)
 }
 
+func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, destroyBusy, destroyFree bool) error {
+	pool.Lock()
+	defer pool.Unlock()
+	busy, free, hibernating, err := m.List(ctx, pool)
+	if err != nil {
+		return err
+	}
+	free = append(free, hibernating...)
+	var instances []*types.Instance
+
+	if destroyBusy {
+		instances = append(instances, busy...)
+	}
+
+	if destroyFree {
+		instances = append(instances, free...)
+	}
+
+	if len(instances) == 0 {
+		return nil
+	}
+
+	err = pool.Driver.Destroy(ctx, instances)
+	if err != nil {
+		return err
+	}
+
+	for _, inst := range instances {
+		err = m.Delete(ctx, inst.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	for _, pool := range m.poolMap {
-		busy, free, hibernating, err := m.List(ctx, pool)
+		err := m.cleanPool(ctx, pool, destroyBusy, destroyFree)
 		if err != nil {
 			return err
-		}
-		free = append(free, hibernating...)
-		var instances []*types.Instance
-
-		if destroyBusy {
-			instances = append(instances, busy...)
-		}
-
-		if destroyFree {
-			instances = append(instances, free...)
-		}
-
-		if len(instances) == 0 {
-			continue
-		}
-		err = pool.Driver.Destroy(ctx, instances)
-		if err != nil {
-			return err
-		}
-		for _, inst := range instances {
-			err = m.Delete(ctx, inst.ID)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
