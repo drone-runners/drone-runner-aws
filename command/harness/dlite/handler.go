@@ -1,11 +1,12 @@
 package dlite
 
 import (
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"io"
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/wings-software/dlite/client"
