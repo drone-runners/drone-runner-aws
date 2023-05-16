@@ -1,25 +1,148 @@
 # Changelog
 
+## [v1.0.0-rc.58](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.58) (2023-05-15)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.57...v1.0.0-rc.58)
+
+**Merged pull requests:**
+
+- \[feat\]: \[CI-7842\]: Update Lite Engine [\#299](https://github.com/drone-runners/drone-runner-aws/pull/299) ([anurag-harness](https://github.com/anurag-harness))
+
+## [v1.0.0-rc.57](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.57) (2023-05-15)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.56...v1.0.0-rc.57)
+
+**Merged pull requests:**
+
+- update dlite version [\#298](https://github.com/drone-runners/drone-runner-aws/pull/298) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.56](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.56) (2023-05-12)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.55...v1.0.0-rc.56)
+
+**Merged pull requests:**
+
+- Update Lite Engine [\#297](https://github.com/drone-runners/drone-runner-aws/pull/297) ([anurag-harness](https://github.com/anurag-harness))
+
+## [v1.0.0-rc.55](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.55) (2023-05-11)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.54...v1.0.0-rc.55)
+
+**Merged pull requests:**
+
+- update lite engine [\#295](https://github.com/drone-runners/drone-runner-aws/pull/295) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- Add prefix to hostname while setting default runner name [\#294](https://github.com/drone-runners/drone-runner-aws/pull/294) ([rutvijmehta-harness](https://github.com/rutvijmehta-harness))
+
+## [v1.0.0-rc.54](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.54) (2023-05-05)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.53...v1.0.0-rc.54)
+
+## [v1.0.0-rc.53](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.53) (2023-05-05)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.52...v1.0.0-rc.53)
+
+**Merged pull requests:**
+
+- check whether resource job is in dead state before continuing [\#292](https://github.com/drone-runners/drone-runner-aws/pull/292) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.52](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.52) (2023-05-04)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.51...v1.0.0-rc.52)
+
+**Merged pull requests:**
+
+- add swap space of 30GB for bare metal [\#291](https://github.com/drone-runners/drone-runner-aws/pull/291) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.51](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.51) (2023-05-04)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.50...v1.0.0-rc.51)
+
+**Merged pull requests:**
+
+- update purge flag and job timeouts [\#290](https://github.com/drone-runners/drone-runner-aws/pull/290) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.50](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.50) (2023-05-03)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.49...v1.0.0-rc.50)
+
+**Merged pull requests:**
+
+- Upgrade plugin to support github action on windows [\#289](https://github.com/drone-runners/drone-runner-aws/pull/289) ([shubham149](https://github.com/shubham149))
+- Reduce retries in destroy call [\#288](https://github.com/drone-runners/drone-runner-aws/pull/288) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.49](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.49) (2023-05-02)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.48...v1.0.0-rc.49)
+
+**Merged pull requests:**
+
+- fix destroy condition [\#287](https://github.com/drone-runners/drone-runner-aws/pull/287) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+## [v1.0.0-rc.48](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.48) (2023-04-27)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.47...v1.0.0-rc.48)
+
+**Merged pull requests:**
+
+- Print only last 60k char logs from serial console output [\#286](https://github.com/drone-runners/drone-runner-aws/pull/286) ([shubham149](https://github.com/shubham149))
+- feat: \[CI-7794\]: change tmate to work against harness server [\#283](https://github.com/drone-runners/drone-runner-aws/pull/283) ([HenAmar](https://github.com/HenAmar))
+
+## [v1.0.0-rc.47](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.47) (2023-04-25)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.46...v1.0.0-rc.47)
+
+**Merged pull requests:**
+
+- fix cloudinit script [\#285](https://github.com/drone-runners/drone-runner-aws/pull/285) ([vistaarjuneja](https://github.com/vistaarjuneja))
+- handle logging, cleanup on bare metal [\#284](https://github.com/drone-runners/drone-runner-aws/pull/284) ([harshjain12](https://github.com/harshjain12))
+- Upgrade plugin version for bitrise step env defaults [\#282](https://github.com/drone-runners/drone-runner-aws/pull/282) ([shubham149](https://github.com/shubham149))
+
+## [v1.0.0-rc.46](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.46) (2023-04-24)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.45...v1.0.0-rc.46)
+
+**Merged pull requests:**
+
+- Update lite-engine to set idle connection timeout [\#279](https://github.com/drone-runners/drone-runner-aws/pull/279) ([shubham149](https://github.com/shubham149))
+- \(feat\) ability to support groupID in Anka build cloud.  [\#276](https://github.com/drone-runners/drone-runner-aws/pull/276) ([eoinmcafee00](https://github.com/eoinmcafee00))
+
+## [v1.0.0-rc.45](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.45) (2023-04-20)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.44...v1.0.0-rc.45)
+
+**Merged pull requests:**
+
+- update purge flag [\#278](https://github.com/drone-runners/drone-runner-aws/pull/278) ([harshjain12](https://github.com/harshjain12))
+
+## [v1.0.0-rc.44](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.44) (2023-04-20)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.43...v1.0.0-rc.44)
+
+**Merged pull requests:**
+
+- change timeout for nomad [\#277](https://github.com/drone-runners/drone-runner-aws/pull/277) ([raghavharness](https://github.com/raghavharness))
+
+## [v1.0.0-rc.43](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.43) (2023-04-19)
+
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.42...v1.0.0-rc.43)
+
+**Implemented enhancements:**
+
+- Update dlite package [\#274](https://github.com/drone-runners/drone-runner-aws/pull/274) ([shubham149](https://github.com/shubham149))
+- \(feat\): add noop functionality in nomad to do scale testing [\#270](https://github.com/drone-runners/drone-runner-aws/pull/270) ([vistaarjuneja](https://github.com/vistaarjuneja))
+
+**Merged pull requests:**
+
+- rc43 prep [\#275](https://github.com/drone-runners/drone-runner-aws/pull/275) ([shubham149](https://github.com/shubham149))
+
 ## [v1.0.0-rc.42](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.42) (2023-04-06)
 
-[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc-test...v1.0.0-rc.42)
+[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.41...v1.0.0-rc.42)
 
 **Merged pull requests:**
 
 - \(feat\): refactor destroy job [\#269](https://github.com/drone-runners/drone-runner-aws/pull/269) ([vistaarjuneja](https://github.com/vistaarjuneja))
 - added debug in linux init script [\#267](https://github.com/drone-runners/drone-runner-aws/pull/267) ([devkimittal](https://github.com/devkimittal))
-
-## [v1.0.0-rc-test](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc-test) (2023-04-06)
-
-[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-devtest1...v1.0.0-rc-test)
-
-## [v1.0.0-devtest1](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-devtest1) (2023-04-06)
-
-[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-devtest...v1.0.0-devtest1)
-
-## [v1.0.0-devtest](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-devtest) (2023-04-06)
-
-[Full Changelog](https://github.com/drone-runners/drone-runner-aws/compare/v1.0.0-rc.41...v1.0.0-devtest)
 
 ## [v1.0.0-rc.41](https://github.com/drone-runners/drone-runner-aws/tree/v1.0.0-rc.41) (2023-04-05)
 
