@@ -140,7 +140,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if err != nil {
 		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
 	}
-	if isTerminal(job) {
+	if job == nil || isTerminal(job) {
 		return nil, fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
@@ -200,6 +200,16 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s", err, ip)
+	}
+
+	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
+	job, _, err = p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w", err)
+	}
+	if job == nil || isTerminal(job) {
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM")
 	}
 
 	return instance, nil
