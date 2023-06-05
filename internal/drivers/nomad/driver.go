@@ -407,6 +407,20 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 					},
 
 					{
+						Name:      "enable_port_forwarding",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", "iptables -P FORWARD ACCEPT"},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "prestart",
+						},
+					},
+
+					{
 						Name:      "ignite_run",
 						Driver:    "raw_exec",
 						Resources: minNomadResources(),
