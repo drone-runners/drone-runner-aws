@@ -367,9 +367,6 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 		strconv.Itoa(lehelper.LiteEnginePort),
 		hostPath,
 		vmPath)
-
-	enablePortForwarding := fmt.Sprintf("iptables -P FORWARD ACCEPT")
-
 	job = &api.Job{
 		ID:          &id,
 		Name:        stringToPtr(vm),
@@ -410,22 +407,26 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 					},
 
 					{
+						Name:      "enable_port_forwarding",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", "iptables -P FORWARD ACCEPT"},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "prestart",
+						},
+					},
+
+					{
 						Name:      "ignite_run",
 						Driver:    "raw_exec",
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", runCmd},
-						},
-					},
-
-					{
-						Name:      "enable_port_forwarding",
-						Driver:    "raw_exec",
-						Resources: minNomadResources(),
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", enablePortForwarding},
 						},
 					},
 
