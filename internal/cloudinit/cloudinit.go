@@ -107,7 +107,7 @@ systemctl disable docker.service
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 service docker start
 
-/usr/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+/usr/bin/lite-engine server --env-file $HOME/.env > /var/log/lite-engine.log 2>&1 &
 `
 
 const macScript = `
