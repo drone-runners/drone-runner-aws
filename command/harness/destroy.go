@@ -83,12 +83,12 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.Traceln("invoking lite engine cleanup")
 	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
-		// we can continue even if lite engine destroy does not happen successfully. This is becuase
-		// the VM is anyways destroyed so the process will be killed
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	}
 	_, err = client.Destroy(context.Background(), &api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: GetLiteEnginePath(inst.OS)})
 	if err != nil {
+		// we can continue even if lite engine destroy does not happen successfully. This is because
+		// the VM is anyways destroyed so the process will be killed
 		logr.WithError(err).Errorln("could not invoke lite engine cleanup")
 	}
 
