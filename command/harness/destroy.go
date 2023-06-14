@@ -8,6 +8,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/harness/lite-engine/api"
@@ -84,12 +85,14 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
-	}
-	_, err = client.Destroy(context.Background(), &api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: GetLiteEnginePath(inst.OS)})
-	if err != nil {
-		// we can continue even if lite engine destroy does not happen successfully. This is because
-		// the VM is anyways destroyed so the process will be killed
-		logr.WithError(err).Errorln("could not invoke lite engine cleanup")
+	} else {
+		// Attempting to call lite engine destroy
+		_, err = client.Destroy(context.Background(), &api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS)})
+		if err != nil {
+			// we can continue even if lite engine destroy does not happen successfully. This is because
+			// the VM is anyways destroyed so the process will be killed
+			logr.WithError(err).Errorln("could not invoke lite engine cleanup")
+		}
 	}
 
 	logr.Traceln("successfully invoked lite engine cleanup, destroying instance")
@@ -112,17 +115,4 @@ func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
 	exp := backoff.NewExponentialBackOff()
 	exp.MaxElapsedTime = maxElapsedTime
 	return exp
-}
-
-func GetLiteEnginePath(osType string) string {
-	fmt.Println("osType: ", osType)
-	switch osType {
-	case "linux":
-		return "/var/log/lite-engine.log"
-	case "windows":
-		return "C:\\Program Files\\lite-engine\\log.out"
-	case "darwin":
-		return "/Users/anka/lite-engine.log"
-	}
-	return ""
 }

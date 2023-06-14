@@ -22,6 +22,7 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 		TLSCert:              string(opts.TLSCert),
 		TLSKey:               string(opts.TLSKey),
 		LiteEnginePath:       opts.LiteEnginePath,
+		LiteEngineLogsPath:   oshelp.GetLiteEngineLogsPath(opts.Platform.OS),
 		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
 		PluginBinaryURI:      opts.PluginBinaryURI,
 		Tmate:                opts.Tmate,

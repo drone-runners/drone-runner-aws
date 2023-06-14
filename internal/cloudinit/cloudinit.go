@@ -21,6 +21,7 @@ import (
 // Params defines parameters used to create userdata files.
 type Params struct {
 	LiteEnginePath       string
+	LiteEngineLogsPath   string
 	CACert               string
 	TLSCert              string
 	TLSKey               string
@@ -107,7 +108,7 @@ systemctl disable docker.service
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 service docker start
 
-/usr/bin/lite-engine server --env-file $HOME/.env > /var/log/lite-engine.log 2>&1 &
+/usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 `
 
 const macScript = `
@@ -133,7 +134,7 @@ wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /
 chmod 777 /usr/bin/plugin
 {{ end }}
 
-/usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+/usr/local/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 `
 
 const macArm64Script = `
@@ -269,7 +270,7 @@ runcmd:
 {{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
@@ -319,7 +320,7 @@ runcmd:
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 - 'touch /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
@@ -433,7 +434,7 @@ refreshenv
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
-Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "C:\Program Files\lite-engine\log.out" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
+Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
 echo "[DRONE] Initialization Complete"
 

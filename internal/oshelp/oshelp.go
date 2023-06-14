@@ -44,6 +44,22 @@ func GetExt(os, file string) (s string) {
 	}
 }
 
+// Path to store the lite engine logs inside the virtual machine
+func GetLiteEngineLogsPath(os string) string {
+	switch os {
+	case OSMac:
+		return "/Users/anka/lite-engine.log"
+	case OSWindows:
+		return `C:\Program Files\lite-engine\log.out`
+	case OSLinux:
+		return "/var/log/lite-engine.log"
+	case AmazonLinux:
+		return "/var/log/lite-engine.log"
+	default:
+		return "/var/log/lite-engine.log"
+	}
+}
+
 // GetNetrc helper function returns the netrc file name based on the target platform.
 func GetNetrc(os string) string {
 	switch os {
