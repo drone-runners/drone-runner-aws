@@ -675,20 +675,29 @@ func generateHealthCheckScript(sleep time.Duration, port string) string {
 	sleepSecs := sleep.Seconds()
 	return fmt.Sprintf(`
 #!/usr/bin/bash
-echo "sleeping..."
 sleep %f
-echo "done sleeping"
+echo "done sleeping, port is: %s"
+cntr=0
 while true
-do
-nc -vz localhost %s
-if [ $? -eq 1 ]
-then
-    echo "The port check failed"
-	exit 1
-fi
-echo "Port check passed..."
-sleep 30
-done`, sleepSecs, port)
+	do
+		nc -vz localhost %s
+		if [ $? -eq 1 ]; then
+		    echo "port check failed, incrementing counter:"
+			echo "cntr: "$cntr
+			((cntr++))
+			if [ $cntr -eq 3 ]; then
+				echo "port check failed three times. output of ignite command:"
+				ignite ps
+				echo "output of iptables:"
+				iptables -L -v -n
+				exit 1
+			fi
+		else
+			cntr=0
+			echo "Port check passed..."
+		fi
+		sleep 20
+	done`, sleepSecs, port, port)
 }
 
 func generateDestroyCommand(vm string) string {
