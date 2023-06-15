@@ -51,10 +51,6 @@ func GetLiteEngineLogsPath(os string) string {
 		return "/Users/anka/lite-engine.log"
 	case OSWindows:
 		return `C:\Program Files\lite-engine\log.out`
-	case OSLinux:
-		return "/var/log/lite-engine.log"
-	case AmazonLinux:
-		return "/var/log/lite-engine.log"
 	default:
 		return "/var/log/lite-engine.log"
 	}
