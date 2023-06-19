@@ -215,7 +215,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	}
 	req := &harness.VMCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID}
 	ctx := r.Context()
-	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.poolManager)
+	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Error("could not destroy VM")
 		writeError(w, err)

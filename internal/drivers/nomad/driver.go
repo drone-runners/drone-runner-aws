@@ -140,7 +140,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if err != nil {
 		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
 	}
-	if isTerminal(job) {
+	if job == nil || isTerminal(job) {
 		return nil, fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
@@ -200,6 +200,16 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s", err, ip)
+	}
+
+	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
+	job, _, err = p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w", err)
+	}
+	if job == nil || isTerminal(job) {
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM")
 	}
 
 	return instance, nil
@@ -389,6 +399,20 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedStartupScript, hostPath)},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "prestart",
+						},
+					},
+
+					{
+						Name:      "enable_port_forwarding",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
+						Config: map[string]interface{}{
+							"command": "/usr/bin/su",
+							"args":    []string{"-c", "iptables -P FORWARD ACCEPT"},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -652,20 +676,29 @@ func generateHealthCheckScript(sleep time.Duration, port string) string {
 	sleepSecs := sleep.Seconds()
 	return fmt.Sprintf(`
 #!/usr/bin/bash
-echo "sleeping..."
 sleep %f
-echo "done sleeping"
+echo "done sleeping, port is: %s"
+cntr=0
 while true
-do
-nc -vz localhost %s
-if [ $? -eq 1 ]
-then
-    echo "The port check failed"
-	exit 1
-fi
-echo "Port check passed..."
-sleep 30
-done`, sleepSecs, port)
+	do
+		nc -vz localhost %s
+		if [ $? -eq 1 ]; then
+		    echo "port check failed, incrementing counter:"
+			echo "cntr: "$cntr
+			((cntr++))
+			if [ $cntr -eq 3 ]; then
+				echo "port check failed three times. output of ignite command:"
+				ignite ps
+				echo "output of iptables:"
+				iptables -L -v -n
+				exit 1
+			fi
+		else
+			cntr=0
+			echo "Port check passed..."
+		fi
+		sleep 20
+	done`, sleepSecs, port, port)
 }
 
 func generateDestroyCommand(vm string) string {

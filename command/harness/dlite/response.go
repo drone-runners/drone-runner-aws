@@ -7,6 +7,7 @@ type VMTaskExecutionResponse struct {
 	ServiceStatuses        []VMServiceStatus      `json:"service_statuses"`
 	CommandExecutionStatus CommandExecutionStatus `json:"command_execution_status"`
 	DelegateMetaInfo       DelegateMetaInfo       `json:"delegate_meta_info"`
+	Artifact               []byte                 `json:"artifact,omitempty"`
 }
 
 type DelegateMetaInfo struct {

@@ -21,6 +21,7 @@ import (
 // Params defines parameters used to create userdata files.
 type Params struct {
 	LiteEnginePath       string
+	LiteEngineLogsPath   string
 	CACert               string
 	TLSCert              string
 	TLSKey               string
@@ -112,22 +113,21 @@ rm /etc/resolv.conf
 cp /proc/net/pnp /root/resolv.conf
 ln -s /root/resolv.conf /etc/resolv.conf
 mkdir /addon
-{{ if eq .Platform.Arch "amd64" }}
-wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
-tar -xf /addon/tmate.xz -C /addon/
 chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate
+tar -xf /addon/tmate.xz -C /addon/
+wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
+{{ if eq .Platform.Arch "amd64" }}
 mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
 rm -rf /addon/tmate-1.0-static-linux-amd64/
 {{ else if eq .Platform.Arch "arm64" }}
 wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz
 tar -xf /addon/tmate.xz -C /addon/
 chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate
-mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
 rm -rf /addon/tmate-1.0-static-linux-arm64v8/
+mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
 {{ end }}
 {{ end }}
-
-/usr/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+/usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 `
 
 const macScript = `
@@ -153,7 +153,7 @@ wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /
 chmod 777 /usr/bin/plugin
 {{ end }}
 
-/usr/local/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+/usr/local/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 `
 
 const macArm64Script = `
@@ -289,7 +289,7 @@ runcmd:
 {{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
@@ -339,7 +339,7 @@ runcmd:
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 - 'touch /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &'
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
@@ -453,7 +453,7 @@ refreshenv
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
-Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "C:\Program Files\lite-engine\log.out" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
+Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
 echo "[DRONE] Initialization Complete"
 

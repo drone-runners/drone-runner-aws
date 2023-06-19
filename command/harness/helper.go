@@ -15,7 +15,7 @@ import (
 func getStreamLogger(cfg leapi.LogConfig, logKey, correlationID string) *lelivelog.Writer {
 	client := lestream.NewHTTPClient(cfg.URL, cfg.AccountID,
 		cfg.Token, cfg.IndirectUpload, false)
-	wc := lelivelog.New(client, logKey, correlationID, nil)
+	wc := lelivelog.New(client, logKey, correlationID, nil, true)
 	go func() {
 		if err := wc.Open(); err != nil {
 			logrus.WithError(err).Debugln("failed to open log stream")
