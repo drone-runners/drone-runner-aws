@@ -88,12 +88,16 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
+echo "setting up swap space"
 fallocate -l 30G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
 swapon /swapfile
+echo "done setting up swap space"
 
+echo "downloading lite engine binary"
 /usr/bin/wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
+echo "done downloading lite engine binary"
 chmod 777 /usr/bin/lite-engine
 touch $HOME/.env
 cp "/etc/environment" $HOME/.env
@@ -106,7 +110,9 @@ chmod 777 /usr/bin/plugin
 
 systemctl disable docker.service
 update-alternatives --set iptables /usr/sbin/iptables-legacy
+echo "restarting docker"
 service docker start
+echo "docker service restarted"
 
 {{ if .Tmate.Enabled }}
 rm /etc/resolv.conf
@@ -127,7 +133,10 @@ rm -rf /addon/tmate-1.0-static-linux-arm64v8/
 mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
 {{ end }}
 {{ end }}
+
+echo "starting lite engine server"
 /usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
+echo "done starting lite engine server"
 `
 
 const macScript = `
