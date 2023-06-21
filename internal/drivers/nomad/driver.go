@@ -638,6 +638,7 @@ func generateStartupScript(opts *types.InstanceCreateOpts) string {
 	params := &cloudinit.Params{
 		Platform:             opts.Platform,
 		CACert:               string(opts.CACert),
+		LiteEngineLogsPath:   oshelp.GetLiteEngineLogsPath(opts.OS),
 		TLSCert:              string(opts.TLSCert),
 		TLSKey:               string(opts.TLSKey),
 		LiteEnginePath:       opts.LiteEnginePath,
