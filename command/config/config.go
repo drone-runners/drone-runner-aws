@@ -292,15 +292,16 @@ type EnvConfig struct {
 	}
 
 	Runner struct {
-		Name        string            `envconfig:"DRONE_RUNNER_NAME"`
-		Capacity    int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
-		Procs       int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
-		Environ     map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
-		EnvFile     string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
-		Secrets     map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
-		Labels      map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
-		NetworkOpts map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
-		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
+		Name         string            `envconfig:"DRONE_RUNNER_NAME"`
+		Capacity     int               `envconfig:"DRONE_RUNNER_CAPACITY" default:"6"`
+		Procs        int64             `envconfig:"DRONE_RUNNER_MAX_PROCS"`
+		Environ      map[string]string `envconfig:"DRONE_RUNNER_ENVIRON"`
+		EnvFile      string            `envconfig:"DRONE_RUNNER_ENV_FILE"`
+		Secrets      map[string]string `envconfig:"DRONE_RUNNER_SECRETS"`
+		Labels       map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
+		NetworkOpts  map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
+		Volumes      []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
+		CleanupDebug bool              `envconfig:"DRONE_CLEANUP_DEBUG"`
 	}
 
 	Dlite struct {

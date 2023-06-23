@@ -10,6 +10,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	debugState "github.com/drone-runners/drone-runner-aws/command/debug"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
 	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -354,6 +355,13 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 	instance, err := m.Find(ctx, instanceID)
 	if err != nil {
 		return err
+	}
+
+	stageRuntimeID := instance.Stage
+	retainVM := debugState.GetState().Get(stageRuntimeID)
+	if retainVM {
+		logrus.WithField("instance", instanceID).Infof("instance won't be deleted")
+		return nil
 	}
 
 	err = pool.Driver.Destroy(ctx, []*types.Instance{instance})

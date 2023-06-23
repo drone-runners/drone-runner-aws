@@ -10,6 +10,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/debug"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
@@ -214,6 +215,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
+	setRetainFlag(env, stageRuntimeID, true, logr)
+
 	setupResponse, err := client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
 		go cleanUpFn(true)
@@ -222,5 +225,14 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).Traceln("VM setup is complete")
 
+	setRetainFlag(env, stageRuntimeID, false, logr)
+
 	return &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}, nil
+}
+
+func setRetainFlag(env *config.EnvConfig, stageRuntimeID string, retainVM bool, logr *logrus.Entry) {
+	if env.Runner.CleanupDebug {
+		logr.Traceln("retain vm set to", retainVM)
+		debug.GetState().Set(stageRuntimeID, retainVM)
+	}
 }

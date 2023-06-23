@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/debug"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
@@ -103,6 +104,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.Traceln("destroyed instance")
 
 	envState().Delete(r.StageRuntimeID)
+	debug.GetState().Delete(r.StageRuntimeID)
 
 	if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
