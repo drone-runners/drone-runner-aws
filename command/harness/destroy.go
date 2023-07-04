@@ -10,7 +10,9 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/api"
 
 	"github.com/cenkalti/backoff/v4"
@@ -28,7 +30,7 @@ type VMCleanupRequest struct {
 	LogKey         string `json:"log_key,omitempty"`
 }
 
-func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) error {
+func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) error {
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
@@ -37,7 +39,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	b := createBackoff(destroyTimeout)
 	for {
 		duration := b.NextBackOff()
-		err := handleDestroy(ctx, r, s, env, poolManager, cnt)
+		_, err := handleDestroy(ctx, r, s, env, poolManager, cnt)
 		if err != nil {
 			logrus.WithError(err).
 				WithField("retry_count", cnt).
@@ -54,10 +56,10 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	}
 }
 
-func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, retryCount int) error {
+func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, retryCount int) (*types.Instance, error) {
 	entity, err := s.Find(ctx, r.StageRuntimeID)
 	if err != nil || entity == nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 	}
 	poolID := entity.PoolName
 
@@ -71,10 +73,10 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	inst, err := poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
 	if err != nil {
-		return fmt.Errorf("cannot get the instance by tag: %w", err)
+		return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
 	}
 	if inst == nil {
-		return fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+		return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
 	}
 
 	logr = logr.
@@ -87,18 +89,23 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	} else {
 		// Attempting to call lite engine destroy
-		_, err = client.Destroy(context.Background(), &api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS)})
+		resp, err := client.Destroy(context.Background(), &api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS)})
 		if err != nil {
 			// we can continue even if lite engine destroy does not happen successfully. This is because
 			// the VM is anyways destroyed so the process will be killed
 			logr.WithError(err).Errorln("could not invoke lite engine cleanup")
+		}
+		fmt.Println("resp is: ", resp)
+		if resp != nil && resp.OSStats != nil {
+			logr.Tracef("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
+				resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
 		}
 	}
 
 	logr.Traceln("successfully invoked lite engine cleanup, destroying instance")
 
 	if err = poolManager.Destroy(ctx, poolID, inst.ID); err != nil {
-		return fmt.Errorf("cannot destroy the instance: %w", err)
+		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Traceln("destroyed instance")
 
@@ -108,7 +115,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 
-	return nil
+	return inst, nil
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {

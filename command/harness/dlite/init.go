@@ -55,7 +55,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Make the setup call
 	req.SetupVMRequest.CorrelationID = task.ID
-	setupResp, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
+	setupResp, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
 	if err != nil {
 		logr.WithError(err).Error("could not setup VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
@@ -70,7 +70,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Services[i].IPAddress = setupResp.IPAddress
 		req.Services[i].CorrelationID = task.ID
 		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
-		resp, err := harness.HandleStep(ctx, req.Services[i], t.c.stageOwnerStore, &t.c.env, t.c.poolManager)
+		resp, err := harness.HandleStep(ctx, req.Services[i], t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
 		if err != nil {
 			status.Status = Error
 			status.ErrorMessage = err.Error()

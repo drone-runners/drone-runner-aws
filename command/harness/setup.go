@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/metric"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
@@ -42,7 +43,7 @@ var (
 	setupTimeout = 10 * time.Minute
 )
 
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*SetupVMResponse, error) {
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*SetupVMResponse, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
@@ -101,8 +102,14 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	var selectedPool string
 	var instance *types.Instance
 	foundPool := false
+	fallback := false
 
-	for _, p := range pools {
+	st := time.Now()
+
+	for idx, p := range pools {
+		if idx > 0 {
+			fallback = true
+		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
 
@@ -135,12 +142,29 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		break
 	}
 
-	if !foundPool {
+	duration := time.Since(st) // amount of time it took to provision an instance
+
+	// If a successful fallback happened and we have an instance setup, record it
+	if foundPool {
+		if fallback && instance != nil { // check for instance != nil just in case
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, string(instance.Provider), metric.True).Inc()
+			metrics.WaitDurationCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), metric.True).Observe(duration.Seconds())
+		} else {
+			metrics.WaitDurationCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), metric.False).Observe(duration.Seconds())
+		}
+	} else {
+		p, _, driver := poolManager.Inspect(r.PoolID)
+		metrics.FailedCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver).Inc()
+		metrics.BuildCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver).Inc()
+		if fallback {
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver, metric.False).Inc()
+		}
 		return nil, fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
-	logr = logr.WithField("pool_id", selectedPool)
+	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider)).Inc()
 
+	logr = logr.WithField("pool_id", selectedPool)
 	logr = logr.
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
@@ -150,6 +174,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpFn := func(consoleLogs bool) {
+		metrics.FailedCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider)).Inc()
 		if consoleLogs {
 			out, logErr := poolManager.InstanceLogs(context.Background(), selectedPool, instance.ID)
 			if logErr != nil {

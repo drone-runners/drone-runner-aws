@@ -13,6 +13,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/api"
@@ -35,7 +36,7 @@ var (
 	stepTimeout = 4 * time.Hour
 )
 
-func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager) (*api.PollStepResponse, error) {
+func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
 		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
 	}
@@ -90,7 +91,7 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 		if strings.Contains(r.StartStepRequest.Image, "harness/drone-git") {
 			r.StartStepRequest.Image = ""
 			r.Volumes = nil
-			pipelinePlatform, _ := poolManager.Inspect(inst.Pool)
+			pipelinePlatform, _, _ := poolManager.Inspect(inst.Pool)
 
 			cloneScript := scripts.Clone
 			clonePath := fmt.Sprintf("%s/clone.sh", r.StartStepRequest.WorkingDir)

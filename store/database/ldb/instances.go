@@ -98,6 +98,10 @@ func (s InstanceStore) Purge(ctx context.Context) error {
 }
 
 func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
+	if pool == "" {
+		return true
+	}
+
 	if inst.Pool != pool {
 		return false
 	}
