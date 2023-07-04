@@ -89,11 +89,12 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	} else {
 		// Attempting to call lite engine destroy
-		resp, err := client.Destroy(context.Background(), &api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS)})
-		if err != nil {
+		resp, destroyErr := client.Destroy(context.Background(),
+			&api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS)})
+		if destroyErr != nil {
 			// we can continue even if lite engine destroy does not happen successfully. This is because
 			// the VM is anyways destroyed so the process will be killed
-			logr.WithError(err).Errorln("could not invoke lite engine cleanup")
+			logr.WithError(destroyErr).Errorln("could not invoke lite engine cleanup")
 		}
 		fmt.Println("resp is: ", resp)
 		if resp != nil && resp.OSStats != nil {

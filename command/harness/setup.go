@@ -43,7 +43,7 @@ var (
 	setupTimeout = 10 * time.Minute
 )
 
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*SetupVMResponse, error) {
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*SetupVMResponse, error) { // nolint:funlen
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
@@ -145,8 +145,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	duration := time.Since(st) // amount of time it took to provision an instance
 
 	// If a successful fallback happened and we have an instance setup, record it
-	if foundPool {
-		if fallback && instance != nil { // check for instance != nil just in case
+	if foundPool && instance != nil { // check for instance != nil just in case
+		if fallback {
 			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, string(instance.Provider), metric.True).Inc()
 			metrics.WaitDurationCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), metric.True).Observe(duration.Seconds())
 		} else {
@@ -164,8 +164,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider)).Inc()
 
-	logr = logr.WithField("pool_id", selectedPool)
-	logr = logr.
+	logr = logr.WithField("pool_id", selectedPool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name)
@@ -200,7 +199,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		instance, err = poolManager.StartInstance(ctx, selectedPool, instance.ID)
 		if err != nil {
 			go cleanUpFn(false)
-			return nil, fmt.Errorf("failed to start the instance up")
+			return nil, fmt.Errorf("failed to start the instance up: %w", err)
 		}
 	}
 

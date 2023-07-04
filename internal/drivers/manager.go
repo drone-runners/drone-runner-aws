@@ -57,7 +57,7 @@ func New(
 }
 
 // Inspect returns OS, root directory and driver for a pool.
-func (m *Manager) Inspect(name string) (platform types.Platform, rootDir string, driver string) {
+func (m *Manager) Inspect(name string) (platform types.Platform, rootDir, driver string) {
 	entry := m.poolMap[name]
 	if entry == nil {
 		return

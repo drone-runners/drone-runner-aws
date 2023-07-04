@@ -129,7 +129,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	// Initialise metrics
+	// Initialize metrics
 	c.registerMetrics(instanceStore)
 
 	var g errgroup.Group

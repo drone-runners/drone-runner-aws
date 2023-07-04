@@ -68,30 +68,25 @@ func RunningCount(instanceStore store.InstanceStore) *prometheus.GaugeVec {
 }
 
 func updateRunningCount(ctx context.Context, instanceStore store.InstanceStore, dbMetric *prometheus.GaugeVec) {
-	timer := time.NewTimer(dbInterval) // query the DB every 30 seconds
-	defer timer.Stop()
 	for {
-		timer.Reset(dbInterval)
-		select {
-		case <-timer.C:
-			m := make(map[label]int)
-			// collect stats here
-			instances, err := instanceStore.List(ctx, "", &types.QueryParams{})
-			if err != nil {
-				continue
-			}
-			for _, i := range instances {
-				l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider)}
-				m[l] += 1
-			}
-			dbMetric.Reset()
-			for k, v := range m {
-				fmt.Println("setting: ", k.poolID, k.os, k.arch, k.driver, k.state, v)
-				dbMetric.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state).Set(float64(v))
-			}
+		time.Sleep(dbInterval)
+		m := make(map[label]int)
+		// collect stats here
+		instances, err := instanceStore.List(ctx, "", &types.QueryParams{})
+		if err != nil {
+			// log error
+			continue
+		}
+		for _, i := range instances {
+			l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider)}
+			m[l]++
+		}
+		dbMetric.Reset()
+		for k, v := range m {
+			fmt.Println("setting: ", k.poolID, k.os, k.arch, k.driver, k.state, v)
+			dbMetric.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state).Set(float64(v))
 		}
 	}
-
 }
 
 // PoolFallbackCount provides metrics for number of fallbacks while finding a valid pool
