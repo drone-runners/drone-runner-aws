@@ -97,8 +97,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	pools = append(pools, r.PoolID)
 	pools = append(pools, r.FallbackPoolIDs...)
 
-	var poolErr error
-	var err error
+	var poolErr, err error
 	var selectedPool string
 	var instance *types.Instance
 	foundPool := false

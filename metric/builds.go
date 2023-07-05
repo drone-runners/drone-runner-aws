@@ -2,7 +2,6 @@ package metric
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -74,7 +73,7 @@ func updateRunningCount(ctx context.Context, instanceStore store.InstanceStore, 
 		// collect stats here
 		instances, err := instanceStore.List(ctx, "", &types.QueryParams{})
 		if err != nil {
-			// log error
+			// TODO: log error
 			continue
 		}
 		for _, i := range instances {
@@ -83,7 +82,6 @@ func updateRunningCount(ctx context.Context, instanceStore store.InstanceStore, 
 		}
 		dbMetric.Reset()
 		for k, v := range m {
-			fmt.Println("setting: ", k.poolID, k.os, k.arch, k.driver, k.state, v)
 			dbMetric.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state).Set(float64(v))
 		}
 	}

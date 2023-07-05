@@ -96,7 +96,6 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			// the VM is anyways destroyed so the process will be killed
 			logr.WithError(destroyErr).Errorln("could not invoke lite engine cleanup")
 		}
-		fmt.Println("resp is: ", resp)
 		if resp != nil && resp.OSStats != nil {
 			logr.Tracef("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
 				resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
