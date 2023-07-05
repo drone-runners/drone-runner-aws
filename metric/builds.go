@@ -31,6 +31,13 @@ var (
 	dbInterval = 30 * time.Second
 )
 
+func ConvertBool(b bool) string {
+	if b {
+		return True
+	}
+	return False
+}
+
 // BuildCount provides metrics for total number of pipeline executions (failed + successful)
 func BuildCount() *prometheus.CounterVec {
 	return prometheus.NewCounterVec(

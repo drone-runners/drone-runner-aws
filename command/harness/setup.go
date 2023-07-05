@@ -43,7 +43,8 @@ var (
 	setupTimeout = 10 * time.Minute
 )
 
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*SetupVMResponse, error) { // nolint:funlen
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo
+	metrics *metric.Metrics) (*SetupVMResponse, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
@@ -58,8 +59,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	var logr *logrus.Entry
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
-		logr = log.WithField("api", "dlite:setup").
-			WithField("correlationID", r.CorrelationID)
+		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
 	} else {
 		wc := getStreamLogger(r.SetupRequest.LogConfig, r.LogKey, r.CorrelationID)
 		defer func() {
@@ -147,10 +147,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	if foundPool && instance != nil { // check for instance != nil just in case
 		if fallback {
 			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, string(instance.Provider), metric.True).Inc()
-			metrics.WaitDurationCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), metric.True).Observe(duration.Seconds())
-		} else {
-			metrics.WaitDurationCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), metric.False).Observe(duration.Seconds())
 		}
+		metrics.WaitDurationCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), metric.ConvertBool(fallback)).Observe(duration.Seconds())
 	} else {
 		p, _, driver := poolManager.Inspect(r.PoolID)
 		metrics.FailedCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver).Inc()
