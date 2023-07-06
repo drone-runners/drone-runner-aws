@@ -83,7 +83,7 @@ func (c *Compiler) Compile(ctx context.Context, args runtime.CompilerArgs) runti
 		targetPool = c.PoolManager.MatchPoolNameFromPlatform(&pipeline.Platform)
 	}
 
-	pipelinePlatform, pipelineRoot := c.PoolManager.Inspect(targetPool)
+	pipelinePlatform, pipelineRoot, _ := c.PoolManager.Inspect(targetPool)
 
 	// move the pool from the `mapping of pools` into the spec of this pipeline.
 	spec.CloudInstance.PoolName = targetPool

@@ -11,6 +11,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
 	errors "github.com/drone-runners/drone-runner-aws/internal/types"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	loghistory "github.com/drone/runner-go/logger/history"
@@ -29,6 +30,7 @@ type delegateCommand struct {
 	env             config.EnvConfig
 	poolFile        string
 	poolManager     *drivers.Manager
+	metrics         *metric.Metrics
 	stageOwnerStore store.StageOwnerStore
 }
 
@@ -173,7 +175,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
+	resp, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not setup VM")
 		writeError(w, err)
@@ -190,7 +192,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
+	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("step_id", req.ID).
 			WithError(err).Error("could not execute step on VM")
@@ -215,7 +217,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	}
 	req := &harness.VMCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID}
 	ctx := r.Context()
-	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, &c.env, c.poolManager)
+	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Error("could not destroy VM")
 		writeError(w, err)

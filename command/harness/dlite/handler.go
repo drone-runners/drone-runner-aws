@@ -6,6 +6,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -31,6 +32,8 @@ func Handler(p *poller.Poller, manager *drivers.Manager) http.Handler {
 		sr.Post("/disable", handleDisable(p))
 		return sr
 	}())
+
+	r.Mount("/metrics", promhttp.Handler())
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, okStatus) //nolint: errcheck

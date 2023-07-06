@@ -7,6 +7,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	loghistory "github.com/drone/runner-go/logger/history"
@@ -28,6 +29,7 @@ type dliteCommand struct {
 	delegateInfo    *poller.DelegateInfo
 	poolFile        string
 	poolManager     *drivers.Manager
+	metrics         *metric.Metrics
 	stageOwnerStore store.StageOwnerStore
 }
 
@@ -51,6 +53,11 @@ func parseTags(pf *config.PoolFile) []string {
 		tags = append(tags, pf.Instances[i].Name)
 	}
 	return tags
+}
+
+// register metrics
+func (c *dliteCommand) registerMetrics(instanceStore store.InstanceStore) {
+	c.metrics = metric.RegisterMetrics(instanceStore)
 }
 
 func (c *dliteCommand) registerPoller(ctx context.Context, tags []string) (*poller.Poller, error) {
@@ -121,6 +128,9 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		logrus.WithError(err).Error("could not register poller")
 		return err
 	}
+
+	// Initialize metrics
+	c.registerMetrics(instanceStore)
 
 	var g errgroup.Group
 
