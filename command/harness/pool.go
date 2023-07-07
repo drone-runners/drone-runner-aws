@@ -17,6 +17,11 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	}
 
 	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name)
+
+	if pools == nil {
+		logrus.WithError(err).Errorln("none of the pools were created")
+	}
+
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err
