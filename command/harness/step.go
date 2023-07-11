@@ -33,7 +33,7 @@ type ExecuteVMRequest struct {
 }
 
 var (
-	stepTimeout = 4 * time.Hour
+	stepTimeout = 10 * time.Hour
 )
 
 func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*api.PollStepResponse, error) {
