@@ -122,15 +122,15 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
+	// Initialize metrics
+	c.registerMetrics(instanceStore)
+
 	// Register the poller
 	p, err := c.registerPoller(ctx, tags)
 	if err != nil {
 		logrus.WithError(err).Error("could not register poller")
 		return err
 	}
-
-	// Initialize metrics
-	c.registerMetrics(instanceStore)
 
 	var g errgroup.Group
 
