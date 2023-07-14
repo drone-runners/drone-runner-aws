@@ -60,6 +60,11 @@ func RegisterDelegate(app *kingpin.Application) {
 		StringVar(&c.poolFile)
 }
 
+// register metrics
+func (c *delegateCommand) registerMetrics(instanceStore store.InstanceStore) {
+	c.metrics = metric.RegisterMetrics(instanceStore)
+}
+
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// load environment variables from file.
 	envError := godotenv.Load(c.envFile)
@@ -100,6 +105,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	if err != nil {
 		return err
 	}
+
+	// Initialize metrics
+	c.registerMetrics(instanceStore)
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
