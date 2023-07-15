@@ -25,9 +25,10 @@ var (
 )
 
 type VMCleanupRequest struct {
-	PoolID         string `json:"pool_id"`
-	StageRuntimeID string `json:"stage_runtime_id"`
-	LogKey         string `json:"log_key,omitempty"`
+	PoolID         string  `json:"pool_id"`
+	StageRuntimeID string  `json:"stage_runtime_id"`
+	LogKey         string  `json:"log_key,omitempty"`
+	Context        Context `json:"context,omitempty"`
 }
 
 func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) error {
@@ -69,6 +70,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("api", "dlite:destroy").
 		WithField("retry_count", retryCount)
 
+	logr = AddContext(logr, r.Context)
+
 	logr.Traceln("starting the destroy process")
 
 	inst, err := poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
@@ -97,8 +100,30 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			logr.WithError(destroyErr).Errorln("could not invoke lite engine cleanup")
 		}
 		if resp != nil && resp.OSStats != nil {
-			logr.Tracef("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
-				resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
+			var cpu_ge50, cpu_ge70, cpu_ge90, mem_ge50, mem_ge70, mem_ge90 bool
+			if resp.OSStats.MaxCPUUsagePct >= 50.0 {
+				cpu_ge50 = true
+				if resp.OSStats.MaxCPUUsagePct >= 70.0 {
+					cpu_ge70 = true
+					if resp.OSStats.MaxCPUUsagePct >= 90.0 {
+						cpu_ge90 = true
+					}
+				}
+			}
+			if resp.OSStats.MaxMemUsagePct >= 50.0 {
+				mem_ge50 = true
+				if resp.OSStats.MaxMemUsagePct >= 70.0 {
+					mem_ge70 = true
+					if resp.OSStats.MaxMemUsagePct >= 90.0 {
+						mem_ge90 = true
+					}
+				}
+			}
+
+			logr.WithField("cpu_ge50", cpu_ge50).WithField("cpu_ge70", cpu_ge70).WithField("cpu_ge90", cpu_ge90).
+				WithField("mem_ge50", mem_ge50).WithField("mem_ge70", mem_ge70).WithField("mem_ge90", mem_ge90).
+				Tracef("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
+					resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
 		}
 	}
 
