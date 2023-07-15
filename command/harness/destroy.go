@@ -100,28 +100,28 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			logr.WithError(destroyErr).Errorln("could not invoke lite engine cleanup")
 		}
 		if resp != nil && resp.OSStats != nil {
-			var cpu_ge50, cpu_ge70, cpu_ge90, mem_ge50, mem_ge70, mem_ge90 bool
-			if resp.OSStats.MaxCPUUsagePct >= 50.0 {
-				cpu_ge50 = true
-				if resp.OSStats.MaxCPUUsagePct >= 70.0 {
-					cpu_ge70 = true
-					if resp.OSStats.MaxCPUUsagePct >= 90.0 {
-						cpu_ge90 = true
+			var cpuGe50, cpuGe70, cpuGe90, memGe50, memGe70, memGe90 bool
+			if resp.OSStats.MaxCPUUsagePct >= 50.0 { //nolint:gomnd
+				cpuGe50 = true
+				if resp.OSStats.MaxCPUUsagePct >= 70.0 { //nolint:gomnd
+					cpuGe70 = true
+					if resp.OSStats.MaxCPUUsagePct >= 90.0 { //nolint:gomnd
+						cpuGe90 = true
 					}
 				}
 			}
-			if resp.OSStats.MaxMemUsagePct >= 50.0 {
-				mem_ge50 = true
-				if resp.OSStats.MaxMemUsagePct >= 70.0 {
-					mem_ge70 = true
-					if resp.OSStats.MaxMemUsagePct >= 90.0 {
-						mem_ge90 = true
+			if resp.OSStats.MaxMemUsagePct >= 50.0 { //nolint:gomnd
+				memGe50 = true
+				if resp.OSStats.MaxMemUsagePct >= 70.0 { //nolint:gomnd
+					memGe70 = true
+					if resp.OSStats.MaxMemUsagePct >= 90.0 { //nolint:gomnd
+						memGe90 = true
 					}
 				}
 			}
 
-			logr.WithField("cpu_ge50", cpu_ge50).WithField("cpu_ge70", cpu_ge70).WithField("cpu_ge90", cpu_ge90).
-				WithField("mem_ge50", mem_ge50).WithField("mem_ge70", mem_ge70).WithField("mem_ge90", mem_ge90).
+			logr.WithField("cpu_ge50", cpuGe50).WithField("cpu_ge70", cpuGe70).WithField("cpu_ge90", cpuGe90).
+				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).
 				Tracef("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
 					resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
 		}

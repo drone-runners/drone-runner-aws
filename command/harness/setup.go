@@ -44,7 +44,7 @@ var (
 	setupTimeout = 10 * time.Minute
 )
 
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo,funlen
 	metrics *metric.Metrics) (*SetupVMResponse, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
