@@ -31,6 +31,7 @@ type SetupVMRequest struct {
 	Tags             map[string]string `json:"tags"`
 	CorrelationID    string            `json:"correlation_id"`
 	LogKey           string            `json:"log_key"`
+	Context          Context           `json:"context,omitempty"`
 	api.SetupRequest `json:"setup_request"`
 }
 
@@ -43,7 +44,7 @@ var (
 	setupTimeout = 10 * time.Minute
 )
 
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo,funlen
 	metrics *metric.Metrics) (*SetupVMResponse, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
@@ -92,6 +93,8 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		}
 		r.Volumes = append(r.Volumes, &vol)
 	}
+
+	logr = AddContext(logr, r.Context)
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
