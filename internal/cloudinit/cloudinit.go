@@ -348,6 +348,8 @@ runcmd:
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 - 'touch /root/.env'
+- '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+- '[ -f "/root/.env" ] && ! grep -q "^HOME=" /root/.env && echo "HOME=/root" >> /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
