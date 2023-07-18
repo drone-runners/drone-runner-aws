@@ -38,6 +38,7 @@ type SetupVMRequest struct {
 type SetupVMResponse struct {
 	IPAddress  string `json:"ip_address"`
 	InstanceID string `json:"instance_id"`
+	DriverUsed string `json:"driver_used"`
 }
 
 var (
@@ -101,7 +102,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	pools = append(pools, r.FallbackPoolIDs...)
 
 	var poolErr, err error
-	var selectedPool string
+	var selectedPool, selectedPoolDriver string
 	var instance *types.Instance
 	foundPool := false
 	fallback := false
@@ -141,6 +142,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		// Successfully provisioned an instance out of the listed pools
 		foundPool = true
 		selectedPool = pool
+		_, _, selectedPoolDriver = poolManager.Inspect(pool)
 		break
 	}
 
@@ -246,5 +248,5 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 
 	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).Traceln("VM setup is complete")
 
-	return &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}, nil
+	return &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, DriverUsed: selectedPoolDriver}, nil
 }
