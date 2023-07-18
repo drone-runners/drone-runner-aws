@@ -15,6 +15,8 @@ type Metrics struct {
 	RunningCount      *prometheus.GaugeVec
 	PoolFallbackCount *prometheus.CounterVec
 	WaitDurationCount *prometheus.HistogramVec
+	CPUPercentile     *prometheus.HistogramVec
+	MemoryPercentile  *prometheus.HistogramVec
 }
 
 type label struct {
@@ -105,6 +107,30 @@ func PoolFallbackCount() *prometheus.CounterVec {
 	)
 }
 
+// CPUPercentile provides information about the max CPU usage in the pipeline run
+func CPUPercentile() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_pipeline_max_cpu_usage_percent",
+			Help:    "Max CPU usage in the pipeline",
+			Buckets: []float64{30, 50, 70, 90},
+		},
+		[]string{"pool_id", "os", "arch", "driver"},
+	)
+}
+
+// MemoryPercentile provides information about the max RAM usage in the pipeline run
+func MemoryPercentile() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_pipeline_max_mem_usage_percent",
+			Help:    "Max memory usage in the pipeline",
+			Buckets: []float64{30, 50, 70, 90},
+		},
+		[]string{"pool_id", "os", "arch", "driver"},
+	)
+}
+
 // WaitDurationCount provides metrics for amount of time needed to wait to setup a machine
 func WaitDurationCount() *prometheus.HistogramVec {
 	return prometheus.NewHistogramVec(
@@ -123,12 +149,16 @@ func RegisterMetrics(instanceStore store.InstanceStore) *Metrics {
 	runningCount := RunningCount(instanceStore)
 	poolFallbackCount := PoolFallbackCount()
 	waitDurationCount := WaitDurationCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, poolFallbackCount, waitDurationCount)
+	cpuPercentile := CPUPercentile()
+	memoryPercentile := MemoryPercentile()
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile)
 	return &Metrics{
 		BuildCount:        buildCount,
 		FailedCount:       failedBuildCount,
 		RunningCount:      runningCount,
 		PoolFallbackCount: poolFallbackCount,
 		WaitDurationCount: waitDurationCount,
+		MemoryPercentile:  memoryPercentile,
+		CPUPercentile:     cpuPercentile,
 	}
 }

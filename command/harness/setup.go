@@ -151,7 +151,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		if fallback {
 			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, string(instance.Provider), metric.True).Inc()
 		}
-		metrics.WaitDurationCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), metric.ConvertBool(fallback)).Observe(duration.Seconds())
+		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, string(instance.Provider), metric.ConvertBool(fallback)).Observe(duration.Seconds())
 	} else {
 		p, _, driver := poolManager.Inspect(r.PoolID)
 		metrics.FailedCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver).Inc()
