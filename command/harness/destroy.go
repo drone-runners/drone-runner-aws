@@ -57,7 +57,8 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	}
 }
 
-func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int) (*types.Instance, error) {
+func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig,
+	poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int) (*types.Instance, error) {
 	entity, err := s.Find(ctx, r.StageRuntimeID)
 	if err != nil || entity == nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))

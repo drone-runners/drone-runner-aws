@@ -63,6 +63,7 @@ func (c *dliteCommand) registerMetrics(instanceStore store.InstanceStore) {
 func (c *dliteCommand) registerPoller(ctx context.Context, tags []string) (*poller.Poller, error) {
 	r := router.NewRouter(routeMap(c))
 	// Client to interact with the harness server
+	// Additional certs are not needed to be passed in case of hosted
 	client := delegate.New(c.env.Dlite.ManagerEndpoint, c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, true, "")
 	p := poller.New(c.env.Dlite.AccountID, c.env.Dlite.AccountSecret, c.env.Dlite.Name, tags, client, r)
 	info, err := p.Register(ctx)
