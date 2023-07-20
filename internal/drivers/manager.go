@@ -411,14 +411,16 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, destroyBusy, d
 }
 
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
+	var returnError error
 	for _, pool := range m.poolMap {
 		err := m.cleanPool(ctx, pool, destroyBusy, destroyFree)
 		if err != nil {
-			return err
+			returnError = err
+			logrus.Errorf("failed to dclean pool %s with error: %s", pool.Name, err)
 		}
 	}
 
-	return nil
+	return returnError
 }
 
 func (m *Manager) PingDriver(ctx context.Context) error {
