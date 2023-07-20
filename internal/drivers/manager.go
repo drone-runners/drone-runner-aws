@@ -414,7 +414,7 @@ func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool)
 	for _, pool := range m.poolMap {
 		err := m.cleanPool(ctx, pool, destroyBusy, destroyFree)
 		if err != nil {
-			return err
+			logrus.Error("failed to clean pool %s with err: %s", pool, err)
 		}
 	}
 
