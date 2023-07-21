@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
@@ -43,6 +44,7 @@ type SetupVMResponse struct {
 
 var (
 	setupTimeout = 10 * time.Minute
+	freeAccount  = "free"
 )
 
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo,funlen
@@ -95,19 +97,26 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		r.Volumes = append(r.Volumes, &vol)
 	}
 
-	logr = AddContext(logr, r.Context)
+	logr = AddContext(logr, r.Context, r.Tags)
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
 	pools = append(pools, r.FallbackPoolIDs...)
 
 	var poolErr, err error
-	var selectedPool, selectedPoolDriver string
+	var selectedPool, selectedPoolDriver, owner string
 	var instance *types.Instance
 	foundPool := false
 	fallback := false
 
 	st := time.Now()
+
+	// TODO: Remove this once we start populating license information
+	if strings.Contains(r.PoolID, freeAccount) {
+		owner = freeAccount
+	} else {
+		owner = getAccountID(r.Context, r.Tags)
+	}
 
 	for idx, p := range pools {
 		if idx > 0 {
@@ -130,7 +139,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			}
 		}
 
-		instance, err = poolManager.Provision(ctx, pool, env.Runner.Name, env)
+		instance, err = poolManager.Provision(ctx, pool, env.Runner.Name, owner, env)
 		if err != nil {
 			logr.WithError(err).WithField("pool_id", p).Errorln("failed to provision instance")
 			poolErr = err

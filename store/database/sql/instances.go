@@ -113,6 +113,7 @@ const instanceColumns = `
 ,instance_updated
 ,is_hibernated
 ,instance_port
+,instance_owner_id
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -147,6 +148,7 @@ INSERT INTO instances (
 ,instance_updated
 ,is_hibernated
 ,instance_port
+,instance_owner_id
 ) values (
  :instance_id
 ,:instance_node_id
@@ -173,6 +175,7 @@ INSERT INTO instances (
 ,:instance_updated
 ,:is_hibernated
 ,:instance_port
+,:instance_owner_id
 ) RETURNING instance_id
 `
 
@@ -189,5 +192,6 @@ SET
  ,instance_updated  = :instance_updated
  ,is_hibernated 	= :is_hibernated
  ,instance_address  = :instance_address
+ ,instance_owner_id = :instance_owner_id
 WHERE instance_id   = :instance_id
 `
