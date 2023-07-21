@@ -47,6 +47,7 @@ type Instance struct {
 	Region       string        `db:"instance_region" json:"region"`
 	Zone         string        `db:"instance_zone" json:"zone"`
 	Size         string        `db:"instance_size" json:"size"`
+	OwnerID      string        `db:"instance_owner_id" json:"owner_id"`
 	Platform     `json:"platform"`
 	CAKey        []byte `db:"instance_ca_key" json:"ca_key"`
 	CACert       []byte `db:"instance_ca_cert" json:"ca_cert"`

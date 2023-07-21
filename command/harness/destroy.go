@@ -71,7 +71,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("api", "dlite:destroy").
 		WithField("retry_count", retryCount)
 
-	logr = AddContext(logr, r.Context)
+	logr = AddContext(logr, r.Context, map[string]string{})
 
 	logr.Traceln("starting the destroy process")
 

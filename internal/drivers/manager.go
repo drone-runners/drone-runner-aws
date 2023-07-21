@@ -285,7 +285,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName string, env *config.EnvConfig) (*types.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
 	m.runnerName = serverName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
@@ -329,6 +329,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName string, en
 
 	inst := free[0]
 	inst.State = types.StateInUse
+	inst.OwnerID = ownerID
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
 		pool.Unlock()

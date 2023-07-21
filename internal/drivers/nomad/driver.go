@@ -181,13 +181,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Address:  ip,
 	}
 
-	logr.Debugln("scheduler: submitting VM creation job to nomad")
+	logr.Debugln("scheduler: submitting VM creation job")
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s", err, ip)
 	}
-	logr.Debugln("scheduler: successfully submitted job to nomad, started polling for job status")
+	logr.Debugln("scheduler: successfully submitted job, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		// Destroy the VM if it's in a partially created state

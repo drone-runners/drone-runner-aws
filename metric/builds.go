@@ -10,13 +10,14 @@ import (
 )
 
 type Metrics struct {
-	BuildCount        *prometheus.CounterVec
-	FailedCount       *prometheus.CounterVec
-	RunningCount      *prometheus.GaugeVec
-	PoolFallbackCount *prometheus.CounterVec
-	WaitDurationCount *prometheus.HistogramVec
-	CPUPercentile     *prometheus.HistogramVec
-	MemoryPercentile  *prometheus.HistogramVec
+	BuildCount             *prometheus.CounterVec
+	FailedCount            *prometheus.CounterVec
+	RunningCount           *prometheus.GaugeVec
+	RunningPerAccountCount *prometheus.GaugeVec
+	PoolFallbackCount      *prometheus.CounterVec
+	WaitDurationCount      *prometheus.HistogramVec
+	CPUPercentile          *prometheus.HistogramVec
+	MemoryPercentile       *prometheus.HistogramVec
 }
 
 type label struct {
@@ -64,18 +65,30 @@ func FailedBuildCount() *prometheus.CounterVec {
 
 // RunningCount provides metrics for number of builds currently running
 func RunningCount(instanceStore store.InstanceStore) *prometheus.GaugeVec {
-	metric := prometheus.NewGaugeVec(
+	return prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "harness_ci_pipeline_running_executions",
 			Help: "Total number of running executions",
 		},
 		[]string{"pool_id", "os", "arch", "driver", "state"}, // state can be running, in_use, or hibernating
 	)
-	go updateRunningCount(context.Background(), instanceStore, metric)
-	return metric
 }
 
-func updateRunningCount(ctx context.Context, instanceStore store.InstanceStore, dbMetric *prometheus.GaugeVec) {
+// RunningPerAccountCount provides metrics at account level for running executions
+// This might be removed in the future as we don't want labels with high cardinality
+// We are just using two labels at the moment which should be pretty small
+func RunningPerAccountCount(instanceStore store.InstanceStore) *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "harness_ci_pipeline_per_account_running_executions",
+			Help: "Total number of running executions per account",
+		},
+		[]string{"owner_id", "os"},
+	)
+}
+
+func updateRunningCount(ctx context.Context, instanceStore store.InstanceStore,
+	runningMetric *prometheus.GaugeVec, runningPerAccountMetric *prometheus.GaugeVec) {
 	for {
 		time.Sleep(dbInterval)
 		m := make(map[label]int)
@@ -85,13 +98,17 @@ func updateRunningCount(ctx context.Context, instanceStore store.InstanceStore, 
 			// TODO: log error
 			continue
 		}
+		runningMetric.Reset()
+		runningPerAccountMetric.Reset()
 		for _, i := range instances {
 			l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider)}
+			if i.OwnerID != "" {
+				runningPerAccountMetric.WithLabelValues(i.OwnerID, i.OS).Inc()
+			}
 			m[l]++
 		}
-		dbMetric.Reset()
 		for k, v := range m {
-			dbMetric.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state).Set(float64(v))
+			runningMetric.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state).Set(float64(v))
 		}
 	}
 }
@@ -147,18 +164,21 @@ func RegisterMetrics(instanceStore store.InstanceStore) *Metrics {
 	buildCount := BuildCount()
 	failedBuildCount := FailedBuildCount()
 	runningCount := RunningCount(instanceStore)
+	runningPerAccountCount := RunningPerAccountCount(instanceStore)
+	go updateRunningCount(context.Background(), instanceStore, runningCount, runningPerAccountCount)
 	poolFallbackCount := PoolFallbackCount()
 	waitDurationCount := WaitDurationCount()
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile)
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile)
 	return &Metrics{
-		BuildCount:        buildCount,
-		FailedCount:       failedBuildCount,
-		RunningCount:      runningCount,
-		PoolFallbackCount: poolFallbackCount,
-		WaitDurationCount: waitDurationCount,
-		MemoryPercentile:  memoryPercentile,
-		CPUPercentile:     cpuPercentile,
+		BuildCount:             buildCount,
+		FailedCount:            failedBuildCount,
+		RunningCount:           runningCount,
+		RunningPerAccountCount: runningPerAccountCount,
+		PoolFallbackCount:      poolFallbackCount,
+		WaitDurationCount:      waitDurationCount,
+		MemoryPercentile:       memoryPercentile,
+		CPUPercentile:          cpuPercentile,
 	}
 }
