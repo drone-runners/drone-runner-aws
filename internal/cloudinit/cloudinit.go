@@ -20,15 +20,16 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	LiteEnginePath       string
-	LiteEngineLogsPath   string
-	CACert               string
-	TLSCert              string
-	TLSKey               string
-	Platform             types.Platform
-	HarnessTestBinaryURI string
-	PluginBinaryURI      string
-	Tmate                types.Tmate
+	LiteEnginePath            string
+	LiteEngineLogsPath        string
+	CACert                    string
+	TLSCert                   string
+	TLSKey                    string
+	Platform                  types.Platform
+	HarnessTestBinaryURI      string
+	PluginBinaryURI           string
+	Tmate                     types.Tmate
+	DisableUnattendedUpgrades bool
 }
 
 var funcs = map[string]interface{}{
@@ -285,6 +286,9 @@ write_files:
   content: {{ .TLSKey | base64 }}
 runcmd:
 - 'set -x'
+{{ if .DisableUnattendedUpgrades }}
+- 'sudo systemctl stop unattended-upgrades'
+{{ end }}
 - 'ufw allow 9079'
 - 'wget -nv --debug "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'

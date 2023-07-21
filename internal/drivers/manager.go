@@ -24,16 +24,17 @@ import (
 
 type (
 	Manager struct {
-		globalCtx            context.Context
-		poolMap              map[string]*poolEntry
-		strategy             Strategy
-		cleanupTimer         *time.Ticker
-		runnerName           string
-		liteEnginePath       string
-		instanceStore        store.InstanceStore
-		harnessTestBinaryURI string
-		pluginBinaryURI      string
-		tmate                types.Tmate
+		globalCtx                 context.Context
+		poolMap                   map[string]*poolEntry
+		strategy                  Strategy
+		cleanupTimer              *time.Ticker
+		runnerName                string
+		liteEnginePath            string
+		instanceStore             store.InstanceStore
+		harnessTestBinaryURI      string
+		pluginBinaryURI           string
+		tmate                     types.Tmate
+		disableUnattendedUpgrades bool
 	}
 
 	poolEntry struct {
@@ -48,12 +49,13 @@ func New(
 	env *config.EnvConfig,
 ) *Manager {
 	return &Manager{
-		globalCtx:            globalContext,
-		instanceStore:        instanceStore,
-		runnerName:           env.Runner.Name,
-		liteEnginePath:       env.LiteEngine.Path,
-		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
-		pluginBinaryURI:      env.Settings.PluginBinaryURI,
+		globalCtx:                 globalContext,
+		instanceStore:             instanceStore,
+		runnerName:                env.Runner.Name,
+		liteEnginePath:            env.LiteEngine.Path,
+		harnessTestBinaryURI:      env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:           env.Settings.PluginBinaryURI,
+		disableUnattendedUpgrades: env.Settings.DisableUnattendedUpgrades,
 	}
 }
 
@@ -544,6 +546,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
 	createOptions.PluginBinaryURI = m.pluginBinaryURI
 	createOptions.Tmate = m.tmate
+	createOptions.DisableUnattendedUpgrades = m.disableUnattendedUpgrades
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")

@@ -315,15 +315,16 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		DefaultDriver        string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
-		ReusePool            bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
-		BusyMaxAge           int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
-		FreeMaxAge           int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
-		MinPoolSize          int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
-		MaxPoolSize          int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
-		EnableAutoPool       bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
-		HarnessTestBinaryURI string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.3.2-beta"`
+		DefaultDriver             string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
+		ReusePool                 bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
+		BusyMaxAge                int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
+		FreeMaxAge                int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
+		MinPoolSize               int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
+		MaxPoolSize               int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
+		EnableAutoPool            bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
+		HarnessTestBinaryURI      string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
+		PluginBinaryURI           string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.3.2-beta"`
+		DisableUnattendedUpgrades bool   `envconfig:"DISABLE_UNATTENDED_UPGRADES"`
 	}
 	LiteEngine struct {
 		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.21/"`
