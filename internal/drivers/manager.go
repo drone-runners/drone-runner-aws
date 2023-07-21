@@ -314,7 +314,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, true)
+		inst, err = m.setupInstance(ctx, pool, ownerID, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -340,7 +340,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, false)
+		_, _ = m.setupInstance(ctx, pool, "", false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -501,7 +501,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, false)
+			inst, err := m.setupInstance(ctx, pool, "", false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -527,7 +527,7 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error
 	return m.buildPool(ctx, pool)
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool) (*types.Instance, error) {
+func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID string, inuse bool) (*types.Instance, error) {
 	var inst *types.Instance
 
 	// generate certs
@@ -555,6 +555,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, inuse bool
 
 	if inuse {
 		inst.State = types.StateInUse
+		inst.OwnerID = ownerID
 	}
 
 	err = m.instanceStore.Create(ctx, inst)
