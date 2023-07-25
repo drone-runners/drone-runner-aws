@@ -119,17 +119,15 @@ rm /etc/resolv.conf
 cp /proc/net/pnp /root/resolv.conf
 ln -s /root/resolv.conf /etc/resolv.conf
 mkdir /addon
-chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate
-tar -xf /addon/tmate.xz -C /addon/
-wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
 {{ if eq .Platform.Arch "amd64" }}
+wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
+tar -xf /addon/tmate.xz -C /addon/
+chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate
 mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
-rm -rf /addon/tmate-1.0-static-linux-amd64/
 {{ else if eq .Platform.Arch "arm64" }}
 wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz
 tar -xf /addon/tmate.xz -C /addon/
 chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate
-rm -rf /addon/tmate-1.0-static-linux-arm64v8/
 mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
 {{ end }}
 {{ end }}
