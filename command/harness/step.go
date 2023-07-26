@@ -54,7 +54,6 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 		WithField("pool", poolID).
 		WithField("correlation_id", r.CorrelationID)
 
-
 	// set the envs from previous step only for non-container steps
 	if r.Image == "" {
 		setPrevStepExportEnvs(r)
