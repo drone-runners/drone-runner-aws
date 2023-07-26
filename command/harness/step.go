@@ -54,7 +54,12 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 		WithField("pool", poolID).
 		WithField("correlation_id", r.CorrelationID)
 
-	setPrevStepExportEnvs(r)
+
+	// set the envs from previous step only for non-container steps
+	if r.Image == "" {
+		setPrevStepExportEnvs(r)
+	}
+
 	// add global volumes as mounts only if image is specified
 	if r.Image != "" {
 		for _, pair := range env.Runner.Volumes {
