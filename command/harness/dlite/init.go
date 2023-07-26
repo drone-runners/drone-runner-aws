@@ -90,7 +90,6 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			HostName: t.c.delegateInfo.Host,
 			ID:       t.c.delegateInfo.ID,
 		},
-		PoolDriverUsed: setupResp.DriverUsed,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }

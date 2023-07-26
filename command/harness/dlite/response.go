@@ -8,7 +8,6 @@ type VMTaskExecutionResponse struct {
 	CommandExecutionStatus CommandExecutionStatus `json:"command_execution_status"`
 	DelegateMetaInfo       DelegateMetaInfo       `json:"delegate_meta_info"`
 	Artifact               []byte                 `json:"artifact,omitempty"`
-	PoolDriverUsed         string                 `json:"pool_driver_used"`
 }
 
 type DelegateMetaInfo struct {
