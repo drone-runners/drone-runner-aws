@@ -116,8 +116,7 @@ echo "docker service restarted"
 
 {{ if .Tmate.Enabled }}
 rm /etc/resolv.conf
-cp /proc/net/pnp /root/resolv.conf
-ln -s /root/resolv.conf /etc/resolv.conf
+cp /proc/net/pnp /etc/resolv.conf
 mkdir /addon
 {{ if eq .Platform.Arch "amd64" }}
 wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
