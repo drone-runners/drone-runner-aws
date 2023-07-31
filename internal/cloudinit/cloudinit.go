@@ -114,9 +114,12 @@ echo "restarting docker"
 service docker start
 echo "docker service restarted"
 
-{{ if .Tmate.Enabled }}
 rm /etc/resolv.conf
-cp /proc/net/pnp /etc/resolv.conf
+echo "nameserver 127.0.0.53
+options edns0 trust-ad
+search ." >> /etc/resolv.conf
+
+{{ if .Tmate.Enabled }}
 mkdir /addon
 {{ if eq .Platform.Arch "amd64" }}
 wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
