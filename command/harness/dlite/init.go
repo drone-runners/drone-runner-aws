@@ -55,7 +55,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Make the setup call
 	req.SetupVMRequest.CorrelationID = task.ID
-	setupResp, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
+	setupResp, selectedPoolDriver, err := harness.HandleSetup(ctx, &req.SetupVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
 	if err != nil {
 		logr.WithError(err).Error("could not setup VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
@@ -90,6 +90,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			HostName: t.c.delegateInfo.Host,
 			ID:       t.c.delegateInfo.ID,
 		},
+		PoolDriverUsed: selectedPoolDriver,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }
