@@ -114,7 +114,9 @@ echo "restarting docker"
 service docker start
 echo "docker service restarted"
 
+cp /etc/resolv.conf /etc/resolv_orig.conf
 rm /etc/resolv.conf
+mv /etc/resolv_orig.conf /etc/resolv.conf
 echo "nameserver 127.0.0.53
 options edns0 trust-ad
 search ." >> /etc/resolv.conf
