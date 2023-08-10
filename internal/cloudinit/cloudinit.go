@@ -114,15 +114,20 @@ echo "restarting docker"
 service docker start
 echo "docker service restarted"
 
-{{ if .Tmate.Enabled }}
 rm /etc/resolv.conf
-cp /proc/net/pnp /etc/resolv.conf
+echo "nameserver 127.0.0.53
+options edns0 trust-ad
+search ." >> /etc/resolv.conf
+
+{{ if .Tmate.Enabled }}
 mkdir /addon
 {{ if eq .Platform.Arch "amd64" }}
 wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
 tar -xf /addon/tmate.xz -C /addon/
 chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate
 mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
+curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
+chmod 777 /usr/bin/envman
 {{ else if eq .Platform.Arch "arm64" }}
 wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz
 tar -xf /addon/tmate.xz -C /addon/
@@ -184,6 +189,9 @@ echo "SKIP_PREPARE_SERVER=true" >> .env;
 wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin
 chmod 777 /usr/local/bin/plugin
 {{ end }}
+
+curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Darwin-arm64 > /usr/local/bin/envman
+chmod 777 /usr/local/bin/envman
 
 /opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
@@ -304,6 +312,8 @@ runcmd:
 - 'chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate'
 - 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
 - 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
+- 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
+- 'chmod 777 /usr/bin/envman'
 {{ else if eq .Platform.Arch "arm64" }}
 - 'wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
 - 'tar -xf /addon/tmate.xz -C /addon/'
@@ -356,6 +366,8 @@ runcmd:
 - 'chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate'
 - 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
 - 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
+- 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
+- 'chmod 777 /usr/bin/envman'
 {{ else if eq .Platform.Arch "arm64" }}
 - 'wget https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
 - 'tar -xf /addon/tmate.xz -C /addon/'

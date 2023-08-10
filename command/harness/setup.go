@@ -47,14 +47,14 @@ var (
 )
 
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo,funlen
-	metrics *metric.Metrics) (*SetupVMResponse, error) {
+	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
-		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
+		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
 
 	if r.PoolID == "" {
-		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
+		return nil, "", errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
 	// Sets up logger to stream the logs in case log config is set
@@ -103,7 +103,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	pools = append(pools, r.FallbackPoolIDs...)
 
 	var poolErr, err error
-	var selectedPool, owner string
+	var selectedPool, selectedPoolDriver, owner string
 	var instance *types.Instance
 	foundPool := false
 	fallback := false
@@ -150,6 +150,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		// Successfully provisioned an instance out of the listed pools
 		foundPool = true
 		selectedPool = pool
+		_, _, selectedPoolDriver = poolManager.Inspect(pool)
 		break
 	}
 
@@ -168,7 +169,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		if fallback {
 			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver, metric.False).Inc()
 		}
-		return nil, fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
+		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider)).Inc()
@@ -208,7 +209,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		instance, err = poolManager.StartInstance(ctx, selectedPool, instance.ID)
 		if err != nil {
 			go cleanUpFn(false)
-			return nil, fmt.Errorf("failed to start the instance up: %w", err)
+			return nil, "", fmt.Errorf("failed to start the instance up: %w", err)
 		}
 	}
 
@@ -217,26 +218,26 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	err = poolManager.Update(ctx, instance)
 	if err != nil {
 		go cleanUpFn(false)
-		return nil, fmt.Errorf("failed to tag: %w", err)
+		return nil, "", fmt.Errorf("failed to tag: %w", err)
 	}
 
 	err = poolManager.SetInstanceTags(ctx, selectedPool, instance, r.Tags)
 	if err != nil {
 		go cleanUpFn(false)
-		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
+		return nil, "", fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
 	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		go cleanUpFn(false)
-		return nil, fmt.Errorf("failed to create LE client: %w", err)
+		return nil, "", fmt.Errorf("failed to create LE client: %w", err)
 	}
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
 	if _, err = client.RetryHealth(ctx, setupTimeout); err != nil {
 		go cleanUpFn(true)
-		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
+		return nil, "", fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
 	logr.Traceln("retry health check complete")
@@ -250,10 +251,10 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	setupResponse, err := client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
 		go cleanUpFn(true)
-		return nil, fmt.Errorf("failed to call setup lite-engine: %w", err)
+		return nil, "", fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
 	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).Traceln("VM setup is complete")
 
-	return &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}, nil
+	return &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}, selectedPoolDriver, nil
 }
