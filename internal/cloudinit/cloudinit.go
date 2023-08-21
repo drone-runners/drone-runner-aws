@@ -199,6 +199,14 @@ curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Dar
 chmod 777 /usr/local/bin/envman
 
 /opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
+
+# Check health
+for i in {1..10}; do
+    curl http://localhost:9079/healthz && exit 0 || sleep 5
+done
+
+echo "Health check failed"
+exit 1
 `
 
 var macTemplate = template.Must(template.New("mac").Funcs(funcs).Parse(macScript))
