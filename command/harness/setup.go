@@ -46,7 +46,7 @@ var (
 	freeAccount  = "free"
 )
 
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo,funlen
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint
 	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {

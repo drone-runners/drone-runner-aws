@@ -36,7 +36,7 @@ var (
 	stepTimeout = 10 * time.Hour
 )
 
-func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*api.PollStepResponse, error) {
+func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, _ *metric.Metrics) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
 		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
 	}

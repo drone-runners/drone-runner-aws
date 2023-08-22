@@ -3,23 +3,23 @@ package drivers
 import (
 	"context"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	lehttp "github.com/harness/lite-engine/cli/client"
-	"github.com/pkg/errors"
 
+	"github.com/cenkalti/backoff/v4"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
