@@ -3,6 +3,8 @@ package drivers
 import (
 	"context"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"runtime/debug"
 	"sort"
 	"sync"
@@ -285,7 +287,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig, healthCheckTimeout time.Duration) (*types.Instance, error) {
 	m.runnerName = serverName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
@@ -308,42 +310,66 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
-	if len(free) == 0 {
-		pool.Unlock()
-		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
-			return nil, ErrorNoInstanceAvailable
-		}
-		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, ownerID, true)
-		if err != nil {
-			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
-		}
-		return inst, nil
-	}
-
-	sort.Slice(free, func(i, j int) bool {
-		iTime := time.Unix(free[i].Started, 0)
-		jTime := time.Unix(free[j].Started, 0)
-		return iTime.Before(jTime)
-	})
-
-	inst := free[0]
-	inst.State = types.StateInUse
-	inst.OwnerID = ownerID
-	err = m.instanceStore.Update(ctx, inst)
-	if err != nil {
-		pool.Unlock()
-		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
-	}
 	pool.Unlock()
 
-	// the go routine here uses the global context because this function is called
-	// from setup API call (and we can't use HTTP request context for async tasks)
-	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, "", false)
-	}(m.globalCtx)
+	var instance *types.Instance
+	const maxCreateRetries = 3
 
-	return inst, nil
+	instanceRetries := len(free)
+	if instanceRetries == 0 {
+		instanceRetries = maxCreateRetries
+	}
+	for i := 0; i < instanceRetries; i++ {
+		if len(free) == 0 {
+			if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
+				return nil, ErrorNoInstanceAvailable
+			}
+			instance, err = m.setupInstance(ctx, pool, ownerID, true)
+			if err != nil {
+				continue
+			}
+		} else {
+			sort.Slice(free, func(i, j int) bool {
+				iTime := time.Unix(free[i].Started, 0)
+				jTime := time.Unix(free[j].Started, 0)
+				return iTime.Before(jTime)
+			})
+
+			instance = free[0]
+			instance.State = types.StateInUse
+			instance.OwnerID = ownerID
+			err = m.instanceStore.Update(ctx, instance)
+			if err != nil {
+				continue
+			}
+
+			free = free[1:]
+		}
+
+		client, _ := lehelper.GetClient(instance, m.runnerName, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+
+		if instance.Platform.OS == oshelp.OSMac {
+			healthCheckTimeout = 15 * time.Second
+		}
+
+		logrus.Traceln("running healthcheck and waiting for an ok response")
+		healthResponse, err := client.RetryHealth(ctx, healthCheckTimeout)
+		if err != nil {
+			logrus.WithError(err).Errorln("failed to call LE.RetryHealth")
+			err = pool.Driver.Destroy(ctx, []*types.Instance{instance})
+			if err != nil {
+				logrus.WithError(err).Errorln("failed to destroy instance")
+			}
+			continue
+		}
+
+		logrus.WithField("response", fmt.Sprintf("%+v", healthResponse)).
+			Traceln("LE.RetryHealth check complete")
+
+		return instance, nil
+	}
+
+	return nil, fmt.Errorf("all available instances are unhealthy")
 }
 
 // Destroy destroys an instance in a pool.

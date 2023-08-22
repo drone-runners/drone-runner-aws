@@ -65,8 +65,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return ErrorPoolNameEmpty
 	}
 
-	// lets see if there is anything in the pool
-	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, "drone", e.config)
+	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, "drone", e.config, 20*time.Minute)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
@@ -105,18 +104,6 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 
-	const timeoutSetup = 20 * time.Minute // TODO: Move to configuration
-
-	// try the healthcheck api on the lite-engine until it responds ok
-	logr.Traceln("running healthcheck and waiting for an ok response")
-	healthResponse, err := client.RetryHealth(ctx, timeoutSetup)
-	if err != nil {
-		logr.WithError(err).Errorln("failed to call LE.RetryHealth")
-		return err
-	}
-
-	logr.WithField("response", fmt.Sprintf("%+v", healthResponse)).
-		Traceln("LE.RetryHealth check complete")
 	setupRequest := &leapi.SetupRequest{
 		Envs:      nil, // no global envs, envs are passed to each step individually
 		Network:   spec.Network,

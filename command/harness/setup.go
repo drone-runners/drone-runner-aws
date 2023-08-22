@@ -138,7 +138,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			}
 		}
 
-		instance, err = poolManager.Provision(ctx, pool, env.Runner.Name, owner, env)
+		instance, err = poolManager.Provision(ctx, pool, env.Runner.Name, owner, env, setupTimeout)
 		if err != nil {
 			logr.WithError(err).WithField("pool_id", p).Errorln("failed to provision instance")
 			poolErr = err
@@ -232,15 +232,6 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		go cleanUpFn(false)
 		return nil, "", fmt.Errorf("failed to create LE client: %w", err)
 	}
-
-	// try the healthcheck api on the lite-engine until it responds ok
-	logr.Traceln("running healthcheck and waiting for an ok response")
-	if _, err = client.RetryHealth(ctx, setupTimeout); err != nil {
-		go cleanUpFn(true)
-		return nil, "", fmt.Errorf("failed to call lite-engine retry health: %w", err)
-	}
-
-	logr.Traceln("retry health check complete")
 
 	// Currently m1 architecture does not enable nested virtualisation, so we disable docker.
 	if instance.Platform.OS == oshelp.OSMac {
