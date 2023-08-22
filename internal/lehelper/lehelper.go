@@ -29,9 +29,9 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	}
 
 	if userdata == "" {
-		if opts.OS == oshelp.OSWindows {
+		if opts.Platform.OS == oshelp.OSWindows {
 			userdata = cloudinit.Windows(&params)
-		} else if opts.OS == oshelp.OSMac {
+		} else if opts.Platform.OS == oshelp.OSMac {
 			userdata = cloudinit.Mac(&params)
 		} else {
 			userdata = cloudinit.Linux(&params)
