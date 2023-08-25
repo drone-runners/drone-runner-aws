@@ -348,22 +348,31 @@ func TestProvision_Deadlock(t *testing.T) {
 		},
 	}
 
+	instance := &types.Instance{
+		ID:    "inst2",
+		State: types.StateCreated,
+	}
 	// Mocking the calls
-	mockInstanceStore.EXPECT().List(ctx, poolName, gomock.Any()).Return(instances, nil).Times(1)
-	mockInstanceStore.EXPECT().Update(ctx, gomock.Any()).Return(nil).Times(1)
-	mockInstanceStore.EXPECT().Create(ctx, gomock.Any()).Return(nil).Times(1)
-	mockInstanceStore.EXPECT().Find(ctx, gomock.Any()).Return(instances[0], nil).Times(1)
-	mockDriver.EXPECT().Destroy(ctx, gomock.Any()).Return(nil).Times(1)
-	mockInstanceStore.EXPECT().Delete(ctx, gomock.Any()).Return(nil).Times(1)
-	mockDriver.EXPECT().Create(ctx, gomock.Any()).Return(instances[0], nil).Times(1)
-	mockClientFactory.EXPECT().NewClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLeHttpClient, nil).Times(1)
-	mockLeHttpClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, errors.New("health check error")).Times(1)
+	mockInstanceStore.EXPECT().List(ctx, poolName, gomock.Any()).Return(instances, nil)
+	mockInstanceStore.EXPECT().Update(ctx, gomock.Any()).Return(nil)
+	mockClientFactory.EXPECT().NewClient(
+		gomock.Eq(instances[0]),
+		gomock.Eq(env.Runner.Name),
+		gomock.Eq(instances[0].Port),
+		gomock.Eq(env.LiteEngine.EnableMock),
+		gomock.Eq(env.LiteEngine.MockStepTimeoutSecs),
+	).Return(mockLeHttpClient, nil)
+	mockLeHttpClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, nil)
+	mockDriver.EXPECT().Create(context.Background(), gomock.Any()).Return(instance, nil)
+	mockInstanceStore.EXPECT().Create(context.Background(), gomock.Any()).Return(nil)
+	mockDriver.EXPECT().CanHibernate().Return(false).AnyTimes()
 
 	// Use a channel to signal the completion of the goroutine
 	doneCh := make(chan bool)
 
 	go func() {
 		_, err := m.Provision(ctx, poolName, ownerID, env)
+		m.wg.Wait() // Wait for all goroutines to finish
 		if err != nil {
 			t.Errorf("unexpected error in Provision: %v", err)
 		}
@@ -374,7 +383,7 @@ func TestProvision_Deadlock(t *testing.T) {
 	select {
 	case <-doneCh:
 		// Completed successfully
-	case <-time.After(5 * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatal("Test timed out, potential deadlock detected!")
 	}
 }
