@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"io"
 	"os"
 	"strings"
@@ -143,7 +144,8 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 	logrus.WithField("lite_engine_url", envConfig.LiteEngine.Path).Infoln("Using lite engine base url")
 
 	envConfig.Runner.Name = runnerName
-	poolManager := drivers.New(ctx, store, &envConfig)
+	factory := &le.LiteEngineClientFactory{}
+	poolManager := drivers.New(ctx, store, &envConfig, factory)
 	err = poolManager.Add(pools...)
 	if err != nil {
 		return err
@@ -246,7 +248,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 			logrus.StandardLogger(),
 		),
 	)
-	engineInstance, err := engine.New(engine.Opts{Repopulate: false}, poolManager, &envConfig)
+	engineInstance, err := engine.New(engine.Opts{Repopulate: false}, poolManager, &envConfig, factory)
 	if err != nil {
 		return err
 	}

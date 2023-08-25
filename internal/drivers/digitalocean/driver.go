@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -80,7 +80,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Size:     p.size,
 		Tags:     p.tags,
 		IPv6:     false,
-		UserData: lehelper.GenerateUserdata(p.userData, opts),
+		UserData: le.GenerateUserdata(p.userData, opts),
 
 		Image: godo.DropletCreateImage{
 			Slug: p.image,
@@ -134,7 +134,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:      startTime.Unix(),
 		Updated:      startTime.Unix(),
 		IsHibernated: false,
-		Port:         lehelper.LiteEnginePort,
+		Port:         le.LiteEnginePort,
 	}
 	// poll the digitalocean endpoint for server updates and exit when a network address is allocated.
 	interval := time.Duration(0)

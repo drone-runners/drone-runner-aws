@@ -3,21 +3,24 @@ package drivers
 import (
 	"context"
 	"fmt"
+
 	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	lehttp "github.com/harness/lite-engine/cli/client"
-	"github.com/pkg/errors"
 
+	"github.com/cenkalti/backoff/v4"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,6 +36,7 @@ type (
 		harnessTestBinaryURI string
 		pluginBinaryURI      string
 		tmate                types.Tmate
+		clientFactory        le.ClientFactory
 	}
 
 	poolEntry struct {
@@ -45,6 +49,7 @@ func New(
 	globalContext context.Context,
 	instanceStore store.InstanceStore,
 	env *config.EnvConfig,
+	factory le.ClientFactory,
 ) *Manager {
 	return &Manager{
 		globalCtx:            globalContext,
@@ -53,6 +58,8 @@ func New(
 		liteEnginePath:       env.LiteEngine.Path,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
 		pluginBinaryURI:      env.Settings.PluginBinaryURI,
+		tmate:                types.Tmate(env.Tmate),
+		clientFactory:        factory,
 	}
 }
 
@@ -285,11 +292,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
-	m.runnerName = serverName
-	m.liteEnginePath = env.LiteEngine.Path
-	m.tmate = types.Tmate(env.Tmate)
-
+func (m *Manager) Provision(ctx context.Context, poolName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
@@ -337,6 +340,23 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 	}
 	pool.Unlock()
 
+	// do health check
+	if healthCheckErr := m.performHealthCheck(ctx, inst, env); healthCheckErr != nil {
+		destroyErr := m.Destroy(ctx, pool.Name, inst.ID)
+		if destroyErr != nil {
+			logrus.WithError(destroyErr).Errorf("provision: failed to destroy instance %s", inst.ID)
+		}
+		instance, createErr := m.setupInstance(ctx, pool, ownerID, true)
+		if createErr != nil {
+			return nil, fmt.Errorf("provision: failed to create instance: %w", createErr)
+		}
+		// maintains pool size
+		go func(ctx context.Context) {
+			_, _ = m.setupInstance(ctx, pool, "", false)
+		}(m.globalCtx)
+		return instance, nil
+	}
+
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
@@ -344,6 +364,27 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 	}(m.globalCtx)
 
 	return inst, nil
+}
+
+func (m *Manager) performHealthCheck(ctx context.Context, instance *types.Instance, env *config.EnvConfig) error {
+	client, _ := m.clientFactory.NewClient(instance, m.runnerName, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	healthCheckTimeout := env.LiteEngine.HealthCheckTimeout
+	healthCheckTimeout = adjustHealthCheckTimeoutByOS(instance.Platform.OS, healthCheckTimeout)
+	healthResponse, err := client.RetryHealth(ctx, healthCheckTimeout)
+	if err != nil {
+		logrus.WithError(err).Errorln("failed to call LE.RetryHealth")
+		return err
+	}
+
+	logrus.WithField("response", fmt.Sprintf("%+v", healthResponse)).Traceln("LE.RetryHealth check complete")
+	return nil
+}
+
+func adjustHealthCheckTimeoutByOS(os string, healthCheckTimeout time.Duration) time.Duration {
+	if os == oshelp.OSMac {
+		healthCheckTimeout = 15 * time.Second
+	}
+	return healthCheckTimeout
 }
 
 // Destroy destroys an instance in a pool.

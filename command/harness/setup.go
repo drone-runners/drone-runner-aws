@@ -8,14 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	"github.com/drone-runners/drone-runner-aws/metric"
-
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	errors "github.com/drone-runners/drone-runner-aws/internal/types"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -47,7 +46,7 @@ var (
 )
 
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo,funlen
-	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
+	metrics *metric.Metrics, clientFactory le.ClientFactory) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
@@ -138,7 +137,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			}
 		}
 
-		instance, err = poolManager.Provision(ctx, pool, env.Runner.Name, owner, env)
+		instance, err = poolManager.Provision(ctx, pool, owner, env)
 		if err != nil {
 			logr.WithError(err).WithField("pool_id", p).Errorln("failed to provision instance")
 			poolErr = err
@@ -227,7 +226,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		return nil, "", fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
-	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := clientFactory.NewClient(instance, env.Runner.Name, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		go cleanUpFn(false)
 		return nil, "", fmt.Errorf("failed to create LE client: %w", err)

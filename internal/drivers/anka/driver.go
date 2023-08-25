@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -67,7 +67,7 @@ func (p *config) CanHibernate() bool {
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
-	uData := lehelper.GenerateUserdata(p.userData, opts)
+	uData := le.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 
 	logr := logger.FromContext(ctx).
@@ -164,7 +164,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		TLSKey:   opts.TLSKey,
 		Started:  startTime.Unix(),
 		Updated:  time.Now().Unix(),
-		Port:     lehelper.LiteEnginePort,
+		Port:     le.LiteEnginePort,
 	}
 	logr.
 		WithField("ip", ip).

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/google/uuid"
 )
@@ -55,7 +55,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:      time.Now().Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
-		Port:         lehelper.LiteEnginePort,
+		Port:         le.LiteEnginePort,
 	}, nil
 }
 

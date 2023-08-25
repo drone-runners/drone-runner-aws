@@ -12,7 +12,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -364,7 +364,7 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 		p.vmMemoryGB,
 		p.vmDiskSize,
 		hostPort,
-		strconv.Itoa(lehelper.LiteEnginePort),
+		strconv.Itoa(le.LiteEnginePort),
 		hostPath,
 		vmPath)
 	job = &api.Job{

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -88,7 +88,7 @@ func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	uData := lehelper.GenerateUserdata(p.userData, opts)
+	uData := le.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
 
 	p.MachineName = machineName
@@ -205,7 +205,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		TLSKey:   opts.TLSKey,
 		Started:  startTime.Unix(),
 		Updated:  time.Now().Unix(),
-		Port:     lehelper.LiteEnginePort,
+		Port:     le.LiteEnginePort,
 	}
 	logr.
 		WithField("ip", instanceIP).

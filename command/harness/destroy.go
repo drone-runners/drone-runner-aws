@@ -7,7 +7,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/metric"
@@ -31,7 +31,7 @@ type VMCleanupRequest struct {
 	Context        Context `json:"context,omitempty"`
 }
 
-func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) error {
+func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics, clientFactory le.ClientFactory) error {
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
@@ -40,7 +40,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	b := createBackoff(destroyTimeout)
 	for {
 		duration := b.NextBackOff()
-		_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt)
+		_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt, clientFactory)
 		if err != nil {
 			logrus.WithError(err).
 				WithField("retry_count", cnt).
@@ -58,7 +58,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig,
-	poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int) (*types.Instance, error) {
+	poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int, clientFactory le.ClientFactory) (*types.Instance, error) {
 	entity, err := s.Find(ctx, r.StageRuntimeID)
 	if err != nil || entity == nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
@@ -88,7 +88,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_name", inst.Name)
 
 	logr.Traceln("invoking lite engine cleanup")
-	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := clientFactory.NewClient(inst, env.Runner.Name, inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	} else {

@@ -2,6 +2,7 @@ package dlite
 
 import (
 	"context"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -109,7 +110,8 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	}
 
 	c.stageOwnerStore = stageOwnerStore
-	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
+	factory := &le.LiteEngineClientFactory{}
+	c.poolManager = drivers.New(ctx, instanceStore, &c.env, factory)
 
 	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
 	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck

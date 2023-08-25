@@ -5,10 +5,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -139,8 +139,8 @@ func lookupCreateSecurityGroupID(ctx context.Context, client *ec2.EC2, vpc strin
 			IpPermissions: []*ec2.IpPermission{
 				{
 					IpProtocol: aws.String("tcp"),
-					FromPort:   aws.Int64(lehelper.LiteEnginePort),
-					ToPort:     aws.Int64(lehelper.LiteEnginePort),
+					FromPort:   aws.Int64(le.LiteEnginePort),
+					ToPort:     aws.Int64(le.LiteEnginePort),
 					IpRanges: []*ec2.IpRange{
 						{
 							CidrIp: aws.String("0.0.0.0/0"),
@@ -170,13 +170,13 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 	securityGroup := securityGroupResponse.SecurityGroups[0]
 	found := false
 	for _, permission := range securityGroup.IpPermissions {
-		if *permission.IpProtocol == "tcp" && *permission.FromPort == lehelper.LiteEnginePort && *permission.ToPort == lehelper.LiteEnginePort {
+		if *permission.IpProtocol == "tcp" && *permission.FromPort == le.LiteEnginePort && *permission.ToPort == le.LiteEnginePort {
 			found = true
 			break
 		}
 	}
 	if !found {
-		return fmt.Errorf("security group %s does not have the correct ingress rules. There is no rule for port %d", *securityGroup.GroupName, lehelper.LiteEnginePort)
+		return fmt.Errorf("security group %s does not have the correct ingress rules. There is no rule for port %d", *securityGroup.GroupName, le.LiteEnginePort)
 	}
 	return nil
 }
@@ -240,7 +240,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		IamInstanceProfile: iamProfile,
 		UserData: aws.String(
 			base64.StdEncoding.EncodeToString(
-				[]byte(lehelper.GenerateUserdata(p.userData, opts)),
+				[]byte(le.GenerateUserdata(p.userData, opts)),
 			),
 		),
 		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
@@ -344,7 +344,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:      launchTime.Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
-		Port:         lehelper.LiteEnginePort,
+		Port:         le.LiteEnginePort,
 	}
 	logr.
 		WithField("ip", instanceIP).

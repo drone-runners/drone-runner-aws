@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -166,7 +166,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	// create the instance
 	startTime := time.Now()
 
-	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
+	uData := base64.StdEncoding.EncodeToString([]byte(le.GenerateUserdata(c.userData, opts)))
 
 	logr.Traceln("azure: creating VM")
 
@@ -349,6 +349,6 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 		Started:      vm.Properties.TimeCreated.Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
-		Port:         lehelper.LiteEnginePort,
+		Port:         le.LiteEnginePort,
 	}
 }

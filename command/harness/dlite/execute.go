@@ -3,6 +3,7 @@ package dlite
 import (
 	"context"
 	"encoding/json"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
@@ -24,6 +25,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: (Vistaar) Set this in dlite
 	log := logrus.New()
 	task := &client.Task{}
+	factory := &le.LiteEngineClientFactory{}
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
 		log.WithError(err).Error("could not decode VM step execute HTTP body")
@@ -47,7 +49,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.ExecuteVMRequest.CorrelationID = task.ID
-	stepResp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
+	stepResp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics, factory)
 	if err != nil {
 		logr.WithError(err).
 			WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"io"
 	"sync"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/config"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
@@ -38,14 +38,16 @@ type Engine struct {
 	opts        Opts
 	poolManager *drivers.Manager
 	config      *config.EnvConfig
+	factory     le.ClientFactory
 }
 
 // New returns a new engine.
-func New(opts Opts, poolManager *drivers.Manager, envConfig *config.EnvConfig) (*Engine, error) {
+func New(opts Opts, poolManager *drivers.Manager, envConfig *config.EnvConfig, clientFactory le.ClientFactory) (*Engine, error) {
 	return &Engine{
 		opts:        opts,
 		poolManager: poolManager,
 		config:      envConfig,
+		factory:     clientFactory,
 	}, nil
 }
 
@@ -55,6 +57,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 
 	poolName := spec.CloudInstance.PoolName
 	manager := e.poolManager
+	clientFactory := e.factory
 
 	logr := logger.FromContext(ctx).
 		WithField("func", "engine.Setup").
@@ -65,8 +68,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return ErrorPoolNameEmpty
 	}
 
-	// lets see if there is anything in the pool
-	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, "drone", e.config)
+	instance, err := manager.Provision(ctx, poolName, "drone", e.config) //nolint
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
@@ -99,7 +101,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return err
 	}
 	// required for anka build where the port is dynamic
-	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port, e.config.LiteEngine.EnableMock, e.config.LiteEngine.MockStepTimeoutSecs)
+	client, err := clientFactory.NewClient(instance, e.config.Runner.Name, instance.Port, e.config.LiteEngine.EnableMock, e.config.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return err
@@ -181,6 +183,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	spec := specv.(*Spec)
 	step := stepv.(*Step)
 
+	clientFactory := e.factory
 	poolName := spec.CloudInstance.PoolName
 	instanceID := spec.CloudInstance.ID
 	instanceIP := spec.CloudInstance.IP
@@ -197,7 +200,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		logr.WithError(err).Errorln("cannot find instance")
 		return nil, err
 	}
-	client, err := lehelper.GetClient(instance, e.config.Runner.Name, instance.Port, e.config.LiteEngine.EnableMock, e.config.LiteEngine.MockStepTimeoutSecs)
+	client, err := clientFactory.NewClient(instance, e.config.Runner.Name, instance.Port, e.config.LiteEngine.EnableMock, e.config.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to create LE client")
 		return nil, err

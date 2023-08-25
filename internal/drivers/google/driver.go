@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -224,7 +224,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 			Items: []*compute.MetadataItems{
 				{
 					Key:   p.userDataKey,
-					Value: googleapi.String(lehelper.GenerateUserdata(p.userData, opts)),
+					Value: googleapi.String(le.GenerateUserdata(p.userData, opts)),
 				},
 			},
 		},
@@ -513,7 +513,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		Started:      started.Unix(),
 		Updated:      time.Now().Unix(),
 		IsHibernated: false,
-		Port:         lehelper.LiteEnginePort,
+		Port:         le.LiteEnginePort,
 	}
 }
 
@@ -588,7 +588,7 @@ func (p *config) setupFirewall(ctx context.Context) error {
 		Allowed: []*compute.FirewallAllowed{
 			{
 				IPProtocol: "tcp",
-				Ports:      []string{"2376", fmt.Sprint(lehelper.LiteEnginePort)},
+				Ports:      []string{"2376", fmt.Sprint(le.LiteEnginePort)},
 			},
 		},
 		Direction:    "INGRESS",

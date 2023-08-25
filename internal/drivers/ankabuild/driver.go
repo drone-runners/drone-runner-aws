@@ -9,7 +9,7 @@ import (
 
 	"github.com/dchest/uniuri"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -50,7 +50,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
-	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
+	uData := base64.StdEncoding.EncodeToString([]byte(le.GenerateUserdata(c.userData, opts)))
 	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.AnkaBuild).

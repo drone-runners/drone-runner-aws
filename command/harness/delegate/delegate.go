@@ -3,6 +3,7 @@ package delegate
 import (
 	"context"
 	"encoding/json"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -32,6 +33,7 @@ type delegateCommand struct {
 	poolManager     *drivers.Manager
 	metrics         *metric.Metrics
 	stageOwnerStore store.StageOwnerStore
+	clientFactory   le.ClientFactory
 }
 
 func (c *delegateCommand) delegateListener() http.Handler {
@@ -84,6 +86,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// setup the global logrus logger.
 	harness.SetupLogger(&c.env)
 
+	c.clientFactory = &le.LiteEngineClientFactory{}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// listen for termination signals to gracefully shutdown the runner.
@@ -98,7 +102,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	}
 
 	c.stageOwnerStore = stageOwnerStore
-	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
+	c.poolManager = drivers.New(ctx, instanceStore, &c.env, c.clientFactory)
 
 	_, err = harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
 	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck
@@ -183,7 +187,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, _, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
+	resp, _, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics, c.clientFactory)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not setup VM")
 		writeError(w, err)
@@ -200,7 +204,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
+	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics, c.clientFactory)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("step_id", req.ID).
 			WithError(err).Error("could not execute step on VM")
@@ -225,7 +229,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	}
 	req := &harness.VMCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID}
 	ctx := r.Context()
-	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
+	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics, c.clientFactory)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Error("could not destroy VM")
 		writeError(w, err)

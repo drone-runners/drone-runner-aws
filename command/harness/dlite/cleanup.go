@@ -3,6 +3,7 @@ package dlite
 import (
 	"context"
 	"encoding/json"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
@@ -19,6 +20,8 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background() // TODO: Get this from http Request
 	log := logrus.New()
 	task := &client.Task{}
+	factory := &le.LiteEngineClientFactory{}
+
 	err := json.NewDecoder(r.Body).Decode(task)
 	if err != nil {
 		log.WithError(err).Error("could not decode VM cleanup HTTP body")
@@ -40,7 +43,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
-	err = harness.HandleDestroy(ctx, req, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
+	err = harness.HandleDestroy(ctx, req, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics, factory)
 	if err != nil {
 		logr.WithError(err).Error("could not destroy VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)

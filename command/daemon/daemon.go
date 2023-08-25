@@ -7,6 +7,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"os"
 	"time"
 
@@ -101,7 +102,8 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
 
-	poolManager := drivers.New(ctx, store, &env)
+	factory := &le.LiteEngineClientFactory{}
+	poolManager := drivers.New(ctx, store, &env, factory)
 
 	logrus.Infoln(fmt.Sprintf("Loading pool file '%s'", c.poolFile))
 	configPool, confErr := poolfile.ConfigPoolFile(c.poolFile, &env)
@@ -146,7 +148,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		Repopulate: true,
 	}
 
-	engInstance, engineErr := engine.New(opts, poolManager, &env)
+	engInstance, engineErr := engine.New(opts, poolManager, &env, factory)
 	if engineErr != nil {
 		logrus.WithError(engineErr).
 			Fatalln("daemon: cannot load the engine")

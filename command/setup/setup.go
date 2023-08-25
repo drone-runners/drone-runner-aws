@@ -7,12 +7,12 @@ package setup
 import (
 	"context"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"os"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone/runner-go/client"
@@ -135,7 +135,8 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
 
-	poolManager := drivers.New(ctx, store, &env)
+	factory := &le.LiteEngineClientFactory{}
+	poolManager := drivers.New(ctx, store, &env, factory)
 
 	configPool, confErr := poolfile.ConfigPoolFile("", &env)
 	if confErr != nil {
@@ -155,7 +156,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("setup: unable to add pool")
 	}
 	// provision
-	instance, provisionErr := poolManager.Provision(ctx, testPoolName, runnerName, "drone", &env)
+	instance, provisionErr := poolManager.Provision(ctx, testPoolName, "drone", &env) //nolint
 	if provisionErr != nil {
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
@@ -183,7 +184,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("setup: unable to start instance")
 	}
 	// create an LE client so we can test the instance
-	leClient, leErr := lehelper.GetClient(instance, runnerName, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	leClient, leErr := factory.NewClient(instance, runnerName, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if leErr != nil {
 		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
