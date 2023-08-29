@@ -108,7 +108,7 @@ func TestProvision_InstancesAvailable_Use(t *testing.T) {
 
 	mockInstanceStore := mocks.NewMockInstanceStore(ctrl)
 	mockDriver := mocks.NewMockDriver(ctrl)
-	mockLeHttpClient := mocks.NewMockLiteClient(ctrl)
+	mockLeHTTPClient := mocks.NewMockLiteClient(ctrl)
 	mockClientFactory := mocks.NewMockClientFactory(ctrl)
 
 	ctx, cancel := context.WithCancel(context.TODO())
@@ -153,8 +153,8 @@ func TestProvision_InstancesAvailable_Use(t *testing.T) {
 		gomock.Eq(instances[0].Port),
 		gomock.Eq(env.LiteEngine.EnableMock),
 		gomock.Eq(env.LiteEngine.MockStepTimeoutSecs),
-	).Return(mockLeHttpClient, nil)
-	mockLeHttpClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, nil)
+	).Return(mockLeHTTPClient, nil)
+	mockLeHTTPClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, nil)
 	mockDriver.EXPECT().Create(context.Background(), gomock.Any()).Return(instance, nil)
 	mockInstanceStore.EXPECT().Create(context.Background(), gomock.Any()).Return(nil)
 	mockDriver.EXPECT().CanHibernate().Return(false).AnyTimes()
@@ -215,7 +215,7 @@ func TestProvision_FailedHealthCheckAndDestroy(t *testing.T) {
 
 	mockInstanceStore := mocks.NewMockInstanceStore(ctrl)
 	mockDriver := mocks.NewMockDriver(ctrl)
-	mockLeHttpClient := mocks.NewMockLiteClient(ctrl)
+	mockLeHTTPClient := mocks.NewMockLiteClient(ctrl)
 	mockClientFactory := mocks.NewMockClientFactory(ctrl)
 
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10) // adding a timeout to prevent hanging
@@ -250,8 +250,8 @@ func TestProvision_FailedHealthCheckAndDestroy(t *testing.T) {
 	// Mocking the calls
 	mockInstanceStore.EXPECT().List(gomock.Any(), poolName, gomock.Any()).Return(instances, nil).Times(1)
 	mockInstanceStore.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-	mockClientFactory.EXPECT().NewClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLeHttpClient, nil).Times(1)
-	mockLeHttpClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, errors.New("health check error")).Times(1)
+	mockClientFactory.EXPECT().NewClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLeHTTPClient, nil).Times(1)
+	mockLeHTTPClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, errors.New("health check error")).Times(1)
 	mockInstanceStore.EXPECT().Find(gomock.Any(), gomock.Any()).Return(instances[0], nil).Times(1)
 	mockDriver.EXPECT().Destroy(gomock.Any(), gomock.Any()).Return(errors.New("destroy error")).Times(1)
 	mockDriver.EXPECT().Create(gomock.Any(), gomock.Any()).Return(newInstance, nil).AnyTimes()
@@ -265,7 +265,6 @@ func TestProvision_FailedHealthCheckAndDestroy(t *testing.T) {
 	assert.NotNil(t, newInstance, "expected newInstance to not be nil")
 	assert.Equal(t, "inst2", newInstance.ID, "expected newInstance ID to be inst2")
 	assert.Equal(t, types.StateInUse, newInstance.State, "expected newInstance state to be StateInUse")
-
 }
 
 func TestProvision_FailedHealthCheckSuccessfulDestroyFailedCreation(t *testing.T) {
@@ -274,7 +273,7 @@ func TestProvision_FailedHealthCheckSuccessfulDestroyFailedCreation(t *testing.T
 
 	mockInstanceStore := mocks.NewMockInstanceStore(ctrl)
 	mockDriver := mocks.NewMockDriver(ctrl)
-	mockLeHttpClient := mocks.NewMockLiteClient(ctrl)
+	mockLeHTTPClient := mocks.NewMockLiteClient(ctrl)
 	mockClientFactory := mocks.NewMockClientFactory(ctrl)
 
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Minute*10) // adding a timeout to prevent hanging
@@ -304,8 +303,8 @@ func TestProvision_FailedHealthCheckSuccessfulDestroyFailedCreation(t *testing.T
 	// Mocking the calls
 	mockInstanceStore.EXPECT().List(ctx, poolName, gomock.Any()).Return(instances, nil).AnyTimes()
 	mockInstanceStore.EXPECT().Update(ctx, gomock.Any()).Return(nil).AnyTimes()
-	mockClientFactory.EXPECT().NewClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLeHttpClient, nil).AnyTimes()
-	mockLeHttpClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, errors.New("health check error")).AnyTimes()
+	mockClientFactory.EXPECT().NewClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLeHTTPClient, nil).AnyTimes()
+	mockLeHTTPClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, errors.New("health check error")).AnyTimes()
 	mockInstanceStore.EXPECT().Find(ctx, gomock.Any()).Return(instances[0], nil).AnyTimes()
 	mockDriver.EXPECT().Destroy(ctx, gomock.Any()).Return(nil).AnyTimes()
 	mockInstanceStore.EXPECT().Delete(ctx, gomock.Any()).Return(nil).AnyTimes()

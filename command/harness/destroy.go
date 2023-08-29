@@ -31,7 +31,8 @@ type VMCleanupRequest struct {
 	Context        Context `json:"context,omitempty"`
 }
 
-func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics, clientFactory le.ClientFactory) error {
+func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager,
+	metrics *metric.Metrics, clientFactory le.ClientFactory) error {
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}

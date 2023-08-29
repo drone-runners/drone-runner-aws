@@ -68,7 +68,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 		return ErrorPoolNameEmpty
 	}
 
-	instance, err := manager.Provision(ctx, poolName, "drone", e.config) //nolint
+	instance, err := manager.Provision(ctx, poolName, "drone", e.config)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err

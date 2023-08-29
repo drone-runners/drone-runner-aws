@@ -156,7 +156,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("setup: unable to add pool")
 	}
 	// provision
-	instance, provisionErr := poolManager.Provision(ctx, testPoolName, "drone", &env) //nolint
+	instance, provisionErr := poolManager.Provision(ctx, testPoolName, "drone", &env)
 	if provisionErr != nil {
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
