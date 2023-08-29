@@ -7,7 +7,6 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"os"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/match"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"

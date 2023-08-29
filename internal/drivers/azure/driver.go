@@ -138,7 +138,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	_, err = c.createResourceGroup(ctx)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to get/create resource group")
-		return
+		return nil, err
 	}
 
 	_, err = c.createVirtualNetwork(ctx, vnetName)

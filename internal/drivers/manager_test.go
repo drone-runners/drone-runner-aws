@@ -14,6 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var ownerID = "owner1"
+var poolName = "testPool"
+
 func TestProvision_NoPoolAvailable(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -42,7 +45,6 @@ func TestProvision_FailedToListInstances(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	poolName := "testPool"
 	env := setupMockEnvConfig()
 
 	mockInstanceStore.EXPECT().List(ctx, poolName, gomock.Any()).Return(nil, errors.New("database error"))
@@ -72,8 +74,6 @@ func TestProvision_NoFreeInstances_CreateNew(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	poolName := "testPool"
-	ownerID := "owner1"
 	env := setupMockEnvConfig()
 
 	m := &Manager{
@@ -114,8 +114,6 @@ func TestProvision_InstancesAvailable_Use(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	poolName := "testPool"
-	ownerID := "owner1"
 	env := setupMockEnvConfig()
 
 	m := &Manager{
@@ -179,8 +177,6 @@ func TestProvision_FailedToUpdateInstanceState(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	poolName := "testPool"
-	ownerID := "owner1"
 	env := setupMockEnvConfig()
 
 	m := &Manager{
@@ -221,8 +217,6 @@ func TestProvision_FailedHealthCheckAndDestroy(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10) // adding a timeout to prevent hanging
 	defer cancel()
 
-	poolName := "testPool"
-	ownerID := "owner1"
 	env := setupMockEnvConfig()
 
 	m := &Manager{
@@ -279,8 +273,6 @@ func TestProvision_FailedHealthCheckSuccessfulDestroyFailedCreation(t *testing.T
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Minute*10) // adding a timeout to prevent hanging
 	defer cancel()
 
-	poolName := "testPool"
-	ownerID := "owner1"
 	env := setupMockEnvConfig()
 
 	m := &Manager{
@@ -322,12 +314,10 @@ func TestProvision_Deadlock(t *testing.T) {
 
 	mockInstanceStore := mocks.NewMockInstanceStore(ctrl)
 	mockDriver := mocks.NewMockDriver(ctrl)
-	mockLeHttpClient := mocks.NewMockLiteClient(ctrl)
+	mockLeHTTPClient := mocks.NewMockLiteClient(ctrl)
 	mockClientFactory := mocks.NewMockClientFactory(ctrl)
 
 	ctx := context.TODO()
-	poolName := "testPool"
-	ownerID := "owner1"
 	env := setupMockEnvConfig()
 
 	m := &Manager{
@@ -360,8 +350,8 @@ func TestProvision_Deadlock(t *testing.T) {
 		gomock.Eq(instances[0].Port),
 		gomock.Eq(env.LiteEngine.EnableMock),
 		gomock.Eq(env.LiteEngine.MockStepTimeoutSecs),
-	).Return(mockLeHttpClient, nil)
-	mockLeHttpClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, nil)
+	).Return(mockLeHTTPClient, nil)
+	mockLeHTTPClient.EXPECT().RetryHealth(gomock.Any(), gomock.Any()).Return(nil, nil)
 	mockDriver.EXPECT().Create(context.Background(), gomock.Any()).Return(instance, nil)
 	mockInstanceStore.EXPECT().Create(context.Background(), gomock.Any()).Return(nil)
 	mockDriver.EXPECT().CanHibernate().Return(false).AnyTimes()

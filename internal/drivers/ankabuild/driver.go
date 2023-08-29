@@ -126,9 +126,8 @@ func (c *config) CreateVM(ctx context.Context, request *createVMParams, maxRetri
 				time.Sleep(retryInterval)
 				retryInterval *= 2
 				continue
-			} else {
-				return nil, fmt.Errorf("failed to create vm after %d retries: %v", maxRetries, err)
 			}
+			return nil, fmt.Errorf("failed to create vm after %d retries: %v", maxRetries, err)
 		}
 		var id = response.Body[0]
 		vm, err = c.FindVM(ctx, id, retryIntervalFind)

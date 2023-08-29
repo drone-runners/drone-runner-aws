@@ -7,12 +7,12 @@ package setup
 import (
 	"context"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"os"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone/runner-go/client"
