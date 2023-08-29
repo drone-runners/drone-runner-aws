@@ -3,7 +3,6 @@ package delegate
 import (
 	"context"
 	"encoding/json"
-	"github.com/drone-runners/drone-runner-aws/internal/le"
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -11,6 +10,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/httprender"
+	"github.com/drone-runners/drone-runner-aws/internal/le"
 	errors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
