@@ -21,7 +21,8 @@ type VMExecuteTaskRequest struct {
 }
 
 func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background() // TODO: (Vistaar) Set this in dlite
+	ctx, cancel := context.WithCancel(context.Background()) // TODO: (Vistaar) Set this in dlite
+	defer cancel()
 	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
@@ -46,8 +47,12 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctxState().Add(cancel, req.ExecuteVMRequest.StageRuntimeID, task.ID)
+
 	req.ExecuteVMRequest.CorrelationID = task.ID
 	stepResp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
+
+	ctxState().DeleteTask(req.ExecuteVMRequest.StageRuntimeID, task.ID)
 	if err != nil {
 		logr.WithError(err).
 			WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
