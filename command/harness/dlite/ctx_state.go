@@ -16,7 +16,7 @@ type CtxState struct {
 	ctx map[string]map[string]*context.CancelFunc
 }
 
-func (c *CtxState) Add(cancel context.CancelFunc, stageRuntimeID string, taskID string) {
+func (c *CtxState) Add(cancel context.CancelFunc, stageRuntimeID, taskID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -37,7 +37,7 @@ func (c *CtxState) Delete(stageRuntimeID string) {
 	delete(c.ctx, stageRuntimeID)
 }
 
-func (c *CtxState) DeleteTask(stageRuntimeID string, taskID string) {
+func (c *CtxState) DeleteTask(stageRuntimeID, taskID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
