@@ -48,7 +48,7 @@ var (
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:funlen
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager,
 	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
