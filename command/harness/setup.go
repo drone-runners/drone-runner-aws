@@ -60,7 +60,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	}
 
 	// Sets up logger to stream the logs in case log config is set
-	log := logrus.StandardLogger()
+	log := logrus.New()
 	var logr *logrus.Entry
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
@@ -236,7 +236,7 @@ func handleSetup(
 					Infof("serial console output: %s", out[len(out)-int(l):])
 			}
 		}
-		err := poolManager.Destroy(context.Background(), pool, instance.ID)
+		err = poolManager.Destroy(context.Background(), pool, instance.ID)
 		if err != nil {
 			logr.WithError(err).Errorln("failed to cleanup instance on setup failure")
 		}
