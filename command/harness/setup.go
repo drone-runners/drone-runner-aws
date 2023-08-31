@@ -41,10 +41,12 @@ type SetupVMResponse struct {
 }
 
 var (
-	setupTimeout = 10 * time.Minute
-	freeAccount  = "free"
+	healthCheckTimeout = 3 * time.Minute
+	freeAccount        = "free"
 )
 
+// HandleSetup tries to setup an instance in any of the pools given in the setup request.
+// It calls handleSetup internally for each pool instance trying to complete a setup.
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, //nolint:gocyclo,funlen
 	metrics *metric.Metrics, clientFactory le.ClientFactory) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
@@ -66,7 +68,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		wc := getStreamLogger(r.SetupRequest.LogConfig, r.LogKey, r.CorrelationID)
 		defer func() {
 			if err := wc.Close(); err != nil {
-				logrus.WithError(err).Debugln("failed to close log stream")
+				log.WithError(err).Debugln("failed to close log stream")
 			}
 		}()
 
@@ -101,90 +103,126 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	pools = append(pools, r.PoolID)
 	pools = append(pools, r.FallbackPoolIDs...)
 
-	var poolErr, err error
-	var selectedPool, selectedPoolDriver, owner string
+	var selectedPool, selectedPoolDriver string
+	var poolErr error
 	var instance *types.Instance
 	foundPool := false
 	fallback := false
 
 	st := time.Now()
 
-	// TODO: Remove this once we start populating license information
-	if strings.Contains(r.PoolID, freeAccount) {
-		owner = freeAccount
-	} else {
-		owner = getAccountID(r.Context, r.Tags)
-	}
-
+	// try to provision an instance with fallbacks
 	for idx, p := range pools {
 		if idx > 0 {
 			fallback = true
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
-
-		if !poolManager.Exists(pool) {
-			logr.WithField("pool_id", pool).Errorln("pool does not exist")
+		instance, poolErr = handleSetup(ctx, logr, r, s, env, poolManager, pool, clientFactory)
+		if poolErr != nil {
+			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
 			continue
 		}
-
-		_, findErr := s.Find(ctx, stageRuntimeID)
-		if findErr != nil {
-			if cerr := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); cerr != nil {
-				poolErr = fmt.Errorf("could not create stage owner entity: %w", cerr)
-				logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not create stage owner entity")
-				continue
-			}
-		}
-
-		instance, err = poolManager.Provision(ctx, pool, owner, env)
-		if err != nil {
-			logr.WithError(err).WithField("pool_id", p).Errorln("failed to provision instance")
-			poolErr = err
-			if derr := s.Delete(ctx, stageRuntimeID); derr != nil {
-				logr.WithField("pool_id", pool).WithError(derr).Errorln("could not remove stage ID mapping after provision failure")
-			}
-			continue
-		}
-		// Successfully provisioned an instance out of the listed pools
-		foundPool = true
 		selectedPool = pool
-		_, _, selectedPoolDriver = poolManager.Inspect(pool)
+		foundPool = true
+		_, _, selectedPoolDriver = poolManager.Inspect(selectedPool)
 		break
 	}
 
-	duration := time.Since(st) // amount of time it took to provision an instance
+	setupTime := time.Since(st) // amount of time it took to provision an instance
+	platform, _, driver := poolManager.Inspect(r.PoolID)
 
 	// If a successful fallback happened and we have an instance setup, record it
 	if foundPool && instance != nil { // check for instance != nil just in case
 		if fallback {
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, string(instance.Provider), metric.True).Inc()
+			// fallback metric records the first pool ID which was tried and the associated driver.
+			// We don't record final pool which was used as this metric is only used to get data about
+			// which drivers and pools are causing fallbacks.
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True).Inc()
 		}
-		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, string(instance.Provider), metric.ConvertBool(fallback)).Observe(duration.Seconds())
+		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
+			driver, metric.ConvertBool(fallback)).Observe(setupTime.Seconds())
 	} else {
-		p, _, driver := poolManager.Inspect(r.PoolID)
-		metrics.FailedCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver).Inc()
-		metrics.BuildCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver).Inc()
+		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver).Inc()
+		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver).Inc()
 		if fallback {
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, p.OS, p.Arch, driver, metric.False).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False).Inc()
 		}
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider)).Inc()
+	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}
 
-	logr = logr.WithField("pool_id", selectedPool).
+	logr.WithField("selected_pool", selectedPool).
+		WithField("ip", instance.Address).
+		WithField("id", instance.ID).
+		WithField("instance_name", instance.Name).
+		WithField("response", fmt.Sprintf("%+v", resp)).
+		WithField("tried_pools", pools).
+		Traceln("VM setup is complete")
+
+	return resp, selectedPoolDriver, nil
+}
+
+// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
+// run a health check on the lite engine. It returns information about the setup
+// VM and an error if setup failed.
+// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
+func handleSetup(
+	ctx context.Context,
+	logr *logrus.Entry,
+	r *SetupVMRequest,
+	s store.StageOwnerStore,
+	env *config.EnvConfig,
+	poolManager *drivers.Manager,
+	pool string,
+	factory le.ClientFactory,
+) (*types.Instance, error) {
+	var owner string
+
+	// check if the pool exists in the pool manager.
+	if !poolManager.Exists(pool) {
+		return nil, fmt.Errorf("could not find pool: %s", pool)
+	}
+
+	stageRuntimeID := r.ID
+
+	// add an entry in stage pool mapping if it doesn't exist.
+	_, findErr := s.Find(ctx, stageRuntimeID)
+	if findErr != nil {
+		if cerr := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); cerr != nil {
+			return nil, fmt.Errorf("could not create stage owner entity: %w", cerr)
+		}
+	}
+
+	// TODO: Remove this once we start populating license information.
+	if strings.Contains(r.PoolID, freeAccount) {
+		owner = freeAccount
+	} else {
+		owner = getAccountID(r.Context, r.Tags)
+	}
+
+	// try to provision an instance from the pool manager.
+	instance, err := poolManager.Provision(ctx, pool, owner, env)
+	if err != nil {
+		if derr := s.Delete(ctx, stageRuntimeID); derr != nil {
+			logr.WithError(derr).Errorln("could not remove stage ID mapping after provision failure")
+		}
+		return nil, fmt.Errorf("failed to provision instance: %w", err)
+	}
+
+	logr = logr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name)
 
-	logr.WithField("selected_pool", selectedPool).WithField("tried_pools", pools).Traceln("successfully provisioned VM in pool")
+	logr.Traceln("successfully provisioned VM in pool")
 
-	// cleanUpFn is a function to terminate the instance if an error occurs later in the handleSetup function
-	cleanUpFn := func(consoleLogs bool) {
-		metrics.FailedCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider)).Inc()
+	// cleanUpInstanceFn is a function to terminate the instance if an error occurs later in the handleSetup function
+	cleanUpInstanceFn := func(consoleLogs bool) {
 		if consoleLogs {
-			out, logErr := poolManager.InstanceLogs(context.Background(), selectedPool, instance.ID)
+			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instance.ID)
 			if logErr != nil {
 				logr.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
@@ -193,22 +231,30 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 				logrus.WithField("id", instance.ID).
 					WithField("instance_name", instance.Name).
 					WithField("ip", instance.Address).
-					WithField("pool_id", selectedPool).
+					WithField("pool_id", pool).
 					WithField("stage_runtime_id", stageRuntimeID).
 					Infof("serial console output: %s", out[len(out)-int(l):])
 			}
 		}
-		errCleanUp := poolManager.Destroy(context.Background(), selectedPool, instance.ID)
-		if errCleanUp != nil {
-			logr.WithError(errCleanUp).Errorln("failed to cleanup instance on setup failure")
+		err = poolManager.Destroy(context.Background(), pool, instance.ID)
+		if err != nil {
+			logr.WithError(err).Errorln("failed to cleanup instance on setup failure")
+		}
+	}
+
+	cleanUpStageOwnerMappingFn := func() {
+		err = s.Delete(context.Background(), stageRuntimeID)
+		if err != nil {
+			logr.WithError(err).Errorln("failed to remove stage owner mapping")
 		}
 	}
 
 	if instance.IsHibernated {
-		instance, err = poolManager.StartInstance(ctx, selectedPool, instance.ID)
+		instance, err = poolManager.StartInstance(ctx, pool, instance.ID)
 		if err != nil {
-			go cleanUpFn(false)
-			return nil, "", fmt.Errorf("failed to start the instance up: %w", err)
+			defer cleanUpStageOwnerMappingFn()
+			go cleanUpInstanceFn(false)
+			return nil, fmt.Errorf("failed to start the instance up: %w", err)
 		}
 	}
 
@@ -216,27 +262,31 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	instance.Updated = time.Now().Unix()
 	err = poolManager.Update(ctx, instance)
 	if err != nil {
-		go cleanUpFn(false)
-		return nil, "", fmt.Errorf("failed to tag: %w", err)
+		defer cleanUpStageOwnerMappingFn()
+		go cleanUpInstanceFn(false)
+		return nil, fmt.Errorf("failed to tag: %w", err)
 	}
 
-	err = poolManager.SetInstanceTags(ctx, selectedPool, instance, r.Tags)
+	err = poolManager.SetInstanceTags(ctx, pool, instance, r.Tags)
 	if err != nil {
-		go cleanUpFn(false)
-		return nil, "", fmt.Errorf("failed to add tags to the instance: %w", err)
+		defer cleanUpStageOwnerMappingFn()
+		go cleanUpInstanceFn(false)
+		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
-	client, err := clientFactory.NewClient(instance, env.Runner.Name, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := factory.NewClient(instance, env.Runner.Name, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
-		go cleanUpFn(false)
-		return nil, "", fmt.Errorf("failed to create LE client: %w", err)
+		defer cleanUpStageOwnerMappingFn()
+		go cleanUpInstanceFn(false)
+		return nil, fmt.Errorf("failed to create LE client: %w", err)
 	}
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
-	if _, err = client.RetryHealth(ctx, setupTimeout); err != nil {
-		go cleanUpFn(true)
-		return nil, "", fmt.Errorf("failed to call lite-engine retry health: %w", err)
+	if _, err = client.RetryHealth(ctx, healthCheckTimeout); err != nil {
+		defer cleanUpStageOwnerMappingFn()
+		go cleanUpInstanceFn(true)
+		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
 	logr.Traceln("retry health check complete")
@@ -247,13 +297,12 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
-	setupResponse, err := client.Setup(ctx, &r.SetupRequest)
+	_, err = client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
-		go cleanUpFn(true)
-		return nil, "", fmt.Errorf("failed to call setup lite-engine: %w", err)
+		defer cleanUpStageOwnerMappingFn()
+		go cleanUpInstanceFn(true)
+		return nil, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
-	logr.WithField("response", fmt.Sprintf("%+v", setupResponse)).Traceln("VM setup is complete")
-
-	return &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}, selectedPoolDriver, nil
+	return instance, nil
 }

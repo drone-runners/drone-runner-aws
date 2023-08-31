@@ -18,6 +18,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
+	"github.com/harness/lite-engine/logger"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -54,6 +55,8 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 		WithField("step_id", r.StartStepRequest.ID).
 		WithField("pool", poolID).
 		WithField("correlation_id", r.CorrelationID)
+
+	ctx = logger.WithContext(ctx, logr)
 
 	// set the envs from previous step only for non-container steps
 	if r.Image == "" {
