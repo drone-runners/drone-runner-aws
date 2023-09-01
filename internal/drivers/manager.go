@@ -352,9 +352,9 @@ func (m *Manager) Provision(ctx context.Context, poolName, ownerID string, env *
 			return nil, fmt.Errorf("provision: failed to create instance: %w", createErr)
 		}
 		// maintains pool size
-		//m.wg.Add(1)
+		m.wg.Add(1)
 		go func(ctx context.Context) {
-			//defer m.wg.Done()
+			defer m.wg.Done()
 			_, _ = m.setupInstance(ctx, pool, "", false)
 		}(m.globalCtx)
 		return instance, nil
@@ -362,9 +362,9 @@ func (m *Manager) Provision(ctx context.Context, poolName, ownerID string, env *
 
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
-	//m.wg.Add(1)
+	m.wg.Add(1)
 	go func(ctx context.Context) {
-		//defer m.wg.Done()
+		defer m.wg.Done()
 		_, _ = m.setupInstance(ctx, pool, "", false)
 	}(m.globalCtx)
 
