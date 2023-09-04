@@ -45,6 +45,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			logrus.WithError(err).
 				WithField("retry_count", cnt).
 				WithField("stage_runtime_id", r.StageRuntimeID).
+				WithField("task_id", r.Context.TaskID).
 				Errorln("could not destroy VM")
 			if duration == backoff.Stop {
 				return err
@@ -71,9 +72,9 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("api", "dlite:destroy").
 		WithField("retry_count", retryCount)
 
-	logr = AddContext(logr, r.Context, map[string]string{})
+	logr = AddContext(logr, &r.Context, map[string]string{})
 
-	logr.Traceln("starting the destroy process")
+	logr.Infoln("starting the destroy process")
 
 	inst, err := poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
 	if err != nil {
@@ -131,12 +132,12 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		}
 	}
 
-	logr.Traceln("successfully invoked lite engine cleanup, destroying instance")
+	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
 	if err = poolManager.Destroy(ctx, poolID, inst.ID); err != nil {
 		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
-	logr.Traceln("destroyed instance")
+	logr.Infoln("destroyed instance")
 
 	envState().Delete(r.StageRuntimeID)
 

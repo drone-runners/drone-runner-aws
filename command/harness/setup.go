@@ -98,7 +98,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		r.Volumes = append(r.Volumes, &vol)
 	}
 
-	logr = AddContext(logr, r.Context, r.Tags)
+	logr = AddContext(logr, &r.Context, r.Tags)
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
@@ -200,7 +200,7 @@ func handleSetup(
 	if strings.Contains(r.PoolID, freeAccount) {
 		owner = freeAccount
 	} else {
-		owner = getAccountID(r.Context, r.Tags)
+		owner = getAccountID(&r.Context, r.Tags)
 	}
 
 	// try to provision an instance from the pool manager.
