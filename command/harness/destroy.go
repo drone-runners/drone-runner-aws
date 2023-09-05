@@ -32,7 +32,7 @@ type VMCleanupRequest struct {
 	Context        Context `json:"context,omitempty"`
 }
 
-func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) error {
+func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager, metrics *metric.Metrics) error {
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
@@ -60,7 +60,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig,
-	poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
 	entity, err := s.Find(ctx, r.StageRuntimeID)
 	if err != nil || entity == nil {

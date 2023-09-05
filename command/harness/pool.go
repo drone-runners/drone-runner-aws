@@ -2,7 +2,7 @@ package harness
 
 import (
 	"context"
-	"time"
+	// "time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager, poolFile string) (*config.PoolFile, error) {
+func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string) (*config.PoolFile, error) {
 	configPool, confErr := poolfile.ConfigPoolFile(poolFile, env)
 	if confErr != nil {
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
@@ -43,14 +43,14 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	}
 
 	// setup lifetimes of instances
-	busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
-	freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
-	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("failed to start instance purger")
-		return configPool, err
-	}
+	// busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
+	// freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
+	// err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
+	// if err != nil {
+	// 	logrus.WithError(err).
+	// 		Errorln("failed to start instance purger")
+	// 	return configPool, err
+	// }
 	// lets remove any old instances.
 	if !env.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
@@ -70,12 +70,12 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	return configPool, nil
 }
 
-func Cleanup(env *config.EnvConfig, poolManager *drivers.Manager) error {
+func Cleanup(env *config.EnvConfig, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {
 	if env.Settings.ReusePool {
 		return nil
 	}
 
-	cleanErr := poolManager.CleanPools(context.Background(), true, true)
+	cleanErr := poolManager.CleanPools(context.Background(), destroyBusy, destroyFree)
 	if cleanErr != nil {
 		logrus.WithError(cleanErr).Errorln("unable to clean pools")
 	} else {

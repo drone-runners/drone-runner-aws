@@ -48,7 +48,7 @@ var (
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager,
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager,
 	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
@@ -176,7 +176,7 @@ func handleSetup(
 	r *SetupVMRequest,
 	s store.StageOwnerStore,
 	env *config.EnvConfig,
-	poolManager *drivers.Manager,
+	poolManager drivers.IManager,
 	pool string,
 ) (*types.Instance, error) {
 	var owner string
@@ -204,7 +204,7 @@ func handleSetup(
 	}
 
 	// try to provision an instance from the pool manager.
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, owner, env)
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, owner, env, nil)
 	if err != nil {
 		if derr := s.Delete(ctx, stageRuntimeID); derr != nil {
 			logr.WithError(derr).Errorln("could not remove stage ID mapping after provision failure")

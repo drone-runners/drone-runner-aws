@@ -83,11 +83,8 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var stepResp *api.PollStepResponse
-	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics, distributed)
+	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.poolManager.GetStageOwnerStore(), &t.c.env, t.c.poolManager, t.c.metrics, distributed)
 	if err != nil {
-		logr.WithError(err).
-			WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
-			Error("could not execute step")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}

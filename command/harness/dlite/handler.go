@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/go-chi/chi/v5"
@@ -23,7 +22,7 @@ var (
 	disabledStatus = "DISABLED"
 )
 
-func Handler(p *poller.Poller, manager *drivers.Manager) http.Handler {
+func Handler(p *poller.Poller, d *dliteCommand) http.Handler {
 	r := chi.NewRouter()
 	r.Use(harness.Middleware)
 	r.Use(middleware.Recoverer)
@@ -31,7 +30,7 @@ func Handler(p *poller.Poller, manager *drivers.Manager) http.Handler {
 	r.Mount("/maintenance_mode", func() http.Handler {
 		sr := chi.NewRouter()
 		sr.Get("/", handleStatus(p))
-		sr.Post("/enable", handleEnable(p, manager))
+		sr.Post("/enable", handleEnable(p, d))
 		sr.Post("/disable", handleDisable(p))
 		return sr
 	}())
@@ -44,12 +43,15 @@ func Handler(p *poller.Poller, manager *drivers.Manager) http.Handler {
 	return r
 }
 
-func handleEnable(p *poller.Poller, manager *drivers.Manager) http.HandlerFunc {
+func handleEnable(p *poller.Poller, d *dliteCommand) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p.SetFilter(func(ev *client.TaskEvent) bool {
 			return ev.TaskType != initTask
 		})
-		err := manager.CleanPools(r.Context(), false, true)
+		err := d.poolManager.CleanPools(r.Context(), false, true)
+		if derr := d.distributedPoolManager.CleanPools(r.Context(), false, true); derr != nil {
+			err = derr
+		}
 		if err != nil {
 			io.WriteString(w, err.Error()) //nolint: errcheck
 		}

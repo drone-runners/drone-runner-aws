@@ -365,6 +365,11 @@ type EnvConfig struct {
 		Datasource string `envconfig:"DRONE_DATABASE_DATASOURCE" default:"database.sqlite3"`
 	}
 
+	Postgres struct {
+		Driver     string `default:"postgres"`
+		Datasource string `envconfig:"DRONE_POSTGRES_DATASOURCE" default:"port=5431 user=admin password=password dbname=dlite sslmode=disable"`
+	}
+
 	Tmate struct {
 		Enabled bool   `envconfig:"DRONE_TMATE_ENABLED" default:"true"`
 		Image   string `envconfig:"DRONE_TMATE_IMAGE"   default:"drone/drone-runner-docker:1"`

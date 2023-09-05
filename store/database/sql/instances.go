@@ -47,6 +47,10 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 			stmt = stmt.Where(squirrel.Eq{"instance_state": params.Status})
 			args = append(args, params.Status)
 		}
+		if params.RunnerName != "" {
+			stmt = stmt.Where(squirrel.Eq{"runner_name": params.RunnerName})
+			args = append(args, params.RunnerName)
+		}
 	}
 	stmt = stmt.OrderBy("instance_started " + "ASC")
 	sql, _, _ := stmt.ToSql()
@@ -149,6 +153,7 @@ INSERT INTO instances (
 ,is_hibernated
 ,instance_port
 ,instance_owner_id
+,runner_name
 ) values (
  :instance_id
 ,:instance_node_id
@@ -176,6 +181,7 @@ INSERT INTO instances (
 ,:is_hibernated
 ,:instance_port
 ,:instance_owner_id
+,:runner_name
 ) RETURNING instance_id
 `
 

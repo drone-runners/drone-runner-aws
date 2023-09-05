@@ -1,0 +1,1 @@
+ALTER TABLE instances ADD COLUMN runner_name TEXT NOT NULL DEFAULT '';

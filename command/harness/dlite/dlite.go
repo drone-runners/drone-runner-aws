@@ -24,19 +24,20 @@ import (
 )
 
 type dliteCommand struct {
-	envFile         string
-	env             config.EnvConfig
-	delegateInfo    *poller.DelegateInfo
-	poolFile        string
-	poolManager     *drivers.Manager
-	metrics         *metric.Metrics
-	stageOwnerStore store.StageOwnerStore
+	envFile                string
+	env                    config.EnvConfig
+	delegateInfo           *poller.DelegateInfo
+	poolFile               string
+	poolManager            drivers.IManager
+	distributedPoolManager drivers.IManager
+	metrics                *metric.Metrics
 }
 
 func RegisterDlite(app *kingpin.Application) {
 	c := new(dliteCommand)
 
 	c.poolManager = &drivers.Manager{}
+	c.distributedPoolManager = &drivers.DistributedManager{}
 
 	cmd := app.Command("dlite", "starts the runner with polling enabled for accepting tasks").
 		Action(c.run)
@@ -103,18 +104,15 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+	poolConfig, err := c.setupPool(ctx)
+	defer harness.Cleanup(&c.env, c.poolManager, true, true) //nolint: errcheck
 	if err != nil {
-		logrus.WithError(err).Fatalln("Unable to start the database")
+		return err
 	}
 
-	c.stageOwnerStore = stageOwnerStore
-	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
-
-	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
-	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck
+	_, err = c.setupDistributedPool(ctx)
+	defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
 	if err != nil {
-		logrus.WithError(err).Error("could not setup pool")
 		return err
 	}
 
@@ -122,9 +120,6 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
-
-	// Initialize metrics
-	c.registerMetrics(instanceStore)
 
 	// Register the poller
 	p, err := c.registerPoller(ctx, tags)
@@ -137,14 +132,18 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		return harness.Cleanup(&c.env, c.poolManager)
+		err = harness.Cleanup(&c.env, c.poolManager, true, true)
+		if derr := harness.Cleanup(&c.env, c.distributedPoolManager, false, true); derr != nil {
+			err = derr
+		}
+		return err
 	})
 
 	g.Go(func() error {
 		// Start the HTTP server
 		s := server.Server{
 			Addr:    c.env.Server.Port,
-			Handler: Handler(p, c.poolManager),
+			Handler: Handler(p, c),
 		}
 
 		logrus.WithField("addr", s.Addr).
@@ -170,4 +169,41 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return waitErr
 	}
 	return nil
+}
+
+func (c *dliteCommand) setupPool(ctx context.Context) (*config.PoolFile, error) {
+	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+	}
+	c.poolManager = drivers.NewV2(ctx, instanceStore, stageOwnerStore, &c.env)
+	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
+	if err != nil {
+		logrus.WithError(err).Error("could not setup pool")
+		return poolConfig, err
+	}
+	// Initialize metrics
+	c.registerMetrics(instanceStore)
+	return poolConfig, nil
+}
+
+func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
+	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Postgres.Driver, c.env.Postgres.Datasource)
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+	}
+	c.distributedPoolManager = drivers.NewDistributedManager(drivers.NewV2(ctx, instanceStore, stageOwnerStore, &c.env))
+	poolConfig, err := harness.SetupPool(ctx, &c.env, c.distributedPoolManager, c.poolFile)
+	if err != nil {
+		logrus.WithError(err).Error("could not setup distributed pool")
+		return poolConfig, err
+	}
+	return poolConfig, nil
+}
+
+func (c *dliteCommand) getPoolManager(distributed bool) drivers.IManager {
+	if distributed {
+		return c.distributedPoolManager
+	}
+	return c.poolManager
 }

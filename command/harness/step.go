@@ -43,7 +43,7 @@ func HandleStep(ctx context.Context,
 	r *ExecuteVMRequest,
 	s store.StageOwnerStore,
 	env *config.EnvConfig,
-	poolManager *drivers.Manager,
+	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 	async bool) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
@@ -152,7 +152,7 @@ func HandleStep(ctx context.Context,
 }
 
 func getInstance(ctx context.Context, poolID, stageRuntimeID,
-	instanceID string, poolManager *drivers.Manager) (
+	instanceID string, poolManager drivers.IManager) (
 	*types.Instance, error) {
 	if instanceID != "" {
 		inst, err := poolManager.Find(ctx, instanceID)

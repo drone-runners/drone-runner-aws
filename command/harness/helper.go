@@ -32,3 +32,8 @@ func fileID(filename string) string {
 	h.Write([]byte(filename))
 	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))
 }
+
+// Checks whether the reuqest is for distributed dlite
+func IsDistrubutedMode(envs map[string]string) bool {
+	return envs != nil && envs["CI_DLITE_DISTRIBUTED"] == "true"
+}

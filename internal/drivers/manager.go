@@ -30,6 +30,7 @@ type (
 		runnerName           string
 		liteEnginePath       string
 		instanceStore        store.InstanceStore
+		stageOwnerStore      store.StageOwnerStore
 		harnessTestBinaryURI string
 		pluginBinaryURI      string
 		tmate                types.Tmate
@@ -49,6 +50,23 @@ func New(
 	return &Manager{
 		globalCtx:            globalContext,
 		instanceStore:        instanceStore,
+		runnerName:           env.Runner.Name,
+		liteEnginePath:       env.LiteEngine.Path,
+		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:      env.Settings.PluginBinaryURI,
+	}
+}
+
+func NewV2(
+	globalContext context.Context,
+	instanceStore store.InstanceStore,
+	stageOwnerStore store.StageOwnerStore,
+	env *config.EnvConfig,
+) *Manager {
+	return &Manager{
+		globalCtx:            globalContext,
+		instanceStore:        instanceStore,
+		stageOwnerStore:      stageOwnerStore,
 		runnerName:           env.Runner.Name,
 		liteEnginePath:       env.LiteEngine.Path,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
@@ -120,8 +138,8 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 	return list[0], nil
 }
 
-func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free, hibernating []*types.Instance, err error) {
-	list, err := m.instanceStore.List(ctx, pool.Name, nil)
+func (m *Manager) List(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error) {
+	list, err := m.instanceStore.List(ctx, pool.Name, queryParams)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
 			Errorln("manager: failed to list instances")
@@ -227,7 +245,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 						pool.Lock()
 						defer pool.Unlock()
 
-						busy, free, hibernating, err := m.List(ctx, pool)
+						busy, free, hibernating, err := m.List(ctx, pool, nil)
 						if err != nil {
 							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 						}
@@ -264,7 +282,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							}
 						}
 
-						err = m.buildPool(ctx, pool)
+						err = m.buildPool(ctx, pool, nil)
 						if err != nil {
 							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
 						}
@@ -285,7 +303,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig, queryParams *types.QueryParams) (*types.Instance, error) {
 	m.runnerName = serverName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
@@ -302,7 +320,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 
 	pool.Lock()
 
-	busy, free, _, err := m.List(ctx, pool)
+	busy, free, _, err := m.List(ctx, pool, queryParams)
 	if err != nil {
 		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
@@ -374,10 +392,10 @@ func (m *Manager) BuildPools(ctx context.Context) error {
 	return m.forEach(ctx, m.buildPoolWithMutex)
 }
 
-func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, destroyBusy, destroyFree bool) error {
+func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.QueryParams, destroyBusy, destroyFree bool) error {
 	pool.Lock()
 	defer pool.Unlock()
-	busy, free, hibernating, err := m.List(ctx, pool)
+	busy, free, hibernating, err := m.List(ctx, pool, query)
 	if err != nil {
 		return err
 	}
@@ -414,10 +432,10 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, destroyBusy, d
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	var returnError error
 	for _, pool := range m.poolMap {
-		err := m.cleanPool(ctx, pool, destroyBusy, destroyFree)
+		err := m.cleanPool(ctx, pool, nil, destroyBusy, destroyFree)
 		if err != nil {
 			returnError = err
-			logrus.Errorf("failed to dclean pool %s with error: %s", pool.Name, err)
+			logrus.Errorf("failed to clean pool %s with error: %s", pool.Name, err)
 		}
 	}
 
@@ -457,8 +475,8 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 }
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
-func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
-	instBusy, instFree, instHibernating, err := m.List(ctx, pool)
+func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, query *types.QueryParams) error {
+	instBusy, instFree, instHibernating, err := m.List(ctx, pool, query)
 	if err != nil {
 		return err
 	}
@@ -524,7 +542,7 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error
 	pool.Lock()
 	defer pool.Unlock()
 
-	return m.buildPool(ctx, pool)
+	return m.buildPool(ctx, pool, nil)
 }
 
 func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID string, inuse bool) (*types.Instance, error) {
@@ -557,6 +575,8 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID st
 		inst.State = types.StateInUse
 		inst.OwnerID = ownerID
 	}
+
+	inst.RunnerName = m.runnerName
 
 	err = m.instanceStore.Create(ctx, inst)
 	if err != nil {
@@ -604,6 +624,14 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 		return nil, fmt.Errorf("start_instance: failed to update instance store %s of %q pool: %w", instanceID, poolName, err)
 	}
 	return inst, nil
+}
+
+func (m *Manager) GetInstanceStore() store.InstanceStore {
+	return m.instanceStore
+}
+
+func (m *Manager) GetStageOwnerStore() store.StageOwnerStore {
+	return m.stageOwnerStore
 }
 
 func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string) (string, error) {
