@@ -79,8 +79,8 @@ func pollerMiddleware(next http.Handler) http.Handler {
 		defer func() {
 			if r := recover(); r != nil {
 				// Handle the panic here, log it, or respond with an error message.
-				logrus.Errorln("Panic occurred:", r)
 				err := fmt.Errorf("http: panic: %v", r)
+				logrus.WithError(err).Errorln("Panic occurred")
 				httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 			}
 		}()
