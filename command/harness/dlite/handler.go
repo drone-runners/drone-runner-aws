@@ -1,6 +1,7 @@
 package dlite
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/wings-software/dlite/client"
+	"github.com/wings-software/dlite/httphelper"
 	"github.com/wings-software/dlite/poller"
 )
 
@@ -69,4 +71,22 @@ func handleStatus(p *poller.Poller) http.HandlerFunc {
 		}
 		io.WriteString(w, enabledStatus) //nolint: errcheck
 	}
+}
+
+func pollerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if r := recover(); r != nil {
+				// Handle the panic here, log it, or respond with an error message.
+				fmt.Println("Panic occurred:", r)
+				errMsg := "Unable to handle request, something went wrong."
+				if err, ok := r.(error); ok {
+					errMsg = err.Error()
+				}
+				httphelper.WriteJSON(w, failedResponse(errMsg), httpFailed)
+			}
+		}()
+
+		next.ServeHTTP(w, r)
+	})
 }

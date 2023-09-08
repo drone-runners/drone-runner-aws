@@ -12,8 +12,8 @@ const (
 
 func routeMap(c *dliteCommand) map[string]task.Handler {
 	return map[string]task.Handler{
-		initTask:    &VMInitTask{c},
-		executeTask: &VMExecuteTask{c},
-		cleanupTask: &VMCleanupTask{c},
+		initTask:    pollerMiddleware(&VMInitTask{c}),
+		executeTask: pollerMiddleware(&VMExecuteTask{c}),
+		cleanupTask: pollerMiddleware(&VMCleanupTask{c}),
 	}
 }

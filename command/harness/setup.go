@@ -219,24 +219,28 @@ func handleSetup(
 
 	logr.Traceln("successfully provisioned VM in pool")
 
+	instanceID := instance.ID
+	instanceName := instance.Name
+	instanceIP := instance.Address
+
 	// cleanUpInstanceFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpInstanceFn := func(consoleLogs bool) {
 		if consoleLogs {
-			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instance.ID)
+			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instanceID)
 			if logErr != nil {
 				logr.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
 				// Serial console output is limited to 60000 characters since stackdriver only supports 64KB per log entry
 				l := math.Min(float64(len(out)), 60000) //nolint:gomnd
-				logrus.WithField("id", instance.ID).
-					WithField("instance_name", instance.Name).
-					WithField("ip", instance.Address).
+				logrus.WithField("id", instanceID).
+					WithField("instance_name", instanceName).
+					WithField("ip", instanceIP).
 					WithField("pool_id", pool).
 					WithField("stage_runtime_id", stageRuntimeID).
 					Infof("serial console output: %s", out[len(out)-int(l):])
 			}
 		}
-		err = poolManager.Destroy(context.Background(), pool, instance.ID)
+		err = poolManager.Destroy(context.Background(), pool, instanceID)
 		if err != nil {
 			logr.WithError(err).Errorln("failed to cleanup instance on setup failure")
 		}
