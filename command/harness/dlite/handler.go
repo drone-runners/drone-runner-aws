@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/httphelper"
 	"github.com/wings-software/dlite/poller"
@@ -78,12 +79,9 @@ func pollerMiddleware(next http.Handler) http.Handler {
 		defer func() {
 			if r := recover(); r != nil {
 				// Handle the panic here, log it, or respond with an error message.
-				fmt.Println("Panic occurred:", r)
-				errMsg := "Unable to handle request, something went wrong."
-				if err, ok := r.(error); ok {
-					errMsg = err.Error()
-				}
-				httphelper.WriteJSON(w, failedResponse(errMsg), httpFailed)
+				logrus.Errorln("Panic occurred:", r)
+				err := fmt.Errorf("http: panic: %v", r)
+				httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 			}
 		}()
 
