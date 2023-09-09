@@ -4,12 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/harness/lite-engine/api"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
+	"github.com/wings-software/dlite/delegate"
 	"github.com/wings-software/dlite/httphelper"
+)
+
+const (
+	audience          = "audience"
+	issuer            = "issuer"
+	tokenExpiryOffset = time.Minute * 30
 )
 
 type VMExecuteTask struct {
@@ -21,7 +29,7 @@ type VMExecuteTaskRequest struct {
 }
 
 func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(context.Background()) // TODO: (Vistaar) Set this in dlite
+	ctx, cancel := context.WithCancel(r.Context()) // TODO: (Vistaar) Set this in dlite
 	defer cancel()
 	log := logrus.New()
 	task := &client.Task{}
@@ -47,12 +55,36 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctxState().Add(cancel, req.ExecuteVMRequest.StageRuntimeID, task.ID)
-
 	req.ExecuteVMRequest.CorrelationID = task.ID
-	stepResp, err := harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
+	distributed := req.ExecuteVMRequest.Distributed
+	if distributed {
+		// create a temp token with step expiry + offset
+		token, err := delegate.Token(audience, issuer, t.c.env.Dlite.AccountID, t.c.env.Dlite.AccountSecret, harness.StepTimeout+tokenExpiryOffset)
+		if err != nil {
+			logr.WithError(err).
+				WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
+				Error("unable to generate token")
+			httphelper.WriteBadRequest(w, err)
+			return
+		}
+		// setting this only for distributed mode
+		req.ExecuteVMRequest.StartStepRequest.StageRuntimeID = req.ExecuteVMRequest.StageRuntimeID
+		req.ExecuteVMRequest.StepStatus = api.StepStatusConfig{
+			Endpoint:   t.c.env.Dlite.ManagerEndpoint,
+			AccountID:  t.c.env.Dlite.AccountID,
+			TaskID:     req.ExecuteVMRequest.TaskID,
+			DelegateID: task.DelegateInfo.ID,
+			Token:      token,
+		}
+	} else {
+		ctxState().Add(cancel, req.ExecuteVMRequest.StageRuntimeID, task.ID)
+	}
 
-	ctxState().DeleteTask(req.ExecuteVMRequest.StageRuntimeID, task.ID)
+	var stepResp *api.PollStepResponse
+	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics, distributed)
+	if !distributed {
+		ctxState().DeleteTask(req.ExecuteVMRequest.StageRuntimeID, task.ID)
+	}
 	if err != nil {
 		logr.WithError(err).
 			WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
@@ -60,10 +92,25 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
-	resp := convert(stepResp)
-	resp.DelegateMetaInfo.HostName = t.c.delegateInfo.Host
-	resp.DelegateMetaInfo.ID = t.c.delegateInfo.ID
-	httphelper.WriteJSON(w, resp, httpOK)
+	t.handleResponse(w, stepResp, distributed)
+}
+
+func (t *VMExecuteTask) handleResponse(w http.ResponseWriter, resp *api.PollStepResponse, distributed bool) {
+	if distributed {
+		var r VMTaskExecutionResponse
+		if resp.Error == "" {
+			// mark the response running
+			r = VMTaskExecutionResponse{CommandExecutionStatus: RunningState}
+		} else {
+			r = VMTaskExecutionResponse{CommandExecutionStatus: Failure, ErrorMessage: resp.Error}
+		}
+		httphelper.WriteJSON(w, r, httpOK)
+	} else {
+		resp := convert(resp)
+		resp.DelegateMetaInfo.HostName = t.c.delegateInfo.Host
+		resp.DelegateMetaInfo.ID = t.c.delegateInfo.ID
+		httphelper.WriteJSON(w, resp, httpOK)
+	}
 }
 
 // convert poll response to a Vm task execution response

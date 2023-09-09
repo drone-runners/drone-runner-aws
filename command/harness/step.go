@@ -30,14 +30,22 @@ type ExecuteVMRequest struct {
 	IPAddress            string `json:"ip_address"`
 	PoolID               string `json:"pool_id"`
 	CorrelationID        string `json:"correlation_id"`
+	TaskID               string `json:"task_id,omitempty"`
+	Distributed          bool   `json:"distributed,omitempty"`
 	api.StartStepRequest `json:"start_step_request"`
 }
 
 var (
-	stepTimeout = 10 * time.Hour
+	StepTimeout = 10 * time.Hour
 )
 
-func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) (*api.PollStepResponse, error) {
+func HandleStep(ctx context.Context,
+	r *ExecuteVMRequest,
+	s store.StageOwnerStore,
+	env *config.EnvConfig,
+	poolManager *drivers.Manager,
+	metrics *metric.Metrics,
+	async bool) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
 		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
 	}
@@ -53,7 +61,8 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 		WithField("stage_runtime_id", r.StageRuntimeID).
 		WithField("step_id", r.StartStepRequest.ID).
 		WithField("pool", poolID).
-		WithField("correlation_id", r.CorrelationID)
+		WithField("correlation_id", r.CorrelationID).
+		WithField("async", async)
 
 	ctx = logger.WithContext(ctx, logr)
 
@@ -125,9 +134,15 @@ func HandleStep(ctx context.Context, r *ExecuteVMRequest, s store.StageOwnerStor
 
 	logr.WithField("startStepResponse", startStepResponse).Traceln("LE.StartStep complete")
 
-	pollResponse, err := client.RetryPollStep(ctx, &api.PollStepRequest{ID: r.StartStepRequest.ID}, stepTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call LE.RetryPollStep: %w", err)
+	var pollResponse *api.PollStepResponse
+
+	if !async {
+		pollResponse, err = client.RetryPollStep(ctx, &api.PollStepRequest{ID: r.StartStepRequest.ID}, StepTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to call LE.RetryPollStep: %w", err)
+		}
+	} else {
+		pollResponse = &api.PollStepResponse{}
 	}
 
 	logr.WithField("pollResponse", pollResponse).Traceln("completed LE.RetryPollStep")

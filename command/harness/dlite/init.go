@@ -23,10 +23,11 @@ type VMInitTask struct {
 type VMInitRequest struct {
 	SetupVMRequest harness.SetupVMRequest      `json:"setup_vm_request"`
 	Services       []*harness.ExecuteVMRequest `json:"services"`
+	Distributed    bool                        `json:"distributed,omitempty"`
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), initTimeoutSec*time.Second) // TODO: Get this from the request
+	ctx, cancel := context.WithTimeout(r.Context(), initTimeoutSec*time.Second) // TODO: Get this from the request
 	defer cancel()
 
 	log := logrus.New()
@@ -70,7 +71,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Services[i].IPAddress = setupResp.IPAddress
 		req.Services[i].CorrelationID = task.ID
 		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
-		resp, err := harness.HandleStep(ctx, req.Services[i], t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
+		resp, err := harness.HandleStep(ctx, req.Services[i], t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics, false)
 		if err != nil {
 			status.Status = Error
 			status.ErrorMessage = err.Error()

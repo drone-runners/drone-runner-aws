@@ -200,7 +200,7 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
+	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics, false)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("step_id", req.ID).
 			WithError(err).Error("could not execute step on VM")

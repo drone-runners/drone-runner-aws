@@ -16,7 +16,8 @@ type VMCleanupTask struct {
 }
 
 func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background() // TODO: Get this from http Request
+	ctx, cancel := context.WithCancel(r.Context()) // TODO: Get this from http Request
+	defer cancel()
 	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
@@ -40,7 +41,9 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
-	ctxState().Delete(req.StageRuntimeID)
+	if !req.Distributed {
+		ctxState().Delete(req.StageRuntimeID)
+	}
 	err = harness.HandleDestroy(ctx, req, t.c.stageOwnerStore, &t.c.env, t.c.poolManager, t.c.metrics)
 	if err != nil {
 		logr.WithError(err).Error("could not destroy VM")
