@@ -57,6 +57,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	req.ExecuteVMRequest.CorrelationID = task.ID
 	distributed := req.ExecuteVMRequest.Distributed
+	poolManager := t.c.getPoolManager(distributed)
 	if distributed {
 		// create a temp token with step expiry + offset
 		token := ""
@@ -83,7 +84,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var stepResp *api.PollStepResponse
-	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, t.c.poolManager.GetStageOwnerStore(), &t.c.env, t.c.poolManager, t.c.metrics, distributed)
+	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics, distributed)
 	if err != nil {
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return

@@ -57,7 +57,7 @@ func New(
 	}
 }
 
-func NewV2(
+func NewManager(
 	globalContext context.Context,
 	instanceStore store.InstanceStore,
 	stageOwnerStore store.StageOwnerStore,
@@ -282,7 +282,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							}
 						}
 
-						err = m.buildPool(ctx, pool, nil)
+						err = m.buildPool(ctx, pool, m.GetTlsServerName(), nil)
 						if err != nil {
 							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
 						}
@@ -303,7 +303,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig, queryParams *types.QueryParams) (*types.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
 	m.runnerName = serverName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
@@ -320,7 +320,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 
 	pool.Lock()
 
-	busy, free, _, err := m.List(ctx, pool, queryParams)
+	busy, free, _, err := m.List(ctx, pool, nil)
 	if err != nil {
 		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
@@ -332,7 +332,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, ownerID, true)
+		inst, err = m.setupInstance(ctx, pool, m.GetTlsServerName(), ownerID, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -358,7 +358,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, "", false)
+		_, _ = m.setupInstance(ctx, pool, m.GetTlsServerName(), "", false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -475,7 +475,7 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 }
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
-func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, query *types.QueryParams) error {
+func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams) error {
 	instBusy, instFree, instHibernating, err := m.List(ctx, pool, query)
 	if err != nil {
 		return err
@@ -519,7 +519,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, query *types.Q
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, "", false)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -542,14 +542,14 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error
 	pool.Lock()
 	defer pool.Unlock()
 
-	return m.buildPool(ctx, pool, nil)
+	return m.buildPool(ctx, pool, m.GetTlsServerName(), nil)
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID string, inuse bool) (*types.Instance, error) {
+func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID string, inuse bool) (*types.Instance, error) {
 	var inst *types.Instance
 
 	// generate certs
-	createOptions, err := certs.Generate(m.runnerName)
+	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.Platform = pool.Platform
 	createOptions.PoolName = pool.Name
@@ -588,7 +588,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID st
 
 	if !inuse {
 		go func() {
-			herr := m.hibernateWithRetries(context.Background(), pool.Name, inst.ID)
+			herr := m.hibernateWithRetries(context.Background(), pool.Name, tlsServerName, inst.ID)
 			if herr != nil {
 				logrus.WithError(herr).Errorln("failed to hibernate the vm")
 			}
@@ -643,7 +643,7 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	return pool.Driver.Logs(ctx, instanceID)
 }
 
-func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID string) error {
+func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, tlsServerName, instanceID string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
@@ -653,7 +653,7 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 		return nil
 	}
 
-	m.waitForInstanceConnectivity(ctx, instanceID)
+	m.waitForInstanceConnectivity(ctx, tlsServerName, instanceID)
 
 	retryCount := 1
 	const maxRetries = 3
@@ -749,7 +749,7 @@ func (m *Manager) forEach(ctx context.Context, f func(ctx context.Context, pool 
 	return nil
 }
 
-func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID string) {
+func (m *Manager) waitForInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) {
 	bf := backoff.NewExponentialBackOff()
 	for {
 		duration := bf.NextBackOff()
@@ -762,7 +762,7 @@ func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID st
 			logrus.WithField("instanceID", instanceID).Warnln("hibernate: connectivity check deadline exceeded")
 			return
 		case <-time.After(duration):
-			err := m.checkInstanceConnectivity(ctx, instanceID)
+			err := m.checkInstanceConnectivity(ctx, tlsServerName, instanceID)
 			if err == nil {
 				return
 			}
@@ -771,7 +771,7 @@ func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID st
 	}
 }
 
-func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID string) error {
+func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) error {
 	instance, err := m.Find(ctx, instanceID)
 	if err != nil {
 		return errors.Wrap(err, "failed to find the instance in db")
@@ -782,7 +782,7 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID stri
 	}
 
 	endpoint := fmt.Sprintf("https://%s:9079/", instance.Address)
-	client, err := lehttp.NewHTTPClient(endpoint, m.runnerName, string(instance.CACert), string(instance.TLSCert), string(instance.TLSKey))
+	client, err := lehttp.NewHTTPClient(endpoint, tlsServerName, string(instance.CACert), string(instance.TLSCert), string(instance.TLSKey))
 	if err != nil {
 		return errors.Wrap(err, "failed to create client")
 	}
@@ -797,4 +797,12 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID stri
 	}
 
 	return nil
+}
+
+func (m *Manager) GetTlsServerName() string {
+	return m.runnerName
+}
+
+func (m *Manager) IsDistributed() bool {
+	return false
 }

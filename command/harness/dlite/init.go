@@ -56,7 +56,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Make the setup call
 	req.SetupVMRequest.CorrelationID = task.ID
-	poolManager := t.c.getPoolManager(harness.IsDistrubutedMode(req.SetupVMRequest.Envs))
+	poolManager := t.c.getPoolManager(req.Distributed)
 	setupResp, selectedPoolDriver, err := harness.HandleSetup(ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
 	if err != nil {
 		logr.WithError(err).Error("could not setup VM")

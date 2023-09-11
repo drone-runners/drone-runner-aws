@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -86,7 +87,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_name", inst.Name)
 
 	logr.Traceln("invoking lite engine cleanup")
-	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := lehelper.GetClient(inst, poolManager.GetTlsServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	} else {
@@ -119,8 +120,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 				}
 			}
 
-			metrics.CPUPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider)).Observe(resp.OSStats.MaxCPUUsagePct)
-			metrics.MemoryPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider)).Observe(resp.OSStats.MaxMemUsagePct)
+			metrics.CPUPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed())).Observe(resp.OSStats.MaxCPUUsagePct)
+			metrics.MemoryPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed())).Observe(resp.OSStats.MaxMemUsagePct)
 
 			logr.WithField("cpu_ge50", cpuGe50).WithField("cpu_ge70", cpuGe70).WithField("cpu_ge90", cpuGe90).
 				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).

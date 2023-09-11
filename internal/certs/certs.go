@@ -8,12 +8,12 @@ import (
 	"github.com/harness/lite-engine/cli/certs"
 )
 
-func Generate(runnerName string) (*types.InstanceCreateOpts, error) {
+func Generate(runnerName, tlsServerName string) (*types.InstanceCreateOpts, error) {
 	ca, err := certs.GenerateCA()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate ca certificate: %w", err)
 	}
-	tlsCert, err := certs.GenerateCert(runnerName, ca)
+	tlsCert, err := certs.GenerateCert(tlsServerName, ca)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tls certificate: %w", err)
 	}

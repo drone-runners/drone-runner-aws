@@ -2,6 +2,8 @@ package metric
 
 import (
 	"context"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -18,6 +20,8 @@ type Metrics struct {
 	WaitDurationCount      *prometheus.HistogramVec
 	CPUPercentile          *prometheus.HistogramVec
 	MemoryPercentile       *prometheus.HistogramVec
+
+	metricStores []*MetricStore
 }
 
 type label struct {
@@ -26,6 +30,12 @@ type label struct {
 	state  string
 	poolID string
 	driver string
+}
+
+type MetricStore struct {
+	Store       store.InstanceStore
+	Query       *types.QueryParams
+	Distributed bool
 }
 
 var (
@@ -41,6 +51,10 @@ func ConvertBool(b bool) string {
 	return False
 }
 
+func (m *Metrics) AddMetricStore(metricStore *MetricStore) {
+	m.metricStores = append(m.metricStores, metricStore)
+}
+
 // BuildCount provides metrics for total number of pipeline executions (failed + successful)
 func BuildCount() *prometheus.CounterVec {
 	return prometheus.NewCounterVec(
@@ -48,7 +62,7 @@ func BuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_total",
 			Help: "Total number of completed pipeline executions (failed + successful)",
 		},
-		[]string{"pool_id", "os", "arch", "driver"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed"},
 	)
 }
 
@@ -59,57 +73,68 @@ func FailedBuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_errors_total",
 			Help: "Total number of pipeline executions which failed due to system errors",
 		},
-		[]string{"pool_id", "os", "arch", "driver"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed"},
 	)
 }
 
 // RunningCount provides metrics for number of builds currently running
-func RunningCount(instanceStore store.InstanceStore) *prometheus.GaugeVec {
+func RunningCount() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "harness_ci_pipeline_running_executions",
 			Help: "Total number of running executions",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "state"}, // state can be running, in_use, or hibernating
+		[]string{"pool_id", "os", "arch", "driver", "state", "distributed"}, // state can be running, in_use, or hibernating
 	)
 }
 
 // RunningPerAccountCount provides metrics at account level for running executions
 // This might be removed in the future as we don't want labels with high cardinality
 // We are just using two labels at the moment which should be pretty small
-func RunningPerAccountCount(instanceStore store.InstanceStore) *prometheus.GaugeVec {
+func RunningPerAccountCount() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "harness_ci_pipeline_per_account_running_executions",
 			Help: "Total number of running executions per account",
 		},
-		[]string{"owner_id", "os"},
+		[]string{"owner_id", "os", "distributed"},
 	)
 }
 
-func updateRunningCount(ctx context.Context, instanceStore store.InstanceStore,
-	runningMetric *prometheus.GaugeVec, runningPerAccountMetric *prometheus.GaugeVec) {
-	for {
-		time.Sleep(dbInterval)
-		m := make(map[label]int)
-		// collect stats here
-		instances, err := instanceStore.List(ctx, "", &types.QueryParams{})
-		if err != nil {
-			// TODO: log error
-			continue
-		}
-		runningMetric.Reset()
-		runningPerAccountMetric.Reset()
-		for _, i := range instances {
-			l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider)}
-			if i.OwnerID != "" {
-				runningPerAccountMetric.WithLabelValues(i.OwnerID, i.OS).Inc()
+func (m *Metrics) UpdateRunningCount(ctx context.Context) {
+	go func() {
+		for {
+			time.Sleep(dbInterval)
+			wg := &sync.WaitGroup{}
+			for _, ms := range m.metricStores {
+				go m.updateRunningCount(ctx, ms, wg)
 			}
-			m[l]++
+			wg.Wait()
+			m.RunningPerAccountCount.Reset()
+			m.RunningCount.Reset()
 		}
-		for k, v := range m {
-			runningMetric.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state).Set(float64(v))
+	}()
+}
+
+func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *MetricStore, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+	d := make(map[label]int)
+	// collect stats here
+	instances, err := metricStore.Store.List(ctx, "", metricStore.Query)
+	if err != nil {
+		// TODO: log error
+		return
+	}
+	for _, i := range instances {
+		l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider)}
+		if i.OwnerID != "" {
+			m.RunningPerAccountCount.WithLabelValues(i.OwnerID, i.OS, strconv.FormatBool(metricStore.Distributed)).Inc()
 		}
+		d[l]++
+	}
+	for k, v := range d {
+		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed)).Set(float64(v))
 	}
 }
 
@@ -120,7 +145,7 @@ func PoolFallbackCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_pool_fallbacks",
 			Help: "Total number of fallbacks triggered on the pool",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "success"}, // success is true/false depending on whether fallback happened successfully
+		[]string{"pool_id", "os", "arch", "driver", "success", "distributed"}, // success is true/false depending on whether fallback happened successfully
 	)
 }
 
@@ -132,7 +157,7 @@ func CPUPercentile() *prometheus.HistogramVec {
 			Help:    "Max CPU usage in the pipeline",
 			Buckets: []float64{30, 50, 70, 90},
 		},
-		[]string{"pool_id", "os", "arch", "driver"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed"},
 	)
 }
 
@@ -144,7 +169,7 @@ func MemoryPercentile() *prometheus.HistogramVec {
 			Help:    "Max memory usage in the pipeline",
 			Buckets: []float64{30, 50, 70, 90},
 		},
-		[]string{"pool_id", "os", "arch", "driver"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed"},
 	)
 }
 
@@ -156,16 +181,15 @@ func WaitDurationCount() *prometheus.HistogramVec {
 			Help:    "Waiting time needed to successfully allocate a machine",
 			Buckets: []float64{5, 15, 30, 60, 300, 600},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "is_fallback"},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed"},
 	)
 }
 
-func RegisterMetrics(instanceStore store.InstanceStore) *Metrics {
+func RegisterMetrics() *Metrics {
 	buildCount := BuildCount()
 	failedBuildCount := FailedBuildCount()
-	runningCount := RunningCount(instanceStore)
-	runningPerAccountCount := RunningPerAccountCount(instanceStore)
-	go updateRunningCount(context.Background(), instanceStore, runningCount, runningPerAccountCount)
+	runningCount := RunningCount()
+	runningPerAccountCount := RunningPerAccountCount()
 	poolFallbackCount := PoolFallbackCount()
 	waitDurationCount := WaitDurationCount()
 	cpuPercentile := CPUPercentile()

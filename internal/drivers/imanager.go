@@ -18,7 +18,7 @@ type IManager interface {
 	AddTmate(env *config.EnvConfig) error
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration) error
-	Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig, queryParams *types.QueryParams) (*types.Instance, error)
+	Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error)
 	Destroy(ctx context.Context, poolName, instanceID string) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error
@@ -28,4 +28,6 @@ type IManager interface {
 	PingDriver(ctx context.Context) error
 	GetInstanceStore() store.InstanceStore
 	GetStageOwnerStore() store.StageOwnerStore
+	GetTlsServerName() string
+	IsDistributed() bool
 }

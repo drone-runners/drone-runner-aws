@@ -46,7 +46,7 @@ func Handler(p *poller.Poller, d *dliteCommand) http.Handler {
 func handleEnable(p *poller.Poller, d *dliteCommand) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p.SetFilter(func(ev *client.TaskEvent) bool {
-			return ev.TaskType != initTask
+			return ev.TaskType != initTask && ev.TaskType != executeTaskV2 && ev.TaskType != cleanupTaskV2
 		})
 		err := d.poolManager.CleanPools(r.Context(), false, true)
 		if derr := d.distributedPoolManager.CleanPools(r.Context(), false, true); derr != nil {

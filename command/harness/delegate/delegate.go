@@ -62,7 +62,13 @@ func RegisterDelegate(app *kingpin.Application) {
 
 // register metrics
 func (c *delegateCommand) registerMetrics(instanceStore store.InstanceStore) {
-	c.metrics = metric.RegisterMetrics(instanceStore)
+	c.metrics = metric.RegisterMetrics()
+	c.metrics.AddMetricStore(&metric.MetricStore{
+		Store:       instanceStore,
+		Query:       nil,
+		Distributed: false,
+	})
+	c.metrics.UpdateRunningCount(context.Background())
 }
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error {

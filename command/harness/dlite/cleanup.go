@@ -41,10 +41,11 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
+	poolManager := t.c.getPoolManager(req.Distributed)
 	if !req.Distributed {
 		ctxState().Delete(req.StageRuntimeID)
 	}
-	err = harness.HandleDestroy(ctx, req, t.c.poolManager.GetStageOwnerStore(), &t.c.env, t.c.poolManager, t.c.metrics)
+	err = harness.HandleDestroy(ctx, req, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
 	if err != nil {
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
