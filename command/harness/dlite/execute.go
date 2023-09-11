@@ -59,7 +59,8 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	distributed := req.ExecuteVMRequest.Distributed
 	if distributed {
 		// create a temp token with step expiry + offset
-		token, err := delegate.Token(audience, issuer, t.c.env.Dlite.AccountID, t.c.env.Dlite.AccountSecret, harness.StepTimeout+tokenExpiryOffset)
+		token := ""
+		token, err = delegate.Token(audience, issuer, t.c.env.Dlite.AccountID, t.c.env.Dlite.AccountSecret, harness.StepTimeout+tokenExpiryOffset)
 		if err != nil {
 			logr.WithError(err).
 				WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
