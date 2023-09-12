@@ -97,6 +97,10 @@ func (s InstanceStore) Purge(ctx context.Context) error {
 	panic("implement me")
 }
 
+func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
+	panic("implement me")
+}
+
 func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
 	if pool == "" {
 		return true

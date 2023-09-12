@@ -78,6 +78,36 @@ func (s InstanceStore) Delete(ctx context.Context, id string) error {
 	return tx.Commit()
 }
 
+func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
+	dst := []*types.Instance{}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() //nolint
+
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var deletedRow types.Instance
+		err := rows.Scan(&deletedRow.ID, &deletedRow.NodeID)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		dst = append(dst, &deletedRow)
+	}
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return dst, nil
+}
+
 func (s InstanceStore) Update(_ context.Context, instance *types.Instance) error {
 	query, arg, err := s.db.BindNamed(instanceUpdate, instance)
 	if err != nil {

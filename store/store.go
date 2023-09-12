@@ -13,6 +13,7 @@ type InstanceStore interface {
 	Delete(context.Context, string) error
 	Update(context.Context, *types.Instance) error
 	Purge(context.Context) error
+	DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error)
 }
 
 type StageOwnerStore interface {

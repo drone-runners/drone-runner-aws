@@ -2,7 +2,7 @@ package harness
 
 import (
 	"context"
-	// "time"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -43,14 +43,14 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.I
 	}
 
 	// setup lifetimes of instances
-	// busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
-	// freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
-	// err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
-	// if err != nil {
-	// 	logrus.WithError(err).
-	// 		Errorln("failed to start instance purger")
-	// 	return configPool, err
-	// }
+	busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
+	freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
+	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge)
+	if err != nil {
+		logrus.WithError(err).
+			Errorln("failed to start instance purger")
+		return configPool, err
+	}
 	// lets remove any old instances.
 	if !env.Settings.ReusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
