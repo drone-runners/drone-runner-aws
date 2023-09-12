@@ -303,7 +303,7 @@ runcmd:
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
 {{ if .PluginBinaryURI }}
-- 'wget -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'curl -fL --retry 5 --retry-all-errors {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -o /usr/bin/plugin'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
