@@ -34,6 +34,7 @@ type (
 		harnessTestBinaryURI string
 		pluginBinaryURI      string
 		tmate                types.Tmate
+		minPoolSize          int
 	}
 
 	poolEntry struct {
@@ -71,6 +72,7 @@ func NewManager(
 		liteEnginePath:       env.LiteEngine.Path,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
 		pluginBinaryURI:      env.Settings.PluginBinaryURI,
+		minPoolSize:          env.Settings.MinPoolSize,
 	}
 }
 

@@ -20,10 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const (
-	minPoolSize int = 2
-)
-
 type DistributedManager struct {
 	Manager
 }
@@ -53,7 +49,8 @@ func (d *DistributedManager) Add(pools ...Pool) error {
 			return fmt.Errorf("pool %q already defined", name)
 		}
 
-		pools[i].MinSize = int(math.Min(float64(pools[i].MinSize), float64(minPoolSize)))
+		// use minimum of these
+		pools[i].MinSize = int(math.Min(float64(pools[i].MinSize), float64(d.minPoolSize)))
 
 		d.poolMap[name] = &poolEntry{
 			Mutex: sync.Mutex{},
