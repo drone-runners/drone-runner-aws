@@ -242,14 +242,14 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	if maxAgeBusy != 0 {
 		busyCondition := squirrel.And{
 			squirrel.Eq{"instance_state": types.StateInUse},
-			squirrel.Gt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
+			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
 		}
 		conditions = append(conditions, busyCondition)
 	}
 	if maxAgeFree != 0 {
 		freeCondition := squirrel.And{
 			squirrel.Eq{"instance_state": []string{string(types.StateCreated), string(types.StateHibernating)}},
-			squirrel.Gt{"instance_started": currentTime.Add(-maxAgeFree).Unix()},
+			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeFree).Unix()},
 		}
 		conditions = append(conditions, freeCondition)
 	}
@@ -260,7 +260,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		return err
 	}
 
-	instances, err := d.instanceStore.DeleteAndReturn(ctx, deleteSql, args)
+	instances, err := d.instanceStore.DeleteAndReturn(ctx, deleteSql, args...)
 	if err != nil {
 		return err
 	}
