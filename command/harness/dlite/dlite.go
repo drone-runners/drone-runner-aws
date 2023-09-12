@@ -201,6 +201,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Postgres.Driver, c.env.Postgres.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
+		return nil, err
 	}
 	c.distributedPoolManager = drivers.NewDistributedManager(drivers.NewManager(ctx, instanceStore, stageOwnerStore, &c.env))
 	poolConfig, err := harness.SetupPool(ctx, &c.env, c.distributedPoolManager, c.poolFile)
