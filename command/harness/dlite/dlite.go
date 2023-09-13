@@ -113,10 +113,12 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	_, err = c.setupDistributedPool(ctx)
-	defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
-	if err != nil {
-		return err
+	if env.Postgres.Enabled {
+		_, err = c.setupDistributedPool(ctx)
+		defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
+		if err != nil {
+			return err
+		}
 	}
 
 	// Update running count from all the stores

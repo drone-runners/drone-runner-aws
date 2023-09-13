@@ -368,6 +368,7 @@ type EnvConfig struct {
 	Postgres struct {
 		Driver     string `default:"postgres"`
 		Datasource string `envconfig:"DRONE_POSTGRES_DATASOURCE" default:"port=5431 user=admin password=password dbname=dlite sslmode=disable"`
+		Enabled    bool   `envconfig:"DRONE_POSTGRES_ENABLED" default:"false"`
 	}
 
 	Tmate struct {
