@@ -28,6 +28,7 @@ type VMCleanupRequest struct {
 	PoolID         string  `json:"pool_id"`
 	StageRuntimeID string  `json:"stage_runtime_id"`
 	LogKey         string  `json:"log_key,omitempty"`
+	Distributed    bool    `json:"distributed,omitempty"`
 	Context        Context `json:"context,omitempty"`
 }
 
@@ -35,18 +36,18 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
+	logr := logrus.
+		WithField("stage_runtime_id", r.StageRuntimeID).
+		WithField("api", "dlite:destroy").
+		WithField("task_id", r.Context.TaskID)
 	// We do retries on destroy in case a destroy call comes while an initialize call is still happening.
 	cnt := 0
 	b := createBackoff(destroyTimeout)
 	for {
 		duration := b.NextBackOff()
-		_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt)
+		_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt, logr)
 		if err != nil {
-			logrus.WithError(err).
-				WithField("retry_count", cnt).
-				WithField("stage_runtime_id", r.StageRuntimeID).
-				WithField("task_id", r.Context.TaskID).
-				Errorln("could not destroy VM")
+			logr.WithError(err).Errorln("could not destroy VM")
 			if duration == backoff.Stop {
 				return err
 			}
@@ -59,18 +60,14 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig,
-	poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int) (*types.Instance, error) {
+	poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	logr = logr.WithField("retry_count", retryCount)
 	entity, err := s.Find(ctx, r.StageRuntimeID)
 	if err != nil || entity == nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 	}
 	poolID := entity.PoolName
-
-	logr := logrus.
-		WithField("stage_runtime_id", r.StageRuntimeID).
-		WithField("pool", poolID).
-		WithField("api", "dlite:destroy").
-		WithField("retry_count", retryCount)
+	logr = logr.WithField("pool_id", poolID)
 
 	logr = AddContext(logr, &r.Context, map[string]string{})
 
@@ -95,7 +92,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	} else {
 		// Attempting to call lite engine destroy
 		resp, destroyErr := client.Destroy(context.Background(),
-			&api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS)})
+			&api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS), StageRuntimeID: r.StageRuntimeID})
 		if destroyErr != nil {
 			// we can continue even if lite engine destroy does not happen successfully. This is because
 			// the VM is anyways destroyed so the process will be killed

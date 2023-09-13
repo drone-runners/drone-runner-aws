@@ -18,9 +18,9 @@ import (
 	errors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
+	"github.com/harness/lite-engine/logger"
 
 	"github.com/sirupsen/logrus"
 )
@@ -77,7 +77,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		log.SetLevel(logrus.TraceLevel)
 		logr = log.WithField("stage_runtime_id", stageRuntimeID)
 
-		ctx = logger.WithContext(ctx, logger.Logrus(logr))
+		ctx = logger.WithContext(ctx, logr)
 	}
 
 	// append global volumes to the setup request.
