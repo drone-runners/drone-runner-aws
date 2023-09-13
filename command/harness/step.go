@@ -134,15 +134,13 @@ func HandleStep(ctx context.Context,
 
 	logr.WithField("startStepResponse", startStepResponse).Traceln("LE.StartStep complete")
 
-	var pollResponse *api.PollStepResponse
+	pollResponse := &api.PollStepResponse{}
 
 	if !async {
 		pollResponse, err = client.RetryPollStep(ctx, &api.PollStepRequest{ID: r.StartStepRequest.ID}, StepTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("failed to call LE.RetryPollStep: %w", err)
 		}
-	} else {
-		pollResponse = &api.PollStepResponse{}
 	}
 
 	logr.WithField("pollResponse", pollResponse).Traceln("completed LE.RetryPollStep")
