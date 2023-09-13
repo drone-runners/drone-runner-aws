@@ -51,8 +51,8 @@ func ConvertBool(b bool) string {
 	return False
 }
 
-func (m *Metrics) AddMetricStore(store *Store) {
-	m.stores = append(m.stores, store)
+func (m *Metrics) AddMetricStore(metricStore *Store) {
+	m.stores = append(m.stores, metricStore)
 }
 
 // BuildCount provides metrics for total number of pipeline executions (failed + successful)

@@ -252,12 +252,12 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	}
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-	deleteSql, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_node_id").ToSql()
+	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_node_id").ToSql()
 	if err != nil {
 		return err
 	}
 
-	instances, err := d.instanceStore.DeleteAndReturn(ctx, deleteSql, args...)
+	instances, err := d.instanceStore.DeleteAndReturn(ctx, deleteSQL, args...)
 	if err != nil {
 		return err
 	}
