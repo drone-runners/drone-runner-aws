@@ -141,9 +141,11 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	g.Go(func() error {
 		<-ctx.Done()
 		err = harness.Cleanup(&c.env, c.poolManager, true, true)
-		// only delete unused instances for distributed pool
-		if derr := harness.Cleanup(&c.env, c.distributedPoolManager, false, true); derr != nil {
-			err = derr
+		if c.env.Postgres.Enabled {
+			// only delete unused instances for distributed pool
+			if derr := harness.Cleanup(&c.env, c.distributedPoolManager, false, true); derr != nil {
+				err = derr
+			}
 		}
 		return err
 	})

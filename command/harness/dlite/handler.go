@@ -49,8 +49,10 @@ func handleEnable(p *poller.Poller, d *dliteCommand) http.HandlerFunc {
 			return ev.TaskType != initTask && ev.TaskType != executeTaskV2 && ev.TaskType != cleanupTaskV2
 		})
 		err := d.poolManager.CleanPools(r.Context(), false, true)
-		if derr := d.distributedPoolManager.CleanPools(r.Context(), false, true); derr != nil {
-			err = derr
+		if d.env.Postgres.Enabled {
+			if derr := d.distributedPoolManager.CleanPools(r.Context(), false, true); derr != nil {
+				err = derr
+			}
 		}
 		if err != nil {
 			io.WriteString(w, err.Error()) //nolint: errcheck
