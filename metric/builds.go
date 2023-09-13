@@ -21,7 +21,7 @@ type Metrics struct {
 	CPUPercentile          *prometheus.HistogramVec
 	MemoryPercentile       *prometheus.HistogramVec
 
-	metricStores []*MetricStore
+	stores []*Store
 }
 
 type label struct {
@@ -32,7 +32,7 @@ type label struct {
 	driver string
 }
 
-type MetricStore struct {
+type Store struct {
 	Store       store.InstanceStore
 	Query       *types.QueryParams
 	Distributed bool
@@ -51,8 +51,8 @@ func ConvertBool(b bool) string {
 	return False
 }
 
-func (m *Metrics) AddMetricStore(metricStore *MetricStore) {
-	m.metricStores = append(m.metricStores, metricStore)
+func (m *Metrics) AddMetricStore(store *Store) {
+	m.stores = append(m.stores, store)
 }
 
 // BuildCount provides metrics for total number of pipeline executions (failed + successful)
@@ -106,7 +106,7 @@ func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 		for {
 			time.Sleep(dbInterval)
 			wg := &sync.WaitGroup{}
-			for _, ms := range m.metricStores {
+			for _, ms := range m.stores {
 				go m.updateRunningCount(ctx, ms, wg)
 			}
 			wg.Wait()
@@ -116,7 +116,7 @@ func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 	}()
 }
 
-func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *MetricStore, wg *sync.WaitGroup) {
+func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer wg.Done()
 	d := make(map[label]int)

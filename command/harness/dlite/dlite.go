@@ -191,7 +191,7 @@ func (c *dliteCommand) setupPool(ctx context.Context) (*config.PoolFile, error) 
 		logrus.WithError(err).Error("could not setup pool")
 		return poolConfig, err
 	}
-	c.metrics.AddMetricStore(&metric.MetricStore{
+	c.metrics.AddMetricStore(&metric.Store{
 		Store:       instanceStore,
 		Query:       nil,
 		Distributed: false,
@@ -211,7 +211,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 		logrus.WithError(err).Error("could not setup distributed pool")
 		return poolConfig, err
 	}
-	c.metrics.AddMetricStore(&metric.MetricStore{
+	c.metrics.AddMetricStore(&metric.Store{
 		Store: instanceStore,
 		Query: &types.QueryParams{
 			RunnerName: c.env.Runner.Name,

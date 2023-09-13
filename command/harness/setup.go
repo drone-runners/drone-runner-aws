@@ -279,7 +279,7 @@ func handleSetup(
 		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
-	client, err := lehelper.GetClient(instance, poolManager.GetTlsServerName(), instance.Port,
+	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port,
 		env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		defer cleanUpStageOwnerMappingFn()

@@ -28,6 +28,6 @@ type IManager interface {
 	PingDriver(ctx context.Context) error
 	GetInstanceStore() store.InstanceStore
 	GetStageOwnerStore() store.StageOwnerStore
-	GetTlsServerName() string
+	GetTLSServerName() string
 	IsDistributed() bool
 }

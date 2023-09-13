@@ -284,7 +284,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							}
 						}
 
-						err = m.buildPool(ctx, pool, m.GetTlsServerName(), nil)
+						err = m.buildPool(ctx, pool, m.GetTLSServerName(), nil)
 						if err != nil {
 							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
 						}
@@ -334,7 +334,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, m.GetTlsServerName(), ownerID, true)
+		inst, err = m.setupInstance(ctx, pool, m.GetTLSServerName(), ownerID, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -360,7 +360,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, m.GetTlsServerName(), "", false)
+		_, _ = m.setupInstance(ctx, pool, m.GetTLSServerName(), "", false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -544,7 +544,7 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error
 	pool.Lock()
 	defer pool.Unlock()
 
-	return m.buildPool(ctx, pool, m.GetTlsServerName(), nil)
+	return m.buildPool(ctx, pool, m.GetTLSServerName(), nil)
 }
 
 func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID string, inuse bool) (*types.Instance, error) {
@@ -801,7 +801,7 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, 
 	return nil
 }
 
-func (m *Manager) GetTlsServerName() string {
+func (m *Manager) GetTLSServerName() string {
 	return m.runnerName
 }
 

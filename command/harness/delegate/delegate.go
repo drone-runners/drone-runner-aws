@@ -63,7 +63,7 @@ func RegisterDelegate(app *kingpin.Application) {
 // register metrics
 func (c *delegateCommand) registerMetrics(instanceStore store.InstanceStore) {
 	c.metrics = metric.RegisterMetrics()
-	c.metrics.AddMetricStore(&metric.MetricStore{
+	c.metrics.AddMetricStore(&metric.Store{
 		Store:       instanceStore,
 		Query:       nil,
 		Distributed: false,

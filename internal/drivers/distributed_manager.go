@@ -96,7 +96,7 @@ func (d *DistributedManager) Provision(ctx context.Context, poolName, serverName
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = d.setupInstance(ctx, pool, d.GetTlsServerName(), ownerID, true)
+		inst, err = d.setupInstance(ctx, pool, d.GetTLSServerName(), ownerID, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -122,7 +122,7 @@ func (d *DistributedManager) Provision(ctx context.Context, poolName, serverName
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = d.setupInstance(ctx, pool, d.GetTlsServerName(), "", false)
+		_, _ = d.setupInstance(ctx, pool, d.GetTLSServerName(), "", false)
 	}(d.globalCtx)
 
 	return inst, nil
@@ -157,7 +157,7 @@ func (d *DistributedManager) forEach(ctx context.Context,
 		tlsServerName string,
 		queryParams *types.QueryParams) error) error {
 	for _, pool := range d.poolMap {
-		err := f(ctx, pool, d.GetTlsServerName(), queryParams)
+		err := f(ctx, pool, d.GetTLSServerName(), queryParams)
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (d *DistributedManager) forEach(ctx context.Context,
 	return nil
 }
 
-func (d *DistributedManager) GetTlsServerName() string {
+func (d *DistributedManager) GetTLSServerName() string {
 	// keep server name constant since any runner should be able to send request to LE
 	return "distributed-dlite"
 }
@@ -279,7 +279,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		}
 	}
 
-	err = d.buildPool(ctx, pool, d.GetTlsServerName(), nil)
+	err = d.buildPool(ctx, pool, d.GetTLSServerName(), nil)
 	if err != nil {
 		return fmt.Errorf("distributed dlite: failed to rebuld pool=%q error: %w", pool.Name, err)
 	}

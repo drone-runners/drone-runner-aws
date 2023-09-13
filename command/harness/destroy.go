@@ -93,7 +93,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_name", inst.Name)
 
 	logr.Traceln("invoking lite engine cleanup")
-	client, err := lehelper.GetClient(inst, poolManager.GetTlsServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	} else {

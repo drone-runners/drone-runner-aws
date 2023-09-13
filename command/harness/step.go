@@ -93,7 +93,7 @@ func HandleStep(ctx context.Context,
 
 	logr = logr.WithField("ip", inst.Address)
 
-	client, err := lehelper.GetClient(inst, poolManager.GetTlsServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
