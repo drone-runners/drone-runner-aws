@@ -104,7 +104,7 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,529 --tries=10 --waitretry=5 -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 chmod 777 /usr/bin/plugin
 {{ end }}
 
@@ -165,7 +165,7 @@ touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
 
 {{ if .PluginBinaryURI }}
-wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,529 --tries=10 --waitretry=5 -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 chmod 777 /usr/bin/plugin
 {{ end }}
 
@@ -191,7 +191,7 @@ touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
 
 {{ if .PluginBinaryURI }}
-wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,529 --tries=10 --waitretry=5 -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 chmod 777 /usr/local/bin/plugin
 {{ end }}
 
@@ -303,7 +303,7 @@ runcmd:
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
 {{ if .PluginBinaryURI }}
-- 'curl -fL --retry 5 --retry-all-errors {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -o /usr/bin/plugin'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,529 --tries=10 --waitretry=5 -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
@@ -358,7 +358,7 @@ runcmd:
 - 'wget "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .PluginBinaryURI }}
-- 'wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,529 --tries=10 --waitretry=5 -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
