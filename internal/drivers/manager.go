@@ -34,7 +34,6 @@ type (
 		harnessTestBinaryURI string
 		pluginBinaryURI      string
 		tmate                types.Tmate
-		minPoolSize          int
 	}
 
 	poolEntry struct {
@@ -72,7 +71,6 @@ func NewManager(
 		liteEnginePath:       env.LiteEngine.Path,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
 		pluginBinaryURI:      env.Settings.PluginBinaryURI,
-		minPoolSize:          env.Settings.MinPoolSize,
 	}
 }
 
@@ -305,8 +303,8 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
-	m.runnerName = serverName
+func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverName, ownerID string, env *config.EnvConfig, query *types.QueryParams) (*types.Instance, error) {
+	m.runnerName = runnerName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
 
@@ -322,7 +320,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 
 	pool.Lock()
 
-	busy, free, _, err := m.List(ctx, pool, nil)
+	busy, free, _, err := m.List(ctx, pool, query)
 	if err != nil {
 		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
@@ -334,7 +332,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, m.GetTLSServerName(), ownerID, true)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -360,7 +358,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, m.GetTLSServerName(), "", false)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", false)
 	}(m.globalCtx)
 
 	return inst, nil

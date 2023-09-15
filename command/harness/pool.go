@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -20,6 +21,13 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.I
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err
+	}
+
+	if poolManager.IsDistributed() {
+		for i := range pools {
+			// use minimum of these for distributed pool
+			pools[i].MinSize = int(math.Min(float64(pools[i].MinSize), float64(env.Settings.MinPoolSize)))
+		}
 	}
 
 	err = poolManager.Add(pools...)

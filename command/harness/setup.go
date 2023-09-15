@@ -205,7 +205,13 @@ func handleSetup(
 	}
 
 	// try to provision an instance from the pool manager.
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, owner, env)
+	var query *types.QueryParams
+	if poolManager.IsDistributed() {
+		query = &types.QueryParams{
+			RunnerName: env.Runner.Name,
+		}
+	}
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, env, query)
 	if err != nil {
 		if derr := s.Delete(ctx, stageRuntimeID); derr != nil {
 			logr.WithError(derr).Errorln("could not remove stage ID mapping after provision failure")

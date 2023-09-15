@@ -202,6 +202,7 @@ func (c *dliteCommand) setupPool(ctx context.Context) (*config.PoolFile, error) 
 }
 
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
+	logrus.Infoln("Starting postgres database")
 	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Postgres.Driver, c.env.Postgres.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
