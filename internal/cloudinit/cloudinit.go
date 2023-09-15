@@ -473,14 +473,14 @@ if (test-path($profile) -eq "false")
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
 
-Invoke-WebRequest -Uri "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -OutFile "C:\Program Files\lite-engine\plugin.exe"
+Invoke-WebRequest -Uri "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -RetryIntervalSec 1 -OutFile "C:\Program Files\lite-engine\plugin.exe"
 $env:Path = 'C:\Program Files\lite-engine;' + $env:Path
 
 # Refresh the PSEnviroment
 refreshenv
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
-Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
+Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -RetryIntervalSec 1 -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
