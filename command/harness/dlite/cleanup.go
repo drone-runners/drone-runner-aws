@@ -47,6 +47,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	err = harness.HandleDestroy(ctx, req, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
 	if err != nil {
+		logr.WithError(err).Error("could not destroy VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
