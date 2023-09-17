@@ -96,7 +96,7 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
+/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
 echo "done downloading lite engine binary"
 chmod 777 /usr/bin/lite-engine
 touch $HOME/.env
@@ -104,7 +104,7 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
 chmod 777 /usr/bin/plugin
 {{ end }}
 
@@ -159,7 +159,7 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
-/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine
 chmod 777 /usr/local/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
@@ -185,13 +185,13 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
-wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine
 chmod 777 /opt/homebrew/bin/lite-engine
 touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
 
 {{ if .PluginBinaryURI }}
-wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin
 chmod 777 /usr/local/bin/plugin
 {{ end }}
 
@@ -296,14 +296,14 @@ write_files:
 runcmd:
 - 'set -x'
 - 'ufw allow 9079'
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 -nv --debug "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv --debug "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .HarnessTestBinaryURI }}
 - 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
 {{ if .PluginBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
@@ -355,10 +355,10 @@ write_files:
 runcmd:
 - 'sudo service docker start'
 - 'sudo usermod -a -G docker ec2-user'
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .PluginBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=1 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
@@ -473,14 +473,14 @@ if (test-path($profile) -eq "false")
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
 
-Invoke-WebRequest -Uri "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -RetryIntervalSec 1 -OutFile "C:\Program Files\lite-engine\plugin.exe"
+Invoke-WebRequest -Uri "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -RetryIntervalSec 10 -OutFile "C:\Program Files\lite-engine\plugin.exe"
 $env:Path = 'C:\Program Files\lite-engine;' + $env:Path
 
 # Refresh the PSEnviroment
 refreshenv
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
-Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -RetryIntervalSec 1 -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
+Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -MaximumRetryCount 10 -RetryIntervalSec 10 -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
