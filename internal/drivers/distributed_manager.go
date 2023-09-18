@@ -27,7 +27,7 @@ func NewDistributedManager(manager *Manager) *DistributedManager {
 
 func (d *DistributedManager) BuildPools(ctx context.Context) error {
 	query := types.QueryParams{RunnerName: d.runnerName}
-	return d.forEach(ctx, &query, d.buildPool)
+	return d.forEach(ctx, d.GetTLSServerName(), &query, d.buildPoolWithMutex)
 }
 
 // This helps in cleaning the pools
@@ -51,20 +51,6 @@ func (d *DistributedManager) GetInstanceStore() store.InstanceStore {
 
 func (d *DistributedManager) GetStageOwnerStore() store.StageOwnerStore {
 	return d.stageOwnerStore
-}
-
-func (d *DistributedManager) forEach(ctx context.Context,
-	queryParams *types.QueryParams,
-	f func(ctx context.Context, pool *poolEntry,
-		tlsServerName string,
-		queryParams *types.QueryParams) error) error {
-	for _, pool := range d.poolMap {
-		err := f(ctx, pool, d.GetTLSServerName(), queryParams)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (d *DistributedManager) GetTLSServerName() string {

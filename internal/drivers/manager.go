@@ -237,58 +237,61 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 				case <-m.cleanupTimer.C:
 					logrus.Traceln("Launching instance purger")
 
-					err := m.forEach(ctx, func(ctx context.Context, pool *poolEntry) error {
-						logr := logger.FromContext(ctx).
-							WithField("driver", pool.Driver.DriverName()).
-							WithField("pool", pool.Name)
+					err := m.forEach(ctx,
+						m.GetTLSServerName(),
+						nil,
+						func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error {
+							logr := logger.FromContext(ctx).
+								WithField("driver", pool.Driver.DriverName()).
+								WithField("pool", pool.Name)
 
-						pool.Lock()
-						defer pool.Unlock()
+							pool.Lock()
+							defer pool.Unlock()
 
-						busy, free, hibernating, err := m.List(ctx, pool, nil)
-						if err != nil {
-							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
-						}
-						free = append(free, hibernating...)
-
-						var instances []*types.Instance
-						for _, inst := range busy {
-							startedAt := time.Unix(inst.Started, 0)
-							if time.Since(startedAt) > maxAgeBusy {
-								instances = append(instances, inst)
+							busy, free, hibernating, err := m.List(ctx, pool, nil)
+							if err != nil {
+								return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 							}
-						}
-						for _, inst := range free {
-							startedAt := time.Unix(inst.Started, 0)
-							if time.Since(startedAt) > maxAgeFree {
-								instances = append(instances, inst)
-							}
-						}
+							free = append(free, hibernating...)
 
-						if len(instances) == 0 {
+							var instances []*types.Instance
+							for _, inst := range busy {
+								startedAt := time.Unix(inst.Started, 0)
+								if time.Since(startedAt) > maxAgeBusy {
+									instances = append(instances, inst)
+								}
+							}
+							for _, inst := range free {
+								startedAt := time.Unix(inst.Started, 0)
+								if time.Since(startedAt) > maxAgeFree {
+									instances = append(instances, inst)
+								}
+							}
+
+							if len(instances) == 0 {
+								return nil
+							}
+
+							logr.Infof("purger: Terminating %d stale instances\n", len(instances))
+
+							err = pool.Driver.Destroy(ctx, instances)
+							if err != nil {
+								return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
+							}
+							for _, instance := range instances {
+								derr := m.Delete(ctx, instance.ID)
+								if derr != nil {
+									return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
+								}
+							}
+
+							err = m.buildPool(ctx, pool, serverName, nil)
+							if err != nil {
+								return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
+							}
+
 							return nil
-						}
-
-						logr.Infof("purger: Terminating %d stale instances\n", len(instances))
-
-						err = pool.Driver.Destroy(ctx, instances)
-						if err != nil {
-							return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
-						}
-						for _, instance := range instances {
-							derr := m.Delete(ctx, instance.ID)
-							if derr != nil {
-								return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
-							}
-						}
-
-						err = m.buildPool(ctx, pool, m.GetTLSServerName(), nil)
-						if err != nil {
-							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
-						}
-
-						return nil
-					})
+						})
 					if err != nil {
 						logger.FromContext(ctx).WithError(err).
 							Errorln("purger: Failed to purge stale instances")
@@ -389,7 +392,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 }
 
 func (m *Manager) BuildPools(ctx context.Context) error {
-	return m.forEach(ctx, m.buildPoolWithMutex)
+	return m.forEach(ctx, m.GetTLSServerName(), nil, m.buildPoolWithMutex)
 }
 
 func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.QueryParams, destroyBusy, destroyFree bool) error {
@@ -538,11 +541,11 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 	return nil
 }
 
-func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error {
+func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams) error {
 	pool.Lock()
 	defer pool.Unlock()
 
-	return m.buildPool(ctx, pool, m.GetTLSServerName(), nil)
+	return m.buildPool(ctx, pool, tlsServerName, query)
 }
 
 func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID string, inuse bool) (*types.Instance, error) {
@@ -738,9 +741,12 @@ func (m *Manager) updateInstState(ctx context.Context, pool *poolEntry, instance
 	return nil
 }
 
-func (m *Manager) forEach(ctx context.Context, f func(ctx context.Context, pool *poolEntry) error) error {
+func (m *Manager) forEach(ctx context.Context,
+	serverName string,
+	query *types.QueryParams,
+	f func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error) error {
 	for _, pool := range m.poolMap {
-		err := f(ctx, pool)
+		err := f(ctx, pool, serverName, query)
 		if err != nil {
 			return err
 		}
