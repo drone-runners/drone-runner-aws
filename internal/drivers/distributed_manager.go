@@ -174,12 +174,6 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	if err != nil {
 		return fmt.Errorf("distributed dlite: failed to delete instances of pool=%q error: %w", pool.Name, err)
 	}
-	for _, instance := range instances {
-		derr := d.Delete(ctx, instance.ID)
-		if derr != nil {
-			return fmt.Errorf("distributed dlite: failed to delete %s from instance store with err: %s", instance.ID, derr)
-		}
-	}
 
 	err = d.buildPool(ctx, pool, d.GetTLSServerName(), nil)
 	if err != nil {
