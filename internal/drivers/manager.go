@@ -540,6 +540,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID st
 	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
 	createOptions.PluginBinaryURI = m.pluginBinaryURI
 	createOptions.Tmate = m.tmate
+	createOptions.AccountID = ownerID
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")

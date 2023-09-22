@@ -140,7 +140,7 @@ chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate
 mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
 {{ end }}
 {{ end }}
-
+unlink /snap/bin/google-cloud-cli.gcloud
 echo "starting lite engine server"
 /usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 echo "done starting lite engine server"

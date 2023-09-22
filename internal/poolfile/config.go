@@ -290,6 +290,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				nomad.WithCpus(nomadConfig.VM.Cpus),
 				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),
+				nomad.WithEnablePinning(nomadConfig.VM.EnablePinning),
 				nomad.WithImage(nomadConfig.VM.Image),
 				nomad.WithNoop(nomadConfig.VM.Noop))
 			if err != nil {

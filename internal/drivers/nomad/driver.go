@@ -26,6 +26,7 @@ var (
 	resourceJobTimeout      = 2 * time.Minute
 	initTimeout             = 3 * time.Minute
 	destroyTimeout          = 3 * time.Minute
+	globalAccount           = "GLOBAL_ACCOUNT_ID"
 	destroyRetryAttempts    = 1
 	minNomadCPUMhz          = 40
 	minNomadMemoryMb        = 20
@@ -43,6 +44,7 @@ type config struct {
 	clientKeyPath  string
 	insecure       bool
 	noop           bool
+	enablePinning  string
 	client         *api.Client
 }
 
@@ -107,7 +109,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	startupScript := generateStartupScript(opts)
 
 	vm := strings.ToLower(random(20)) //nolint:gomnd
-
+	c := strings.Contains(p.enablePinning, opts.AccountID)
 	cpus, err := strconv.Atoi(p.vmCpus)
 	if err != nil {
 		return nil, errors.New("could not convert VM cpus to integer")
@@ -124,7 +126,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm)
 	} else {
-		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm)
+		if c {
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, opts.AccountID)
+		} else {
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount)
+		}
 	}
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("resource_job_id", resourceJobID)
@@ -237,7 +243,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB int, vm string) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB int, vm, accountID string) (job *api.Job, id string) {
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -248,6 +254,10 @@ func (p *config) resourceJob(cpus, memGB int, vm string) (job *api.Job, id strin
 	cpu := machineFrequencyMhz*cpus - 109
 	mem := convertGigsToMegs(memGB) - 53
 
+	constraintList := []*api.Constraint{}
+	if accountID != "" {
+		constraintList = constraints(accountID)
+	}
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	// It sleeps until the max VM creation timeout, after which it periodically checks whether the VM is alive or not
 	job = &api.Job{
@@ -260,6 +270,7 @@ func (p *config) resourceJob(cpus, memGB int, vm string) (job *api.Job, id strin
 			Attempts:  intToPtr(0),
 			Unlimited: boolToPtr(false),
 		},
+		Constraints: constraintList,
 		TaskGroups: []*api.TaskGroup{
 			{
 				Networks:                  []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: portLabel}}}},
@@ -662,6 +673,19 @@ func initJobID(s string) string {
 // generate a job ID for a resource job
 func resourceJobID(s string) string {
 	return fmt.Sprintf("init_job_resources_%s", s)
+}
+
+func constraints(accountID string) []*api.Constraint {
+	constraintList := []*api.Constraint{}
+
+	constraint := &api.Constraint{
+		LTarget: "${node.class}",
+		RTarget: accountID,
+		Operand: "=",
+	}
+
+	constraintList = append(constraintList, constraint)
+	return constraintList
 }
 
 func minNomadResources() *api.Resources {
