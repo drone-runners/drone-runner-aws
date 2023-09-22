@@ -113,7 +113,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	if env.Database.Postgres.Enabled {
+	if env.DistributedMode.Enabled {
 		_, err = c.setupDistributedPool(ctx)
 		defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
 		if err != nil {
@@ -141,7 +141,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	g.Go(func() error {
 		<-ctx.Done()
 		err = harness.Cleanup(&c.env, c.poolManager, true, true)
-		if c.env.Database.Postgres.Enabled {
+		if c.env.DistributedMode.Enabled {
 			// only delete unused instances for distributed pool
 			if derr := harness.Cleanup(&c.env, c.distributedPoolManager, false, true); derr != nil {
 				err = derr
@@ -203,7 +203,7 @@ func (c *dliteCommand) setupPool(ctx context.Context) (*config.PoolFile, error) 
 
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
 	logrus.Infoln("Starting postgres database")
-	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Postgres.Driver, c.env.Database.Postgres.Datasource)
+	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 		return nil, err

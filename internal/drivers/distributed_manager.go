@@ -85,6 +85,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 	logrus.Infof("distributed dlite: Instance purger started. It will run every %.2f minutes", t.Minutes())
 
 	go func() {
+		defer d.cleanupTimer.Stop()
 		for {
 			func() {
 				defer func() {
