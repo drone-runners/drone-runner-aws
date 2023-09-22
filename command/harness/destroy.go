@@ -46,18 +46,22 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	b := createBackoff(destroyTimeout)
 	for {
 		duration := b.NextBackOff()
+		timer := time.NewTimer(duration)
 
 		select {
 		case <-ctx.Done():
+			// drain the timer
+			if !timer.Stop() {
+				<-timer.C
+			}
 			return ctx.Err()
-		case <-time.After(duration):
+		case <-timer.C:
 			_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt, logr)
 			if err != nil {
 				logr.WithError(err).Errorln("could not destroy VM")
 				if duration == backoff.Stop {
 					return err
 				}
-				time.Sleep(duration)
 				cnt++
 				continue
 			}

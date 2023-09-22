@@ -100,7 +100,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 					logrus.Traceln("distributed dlite: Launching instance purger")
 
 					for _, pool := range d.poolMap {
-						if err := d.startInstancePurger(ctx, pool, maxAgeBusy, maxAgeFree); err != nil {
+						if err := d.startInstancePurger(ctx, pool, maxAgeBusy); err != nil {
 							logger.FromContext(ctx).WithError(err).
 								Errorln("distributed dlite: purger: Failed to purge stale instances")
 						}
@@ -113,7 +113,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 	return nil
 }
 
-func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy, maxAgeFree time.Duration) error {
+func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy time.Duration) error {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
@@ -130,13 +130,6 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
 		}
 		conditions = append(conditions, busyCondition)
-	}
-	if maxAgeFree != 0 {
-		freeCondition := squirrel.And{
-			squirrel.Eq{"instance_state": []string{string(types.StateCreated), string(types.StateHibernating)}},
-			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeFree).Unix()},
-		}
-		conditions = append(conditions, freeCondition)
 	}
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
