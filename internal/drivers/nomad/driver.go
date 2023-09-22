@@ -26,7 +26,7 @@ var (
 	resourceJobTimeout      = 2 * time.Minute
 	initTimeout             = 3 * time.Minute
 	destroyTimeout          = 3 * time.Minute
-	globalAccount           = "GLOBAL_ACCOUNT"
+	globalAccount           = "GLOBAL_ACCOUNT_ID"
 	destroyRetryAttempts    = 1
 	minNomadCPUMhz          = 40
 	minNomadMemoryMb        = 20
