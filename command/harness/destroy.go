@@ -45,15 +45,27 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	cnt := 0
 	b := createBackoff(destroyTimeout)
 	timer := time.NewTimer(0)
+	defer timer.Stop()
+
 	for {
 		duration := b.NextBackOff()
+		// drain the timer
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
 		timer.Reset(duration) // Reset the timer with the new duration
 
 		select {
 		case <-ctx.Done():
 			// drain the timer
 			if !timer.Stop() {
-				<-timer.C
+				select {
+				case <-timer.C:
+				default:
+				}
 			}
 			return ctx.Err()
 		case <-timer.C:
