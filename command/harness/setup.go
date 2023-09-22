@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,7 +49,7 @@ var (
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager,
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager,
 	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
@@ -139,20 +140,20 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			// fallback metric records the first pool ID which was tried and the associated driver.
 			// We don't record final pool which was used as this metric is only used to get data about
 			// which drivers and pools are causing fallbacks.
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True, strconv.FormatBool(poolManager.IsDistributed())).Inc()
 		}
 		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
-			driver, metric.ConvertBool(fallback)).Observe(setupTime.Seconds())
+			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed())).Observe(setupTime.Seconds())
 	} else {
-		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver).Inc()
-		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver).Inc()
+		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed())).Inc()
+		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed())).Inc()
 		if fallback {
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False, strconv.FormatBool(poolManager.IsDistributed())).Inc()
 		}
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
-	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider)).Inc()
+	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed())).Inc()
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}
 
 	logr.WithField("selected_pool", selectedPool).
@@ -176,7 +177,7 @@ func handleSetup(
 	r *SetupVMRequest,
 	s store.StageOwnerStore,
 	env *config.EnvConfig,
-	poolManager *drivers.Manager,
+	poolManager drivers.IManager,
 	pool string,
 ) (*types.Instance, error) {
 	var owner string
@@ -204,7 +205,13 @@ func handleSetup(
 	}
 
 	// try to provision an instance from the pool manager.
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, owner, env)
+	var query *types.QueryParams
+	if poolManager.IsDistributed() {
+		query = &types.QueryParams{
+			RunnerName: env.Runner.Name,
+		}
+	}
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, env, query)
 	if err != nil {
 		if derr := s.Delete(ctx, stageRuntimeID); derr != nil {
 			logr.WithError(derr).Errorln("could not remove stage ID mapping after provision failure")
@@ -278,7 +285,7 @@ func handleSetup(
 		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
-	client, err := lehelper.GetClient(instance, env.Runner.Name, instance.Port,
+	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port,
 		env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		defer cleanUpStageOwnerMappingFn()

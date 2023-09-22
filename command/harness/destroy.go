@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -32,7 +33,7 @@ type VMCleanupRequest struct {
 	Context        Context `json:"context,omitempty"`
 }
 
-func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager *drivers.Manager, metrics *metric.Metrics) error {
+func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager, metrics *metric.Metrics) error {
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
@@ -43,24 +44,47 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	// We do retries on destroy in case a destroy call comes while an initialize call is still happening.
 	cnt := 0
 	b := createBackoff(destroyTimeout)
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
 	for {
 		duration := b.NextBackOff()
-		_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt, logr)
-		if err != nil {
-			logr.WithError(err).Errorln("could not destroy VM")
-			if duration == backoff.Stop {
-				return err
+		// drain the timer
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
 			}
-			time.Sleep(duration)
-			cnt++
-			continue
 		}
-		return nil
+		timer.Reset(duration) // Reset the timer with the new duration
+
+		select {
+		case <-ctx.Done():
+			// drain the timer
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return ctx.Err()
+		case <-timer.C:
+			_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt, logr)
+			if err != nil {
+				logr.WithError(err).Errorln("could not destroy VM")
+				if duration == backoff.Stop {
+					return err
+				}
+				cnt++
+				continue
+			}
+			return nil
+		}
 	}
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig,
-	poolManager *drivers.Manager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
 	entity, err := s.Find(ctx, r.StageRuntimeID)
 	if err != nil || entity == nil {
@@ -86,7 +110,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_name", inst.Name)
 
 	logr.Traceln("invoking lite engine cleanup")
-	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	} else {
@@ -119,8 +143,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 				}
 			}
 
-			metrics.CPUPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider)).Observe(resp.OSStats.MaxCPUUsagePct)
-			metrics.MemoryPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider)).Observe(resp.OSStats.MaxMemUsagePct)
+			metrics.CPUPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed())).Observe(resp.OSStats.MaxCPUUsagePct)
+			metrics.MemoryPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed())).Observe(resp.OSStats.MaxMemUsagePct)
 
 			logr.WithField("cpu_ge50", cpuGe50).WithField("cpu_ge70", cpuGe70).WithField("cpu_ge90", cpuGe90).
 				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).

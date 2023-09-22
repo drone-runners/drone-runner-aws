@@ -58,6 +58,7 @@ type Instance struct {
 	Started      int64  `db:"instance_started" json:"started"`
 	IsHibernated bool   `db:"is_hibernated" json:"is_hibernated"`
 	Port         int64  `db:"instance_port" json:"port"`
+	RunnerName   string `db:"runner_name" json:"runner_name"`
 }
 
 type Tmate struct {
@@ -96,9 +97,10 @@ type Platform struct {
 }
 
 type QueryParams struct {
-	Status   InstanceState
-	Stage    string
-	Platform *Platform
+	Status     InstanceState
+	Stage      string
+	Platform   *Platform
+	RunnerName string
 }
 
 type StageOwner struct {

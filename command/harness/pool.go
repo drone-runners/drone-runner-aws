@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -10,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.Manager, poolFile string) (*config.PoolFile, error) {
+func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string) (*config.PoolFile, error) {
 	configPool, confErr := poolfile.ConfigPoolFile(poolFile, env)
 	if confErr != nil {
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
@@ -20,6 +21,13 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err
+	}
+
+	if poolManager.IsDistributed() {
+		for i := range pools {
+			// use minimum of these for distributed pool
+			pools[i].MinSize = int(math.Min(float64(pools[i].MinSize), float64(env.Settings.MinPoolSize)))
+		}
 	}
 
 	err = poolManager.Add(pools...)
@@ -70,12 +78,12 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager *drivers.
 	return configPool, nil
 }
 
-func Cleanup(env *config.EnvConfig, poolManager *drivers.Manager) error {
+func Cleanup(env *config.EnvConfig, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {
 	if env.Settings.ReusePool {
 		return nil
 	}
 
-	cleanErr := poolManager.CleanPools(context.Background(), true, true)
+	cleanErr := poolManager.CleanPools(context.Background(), destroyBusy, destroyFree)
 	if cleanErr != nil {
 		logrus.WithError(cleanErr).Errorln("unable to clean pools")
 	} else {

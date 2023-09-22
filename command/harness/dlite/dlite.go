@@ -8,8 +8,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/metric"
-	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/types"
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/drone/runner-go/server"
 	"github.com/drone/signal"
@@ -24,19 +24,20 @@ import (
 )
 
 type dliteCommand struct {
-	envFile         string
-	env             config.EnvConfig
-	delegateInfo    *poller.DelegateInfo
-	poolFile        string
-	poolManager     *drivers.Manager
-	metrics         *metric.Metrics
-	stageOwnerStore store.StageOwnerStore
+	envFile                string
+	env                    config.EnvConfig
+	delegateInfo           *poller.DelegateInfo
+	poolFile               string
+	poolManager            drivers.IManager
+	distributedPoolManager drivers.IManager
+	metrics                *metric.Metrics
 }
 
 func RegisterDlite(app *kingpin.Application) {
 	c := new(dliteCommand)
 
 	c.poolManager = &drivers.Manager{}
+	c.distributedPoolManager = &drivers.DistributedManager{}
 
 	cmd := app.Command("dlite", "starts the runner with polling enabled for accepting tasks").
 		Action(c.run)
@@ -56,8 +57,8 @@ func parseTags(pf *config.PoolFile) []string {
 }
 
 // register metrics
-func (c *dliteCommand) registerMetrics(instanceStore store.InstanceStore) {
-	c.metrics = metric.RegisterMetrics(instanceStore)
+func (c *dliteCommand) registerMetrics() {
+	c.metrics = metric.RegisterMetrics()
 }
 
 func (c *dliteCommand) registerPoller(ctx context.Context, tags []string) (*poller.Poller, error) {
@@ -103,28 +104,30 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
-	if err != nil {
-		logrus.WithError(err).Fatalln("Unable to start the database")
-	}
+	// Initialize metrics
+	c.registerMetrics()
 
-	c.stageOwnerStore = stageOwnerStore
-	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
-
-	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
-	defer harness.Cleanup(&c.env, c.poolManager) //nolint: errcheck
+	poolConfig, err := c.setupPool(ctx)
+	defer harness.Cleanup(&c.env, c.poolManager, true, true) //nolint: errcheck
 	if err != nil {
-		logrus.WithError(err).Error("could not setup pool")
 		return err
 	}
+
+	if env.DistributedMode.Enabled {
+		_, err = c.setupDistributedPool(ctx)
+		defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update running count from all the stores
+	c.metrics.UpdateRunningCount(ctx)
 
 	tags := parseTags(poolConfig)
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
-
-	// Initialize metrics
-	c.registerMetrics(instanceStore)
 
 	// Register the poller
 	p, err := c.registerPoller(ctx, tags)
@@ -137,14 +140,21 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		return harness.Cleanup(&c.env, c.poolManager)
+		err = harness.Cleanup(&c.env, c.poolManager, true, true)
+		if c.env.DistributedMode.Enabled {
+			// only delete unused instances for distributed pool
+			if derr := harness.Cleanup(&c.env, c.distributedPoolManager, false, true); derr != nil {
+				err = derr
+			}
+		}
+		return err
 	})
 
 	g.Go(func() error {
 		// Start the HTTP server
 		s := server.Server{
 			Addr:    c.env.Server.Port,
-			Handler: Handler(p, c.poolManager),
+			Handler: Handler(p, c),
 		}
 
 		logrus.WithField("addr", s.Addr).
@@ -170,4 +180,53 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return waitErr
 	}
 	return nil
+}
+
+func (c *dliteCommand) setupPool(ctx context.Context) (*config.PoolFile, error) {
+	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+	}
+	c.poolManager = drivers.NewManager(ctx, instanceStore, stageOwnerStore, &c.env)
+	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
+	if err != nil {
+		logrus.WithError(err).Error("could not setup pool")
+		return poolConfig, err
+	}
+	c.metrics.AddMetricStore(&metric.Store{
+		Store:       instanceStore,
+		Query:       nil,
+		Distributed: false,
+	})
+	return poolConfig, nil
+}
+
+func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
+	logrus.Infoln("Starting postgres database")
+	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+		return nil, err
+	}
+	c.distributedPoolManager = drivers.NewDistributedManager(drivers.NewManager(ctx, instanceStore, stageOwnerStore, &c.env))
+	poolConfig, err := harness.SetupPool(ctx, &c.env, c.distributedPoolManager, c.poolFile)
+	if err != nil {
+		logrus.WithError(err).Error("could not setup distributed pool")
+		return poolConfig, err
+	}
+	c.metrics.AddMetricStore(&metric.Store{
+		Store: instanceStore,
+		Query: &types.QueryParams{
+			RunnerName: c.env.Runner.Name,
+		},
+		Distributed: true,
+	})
+	return poolConfig, nil
+}
+
+func (c *dliteCommand) getPoolManager(distributed bool) drivers.IManager {
+	if distributed {
+		return c.distributedPoolManager
+	}
+	return c.poolManager
 }

@@ -52,3 +52,9 @@ func (i InstanceStoreSync) Purge(ctx context.Context) error {
 	defer mutex.Unlock()
 	panic("implement me")
 }
+
+func (i InstanceStoreSync) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	panic("implement me")
+}

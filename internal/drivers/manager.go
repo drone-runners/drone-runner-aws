@@ -30,6 +30,7 @@ type (
 		runnerName           string
 		liteEnginePath       string
 		instanceStore        store.InstanceStore
+		stageOwnerStore      store.StageOwnerStore
 		harnessTestBinaryURI string
 		pluginBinaryURI      string
 		tmate                types.Tmate
@@ -49,6 +50,23 @@ func New(
 	return &Manager{
 		globalCtx:            globalContext,
 		instanceStore:        instanceStore,
+		runnerName:           env.Runner.Name,
+		liteEnginePath:       env.LiteEngine.Path,
+		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:      env.Settings.PluginBinaryURI,
+	}
+}
+
+func NewManager(
+	globalContext context.Context,
+	instanceStore store.InstanceStore,
+	stageOwnerStore store.StageOwnerStore,
+	env *config.EnvConfig,
+) *Manager {
+	return &Manager{
+		globalCtx:            globalContext,
+		instanceStore:        instanceStore,
+		stageOwnerStore:      stageOwnerStore,
 		runnerName:           env.Runner.Name,
 		liteEnginePath:       env.LiteEngine.Path,
 		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
@@ -120,8 +138,8 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 	return list[0], nil
 }
 
-func (m *Manager) List(ctx context.Context, pool *poolEntry) (busy, free, hibernating []*types.Instance, err error) {
-	list, err := m.instanceStore.List(ctx, pool.Name, nil)
+func (m *Manager) List(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error) {
+	list, err := m.instanceStore.List(ctx, pool.Name, queryParams)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
 			Errorln("manager: failed to list instances")
@@ -219,58 +237,61 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 				case <-m.cleanupTimer.C:
 					logrus.Traceln("Launching instance purger")
 
-					err := m.forEach(ctx, func(ctx context.Context, pool *poolEntry) error {
-						logr := logger.FromContext(ctx).
-							WithField("driver", pool.Driver.DriverName()).
-							WithField("pool", pool.Name)
+					err := m.forEach(ctx,
+						m.GetTLSServerName(),
+						nil,
+						func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error {
+							logr := logger.FromContext(ctx).
+								WithField("driver", pool.Driver.DriverName()).
+								WithField("pool", pool.Name)
 
-						pool.Lock()
-						defer pool.Unlock()
+							pool.Lock()
+							defer pool.Unlock()
 
-						busy, free, hibernating, err := m.List(ctx, pool)
-						if err != nil {
-							return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
-						}
-						free = append(free, hibernating...)
-
-						var instances []*types.Instance
-						for _, inst := range busy {
-							startedAt := time.Unix(inst.Started, 0)
-							if time.Since(startedAt) > maxAgeBusy {
-								instances = append(instances, inst)
+							busy, free, hibernating, err := m.List(ctx, pool, nil)
+							if err != nil {
+								return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 							}
-						}
-						for _, inst := range free {
-							startedAt := time.Unix(inst.Started, 0)
-							if time.Since(startedAt) > maxAgeFree {
-								instances = append(instances, inst)
-							}
-						}
+							free = append(free, hibernating...)
 
-						if len(instances) == 0 {
+							var instances []*types.Instance
+							for _, inst := range busy {
+								startedAt := time.Unix(inst.Started, 0)
+								if time.Since(startedAt) > maxAgeBusy {
+									instances = append(instances, inst)
+								}
+							}
+							for _, inst := range free {
+								startedAt := time.Unix(inst.Started, 0)
+								if time.Since(startedAt) > maxAgeFree {
+									instances = append(instances, inst)
+								}
+							}
+
+							if len(instances) == 0 {
+								return nil
+							}
+
+							logr.Infof("purger: Terminating %d stale instances\n", len(instances))
+
+							err = pool.Driver.Destroy(ctx, instances)
+							if err != nil {
+								return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
+							}
+							for _, instance := range instances {
+								derr := m.Delete(ctx, instance.ID)
+								if derr != nil {
+									return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
+								}
+							}
+
+							err = m.buildPool(ctx, pool, serverName, nil)
+							if err != nil {
+								return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
+							}
+
 							return nil
-						}
-
-						logr.Infof("purger: Terminating %d stale instances\n", len(instances))
-
-						err = pool.Driver.Destroy(ctx, instances)
-						if err != nil {
-							return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
-						}
-						for _, instance := range instances {
-							derr := m.Delete(ctx, instance.ID)
-							if derr != nil {
-								return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
-							}
-						}
-
-						err = m.buildPool(ctx, pool)
-						if err != nil {
-							return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
-						}
-
-						return nil
-					})
+						})
 					if err != nil {
 						logger.FromContext(ctx).WithError(err).
 							Errorln("purger: Failed to purge stale instances")
@@ -285,8 +306,8 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID string, env *config.EnvConfig) (*types.Instance, error) {
-	m.runnerName = serverName
+func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverName, ownerID string, env *config.EnvConfig, query *types.QueryParams) (*types.Instance, error) {
+	m.runnerName = runnerName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
 
@@ -302,7 +323,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 
 	pool.Lock()
 
-	busy, free, _, err := m.List(ctx, pool)
+	busy, free, _, err := m.List(ctx, pool, query)
 	if err != nil {
 		pool.Unlock()
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
@@ -314,7 +335,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, ownerID, true)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, true)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -340,7 +361,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID s
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, "", false)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -371,13 +392,13 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 }
 
 func (m *Manager) BuildPools(ctx context.Context) error {
-	return m.forEach(ctx, m.buildPoolWithMutex)
+	return m.forEach(ctx, m.GetTLSServerName(), nil, m.buildPoolWithMutex)
 }
 
-func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, destroyBusy, destroyFree bool) error {
+func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.QueryParams, destroyBusy, destroyFree bool) error {
 	pool.Lock()
 	defer pool.Unlock()
-	busy, free, hibernating, err := m.List(ctx, pool)
+	busy, free, hibernating, err := m.List(ctx, pool, query)
 	if err != nil {
 		return err
 	}
@@ -414,10 +435,10 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, destroyBusy, d
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	var returnError error
 	for _, pool := range m.poolMap {
-		err := m.cleanPool(ctx, pool, destroyBusy, destroyFree)
+		err := m.cleanPool(ctx, pool, nil, destroyBusy, destroyFree)
 		if err != nil {
 			returnError = err
-			logrus.Errorf("failed to dclean pool %s with error: %s", pool.Name, err)
+			logrus.Errorf("failed to clean pool %s with error: %s", pool.Name, err)
 		}
 	}
 
@@ -457,8 +478,8 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 }
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
-func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
-	instBusy, instFree, instHibernating, err := m.List(ctx, pool)
+func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams) error {
+	instBusy, instFree, instHibernating, err := m.List(ctx, pool, query)
 	if err != nil {
 		return err
 	}
@@ -501,7 +522,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, "", false)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -520,18 +541,18 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry) error {
 	return nil
 }
 
-func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry) error {
+func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams) error {
 	pool.Lock()
 	defer pool.Unlock()
 
-	return m.buildPool(ctx, pool)
+	return m.buildPool(ctx, pool, tlsServerName, query)
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID string, inuse bool) (*types.Instance, error) {
+func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID string, inuse bool) (*types.Instance, error) {
 	var inst *types.Instance
 
 	// generate certs
-	createOptions, err := certs.Generate(m.runnerName)
+	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.Platform = pool.Platform
 	createOptions.PoolName = pool.Name
@@ -559,6 +580,8 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID st
 		inst.OwnerID = ownerID
 	}
 
+	inst.RunnerName = m.runnerName
+
 	err = m.instanceStore.Create(ctx, inst)
 	if err != nil {
 		logrus.WithError(err).
@@ -569,7 +592,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, ownerID st
 
 	if !inuse {
 		go func() {
-			herr := m.hibernateWithRetries(context.Background(), pool.Name, inst.ID)
+			herr := m.hibernateWithRetries(context.Background(), pool.Name, tlsServerName, inst.ID)
 			if herr != nil {
 				logrus.WithError(herr).Errorln("failed to hibernate the vm")
 			}
@@ -607,6 +630,14 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 	return inst, nil
 }
 
+func (m *Manager) GetInstanceStore() store.InstanceStore {
+	return m.instanceStore
+}
+
+func (m *Manager) GetStageOwnerStore() store.StageOwnerStore {
+	return m.stageOwnerStore
+}
+
 func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string) (string, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
@@ -616,7 +647,7 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	return pool.Driver.Logs(ctx, instanceID)
 }
 
-func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID string) error {
+func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, tlsServerName, instanceID string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
@@ -626,7 +657,7 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, instanceID
 		return nil
 	}
 
-	m.waitForInstanceConnectivity(ctx, instanceID)
+	m.waitForInstanceConnectivity(ctx, tlsServerName, instanceID)
 
 	retryCount := 1
 	const maxRetries = 3
@@ -711,9 +742,12 @@ func (m *Manager) updateInstState(ctx context.Context, pool *poolEntry, instance
 	return nil
 }
 
-func (m *Manager) forEach(ctx context.Context, f func(ctx context.Context, pool *poolEntry) error) error {
+func (m *Manager) forEach(ctx context.Context,
+	serverName string,
+	query *types.QueryParams,
+	f func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error) error {
 	for _, pool := range m.poolMap {
-		err := f(ctx, pool)
+		err := f(ctx, pool, serverName, query)
 		if err != nil {
 			return err
 		}
@@ -722,7 +756,7 @@ func (m *Manager) forEach(ctx context.Context, f func(ctx context.Context, pool 
 	return nil
 }
 
-func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID string) {
+func (m *Manager) waitForInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) {
 	bf := backoff.NewExponentialBackOff()
 	for {
 		duration := bf.NextBackOff()
@@ -735,7 +769,7 @@ func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID st
 			logrus.WithField("instanceID", instanceID).Warnln("hibernate: connectivity check deadline exceeded")
 			return
 		case <-time.After(duration):
-			err := m.checkInstanceConnectivity(ctx, instanceID)
+			err := m.checkInstanceConnectivity(ctx, tlsServerName, instanceID)
 			if err == nil {
 				return
 			}
@@ -744,7 +778,7 @@ func (m *Manager) waitForInstanceConnectivity(ctx context.Context, instanceID st
 	}
 }
 
-func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID string) error {
+func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) error {
 	instance, err := m.Find(ctx, instanceID)
 	if err != nil {
 		return errors.Wrap(err, "failed to find the instance in db")
@@ -755,7 +789,7 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID stri
 	}
 
 	endpoint := fmt.Sprintf("https://%s:9079/", instance.Address)
-	client, err := lehttp.NewHTTPClient(endpoint, m.runnerName, string(instance.CACert), string(instance.TLSCert), string(instance.TLSKey))
+	client, err := lehttp.NewHTTPClient(endpoint, tlsServerName, string(instance.CACert), string(instance.TLSCert), string(instance.TLSKey))
 	if err != nil {
 		return errors.Wrap(err, "failed to create client")
 	}
@@ -770,4 +804,12 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, instanceID stri
 	}
 
 	return nil
+}
+
+func (m *Manager) GetTLSServerName() string {
+	return m.runnerName
+}
+
+func (m *Manager) IsDistributed() bool {
+	return false
 }

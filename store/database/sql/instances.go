@@ -47,6 +47,10 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 			stmt = stmt.Where(squirrel.Eq{"instance_state": params.Status})
 			args = append(args, params.Status)
 		}
+		if params.RunnerName != "" {
+			stmt = stmt.Where(squirrel.Eq{"runner_name": params.RunnerName})
+			args = append(args, params.RunnerName)
+		}
 	}
 	stmt = stmt.OrderBy("instance_started " + "ASC")
 	sql, _, _ := stmt.ToSql()
@@ -72,6 +76,36 @@ func (s InstanceStore) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
+	dst := []*types.Instance{}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() //nolint
+
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var deletedRow types.Instance
+		err := rows.Scan(&deletedRow.ID, &deletedRow.NodeID)
+		if err != nil {
+			tx.Rollback() //nolint
+			return nil, err
+		}
+		dst = append(dst, &deletedRow)
+	}
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return dst, nil
 }
 
 func (s InstanceStore) Update(_ context.Context, instance *types.Instance) error {
@@ -149,6 +183,7 @@ INSERT INTO instances (
 ,is_hibernated
 ,instance_port
 ,instance_owner_id
+,runner_name
 ) values (
  :instance_id
 ,:instance_node_id
@@ -176,6 +211,7 @@ INSERT INTO instances (
 ,:is_hibernated
 ,:instance_port
 ,:instance_owner_id
+,:runner_name
 ) RETURNING instance_id
 `
 

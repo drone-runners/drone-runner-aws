@@ -43,7 +43,7 @@ func HandleStep(ctx context.Context,
 	r *ExecuteVMRequest,
 	s store.StageOwnerStore,
 	env *config.EnvConfig,
-	poolManager *drivers.Manager,
+	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 	async bool) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
@@ -93,7 +93,7 @@ func HandleStep(ctx context.Context,
 
 	logr = logr.WithField("ip", inst.Address)
 
-	client, err := lehelper.GetClient(inst, env.Runner.Name, inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
@@ -152,7 +152,7 @@ func HandleStep(ctx context.Context,
 }
 
 func getInstance(ctx context.Context, poolID, stageRuntimeID,
-	instanceID string, poolManager *drivers.Manager) (
+	instanceID string, poolManager drivers.IManager) (
 	*types.Instance, error) {
 	if instanceID != "" {
 		inst, err := poolManager.Find(ctx, instanceID)

@@ -48,3 +48,7 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 func (s InstanceStore) Purge(ctx context.Context) error {
 	return nil
 }
+
+func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
+	panic("implement me")
+}

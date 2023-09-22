@@ -42,12 +42,12 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	return userdata
 }
 
-func GetClient(instance *types.Instance, runnerName string, liteEnginePort int64, mock bool, mockTimeoutSecs int) (lehttp.Client, error) {
+func GetClient(instance *types.Instance, serverName string, liteEnginePort int64, mock bool, mockTimeoutSecs int) (lehttp.Client, error) {
 	leURL := fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
 	if mock {
 		return lehttp.NewNoopClient(&api.PollStepResponse{}, nil, time.Duration(mockTimeoutSecs)*time.Second, 0, 0), nil
 	}
 	return lehttp.NewHTTPClient(leURL,
-		runnerName, string(instance.CACert),
+		serverName, string(instance.CACert),
 		string(instance.TLSCert), string(instance.TLSKey))
 }
