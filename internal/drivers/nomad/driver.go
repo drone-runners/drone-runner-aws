@@ -243,7 +243,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB int, vm, accountId string) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB int, vm, accountID string) (job *api.Job, id string) {
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -255,8 +255,8 @@ func (p *config) resourceJob(cpus, memGB int, vm, accountId string) (job *api.Jo
 	mem := convertGigsToMegs(memGB) - 53
 
 	constraintList := []*api.Constraint{}
-	if accountId != "" {
-		constraintList = constraints(accountId)
+	if accountID != "" {
+		constraintList = constraints(accountID)
 	}
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	// It sleeps until the max VM creation timeout, after which it periodically checks whether the VM is alive or not
