@@ -26,6 +26,12 @@ func WithClientKeyPath(s string) Option {
 	}
 }
 
+func WithEnablePinning(s string) Option {
+	return func(p *config) {
+		p.enablePinning = s
+	}
+}
+
 func WithInsecure(b bool) Option {
 	return func(p *config) {
 		p.insecure = b
