@@ -107,6 +107,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	// Initialize metrics
 	c.registerMetrics()
 
+	ctx = context.WithValue(ctx, types.Hosted, true)
 	poolConfig, err := c.setupPool(ctx)
 	defer harness.Cleanup(&c.env, c.poolManager, true, true) //nolint: errcheck
 	if err != nil {

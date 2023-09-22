@@ -43,7 +43,7 @@ type SetupVMResponse struct {
 }
 
 var (
-	healthCheckTimeout = 3 * time.Minute
+	healthCheckTimeout = 5 * time.Minute
 	freeAccount        = "free"
 )
 
