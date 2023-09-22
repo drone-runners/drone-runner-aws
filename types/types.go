@@ -83,7 +83,7 @@ type InstanceCreateOpts struct {
 	HarnessTestBinaryURI string
 	PluginBinaryURI      string
 	Tmate                Tmate
-	AccountId            string
+	AccountID            string
 }
 
 // Platform defines the target platform.

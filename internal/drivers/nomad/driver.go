@@ -109,7 +109,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	startupScript := generateStartupScript(opts)
 
 	vm := strings.ToLower(random(20)) //nolint:gomnd
-	c := strings.Contains(p.enablePinning, opts.AccountId)
+	c := strings.Contains(p.enablePinning, opts.AccountID)
 	cpus, err := strconv.Atoi(p.vmCpus)
 	if err != nil {
 		return nil, errors.New("could not convert VM cpus to integer")
@@ -127,7 +127,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm)
 	} else {
 		if c {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, opts.AccountId)
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, opts.AccountID)
 		} else {
 			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount)
 		}
@@ -675,12 +675,12 @@ func resourceJobID(s string) string {
 	return fmt.Sprintf("init_job_resources_%s", s)
 }
 
-func constraints(AccountID string) []*api.Constraint {
+func constraints(accountID string) []*api.Constraint {
 	constraintList := []*api.Constraint{}
 
 	constraint := &api.Constraint{
 		LTarget: "${node.class}",
-		RTarget: AccountID,
+		RTarget: accountID,
 		Operand: "=",
 	}
 
