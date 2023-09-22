@@ -243,7 +243,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB int, vm string, accountId string) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB int, vm, accountId string) (job *api.Job, id string) {
 	id = resourceJobID(vm)
 	portLabel := vm
 
