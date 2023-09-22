@@ -44,9 +44,10 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	// We do retries on destroy in case a destroy call comes while an initialize call is still happening.
 	cnt := 0
 	b := createBackoff(destroyTimeout)
+	timer := time.NewTimer(0)
 	for {
 		duration := b.NextBackOff()
-		timer := time.NewTimer(duration)
+		timer.Reset(duration) // Reset the timer with the new duration
 
 		select {
 		case <-ctx.Done():
