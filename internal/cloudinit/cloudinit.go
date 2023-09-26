@@ -29,6 +29,7 @@ type Params struct {
 	HarnessTestBinaryURI string
 	PluginBinaryURI      string
 	Tmate                types.Tmate
+	IsHosted             bool
 }
 
 var funcs = map[string]interface{}{
@@ -484,6 +485,10 @@ Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ 
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
+if (${{ .IsHosted }} -eq $true) {
+    netsh interface ipv4 add dnsserver "Ethernet" 8.8.8.8 index=1
+    Write-Host "DNS server added to Ethernet interface."
+} 
 echo "[DRONE] Initialization Complete"
 
 </powershell>`

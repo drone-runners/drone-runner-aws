@@ -7,6 +7,12 @@ import (
 type InstanceState string
 type DriverType string
 
+type ContextKey string
+
+const (
+	Hosted = ContextKey("hosted")
+)
+
 // Value converts the value to a sql string.
 func (s InstanceState) Value() (driver.Value, error) {
 	return string(s), nil
@@ -85,6 +91,7 @@ type InstanceCreateOpts struct {
 	PluginBinaryURI      string
 	Tmate                Tmate
 	AccountID            string
+	IsHosted             bool
 }
 
 // Platform defines the target platform.

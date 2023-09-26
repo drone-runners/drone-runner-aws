@@ -26,6 +26,7 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
 		PluginBinaryURI:      opts.PluginBinaryURI,
 		Tmate:                opts.Tmate,
+		IsHosted:             opts.IsHosted,
 	}
 
 	if userdata == "" {
