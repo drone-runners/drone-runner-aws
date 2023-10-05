@@ -58,6 +58,11 @@ type config struct {
 	service *ec2.EC2
 }
 
+const (
+	tagRetries      = 3
+	tagRetrySleepMs = 100
+)
+
 func New(opts ...Option) (drivers.Driver, error) {
 	p := new(config)
 	for _, opt := range opts {
@@ -407,13 +412,25 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	in := &ec2.CreateTagsInput{
 		Resources: []*string{aws.String(instance.ID)},
 	}
+	logr := logger.FromContext(ctx).
+		WithField("id", instance.ID).
+		WithField("driver", types.Amazon)
 	for key, value := range tags {
 		in.Tags = append(in.Tags, &ec2.Tag{
 			Key:   aws.String(key),
 			Value: aws.String(value),
 		})
 	}
-	_, err := p.service.CreateTagsWithContext(ctx, in)
+	var err error
+	for i := 0; i < tagRetries; i++ {
+		_, err = p.service.CreateTagsWithContext(ctx, in)
+		if err == nil {
+			return nil
+		}
+		logr.WithError(err).Warnln("failed to set tags to the instance. retrying")
+		time.Sleep(tagRetrySleepMs)
+	}
+
 	return err
 }
 
