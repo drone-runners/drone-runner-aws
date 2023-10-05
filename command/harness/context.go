@@ -16,7 +16,7 @@ type Context struct {
 }
 
 func AddContext(logr *logrus.Entry, context *Context, tags map[string]string) *logrus.Entry {
-	return logr.WithField("account_id", getAccountID(context, tags)).
+	return logr.WithField("account_id", GetAccountID(context, tags)).
 		WithField("org_id", getOrgID(context, tags)).
 		WithField("project_id", getProjectID(context, tags)).
 		WithField("pipeline_id", getPipelineID(context, tags)).
@@ -25,7 +25,7 @@ func AddContext(logr *logrus.Entry, context *Context, tags map[string]string) *l
 }
 
 // These functions can be removed in the next release once we start populating context
-func getAccountID(context *Context, tags map[string]string) string {
+func GetAccountID(context *Context, tags map[string]string) string {
 	if context.AccountID != "" {
 		return context.AccountID
 	}

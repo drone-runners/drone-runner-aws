@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
@@ -26,6 +27,7 @@ type VMExecuteTask struct {
 
 type VMExecuteTaskRequest struct {
 	ExecuteVMRequest harness.ExecuteVMRequest `json:"execute_step_request"`
+	Context          harness.Context          `json:"context,omitempty"`
 }
 
 func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +56,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
+	accountID := harness.GetAccountID(&req.Context, map[string]string{})
 
 	req.ExecuteVMRequest.CorrelationID = task.ID
 	distributed := req.ExecuteVMRequest.Distributed
@@ -86,6 +89,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var stepResp *api.PollStepResponse
 	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics, distributed)
 	if err != nil {
+		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(distributed)).Inc()
 		logr.WithError(err).
 			WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
 			Error("could not execute step")
