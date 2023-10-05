@@ -146,14 +146,14 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed())).Observe(setupTime.Seconds())
 	} else {
 		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed())).Inc()
-		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed())).Inc()
+		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "").Inc()
 		if fallback {
 			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False, strconv.FormatBool(poolManager.IsDistributed())).Inc()
 		}
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
-	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed())).Inc()
+	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone).Inc()
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}
 
 	logr.WithField("selected_pool", selectedPool).
@@ -201,7 +201,7 @@ func handleSetup(
 	if strings.Contains(r.PoolID, freeAccount) {
 		owner = freeAccount
 	} else {
-		owner = getAccountID(&r.Context, r.Tags)
+		owner = GetAccountID(&r.Context, r.Tags)
 	}
 
 	// try to provision an instance from the pool manager.

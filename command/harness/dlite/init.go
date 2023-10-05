@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
@@ -54,11 +55,14 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accountID := harness.GetAccountID(&req.SetupVMRequest.Context, map[string]string{})
+
 	// Make the setup call
 	req.SetupVMRequest.CorrelationID = task.ID
 	poolManager := t.c.getPoolManager(req.Distributed)
 	setupResp, selectedPoolDriver, err := harness.HandleSetup(ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
 	if err != nil {
+		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).Error("could not setup VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return

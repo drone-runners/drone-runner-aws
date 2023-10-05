@@ -14,6 +14,7 @@ import (
 type Metrics struct {
 	BuildCount             *prometheus.CounterVec
 	FailedCount            *prometheus.CounterVec
+	ErrorCount             *prometheus.CounterVec
 	RunningCount           *prometheus.GaugeVec
 	RunningPerAccountCount *prometheus.GaugeVec
 	PoolFallbackCount      *prometheus.CounterVec
@@ -55,6 +56,17 @@ func (m *Metrics) AddMetricStore(metricStore *Store) {
 	m.stores = append(m.stores, metricStore)
 }
 
+// Error count provides metrics for total errors in the system
+func ErrorCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "harness_ci_errors_total",
+			Help: "Total number of system errors",
+		},
+		[]string{"owner_id", "distributed"},
+	)
+}
+
 // BuildCount provides metrics for total number of pipeline executions (failed + successful)
 func BuildCount() *prometheus.CounterVec {
 	return prometheus.NewCounterVec(
@@ -62,7 +74,7 @@ func BuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_total",
 			Help: "Total number of completed pipeline executions (failed + successful)",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone"},
 	)
 }
 
@@ -194,7 +206,8 @@ func RegisterMetrics() *Metrics {
 	waitDurationCount := WaitDurationCount()
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile)
+	errorCount := ErrorCount()
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile, errorCount)
 	return &Metrics{
 		BuildCount:             buildCount,
 		FailedCount:            failedBuildCount,
@@ -204,5 +217,6 @@ func RegisterMetrics() *Metrics {
 		WaitDurationCount:      waitDurationCount,
 		MemoryPercentile:       memoryPercentile,
 		CPUPercentile:          cpuPercentile,
+		ErrorCount:             errorCount,
 	}
 }
