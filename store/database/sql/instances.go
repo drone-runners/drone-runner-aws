@@ -94,7 +94,7 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 
 	for rows.Next() {
 		var deletedRow types.Instance
-		err := rows.Scan(&deletedRow.ID, &deletedRow.NodeID)
+		err := rows.Scan(&deletedRow.ID, &deletedRow.Name, &deletedRow.NodeID)
 		if err != nil {
 			tx.Rollback() //nolint
 			return nil, err

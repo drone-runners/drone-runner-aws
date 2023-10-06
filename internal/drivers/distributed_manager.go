@@ -134,7 +134,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	}
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_node_id").ToSql()
+	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_name, instance_node_id").ToSql()
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,13 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		return nil
 	}
 
-	logr.Infof("distributed dlite: purger: Terminating %d stale instances\n", len(instances))
+	var instanceNames []string
+
+	for _, instance := range instances {
+		instanceNames = append(instanceNames, instance.Name)
+	}
+
+	logr.Infof("distributed dlite: purger: Terminating stale instances\n%s", instanceNames)
 
 	err = pool.Driver.Destroy(ctx, instances)
 	if err != nil {
