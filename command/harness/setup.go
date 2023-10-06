@@ -187,7 +187,6 @@ func handleSetup(
 	env *config.EnvConfig,
 	poolManager drivers.IManager,
 	pool, owner string) (*types.Instance, error) {
-
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, fmt.Errorf("could not find pool: %s", pool)
