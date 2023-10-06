@@ -112,6 +112,14 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	fallback := false
 
 	st := time.Now()
+	var owner string
+
+	// TODO: Remove this once we start populating license information.
+	if strings.Contains(r.PoolID, freeAccount) {
+		owner = freeAccount
+	} else {
+		owner = GetAccountID(&r.Context, r.Tags)
+	}
 
 	// try to provision an instance with fallbacks
 	for idx, p := range pools {
@@ -120,7 +128,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
-		instance, poolErr = handleSetup(ctx, logr, r, s, env, poolManager, pool)
+		instance, poolErr = handleSetup(ctx, logr, r, s, env, poolManager, pool, owner)
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
 			continue
@@ -140,20 +148,20 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 			// fallback metric records the first pool ID which was tried and the associated driver.
 			// We don't record final pool which was used as this metric is only used to get data about
 			// which drivers and pools are causing fallbacks.
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True, strconv.FormatBool(poolManager.IsDistributed())).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
 		}
 		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
-			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed())).Observe(setupTime.Seconds())
+			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed()), owner).Observe(setupTime.Seconds())
 	} else {
-		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed())).Inc()
-		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "").Inc()
+		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
+		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "", owner).Inc()
 		if fallback {
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False, strconv.FormatBool(poolManager.IsDistributed())).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
 		}
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
-	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone).Inc()
+	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner).Inc()
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}
 
 	logr.WithField("selected_pool", selectedPool).
@@ -178,9 +186,8 @@ func handleSetup(
 	s store.StageOwnerStore,
 	env *config.EnvConfig,
 	poolManager drivers.IManager,
-	pool string,
+	pool, owner string,
 ) (*types.Instance, error) {
-	var owner string
 
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
@@ -195,13 +202,6 @@ func handleSetup(
 		if cerr := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: pool}); cerr != nil {
 			return nil, fmt.Errorf("could not create stage owner entity: %w", cerr)
 		}
-	}
-
-	// TODO: Remove this once we start populating license information.
-	if strings.Contains(r.PoolID, freeAccount) {
-		owner = freeAccount
-	} else {
-		owner = GetAccountID(&r.Context, r.Tags)
 	}
 
 	// try to provision an instance from the pool manager.
