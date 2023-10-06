@@ -186,8 +186,7 @@ func handleSetup(
 	s store.StageOwnerStore,
 	env *config.EnvConfig,
 	poolManager drivers.IManager,
-	pool, owner string,
-) (*types.Instance, error) {
+	pool, owner string) (*types.Instance, error) {
 
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
