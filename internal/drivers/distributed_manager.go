@@ -148,13 +148,13 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		return nil
 	}
 
-	var instance_names []string
+	var instanceNames []string
 
 	for _, instance := range instances {
-		instance_names = append(instance_names, instance.Name)
+		instanceNames = append(instanceNames, instance.Name)
 	}
 
-	logr.Infof("distributed dlite: purger: Terminating stale instances\n%s", instance_names)
+	logr.Infof("distributed dlite: purger: Terminating stale instances\n%s", instanceNames)
 
 	err = pool.Driver.Destroy(ctx, instances)
 	if err != nil {
