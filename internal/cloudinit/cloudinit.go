@@ -486,8 +486,11 @@ New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profi
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
 if (${{ .IsHosted }} -eq $true) {
-    netsh interface ipv4 add dnsserver "Ethernet" 8.8.8.8 index=1
-    Write-Host "DNS server added to Ethernet interface."
+	netsh interface ipv4 add dnsserver "Ethernet" 8.8.8.8 index=1
+	netsh interface ipv4 add dnsserver "Ethernet" 1.1.1.1 index=2
+	netsh interface ipv4 add dnsserver "Ethernet" 8.8.4.4 index=3
+	ipconfig /flushdns
+	Write-Host "DNS server added to Ethernet interface."
 } 
 echo "[DRONE] Initialization Complete"
 
