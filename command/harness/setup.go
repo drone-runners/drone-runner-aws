@@ -51,10 +51,16 @@ var (
 // It calls handleSetup internally for each pool instance trying to complete a setup.
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager,
 	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
+
+	GetCtxState().Add(cancel, stageRuntimeID, r.Context.TaskID)
+	defer GetCtxState().Delete(stageRuntimeID)
 
 	if r.PoolID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
@@ -129,6 +135,11 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
 		instance, poolErr = handleSetup(ctx, logr, r, s, env, poolManager, pool, owner)
+		// If the context has been canceled, break out of the loop
+		if ctx.Err() == context.Canceled {
+			logr.WithField("pool_id", pool).Warnln("context canceled, ignoring fallback")
+			break
+		}
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
 			continue

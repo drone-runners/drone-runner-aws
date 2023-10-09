@@ -82,8 +82,8 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Token:      token,
 		}
 	} else {
-		ctxState().Add(cancel, req.ExecuteVMRequest.StageRuntimeID, task.ID)
-		defer ctxState().DeleteTask(req.ExecuteVMRequest.StageRuntimeID, task.ID)
+		harness.GetCtxState().Add(cancel, req.ExecuteVMRequest.StageRuntimeID, task.ID)
+		defer harness.GetCtxState().DeleteTask(req.ExecuteVMRequest.StageRuntimeID, task.ID)
 	}
 
 	var stepResp *api.PollStepResponse

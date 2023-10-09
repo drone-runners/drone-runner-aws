@@ -45,7 +45,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	accountID := harness.GetAccountID(&req.Context, map[string]string{})
 	poolManager := t.c.getPoolManager(req.Distributed)
 	if !req.Distributed {
-		ctxState().Delete(req.StageRuntimeID)
+		harness.GetCtxState().Delete(req.StageRuntimeID)
 	}
 	err = harness.HandleDestroy(ctx, req, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
 	if err != nil {
