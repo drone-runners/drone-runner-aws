@@ -1,4 +1,4 @@
-package dlite
+package harness
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	cState *CtxState
-	once   sync.Once
+	cState  *CtxState
+	ctxOnce sync.Once
 )
 
 // CtxState stores the cancel contexts for all the steps of a stage.
@@ -44,8 +44,8 @@ func (c *CtxState) DeleteTask(stageRuntimeID, taskID string) {
 	delete(c.ctx[stageRuntimeID], taskID)
 }
 
-func ctxState() *CtxState {
-	once.Do(func() {
+func GetCtxState() *CtxState {
+	ctxOnce.Do(func() {
 		cState = &CtxState{
 			mu:  sync.Mutex{},
 			ctx: make(map[string]map[string]*context.CancelFunc),
