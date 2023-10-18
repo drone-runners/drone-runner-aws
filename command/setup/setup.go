@@ -194,9 +194,12 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			WithField("instance", instance.ID).
 			Fatalln("setup: unable to start lite engine")
 	}
+
 	// try the healthcheck api on the lite-engine until it responds ok
 	logrus.Traceln("setup: running healthcheck and waiting for an ok response")
-	healthResponse, healthErr := leClient.RetryHealth(ctx, healthCheckWait)
+	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
+
+	healthResponse, healthErr := leClient.RetryHealth(ctx, healthCheckWait, performDNSLookup)
 	if healthErr != nil {
 		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
 		logrus.WithError(err).Errorln("failed health check with instance")

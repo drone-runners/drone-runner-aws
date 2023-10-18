@@ -304,7 +304,9 @@ func handleSetup(
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
-	if _, err = client.RetryHealth(ctx, healthCheckTimeout); err != nil {
+	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
+
+	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
 		defer cleanUpStageOwnerMappingFn()
 		go cleanUpInstanceFn(true)
 		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
