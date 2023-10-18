@@ -553,7 +553,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 
 	// generate certs
 	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
-	createOptions.IsHosted = isHosted(ctx)
+	createOptions.IsHosted = IsHosted(ctx)
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.Platform = pool.Platform
 	createOptions.PoolName = pool.Name
@@ -795,7 +795,7 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, 
 		return errors.Wrap(err, "failed to create client")
 	}
 
-	response, err := client.Health(ctx)
+	response, err := client.Health(ctx, false)
 	if err != nil {
 		return err
 	}

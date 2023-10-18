@@ -109,7 +109,9 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
-	healthResponse, err := client.RetryHealth(ctx, timeoutSetup)
+	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
+
+	healthResponse, err := client.RetryHealth(ctx, timeoutSetup, performDNSLookup)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to call LE.RetryHealth")
 		return err
