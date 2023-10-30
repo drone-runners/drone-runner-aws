@@ -109,6 +109,11 @@ wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429
 chmod 777 /usr/bin/plugin
 {{ end }}
 
+{{ if .HarnessTestBinaryURI }}
+- 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
+- 'chmod 777 /usr/bin/split_tests'
+{{ end }}
+
 {{ if eq .Platform.Arch "amd64" }}
 curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
 chmod 777 /usr/bin/envman
@@ -358,6 +363,10 @@ runcmd:
 - 'sudo usermod -a -G docker ec2-user'
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
+{{ if .HarnessTestBinaryURI }}
+- 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
+- 'chmod 777 /usr/bin/split_tests'
+{{ end }}
 {{ if .PluginBinaryURI }}
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 - 'chmod 777 /usr/bin/plugin'
