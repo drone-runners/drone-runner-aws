@@ -45,6 +45,7 @@ type SetupVMResponse struct {
 var (
 	healthCheckTimeout = 5 * time.Minute
 	freeAccount        = "free"
+	noContext          = context.Background()
 )
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
@@ -220,9 +221,9 @@ func handleSetup(
 			RunnerName: env.Runner.Name,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, env, query)
+	instance, err := poolManager.Provision(noContext, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, env, query)
 	if err != nil {
-		if derr := s.Delete(ctx, stageRuntimeID); derr != nil {
+		if derr := s.Delete(noContext, stageRuntimeID); derr != nil {
 			logr.WithError(derr).Errorln("could not remove stage ID mapping after provision failure")
 		}
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
