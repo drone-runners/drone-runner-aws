@@ -110,8 +110,8 @@ chmod 777 /usr/bin/plugin
 {{ end }}
 
 {{ if .HarnessTestBinaryURI }}
-- 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
-- 'chmod 777 /usr/bin/split_tests'
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/bin/split_tests
+chmod 777 /usr/bin/split_tests
 {{ end }}
 
 {{ if eq .Platform.Arch "amd64" }}
