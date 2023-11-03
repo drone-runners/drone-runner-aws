@@ -150,7 +150,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		_, findErr := s.Find(noContext, stageRuntimeID)
 		if findErr != nil {
 			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
-				if derr := poolManager.Destroy(context.Background(), selectedPool, instance.ID); derr != nil {
+				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID); derr != nil {
 					logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 				}
 				return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
