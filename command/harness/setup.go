@@ -130,7 +130,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
-		instance, poolErr = handleSetup(ctx, logr, r, s, env, poolManager, pool, owner)
+		instance, poolErr = handleSetup(ctx, logr, r, env, poolManager, pool, owner)
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
 			continue
@@ -195,7 +195,6 @@ func handleSetup(
 	ctx context.Context,
 	logr *logrus.Entry,
 	r *SetupVMRequest,
-	s store.StageOwnerStore,
 	env *config.EnvConfig,
 	poolManager drivers.IManager,
 	pool, owner string) (*types.Instance, error) {
