@@ -52,7 +52,6 @@ var (
 // It calls handleSetup internally for each pool instance trying to complete a setup.
 func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager,
 	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
-
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
