@@ -45,6 +45,7 @@ type SetupVMResponse struct {
 var (
 	healthCheckTimeout = 5 * time.Minute
 	freeAccount        = "free"
+	noContext          = context.Background()
 )
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
@@ -146,9 +147,9 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	// If a successful fallback happened and we have an instance setup, record it
 	if foundPool && instance != nil { // check for instance != nil just in case
 		// add an entry in stage pool mapping if instance was created.
-		_, findErr := s.Find(ctx, stageRuntimeID)
+		_, findErr := s.Find(noContext, stageRuntimeID)
 		if findErr != nil {
-			if cerr := s.Create(ctx, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
+			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
 				if derr := poolManager.Destroy(context.Background(), selectedPool, instance.ID); derr != nil {
 					logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 				}
