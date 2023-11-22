@@ -60,7 +60,7 @@ type config struct {
 
 const (
 	tagRetries      = 3
-	tagRetrySleepMs = 100
+	tagRetrySleepMs = 1000
 )
 
 func New(opts ...Option) (drivers.Driver, error) {
