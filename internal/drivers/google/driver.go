@@ -32,7 +32,7 @@ const (
 	insertRetries      = 3
 	deleteRetries      = 3
 	secSleep           = 1
-	tagRetrySleepMs    = 50
+	tagRetrySleepMs    = 1000
 )
 
 var (
