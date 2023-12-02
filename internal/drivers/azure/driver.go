@@ -40,8 +40,6 @@ type config struct {
 	sku       string
 	version   string
 
-	IPAddress string
-
 	size        string
 	tags        map[string]string
 	zones       []*string
@@ -156,7 +154,6 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		logr.WithError(err).Error("could not create public IP")
 		return nil, err
 	}
-	c.IPAddress = *publicIP.Properties.IPAddress
 	networkInterface, err := c.createNetworkInterface(ctx, networkInterfaceName, *subnet.ID, *publicIP.ID)
 	if err != nil {
 		logr.WithError(err).Error("could not create network interface")
@@ -234,7 +231,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("azure: [provision] VM provisioned")
 
-	instanceMap := c.mapToInstance(&vm, opts)
+	instanceMap := c.mapToInstance(&vm, opts, *publicIP.Properties.IPAddress)
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
@@ -330,7 +327,7 @@ func (c *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
-func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts) types.Instance {
+func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdateResponse, opts *types.InstanceCreateOpts, ipAddress string) types.Instance {
 	return types.Instance{
 		ID:           *vm.Name,
 		Name:         *vm.Name,
@@ -341,7 +338,7 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 		Zone:         c.Zones(),
 		Size:         c.size,
 		Platform:     opts.Platform,
-		Address:      c.IPAddress,
+		Address:      ipAddress,
 		CACert:       opts.CACert,
 		CAKey:        opts.CAKey,
 		TLSCert:      opts.TLSCert,
