@@ -326,11 +326,9 @@ type EnvConfig struct {
 		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.3.5-beta"`
 	}
 	LiteEngine struct {
-		// UPDATE THE GO.MOD FILE TO MATCH THE VERSION OF THE LITE ENGINE
-		Path string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.42/"`
-		// UPDATE THE GO.MOD FILE TO MATCH THE VERSION OF THE LITE ENGINE
-		EnableMock          bool `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
-		MockStepTimeoutSecs int  `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.42/"`
+		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
+		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
 
 	Server struct {
