@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlite
+  namespace: {{ .Release.Namespace }}
+data:
+  ENABLE_AUTH: {{ .Values.enableAuth | quote }}
+  # need to add more here
+  

@@ -1,0 +1,66 @@
+# Default values for dlite
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+global:
+  commonAnnotations: {}
+  commonLabels: {}
+  loadbalancerURL: ""
+  airgap: false
+  imagePullSecrets: []
+  stackDriverLoggingEnabled: false
+
+  ingress:
+    # -- create ingress objects
+    enabled: false
+    # -- set ingress object classname
+    className: harness
+    # -- set host of ingressObjects
+    hosts:
+      - my-host.example.org
+    # -- set tls for ingress objects
+    tls:
+      enabled: true
+      secretName: ''
+    # -- add annotations to ingress objects
+    objects:
+      annotations: { }
+
+enableAuth: true
+replicaCount: 1
+maxSurge: 1
+maxUnavailable: 0
+image:
+  registry: docker.io
+  repository: drone/drone-runner-aws
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "5302"
+  digest: ""
+  imagePullSecrets: []
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "harness-default"
+securityContext:
+  runAsUser: 65534
+  runAsNonRoot: true
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+service:
+  annotations: {}
+  type: ClusterIP
+  port: 3000
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
