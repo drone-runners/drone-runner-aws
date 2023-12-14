@@ -4,8 +4,15 @@ metadata:
   name: dlite-service
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "chart.labels" . | nindent 4 }}
+    {{- include "dlite.labels" . | nindent 4 }}
+    {{- if .Values.global.commonLabels }}
+    {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.global.commonAnnotations }}
+  annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
 spec:
+  progressDeadlineSeconds: 600
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
@@ -16,44 +23,68 @@ spec:
       maxUnavailable: {{ .Values.maxUnavailable }}
   selector:
     matchLabels:
-      {{- include "chart.selectorLabels" . | nindent 6 }}
+      {{- include "dlite.selectorLabels" . | nindent 6 }}
   template:
+      metadata:
+        annotations:
+          checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+          {{- with .Values.podAnnotations }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+          {{- if .Values.global.commonAnnotations }}
+            {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 8 }}
+          {{- end }}
       labels:
-        {{- include "chart.labels" . | nindent 8 }}
-	{{- with .Values.podLabels }}
-        {{- toYaml . | nindent 8 }}
+        {{- include "dlite.selectorLabels" . | nindent 8 }}
+        {{- if .Values.global.commonLabels }}
+        {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonLabels "context" $ ) | nindent 8 }}
+        {{- end }}
+        {{- if .Values.podLabels }}
+        {{- include "harnesscommon.tplvalues.render" (dict "value" .Values.podLabels "context" $) | nindent 8 }}
         {{- end }}
     spec:
-      serviceAccountName: {{ include "dlite-service.serviceAccountName" . }}
+      {{ include "dlite.pullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "dlite.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       terminationGracePeriodSeconds: 30
       containers:
-        - name: dlite
-          image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          securityContext:
-            { { - toYaml .Values.securityContext | nindent 12 } }
-          ports:
-            - name: http-dlite
-              containerPort: {{ .Values.service.port }}
-              protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http-dlite
-              initialDelaySeconds: 40
-              timeoutSeconds: 5
-              periodSeconds: 10
-              failureThreshold: 20
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http-dlite
-              initialDelaySeconds: 60
-              timeoutSeconds: 5
-              periodSeconds: 5
-              failureThreshold: 8
+      - command:
+        - /bin/drone-runner-aws
+        - dlite
+        - --pool=/etc/config/pool.yml
+        env:
+          {{- toYaml .Values.environmentVariables | nindent 12 }}
+        image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          { { - toYaml .Values.securityContext | nindent 12 } }
+        ports:
+          - name: http-dlite
+            containerPort: {{ .Values.service.port }}
+            protocol: TCP
+        livenessProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /healthz
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        readinessProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /healthz
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+            {{- toYaml .Values.resources | nindent 12 }}
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

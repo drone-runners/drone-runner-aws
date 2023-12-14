@@ -58,9 +58,28 @@ service:
   annotations: {}
   type: ClusterIP
   port: 3000
+resources:
+  limits:
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 100
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
+environmentVariables:
+  DLITE_NAME: "dlite-linux-os-1"
+  DLITE_ACCOUNT_ID: 'some_account_id'
+  DLITE_ACCOUNT_SECRET: 'some secret'
+  DLITE_MANAGER_ENDPOINT: 'custome endpoint'
+  DLITE_PARALLEL_WORKERS: "20000"
+  DRONE_DEBUG: "true"
+  DRONE_TRACE: "true"
+  DLITE_POLL_INTERVAL_MILLISECS: "1000"
+  SKIP_PREPARE_SERVER: "true"
+  DRONE_DISTRIBUTED_ENABLED: "true"
+  DRONE_SETTINGS_BUSY_MAX_AGE: "12"
+  DRONE_DISTRIBUTED_DATASOURCE: "host=172.24.1.15 port=5432 user=dlite_db_owner_a6lsbl password=s6tsCuHPmYpMZ!uCU1oQsLRmgypzY dbname=dlite sslmode=verify-ca sslrootcert=/opt/harness/certs/db_server_ca.crt sslcert=/opt/harness/certs/db_client.crt sslkey=/opt/harness/certs/db_client.key"

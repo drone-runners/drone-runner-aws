@@ -3,7 +3,12 @@ kind: ConfigMap
 metadata:
   name: dlite
   namespace: {{ .Release.Namespace }}
+  labels:
+    {{- if .Values.global.commonLabels }}
+    {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.global.commonAnnotations }}
+  annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
 data:
-  ENABLE_AUTH: {{ .Values.enableAuth | quote }}
-  # need to add more here
-  
+  CACHE_BACKEND: "REDIS"
