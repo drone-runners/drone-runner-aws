@@ -206,6 +206,11 @@ chmod 777 /usr/local/bin/plugin
 curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Darwin-arm64 > /usr/local/bin/envman
 chmod 777 /usr/local/bin/envman
 
+{{ if .HarnessTestBinaryURI }}
+wget {{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/local/bin/split_tests
+chmod 777 /usr/local/bin/split_tests
+{{ end }}
+
 /opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
 `
 
