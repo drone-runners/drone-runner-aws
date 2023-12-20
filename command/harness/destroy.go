@@ -43,6 +43,7 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("task_id", r.Context.TaskID)
 	// We do retries on destroy in case a destroy call comes while an initialize call is still happening.
 	cnt := 0
+	var lastErr error
 	b := createBackoff(destroyTimeout)
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -71,7 +72,10 @@ func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		case <-timer.C:
 			_, err := handleDestroy(ctx, r, s, env, poolManager, metrics, cnt, logr)
 			if err != nil {
-				logr.WithError(err).Errorln("could not destroy VM")
+				if lastErr == nil || (lastErr.Error() != err.Error()) {
+					logr.WithError(err).Errorln("could not destroy VM")
+					lastErr = err
+				}
 				if duration == backoff.Stop {
 					return err
 				}
