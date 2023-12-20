@@ -121,8 +121,6 @@ chmod 777 /usr/bin/envman
 
 systemctl disable docker.service
 update-alternatives --set iptables /usr/sbin/iptables-legacy
-sudo sed -i "s|^HOME=/home/harness$|HOME=/home/ubuntu|" /etc/environment
-set -a; source /etc/environment; set +a;
 echo "restarting docker"
 service docker start
 echo "docker service restarted"
