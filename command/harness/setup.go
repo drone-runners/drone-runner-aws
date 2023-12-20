@@ -46,6 +46,7 @@ var (
 	healthCheckTimeout = 5 * time.Minute
 	freeAccount        = "free"
 	noContext          = context.Background()
+	freeCI             = "freeCI"
 )
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
@@ -116,7 +117,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	var owner string
 
 	// TODO: Remove this once we start populating license information.
-	if strings.Contains(r.PoolID, freeAccount) {
+	if strings.Contains(r.PoolID, freeAccount) || r.Tags[freeCI] == "true" {
 		owner = freeAccount
 	} else {
 		owner = GetAccountID(&r.Context, r.Tags)
