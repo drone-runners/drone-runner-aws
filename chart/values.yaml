@@ -1,0 +1,103 @@
+# Default values for ci-manager
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  commonAnnotations: {}
+  commonLabels: {}
+  loadbalancerURL: ""
+  airgap: false
+  imagePullSecrets: []
+  stackDriverLoggingEnabled: false
+  database:
+      mongo:
+      installed: true
+      protocol: mongodb
+      # --  provide default values if mongo.installed is set to false
+      hosts: []
+      secretName: ""
+      userKey: ""
+      passwordKey: ""
+      extraArgs: ""
+      secrets:
+        kubernetesSecrets:
+          - secretName: ""
+            keys:
+              MONGO_USER: ""
+              MONGO_PASSWORD: ""
+        secretManagement: 
+          externalSecretsOperator:
+            - secretStore:
+                name: ""
+                kind: ""
+              remoteKeys:
+                MONGO_USER:
+                  name: ""
+                  property: ""
+                MONGO_PASSWORD:
+                  name: ""
+                  property: ""
+enableAuth: true
+port: 3000
+name: dlite
+replicas: 1
+image:
+  registry: docker.io
+  repository: drone/drone-runner-aws
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+  digest: ""
+  imagePullSecrets: []
+podAnnotations: {}
+podSecurityContext: {}
+affinity: {}
+nodeSelector: {}
+tolerations: []
+waitForInitContainer:
+  image:
+    registry: docker.io
+    repository: harness/helm-init-container
+    pullPolicy: IfNotPresent
+    tag: "latest"
+    digest: ""
+    imagePullSecrets: []
+securityContext:
+  runAsUser: 65534
+  runAsNonRoot: true
+resources:
+  autoscalingMinInstanceCount: 1
+  autoscalingMaxInstanceCount: 3
+dlite:
+  linux_name: dlite-linux
+  accountId: "__GLOBAL_DELEGATE_ACCOUNT_ID__"
+  accountSecret: "2f6b0988b6fb3370073c3d0505baee59"
+  managerEndpoint: "https://<+pipeline.variables.UserId>.pr2.harness.io:9090"
+  pollIntervalMs: "1000"
+  parallelWorkers: "10000"
+instances:
+  project_id: 'ci-play'
+  linux:
+    amd64:
+      pool_size: 1
+      pool_limit: 3
+      image: projects/ci-play/global/images/hosted-vm-64
+      machine_type: e2-standard-4
+      disk_size: 100
+      zones:
+        - asia-south1-b
+service:
+  enabled: true
+  annotations: {}
+  type: ClusterIP
+  port: 80
+  targetPort: 9090
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "harness-default"
+gcp_service_account_b64: '<+secrets.getValue("account.abhaydlitetoken")>'
