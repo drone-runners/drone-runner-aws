@@ -1,82 +1,104 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dlite-service
-  namespace: {{ .Release.Namespace }}
+  name: {{.Values.name}}
+  namespace: {{.Values.namespace.name}}
   labels:
-    {{- include "dlite.labels" . | nindent 4 }}
-    {{- if .Values.global.commonLabels }}
-    {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonLabels "context" $ ) | nindent 4 }}
-    {{- end }}
-  {{- if .Values.global.commonAnnotations }}
-  annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
-  {{- end }}
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: {{.Values.name}}
+    meta.helm.sh/release-namespace: {{.Values.namespace.name}}
 spec:
-  progressDeadlineSeconds: 600
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: {{ .Values.maxSurge }}
-      maxUnavailable: {{ .Values.maxUnavailable }}
+  replicas: {{int .Values.replicas}}
   selector:
     matchLabels:
-      {{- include "dlite.selectorLabels" . | nindent 6 }}
+      app: {{.Values.name}}
+  template:
+    metadata:
+      labels:
+        app: {{.Values.name}}
     spec:
-      {{ include "dlite.pullSecrets" . | nindent 6 }}
-      serviceAccountName: {{ include "dlite.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.securityContext | nindent 8 }}
-      terminationGracePeriodSeconds: 30
-      containers:
-      - command:
-        - /bin/drone-runner-aws
-        - dlite
-        - --pool=/etc/config/pool.yml
+      terminationGracePeriodSeconds: 120
+      initContainers:
+      - name: init-script
+        image: mongo:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          echo "updating global delegate settings";
+          mongo --host=mongo-replicaset.<+pipeline.variables.Namespace>.svc.cluster.local:27017/harness --eval "db.accounts.update({ _id: '__GLOBAL_DELEGATE_ACCOUNT_ID__'}, { \$set: { companyName: 'harness', accountName: 'HarnessGlobalDelegate', accountKey: '2f6b0988b6fb3370073c3d0505baee59', globalDelegateAccount: true, isProductLed: true }}, { upsert: true })"
         env:
-          {{- toYaml .Values.environmentVariables | nindent 12 }}
-        image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        securityContext:
-          {{- toYaml .Values.securityContext | nindent 8 }}
-        ports:
-          - name: http-dlite
-            containerPort: {{ .Values.service.port }}
-            protocol: TCP
-        livenessProbe:
-          failureThreshold: 10
-          httpGet:
-            path: /healthz
-            port: 3000
-            scheme: HTTP
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 5
-        readinessProbe:
-          failureThreshold: 10
-          httpGet:
-            path: /healthz
-            port: 3000
-            scheme: HTTP
-          initialDelaySeconds: 60
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 5
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: username
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: password
+      containers:
+      - name: dlite
+        image: {{.Values.image}}
+        imagePullPolicy: Always
         resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - dlite-service
-              topologyKey: "kubernetes.io/hostname"
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-
+          limits:
+            memory: {{.Values.memory}}
+            cpu: {{.Values.cpu | quote}}
+          requests:
+            memory: {{.Values.memory}}
+            cpu: {{.Values.cpu | quote}}
+        command: ["/bin/drone-runner-aws", "dlite", "--pool=/etc/config/pool.yml"]
+        env:
+        - name: DLITE_NAME
+          value: {{.Values.dlite.linux_name}}
+        - name: DLITE_ACCOUNT_ID
+          value: {{.Values.dlite.accountId | quote}}
+        - name: DLITE_ACCOUNT_SECRET
+          value: {{.Values.dlite.accountSecret | quote}}
+        - name: DLITE_MANAGER_ENDPOINT
+          value: {{.Values.dlite.managerEndpoint}}
+        - name: DLITE_PARALLEL_WORKERS
+          value: {{.Values.dlite.parallelWorkers | quote}}
+        - name: DLITE_POLL_INTERVAL_MILLISECS
+          value: {{.Values.dlite.pollIntervalMs | quote}}
+        - name: SKIP_PREPARE_SERVER
+          value: "true"
+        - name: DRONE_TRACE
+          value: "true"
+        - name: DRONE_LITE_ENGINE_PATH
+          value: https://storage.googleapis.com/harness-ti/local
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: {{int .Values.port}}
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          periodSeconds: 5
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{int .Values.port}}
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 10
+        volumeMounts:
+        - name: pool-cfg
+          mountPath: /etc/config
+        - name: service-account
+          mountPath: /var/run/secret/cloud.google.com
+          readOnly: true
+      volumes:
+        - name: pool-cfg
+          configMap:
+            name: {{.Values.name}}
+            items:
+            - key: pool
+              path: pool.yml
+        - name: service-account
+          secret:
+            secretName: service-account-{{.Values.name}}
+            optional: false
