@@ -12,6 +12,6 @@ ENV DRONE_PLATFORM_ARCH amd64
 COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 LABEL com.centurylinklabs.watchtower.stop-signal="SIGINT"
-
-ADD ./release/linux/amd64/drone-runner-aws-linux-amd64 /bin/drone-runner-aws
+RUN go build -o release/linux/amd64/drone-runner-aws-linux-amd64
+ADD release/linux/amd64/drone-runner-aws-linux-amd64 /bin/drone-runner-aws
 ENTRYPOINT ["/bin/drone-runner-aws"]
