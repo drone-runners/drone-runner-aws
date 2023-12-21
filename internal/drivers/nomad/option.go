@@ -26,7 +26,7 @@ func WithClientKeyPath(s string) Option {
 	}
 }
 
-func WithEnablePinning(s string) Option {
+func WithEnablePinning(s map[string]string) Option {
 	return func(p *config) {
 		p.enablePinning = s
 	}

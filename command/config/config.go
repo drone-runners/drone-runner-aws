@@ -113,12 +113,12 @@ type (
 	}
 
 	NomadVM struct {
-		Image         string `json:"image" yaml:"image"`
-		MemoryGB      string `json:"mem_gb" yaml:"mem_gb"`
-		Cpus          string `json:"cpus" yaml:"cpus"`
-		DiskSize      string `json:"disk_size" yaml:"disk_size"`
-		EnablePinning string `json:"enablePinning" yaml:"enablePinning"`
-		Noop          bool   `json:"noop" yaml:"noop"`
+		Image         string            `json:"image" yaml:"image"`
+		MemoryGB      string            `json:"mem_gb" yaml:"mem_gb"`
+		Cpus          string            `json:"cpus" yaml:"cpus"`
+		DiskSize      string            `json:"disk_size" yaml:"disk_size"`
+		EnablePinning map[string]string `json:"enablePinning" yaml:"enablePinning"`
+		Noop          bool              `json:"noop" yaml:"noop"`
 	}
 
 	// Azure specifies the configuration for an Azure instance.

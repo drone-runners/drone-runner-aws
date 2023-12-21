@@ -44,7 +44,7 @@ type config struct {
 	clientKeyPath  string
 	insecure       bool
 	noop           bool
-	enablePinning  string
+	enablePinning  map[string]string
 	client         *api.Client
 }
 
@@ -109,7 +109,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	startupScript := generateStartupScript(opts)
 
 	vm := strings.ToLower(random(20)) //nolint:gomnd
-	c := strings.Contains(p.enablePinning, opts.AccountID)
+	class := ""
+	for k, v := range p.enablePinning {
+		if strings.Contains(v, opts.AccountID) {
+			class = k
+		}
+	}
 	cpus, err := strconv.Atoi(p.vmCpus)
 	if err != nil {
 		return nil, errors.New("could not convert VM cpus to integer")
@@ -126,8 +131,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm)
 	} else {
-		if c {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, opts.AccountID)
+		if class != "" {
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class)
 		} else {
 			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount)
 		}
