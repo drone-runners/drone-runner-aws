@@ -1,3 +1,3 @@
-BUILD_SCRIPT_PATH: /scripts/build.sh
-DOCKER_FILE_PATH: /docker/Dockerfile.linux.amd64
-HELM_CHART_SOURCE_DIRECTORY: /drone-runner-aws/chart
+BUILD_SCRIPT_PATH: /harness/drone-runner-aws/scripts/build.sh
+DOCKER_FILE_PATH: /harness/drone-runner-aws/docker/Dockerfile.linux.amd64
+HELM_CHART_SOURCE_DIRECTORY: /harness/drone-runner-aws/chart
