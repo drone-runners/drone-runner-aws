@@ -1,5 +1,7 @@
 package dlite
 
+import "github.com/harness/lite-engine/api"
+
 type VMTaskExecutionResponse struct {
 	ErrorMessage           string                 `json:"error_message"`
 	IPAddress              string                 `json:"ip_address"`
@@ -9,6 +11,7 @@ type VMTaskExecutionResponse struct {
 	DelegateMetaInfo       DelegateMetaInfo       `json:"delegate_meta_info"`
 	Artifact               []byte                 `json:"artifact,omitempty"`
 	PoolDriverUsed         string                 `json:"pool_driver_used"`
+	Outputs                []*api.OutputV2        `json:"outputs"`
 }
 
 type DelegateMetaInfo struct {
