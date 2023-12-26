@@ -1,33 +1,25 @@
-FROM alpine:3.6 as alpine
-RUN apk add -U --no-cache ca-certificates
+# First Stage: Build environment with Go and dependencies
+FROM golang:1.19.8-alpine3.6 as builder
 
-FROM alpine:3.6
-RUN apk add -U --no-cache curl
-RUN curl -O https://dl.google.com/go/go1.19.8.linux-amd64.tar.gz
-RUN tar -C /usr/local -xzf go1.19.8.linux-amd64.tar.gz
-ENV PATH=$PATH:/usr/local/go/bin
+RUN apk --no-cache add ca-certificates git
 
-# Set up Go environment
-ENV GOPATH=/go
-ENV PATH=$PATH:/go/bin
-
-RUN mkdir -p /go/src/app
-WORKDIR /go/src/app
-
+WORKDIR /app
 COPY . .
 
 # Fetch dependencies
-RUN go get -d -v ./...
+RUN go mod download
 
 # Build the application
-RUN go build -o /bin/drone-runner-aws
+RUN go build -o /app/drone-runner-aws-linux-amd64
 
-# Final image
+# Second Stage: Final lightweight image
 FROM alpine:3.6
-COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=1 /bin/drone-runner-aws /bin/drone-runner-aws
+
+RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
+COPY --from=builder /app/drone-runner-aws-linux-amd64 .
+
 EXPOSE 3000
 
-ENTRYPOINT ["/bin/drone-runner-aws"]
+ENTRYPOINT ["./drone-runner-aws-linux-amd64"]
