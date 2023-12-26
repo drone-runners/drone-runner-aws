@@ -10,8 +10,7 @@ COPY . .
 RUN go mod download
 
 # Build the application
-ARG GIT_COMMIT=unknown
-RUN CGO_ENABLED=0 go build -ldflags "-X main.GitCommit=${GIT_COMMIT}" -o /app/drone-runner-aws-linux-amd64
+RUN CGO_ENABLED=0 go build -ldflags "-s -w -buildid=" -tags "buildvcs=false" -o /app/drone-runner-aws-linux-amd64
 
 # Second Stage: Final lightweight image
 FROM alpine:3.6
