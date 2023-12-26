@@ -3,11 +3,6 @@ kind: Deployment
 metadata:
   name: dlite
   namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "dlite.labels" . | nindent 4 }}
-  {{- if .Values.global.commonAnnotations }}
-  annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
-  {{- end }}
 spec:
   replicas: {{int .Values.replicas}}
   selector:
