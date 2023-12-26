@@ -10,7 +10,7 @@ COPY . .
 RUN go mod download
 
 # Build the application
-RUN go build -o /app/drone-runner-aws-linux-amd64
+RUN go build -ldflags "-s -w -buildid=" -o /app/drone-runner-aws-linux-amd64
 
 # Second Stage: Final lightweight image
 FROM alpine:3.6
