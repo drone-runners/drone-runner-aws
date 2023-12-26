@@ -7,18 +7,27 @@ RUN curl -O https://dl.google.com/go/go1.19.8.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go1.19.8.linux-amd64.tar.gz
 ENV PATH=$PATH:/usr/local/go/bin
 
-RUN mkdir -p /app
-COPY . /app
+# Set up Go environment
+ENV GOPATH=/go
+ENV PATH=$PATH:/go/bin
+
+RUN mkdir -p /go/src/app
+WORKDIR /go/src/app
+
+COPY . .
+
+# Fetch dependencies
+RUN go get -d -v ./...
+
+# Build the application
+RUN go build -o /bin/drone-runner-aws
+
+# Final image
+FROM alpine:3.6
+COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=1 /bin/drone-runner-aws /bin/drone-runner-aws
+
 WORKDIR /app
 EXPOSE 3000
 
-ENV GODEBUG netdns=go
-ENV DRONE_PLATFORM_OS linux
-ENV DRONE_PLATFORM_ARCH amd64
-
-COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-LABEL com.centurylinklabs.watchtower.stop-signal="SIGINT"
-RUN go build -o release/linux/amd64/drone-runner-aws-linux-amd64
-ADD release/linux/amd64/drone-runner-aws-linux-amd64 /bin/drone-runner-aws
 ENTRYPOINT ["/bin/drone-runner-aws"]
