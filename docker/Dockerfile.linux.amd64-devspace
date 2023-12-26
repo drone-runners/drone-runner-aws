@@ -11,7 +11,7 @@ RUN go mod download
 RUN export export GOPATH=""
 RUN export CGO_ENABLED=1
 # Build the application
-RUN go build -ldflags "-extldflags \"-static\"" -o /app/drone-runner-aws-linux-amd64
+RUN go build -buildvcs=false -ldflags "-extldflags \"-static\"" -o /app/drone-runner-aws-linux-amd64
 # Second Stage: Final lightweight image
 FROM alpine:3.6
 
