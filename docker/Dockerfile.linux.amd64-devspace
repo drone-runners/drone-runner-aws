@@ -6,6 +6,10 @@ RUN apk add -U --no-cache curl
 RUN curl -O https://dl.google.com/go/go1.19.8.linux-amd64.tar.gz
 RUN tar -xvf go1.19.8.linux-amd64.tar.gz
 RUN mv go/ /usr/local/
+
+RUN mkdir -p /app
+COPY . /app
+WORKDIR /app
 EXPOSE 3000
 
 ENV GODEBUG netdns=go
