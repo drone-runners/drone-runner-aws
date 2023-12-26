@@ -1,7 +1,7 @@
 # First Stage: Build environment with Go and dependencies
 FROM golang:1.19.8-alpine as builder
 
-RUN apk --no-cache add ca-certificates git
+RUN apk --no-cache add ca-certificates git build-base
 
 WORKDIR /app
 COPY . .
