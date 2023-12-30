@@ -232,6 +232,8 @@ github.com/harness/lite-engine v0.5.46 h1:OfzVVJEMhMcKMV8AbBx1k0AYqSz6GCaiGW7yHu
 github.com/harness/lite-engine v0.5.46/go.mod h1:l8Ws4f6cbvEzgZ+9krEn/thslrU4bRlyqEigK6Gdfqk=
 github.com/harness/lite-engine v0.5.49 h1:ruaWlfixDMvCmBSU8td++eNZGsLxCLGXubZTk50cOoI=
 github.com/harness/lite-engine v0.5.49/go.mod h1:l8Ws4f6cbvEzgZ+9krEn/thslrU4bRlyqEigK6Gdfqk=
+github.com/harness/lite-engine v0.5.50 h1:9mQME1QGx61xJm+9TvfNtF5DK34cYwU84/yl1otS+PA=
+github.com/harness/lite-engine v0.5.50/go.mod h1:l8Ws4f6cbvEzgZ+9krEn/thslrU4bRlyqEigK6Gdfqk=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/cronexpr v1.1.1 h1:NJZDd87hGXjoZBdvyCF9mX4DCq5Wy7+A/w+A7q0wn6c=
