@@ -35,7 +35,7 @@ Common labels
 */}}
 {{- define "dlite.labels" -}}
 helm.sh/chart: {{ include "dlite.chart" . }}
-{{ include "dlite.selectorLabels" . | nindent 6 }}
+{{ include "dlite.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
