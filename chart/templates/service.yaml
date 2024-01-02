@@ -23,5 +23,4 @@ spec:
   - port: {{ .Values.service.port }}
     targetPort: {{ .Values.service.targetPort }}
   selector:
-    matchLabels:
-      {{- include "dlite.selectorLabels" . | nindent 6 }}
+    {{- include "dlite.selectorLabels" . | nindent 6 }}
