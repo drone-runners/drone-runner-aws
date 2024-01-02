@@ -196,31 +196,31 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s", err, ip)
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Debugln("scheduler: successfully submitted job, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		// Destroy the VM if it's in a partially created state
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s", err, ip)
+		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
 	// Make sure all subtasks in the init job passed
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s", err, ip)
+		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
 	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
 	job, _, err = p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w", err)
+		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobID, initJobID, vm)
 	}
 	if job == nil || isTerminal(job) {
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
-		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM")
+		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)
 	}
 
 	return instance, nil
