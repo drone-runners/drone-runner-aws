@@ -35,6 +35,32 @@ spec:
         {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.podLabels "context" $ ) | nindent 8 }}
         {{- end }}
     spec:
+      initContainers:
+      - name: init-mongo
+        image: {{ include "common.images.image" (dict "imageRoot" .Values.waitForInitContainer.image "global" .Values.global) }}
+        command: 
+          - "/bin/bash"
+          - "-c"
+          - "mongo mongodb://mongo-replicaset-chart:27017/mydb -u $MONGO_USERNAME -p $MONGO_PASSWORD --authenticationDatabase admin --eval 'db.myCollection.insert({ _id:\"'$acc'\"},{\$set:{ companyName: \"'$cname'\", accountName: \"'$accName'\", accountKey: \"'$accKey'\", globalDelegateAccount: true,isProductLed: true }}, {upsert: true })'"
+        env:
+        - name: MONGO_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values | get "global.database.mongo.secrets.kubernetesSecrets[0].secretName" }}
+              key: {{ .Values | get "global.database.mongo.secrets.kubernetesSecrets[0].keys.MONGO_USER" }}
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values | get "global.database.mongo.secrets.kubernetesSecrets[0].secretName" }}
+              key: {{ .Values | get "global.database.mongo.secrets.kubernetesSecrets[0].keys.MONGO_PASSWORD" }}
+        - name: acc
+          value: "{{ .Values.dlite.accountId }}"
+        - name: cname
+          value: "{{ .Values.dlite.cname }}"
+        - name: accName
+          value: "{{ .Values.dlite.accName }}"
+        - name: accKey
+          value: "{{ .Values.dlite.accountSecret }}"
       {{- include "dlite.pullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "dlite.serviceAccountName" . }}
       securityContext:
