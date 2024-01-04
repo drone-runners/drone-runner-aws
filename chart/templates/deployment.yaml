@@ -99,7 +99,7 @@ spec:
               path: pool.yml
         - name: service-account
           secret:
-            secretName: service-account-{{.Values.name}}
+            secretName: {{.Values.name}}
             optional: false
       affinity:
         podAntiAffinity:
