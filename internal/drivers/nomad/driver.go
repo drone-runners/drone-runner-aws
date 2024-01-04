@@ -30,7 +30,7 @@ var (
 	destroyRetryAttempts    = 1
 	minNomadCPUMhz          = 40
 	minNomadMemoryMb        = 20
-	machineFrequencyMhz     = 5100 // TODO: Find a way to extract this from the node directly
+	machineFrequencyMhz     = 3500 // TODO: Find a way to extract this from the node directly
 )
 
 type config struct {
