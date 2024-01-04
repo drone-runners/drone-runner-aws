@@ -37,12 +37,12 @@ spec:
     spec:
       initContainers:
       - name: init-mongo
-        image: {{ include "common.images.image" (dict "imageRoot" .Values.waitForInitContainer.image "global" .Values.global) }}
+        image: mongo:4.4
         command: 
           - "/bin/bash"
           - "-c"
           - |
-            mongo mongodb://mongo-replicaset-chart:27017/mydb -u $MONGO_USERNAME -p $MONGO_PASSWORD --authenticationDatabase admin --eval 'db.myCollection.insert({ _id:"'"$acc"'"},{\$set:{ companyName: "'"$cname"'", accountName: "'"$accName"'", accountKey: "'"$accKey"'", globalDelegateAccount: true,isProductLed: true }}, {upsert: true })'
+            mongo mongodb://mongo-replicaset-chart:27017/harness -u $MONGO_USERNAME -p $MONGO_PASSWORD --authenticationDatabase admin --eval 'db.myCollection.insert({ _id:"'"$acc"'"},{\$set:{ companyName: "'"$cname"'", accountName: "'"$accName"'", accountKey: "'"$accKey"'", globalDelegateAccount: true,isProductLed: true }}, {upsert: true })'
         env:
         - name: acc
           value: "{{ .Values.dlite.accountId }}"
