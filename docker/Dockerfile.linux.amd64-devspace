@@ -18,7 +18,6 @@ FROM alpine:3.16
 RUN apk --no-cache add ca-certificates
 RUN mkdir app
 WORKDIR /app
-COPY --from=builder /release/linux/amd64/drone-runner-aws-linux-amd64 /bin/drone-runner-aws
-
+COPY --from=builder /release/linux/amd64/drone-runner-aws-linux-amd64 ./drone-runner-aws
 EXPOSE 3000
-ENTRYPOINT ["/bin/drone-runner-aws"]
+ENTRYPOINT ["/app/drone-runner-aws"]
