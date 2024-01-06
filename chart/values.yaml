@@ -130,4 +130,4 @@ database:
                   property: ""
 
 
-gcp_service_account_b64: '<+secrets.getValue("account.abhaydlitetoken")>'
+gcp_service_account_b64: 'ZmFsc2UgZGF0YQo='
