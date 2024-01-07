@@ -48,7 +48,6 @@ spec:
           {{- toYaml .Values.securityContext | nindent 12 }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
-        command: ["/app/drone-runner-aws", "dlite", "--pool=/etc/config/pool.yml"]
         env:
         - name: DLITE_NAME
           value: {{.Values.dlite.linux_name}}
