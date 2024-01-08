@@ -35,17 +35,6 @@ spec:
         {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.podLabels "context" $ ) | nindent 8 }}
         {{- end }}
     spec:
-      initContainers:
-        - name: init-mongo
-          image: mongo:4.4
-          command:
-            - /bin/bash
-            - '-c'
-            - >
-              mongo $MONGO_URI -u $MONGODB_USER -p $MONGODB_PASSWORD --eval 'db.accounts.insert({ "_id" : "__GLOBAL_DELEGATE_ACCOUNT_ID__", "companyName" : "Harness", "accountName" : "Harness Global Delegate", "accountKey" : "2f6b0988b6fb3370073c3d0505baee59", "globalDelegateAccount" : true,"isProductLed" : true})'
-          env:
-          {{- include "harnesscommon.dbv3.mongoEnv" (dict "ctx" $ "database" "harness" "userVariableName" "MONGODB_USER" "passwordVariableName" "MONGODB_PASSWORD") | indent 10 }}
-          {{- include "harnesscommon.dbv3.mongoConnectionEnv" (dict "ctx" $ "database" "harness" "connectionURIVariableName" "MONGO_URI" "userVariableName" "MONGODB_USER" "passwordVariableName" "MONGODB_PASSWORD") | indent 10 }}
       {{- include "dlite.pullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "dlite.serviceAccountName" . }}
       securityContext:
@@ -55,6 +44,7 @@ spec:
       - name: dlite
         image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/app/drone-runner-aws", "dlite", "--pool=/etc/config/pool.yml"]
         securityContext:
           {{- toYaml .Values.securityContext | nindent 12 }}
         resources:
@@ -83,22 +73,6 @@ spec:
           value: "true"
         - name: DRONE_LITE_ENGINE_PATH
           value: https://storage.googleapis.com/harness-ti/local
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: {{int .Values.port}}
-          initialDelaySeconds: 60
-          timeoutSeconds: 5
-          periodSeconds: 5
-          failureThreshold: 10
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: {{int .Values.port}}
-          initialDelaySeconds: 60
-          timeoutSeconds: 5
-          periodSeconds: 10
-          failureThreshold: 10
         volumeMounts:
         - name: pool-cfg
           mountPath: /etc/config
