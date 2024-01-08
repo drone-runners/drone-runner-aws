@@ -19,4 +19,4 @@ RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/drone-runn
 # WORKDIR /app
 # COPY --from=builder /app/drone-runner-aws ./drone-runner-aws
 EXPOSE 3000
-# ENTRYPOINT ["/app/drone-runner-aws","dlite", "--pool=/etc/config/pool.yml"]
+ENTRYPOINT ["/app/drone-runner-aws"]
