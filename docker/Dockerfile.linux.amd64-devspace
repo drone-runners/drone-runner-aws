@@ -4,7 +4,7 @@ RUN apk --no-cache add ca-certificates git build-base
 RUN mkdir /app
 WORKDIR /app
 COPY . .
-
+USER root
 # Fetch dependencies
 RUN go mod download
 RUN export GOPATH=""
