@@ -11,13 +11,13 @@ RUN go mod download
 RUN export GOPATH=""
 
 # Build the application
-RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /release/linux/amd64/drone-runner-aws-linux-amd64
+RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/drone-runner-aws
 # # Second Stage: Final lightweight image
 # FROM alpine:3.16
 
 # RUN apk --no-cache add ca-certificates
 # RUN mkdir app
 # WORKDIR /app
-COPY  /release/linux/amd64/drone-runner-aws-linux-amd64 ./drone-runner-aws
+# COPY  /release/linux/amd64/drone-runner-aws-linux-amd64 ./drone-runner-aws
 EXPOSE 3000
 ENTRYPOINT ["/app/drone-runner-aws","dlite", "--pool=/etc/config/pool.yml"]
