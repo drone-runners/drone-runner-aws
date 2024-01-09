@@ -1,22 +1,21 @@
 # First Stage: Build environment with Go and dependencies
 FROM golang:1.19.8-alpine3.16 as builder
 RUN apk --no-cache add ca-certificates git build-base
-RUN mkdir /app
-COPY . /app
 WORKDIR /app
+COPY . .
 USER root
 # Fetch dependencies
-RUN go mod download
-RUN export GOPATH=""
+RUN go mod download && export GOPATH=""
 
 # Build the application
 RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/drone-runner-aws
 #Second Stage: Final lightweight image
-# FROM alpine:3.16
-
-# RUN apk --no-cache add ca-certificates
-# RUN mkdir app
-# WORKDIR /app
-# COPY --from=builder /app/drone-runner-aws ./drone-runner-aws
+FROM alpine:3.16
+WORKDIR /app
+RUN chown -R nobody:nobody /app
+RUN apk --no-cache add ca-certificates
+RUN touch database.sqlite3 && chmod 777 /app/database.sqlite3
+COPY --from=builder /app/drone-runner-aws ./drone-runner-aws
+RUN chmod 777  ./drone-runner-aws
 EXPOSE 3000
 ENTRYPOINT ["/app/drone-runner-aws"]
