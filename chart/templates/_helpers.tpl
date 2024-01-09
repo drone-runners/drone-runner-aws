@@ -64,3 +64,114 @@ Create the name of the service account to use
 {{- define "dlite.pullSecrets" -}}
 {{ include "common.images.pullSecrets" (dict "images" (list .Values.image ) "global" .Values.global ) }}
 {{- end -}}
+
+
+{{- define "dlite.generateServiceAccountSecrets" }}
+    {{- $ := .ctx }}
+    {{- $hasAtleastOneSecret := false }}
+    {{- $localESOSecretCtxIdentifier := (include "harnesscommon.secrets.localESOSecretCtxIdentifier" (dict "ctx" $ )) }}
+    {{- if eq (include "harnesscommon.secrets.isDefaultAppSecret" (dict "ctx" $ "variableName" "DLITE_GCP_SECRET_ACCOUNT")) "true" }}
+    {{- $hasAtleastOneSecret = true }}
+DLITE_GCP_SECRET_ACCOUNT: {{ include "harnesscommon.secrets.passwords.manage" (dict "secret" "dlite" "key" "DLITE_GCP_SECRET_ACCOUNT" "providedValues" (list "secrets.default.DLITE_GCP_SECRET_ACCOUNT") "length" 10 "context" $) }}
+    {{- end }}
+    {{- if not $hasAtleastOneSecret }}
+{}
+    {{- end }}
+{{- end }}
+
+{{- define "harnesscommon.secrets.manageESOSecretVolumes" }}
+{{- $ := .ctx }}
+{{- $variableName := .variableName }}
+{{- $envVariableName := $variableName }}
+{{- $path := .path }}
+{{- if .overrideEnvName }}
+  {{- $envVariableName = .overrideEnvName }}
+{{- end }}
+{{- $secretName := "" }}
+{{- $secretKey := "" }}
+{{- if .variableName }}
+  {{- range .esoSecretCtxs }}
+    {{- $secretCtxIdentifier := .secretCtxIdentifier }}
+    {{- $secretCtx := .secretCtx }}
+    {{- range $esoSecretIdx, $esoSecret := $secretCtx }}
+      {{- if and $esoSecret $esoSecret.secretStore $esoSecret.secretStore.name $esoSecret.secretStore.kind }}
+        {{- $remoteKeyName := (dig "remoteKeys" $variableName "name" "" .) }}
+        {{- if $remoteKeyName }}
+          {{- $secretName = include "harnesscommon.secrets.esoSecretName" (dict "ctx" $ "secretContextIdentifier" $secretCtxIdentifier "secretIdentifier" $esoSecretIdx) }}
+          {{- $secretKey = $variableName }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+  {{- if and $secretName $secretKey }}
+- name: {{ print $envVariableName }}
+  secret:
+    secretName: {{ printf "%s" $secretName }}
+    items: 
+    - key: {{ printf "%s" $secretKey }}
+      path: {{ printf "%s" $path }}
+  {{- end }}
+{{- end }}
+
+{{- define "harnesscommon.secrets.manageExtKubernetesSecretVolumews" }}
+{{- $ := .ctx }}
+{{- $variableName := .variableName }}
+{{- $envVariableName := $variableName }}
+{{- $path := .path }}
+{{- if .overrideEnvName }}
+  {{- $envVariableName = .overrideEnvName }}
+{{- end }}
+{{- $secretName := "" }}
+{{- $secretKey := "" }}
+{{- if $variableName }}
+  {{- range .extKubernetesSecretCtxs }}
+    {{- range . }}
+      {{- if and . .secretName .keys }}
+        {{- $currSecretKey := (get .keys $variableName) }}
+        {{- if and (hasKey .keys $variableName) $currSecretKey }}
+          {{- $secretName = .secretName }}
+          {{- $secretKey = $currSecretKey }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- if and $secretName $secretKey }}
+- name: {{ print $envVariableName }}
+  secret:
+    secretName: {{ printf "%s" $secretName }}
+    items: 
+    - key: {{ printf "%s" $secretKey }}
+      path: {{ printf "%s" $path }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+
+
+
+{{- define "harnesscommon.secrets.manageVolumes" }}
+{{- $ := .ctx }}
+{{- $variableName := .variableName }}
+{{- $envVariableName := $variableName }}
+{{- if .overrideEnvName }}
+  {{- $envVariableName = .overrideEnvName }}
+{{- end }}
+{{- $defaultValue := .defaultValue }}
+{{- if eq (include "harnesscommon.secrets.hasESOSecret" (dict "variableName" .variableName "esoSecretCtxs" .esoSecretCtxs)) "true" }}
+{{- include "harnesscommon.secrets.manageESOSecretVolumes" (dict "ctx" $ "variableName" .variableName "overrideEnvName" .overrideEnvName "path" .path "esoSecretCtxs"  .esoSecretCtxs) }}
+{{- else if eq (include "harnesscommon.secrets.hasExtKubernetesSecret" (dict "variableName" .variableName "extKubernetesSecretCtxs" .extKubernetesSecretCtxs)) "true" }}
+{{- include "harnesscommon.secrets.manageExtKubernetesSecretEnv" (dict "ctx" $ "variableName" .variableName "overrideEnvName" .overrideEnvName "path" .path "extKubernetesSecretCtxs" .extKubernetesSecretCtxs) }}
+{{- else }}
+{{- $KubernetesSecretName := .defaultKubernetesSecretName }}
+
+{{- $KubernetesSecretName := .defaultKubernetesSecretName }}
+
+- name: {{ print $envVariableName }}
+  secret:
+    secretName: {{ print $KubernetesSecretName }}
+    items:
+    - key: {{ print $envVariableName }}
+      path: {{ print .path }}
+{{- end }}
+{{- end }}
