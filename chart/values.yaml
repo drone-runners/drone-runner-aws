@@ -126,5 +126,23 @@ database:
                   name: ""
                   property: ""
 
+secrets:
+  default:
+    DLITE_GCP_SECRET_ACCOUNT: ""
+  kubernetesSecrets:
+    - secretName: ""
+      keys:
+        DLITE_GCP_SECRET_ACCOUNT: ""
+  secretManagement:
+    externalSecretsOperator:
+      - secretStore:
+          name: ""
+          kind: ""
+        remoteKeys:
+          DLITE_GCP_SECRET_ACCOUNT:
+            name: ""
+            property: ""
+
+
 
 gcp_service_account_b64: 'ZmFsc2UgZGF0YQo='
