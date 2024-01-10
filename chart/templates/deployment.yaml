@@ -40,17 +40,6 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       terminationGracePeriodSeconds: 120
-      initContainers:
-        - name: init-mongo
-          image: mongo:4.4
-          command:
-            - /bin/bash
-            - '-c'
-            - >
-              mongo $MONGO_URI -u $MONGODB_USER -p $MONGODB_PASSWORD --eval 'db.accounts.insert({ "_id" : "__GLOBAL_DELEGATE_ACCOUNT_ID__", "companyName" : "Harness", "accountName" : "Harness Global Delegate", "accountKey" : "2f6b0988b6fb3370073c3d0505baee59", "globalDelegateAccount" : true,"isProductLed" : true})'
-          env:
-          {{- include "harnesscommon.dbv3.mongoEnv" (dict "ctx" $ "database" "harness" "userVariableName" "MONGODB_USER" "passwordVariableName" "MONGODB_PASSWORD") | indent 10 }}
-          {{- include "harnesscommon.dbv3.mongoConnectionEnv" (dict "ctx" $ "database" "harness" "connectionURIVariableName" "MONGO_URI" "userVariableName" "MONGODB_USER" "passwordVariableName" "MONGODB_PASSWORD") | indent 10 }}
       containers:
       - name: dlite
         image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
