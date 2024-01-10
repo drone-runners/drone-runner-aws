@@ -24,7 +24,7 @@ data:
       spec:
         account:
           project_id: {{.Values.instances.project_id}}
-          json_path: /var/run/secret/cloud.google.com/service-account
+          json_path: /var/run/secret/cloud.google.com
           no_service_account: true
         image: {{.Values.instances.linux.amd64.image}}
         machine_type: {{.Values.instances.linux.amd64.machine_type}}
