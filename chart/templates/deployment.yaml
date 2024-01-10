@@ -87,7 +87,7 @@ spec:
         volumeMounts:
         - name: pool-cfg
           mountPath: /etc/config
-        - name: DLITE_GCP_SECRET_ACCOUNT
+        - name: service-account
           mountPath: /var/run/secret
           readOnly: true
       volumes:
@@ -97,7 +97,7 @@ spec:
             items:
             - key: pool
               path: pool.yml
-        {{- include "harnesscommon.secrets.manageVolumes" (dict "ctx" $ "variableName" "DLITE_GCP_SECRET_ACCOUNT" "path" "cloud.google.com" "defaultKubernetesSecretName" "dlite" "defaultKubernetesSecretKey" "DLITE_GCP_SECRET_ACCOUNT") | indent 8 }}
+        {{- include "harnesscommon.secrets.manageAppVolumes" (dict "ctx" $ "variableName" "DLITE_GCP_SECRET_ACCOUNT" "overrideEnvName" "service-account" "path" "cloud.google.com" "defaultKubernetesSecretName" "dlite" "defaultKubernetesSecretKey" "DLITE_GCP_SECRET_ACCOUNT") | indent 8 }}
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
