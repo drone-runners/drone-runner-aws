@@ -37,7 +37,7 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rs/zerolog v1.29.1
 	github.com/sirupsen/logrus v1.9.0
-	github.com/stretchr/testify v1.8.3
+	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/wings-software/dlite v1.0.0-rc.8
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb
