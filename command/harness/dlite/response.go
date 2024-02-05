@@ -12,6 +12,7 @@ type VMTaskExecutionResponse struct {
 	Artifact               []byte                 `json:"artifact,omitempty"`
 	PoolDriverUsed         string                 `json:"pool_driver_used"`
 	Outputs                []*api.OutputV2        `json:"outputs"`
+	OptimizationState      string                 `json:"optimization_state"`
 }
 
 type DelegateMetaInfo struct {
