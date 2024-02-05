@@ -120,7 +120,7 @@ func (t *VMExecuteTask) handleResponse(w http.ResponseWriter, resp *api.PollStep
 // convert poll response to a Vm task execution response
 func convert(r *api.PollStepResponse) VMTaskExecutionResponse {
 	if r.Error == "" {
-		return VMTaskExecutionResponse{CommandExecutionStatus: Success, OutputVars: r.Outputs, Artifact: r.Artifact, Outputs: r.OutputV2}
+		return VMTaskExecutionResponse{CommandExecutionStatus: Success, OutputVars: r.Outputs, Artifact: r.Artifact, Outputs: r.OutputV2, OptimizationState: r.OptimizationState}
 	}
 	return VMTaskExecutionResponse{CommandExecutionStatus: Failure, ErrorMessage: r.Error}
 }
