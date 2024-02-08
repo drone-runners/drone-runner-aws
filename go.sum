@@ -228,8 +228,8 @@ github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=
 github.com/grpc-ecosystem/grpc-gateway v1.9.5/go.mod h1:vNeuVxBJEsws4ogUvrchl83t/GYV9WGTSLVdBhOQFDY=
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
-github.com/harness/lite-engine v0.5.60 h1:XeoqQ1Z0UyICd9TAViBfFkFl3qoO/Za3TSDOBljs2E0=
-github.com/harness/lite-engine v0.5.60/go.mod h1:OcY2p9RxEhnj/JeBYQ674ubQrZ2EJW4Qh3dkCowJ97E=
+github.com/harness/lite-engine v0.5.61 h1:l9Xy17soUrYieEsiEqqhjqP68dnvuzldjVi1DXKsBFU=
+github.com/harness/lite-engine v0.5.61/go.mod h1:4ZkUZNlge1kH79bZ6HPjm3MlEXyp+IdgLHcUwhH51wE=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/cronexpr v1.1.1 h1:NJZDd87hGXjoZBdvyCF9mX4DCq5Wy7+A/w+A7q0wn6c=
@@ -539,8 +539,8 @@ github.com/syndtr/goleveldb v1.0.0/go.mod h1:ZVVdQEZoIme9iO1Ch2Jdy24qqXrMMOU6lpP
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
-github.com/wings-software/dlite v1.0.0-rc.8 h1:Vsobn1Y09Vv0qh3oTqNHkJrbCYRvLeUGYsD3ewhr5e0=
-github.com/wings-software/dlite v1.0.0-rc.8/go.mod h1:zZd6iaMk8Av1QSABGuDWdxBFO82MxE0r6PRoDsLDvCE=
+github.com/wings-software/dlite v1.0.0-rc.9 h1:Of0IBMUdgSczGPqvcFGDCtpGVENwQ9/HqOr7dJ8Slho=
+github.com/wings-software/dlite v1.0.0-rc.9/go.mod h1:zZd6iaMk8Av1QSABGuDWdxBFO82MxE0r6PRoDsLDvCE=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/zenazn/goji v0.9.0/go.mod h1:7S9M489iMyHBNxwZnk9/EHS098H4/F6TATF2mIxtB1Q=
