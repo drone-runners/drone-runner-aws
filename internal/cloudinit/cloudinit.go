@@ -97,7 +97,7 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine || wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
+/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine || /usr/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
 echo "done downloading lite engine binary"
 chmod 777 /usr/bin/lite-engine
 touch $HOME/.env
