@@ -545,10 +545,10 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 			return ctx.Err()
 		default:
 		}
-		ctx_gcp, cancel := context.WithTimeout(ctx, operationGetTimeout*time.Second)
-		defer cancel()
+		ctxGcp, cancel := context.WithTimeout(ctx, operationGetTimeout*time.Second)
 		client := p.service
-		op, err := client.ZoneOperations.Get(p.projectID, zone, name).Context(ctx_gcp).Do()
+		op, err := client.ZoneOperations.Get(p.projectID, zone, name).Context(ctxGcp).Do()
+		cancel()
 		if err != nil {
 			if gerr, ok := err.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
