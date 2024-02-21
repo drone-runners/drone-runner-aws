@@ -25,14 +25,15 @@ import (
 )
 
 const (
-	maxInstanceNameLen = 63
-	randStrLen         = 5
-	tagRetries         = 3
-	getRetries         = 3
-	insertRetries      = 3
-	deleteRetries      = 3
-	secSleep           = 1
-	tagRetrySleepMs    = 1000
+	maxInstanceNameLen  = 63
+	randStrLen          = 5
+	tagRetries          = 3
+	getRetries          = 3
+	insertRetries       = 3
+	deleteRetries       = 3
+	secSleep            = 1
+	tagRetrySleepMs     = 1000
+	operationGetTimeout = 30
 )
 
 var (
@@ -539,8 +540,15 @@ func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
 
 func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error {
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		ctx_gcp, cancel := context.WithTimeout(ctx, operationGetTimeout*time.Second)
+		defer cancel()
 		client := p.service
-		op, err := client.ZoneOperations.Get(p.projectID, zone, name).Context(ctx).Do()
+		op, err := client.ZoneOperations.Get(p.projectID, zone, name).Context(ctx_gcp).Do()
 		if err != nil {
 			if gerr, ok := err.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
