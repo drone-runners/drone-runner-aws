@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	initTimeoutSec = 10 * 60
+	initTimeoutSec = 30 * 60
 )
 
 type VMInitTask struct {
