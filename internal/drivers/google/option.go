@@ -216,3 +216,9 @@ func WithHibernate(hibernate bool) Option {
 		p.hibernate = hibernate
 	}
 }
+
+func WithLabels(labels map[string]string) Option {
+	return func(p *config) {
+		p.labels = labels
+	}
+}

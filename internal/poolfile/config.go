@@ -175,6 +175,9 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				google.WithZones(g.Zone...),
 				google.WithUserDataKey(g.UserDataKey, instance.Platform.OS),
 				google.WithHibernate(g.Hibernate),
+				google.WithLabels(map[string]string{
+					instance.Name: instance.Name,
+				}),
 			)
 			if err != nil {
 				return nil, err

@@ -324,6 +324,7 @@ type EnvConfig struct {
 		EnableAutoPool       bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		HarnessTestBinaryURI string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
 		PluginBinaryURI      string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.3.5-beta"`
+		PurgerTime           int64  `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
 	}
 	LiteEngine struct {
 		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.63/"`
@@ -369,7 +370,7 @@ type EnvConfig struct {
 	DistributedMode struct {
 		Driver     string `default:"postgres"`
 		Datasource string `envconfig:"DRONE_DISTRIBUTED_DATASOURCE" default:"port=5431 user=admin password=password dbname=dlite sslmode=disable"`
-		Enabled    bool   `envconfig:"DRONE_DISTRIBUTED_ENABLED" default:"false"`
+		Enabled    bool   `envconfig:"DRONE_DISTRIBUTED_ENABLED" default:"true"`
 	}
 
 	Tmate struct {

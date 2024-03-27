@@ -64,7 +64,7 @@ func (d *DistributedManager) IsDistributed() bool {
 
 // Instance purger for distributed dlite
 // Delete all instances irrespective of runner name
-func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration) error {
+func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, purgerTime time.Duration) error {
 	const minMaxAge = 5 * time.Minute
 	if maxAgeBusy < minMaxAge || maxAgeFree < minMaxAge {
 		return fmt.Errorf("distributed dlite: minimum value of max age is %.2f minutes", minMaxAge.Minutes())
@@ -79,10 +79,9 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 		panic("distributed dlite: purger already started")
 	}
 
-	t := time.Duration(maxAgeBusy.Minutes() * 0.9 * float64(time.Minute))
-	d.cleanupTimer = time.NewTicker(t)
+	d.cleanupTimer = time.NewTicker(purgerTime)
 
-	logrus.Infof("distributed dlite: Instance purger started. It will run every %.2f minutes", t.Minutes())
+	logrus.Infof("distributed dlite: Instance purger started. It will run every %.2f minutes", purgerTime.Minutes())
 
 	go func() {
 		defer d.cleanupTimer.Stop()
