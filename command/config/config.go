@@ -97,6 +97,7 @@ type (
 		Tag           string `json:"tag,omitempty" yaml:"tag"`
 		AuthToken     string `json:"auth_token,omitempty" yaml:"auth_token"`
 		GroupID       string `json:"group_id,omitempty" yaml:"group_id"`
+		Disk          string `json:"disk,omitempty" yaml:"disk"`
 	}
 
 	Nomad struct {
