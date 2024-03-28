@@ -202,7 +202,7 @@ func (m *Manager) Add(pools ...Pool) error {
 	return nil
 }
 
-func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration) error {
+func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, purgerTime time.Duration) error {
 	const minMaxAge = 5 * time.Minute
 	if maxAgeBusy < minMaxAge || maxAgeFree < minMaxAge {
 		return fmt.Errorf("minimum value of max age is %.2f minutes", minMaxAge.Minutes())

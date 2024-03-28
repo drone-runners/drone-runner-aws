@@ -108,15 +108,17 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	c.registerMetrics()
 
 	ctx = context.WithValue(ctx, types.Hosted, true)
-	poolConfig, err := c.setupPool(ctx)
-	defer harness.Cleanup(&c.env, c.poolManager, true, true) //nolint: errcheck
-	if err != nil {
-		return err
-	}
+	var poolConfig *config.PoolFile
 
 	if env.DistributedMode.Enabled {
-		_, err = c.setupDistributedPool(ctx)
+		poolConfig, err = c.setupDistributedPool(ctx)
 		defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
+		if err != nil {
+			return err
+		}
+	} else {
+		poolConfig, err = c.setupPool(ctx)
+		defer harness.Cleanup(&c.env, c.poolManager, true, true) //nolint: errcheck
 		if err != nil {
 			return err
 		}
@@ -141,12 +143,11 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		err = harness.Cleanup(&c.env, c.poolManager, true, true)
 		if c.env.DistributedMode.Enabled {
 			// only delete unused instances for distributed pool
-			if derr := harness.Cleanup(&c.env, c.distributedPoolManager, false, true); derr != nil {
-				err = derr
-			}
+			err = harness.Cleanup(&c.env, c.distributedPoolManager, false, true)
+		} else {
+			err = harness.Cleanup(&c.env, c.poolManager, true, true)
 		}
 		return err
 	})

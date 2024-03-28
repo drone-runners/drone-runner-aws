@@ -75,6 +75,7 @@ type config struct {
 	userData            string
 	userDataKey         string
 	service             *compute.Service
+	labels              map[string]string
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -260,6 +261,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		Tags: &compute.Tags{
 			Items: p.tags,
 		},
+		Labels: p.labels,
 	}
 	if !p.noServiceAccount {
 		in.ServiceAccounts = []*compute.ServiceAccount{
