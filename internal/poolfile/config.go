@@ -257,7 +257,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				ankabuild.WithDisk(ankaBuild.Disk),
 			)
 			if err != nil {
-				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
+				return nil, fmt.Errorf("Unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
 			}
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
