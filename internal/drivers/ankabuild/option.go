@@ -104,3 +104,9 @@ func WithGroupID(groupID string) Option {
 		p.groupID = groupID
 	}
 }
+
+func WithDisk(disk string) Option {
+	return func(p *config) {
+		p.disk = disk
+	}
+}

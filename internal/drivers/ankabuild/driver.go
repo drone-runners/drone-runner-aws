@@ -27,6 +27,7 @@ type config struct {
 	authToken     string
 	tag           string
 	groupID       string
+	disk          string
 	ankaClient    Client
 }
 
@@ -59,6 +60,11 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	logr.Info("starting Anka Build Setup")
 
+	diskSizeRequest := &diskSize{
+		Size:              c.disk,
+		SkipContainerSize: false,
+	}
+
 	request := &createVMParams{
 		Name:                   machineName,
 		StartupScript:          uData,
@@ -68,6 +74,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		VMID:                   c.vmID,
 		ScriptTimeout:          scriptTimeout,
 		Tag:                    c.tag,
+		Disk:                   diskSizeRequest,
 	}
 	if c.nodeID != "" {
 		request.NodeID = c.nodeID

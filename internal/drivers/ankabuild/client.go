@@ -22,21 +22,26 @@ const (
 )
 
 type createVMParams struct {
-	Name                   string `json:"name,omitempty"`
-	Version                string `json:"version,omitempty"`
-	Count                  string `json:"count,omitempty"`
-	NodeID                 string `json:"node_id,omitempty"`
-	StartupScript          string `json:"startup_script,omitempty"`
-	StartupScriptCondition int    `json:"startup_script_condition,omitempty"`
-	ScriptMonitoring       bool   `json:"script_monitoring,omitempty"`
-	ScriptTimeout          int    `json:"script_timeout,omitempty"`
-	ScriptFailHandler      int    `json:"script_fail_handler,omitempty"`
-	VMID                   string `json:"vmid,omitempty"`
-	GroupID                string `json:"group_id,omitempty"`
-	Priority               string `json:"priority,omitempty"`
-	Tag                    string `json:"tag,omitempty"`
+	Name                   string    `json:"name,omitempty"`
+	Version                string    `json:"version,omitempty"`
+	Count                  string    `json:"count,omitempty"`
+	NodeID                 string    `json:"node_id,omitempty"`
+	StartupScript          string    `json:"startup_script,omitempty"`
+	StartupScriptCondition int       `json:"startup_script_condition,omitempty"`
+	ScriptMonitoring       bool      `json:"script_monitoring,omitempty"`
+	ScriptTimeout          int       `json:"script_timeout,omitempty"`
+	ScriptFailHandler      int       `json:"script_fail_handler,omitempty"`
+	VMID                   string    `json:"vmid,omitempty"`
+	GroupID                string    `json:"group_id,omitempty"`
+	Priority               string    `json:"priority,omitempty"`
+	Tag                    string    `json:"tag,omitempty"`
+	Disk                   *diskSize `json:"disk,omitempty"`
 }
 
+type diskSize struct {
+	Size              string `json:"size,omitempty"`
+	SkipContainerSize bool   `json:"skip_container_resize,omitempty"`
+}
 type listResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
