@@ -1,0 +1,2 @@
+DOCKER_FILE_PATH: /harness/drone-runner-aws/docker/Dockerfile.linux.amd64-devspace
+HELM_CHART_SOURCE_DIRECTORY: /harness/drone-runner-aws/chart
