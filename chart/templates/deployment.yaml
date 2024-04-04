@@ -70,6 +70,7 @@ spec:
             memory: 2Gi
             cpu: 1
         env:
+        {{- include "harnesscommon.renderSecretsAsEnvironmentVariables" (dict "ctx" $) | indent 8 }}
         - name: DLITE_NAME
           value: {{.Values.dlite.linux_name}}
         - name: DLITE_ACCOUNT_ID
@@ -93,19 +94,17 @@ spec:
         - name: DRONE_DISTRIBUTED_ENABLED
           value: "true"
         volumeMounts:
+        {{- include "harnesscommon.mountRenderedSecretsAsVolumeMounts" (dict "ctx" $) | indent 8}}
         - name: pool-cfg
           mountPath: /etc/config
-        - name: service-account
-          mountPath: /var/run/secret
-          readOnly: true
       volumes:
+        {{- include "harnesscommon.renderSecretsAsVolumes" (dict "ctx" $) | indent 8 }}
         - name: pool-cfg
           configMap:
-            name: {{.Values.name}}
+            name: {{.Values.name }}
             items:
             - key: pool
               path: pool.yml
-        {{- include "harnesscommon.secrets.manageAppVolumes" (dict "ctx" $ "variableName" "DLITE_GCP_SECRET_ACCOUNT" "overrideEnvName" "service-account" "path" "cloud.google.com" "defaultKubernetesSecretName" "dlite" "defaultKubernetesSecretKey" "DLITE_GCP_SECRET_ACCOUNT") | indent 8 }}
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

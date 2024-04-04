@@ -196,24 +196,27 @@ database:
                   property: ""
 
 secrets:
+  fileSecret:
+  - volumeMountPath: "/etc/dlite"
+    keys:
+      - key: QA_NOMAD_BARE_METAL_CERTS
+        path: "ca.bundle"
   default:
-    DLITE_GCP_SECRET_ACCOUNT: ""
+    QA_NOMAD_BARE_METAL_CERTS: ""
   kubernetesSecrets:
     - secretName: ""
       keys:
-        DLITE_GCP_SECRET_ACCOUNT: ""
-        ABCD: ""
+        QA_NOMAD_BARE_METAL_CERTS: ""
   secretManagement:
     externalSecretsOperator:
       - secretStore:
           name: ""
           kind: ""
         remoteKeys:
-          DLITE_GCP_SECRET_ACCOUNT:
+          QA_NOMAD_BARE_METAL_CERTS:
             name: ""
             property: ""
-gcp_service_account_b64: 'ZmFsc2UgZGF0YQo='
-
+          
 postgres:
   ## - protocol to use for connection
   protocol: ""
