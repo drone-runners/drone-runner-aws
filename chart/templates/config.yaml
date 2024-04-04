@@ -14,21 +14,24 @@ data:
   pool: |-
     version: "1"
     instances:
-    - name: linux-amd64
-      type: google
-      pool: {{int .Values.instances.linux.amd64.pool_size}}
-      limit: {{int .Values.instances.linux.amd64.pool_limit}}
+    - name: linux-amd64-bare-metal
+      type: nomad
+      pool: 0
+      limit: 0
       platform:
         os: linux
         arch: amd64
       spec:
-        account:
-          project_id: {{.Values.instances.project_id}}
-          json_path: /var/run/secret/cloud.google.com
-          no_service_account: true
-        image: {{.Values.instances.linux.amd64.image}}
-        machine_type: {{.Values.instances.linux.amd64.machine_type}}
-        zone: {{.Values.instances.linux.amd64.zones | toYaml | nindent 10 }}
-        disk:
-          size: {{int .Values.instances.linux.amd64.disk_size}}
+        server:
+          address: {{.Values.bare_metal.address}}
+          client_key_path: /etc/dlite/ca.bundle
+          client_cert_path: /etc/dlite/ca.bundle
+          ca_cert_path: /etc/dlite/ca.bundle
+        vm:
+          image: {{.Values.instances.linux.amd64.bare_metal.image}}
+          cpus: {{.Values.instances.linux.amd64.bare_metal.cpus | quote}}
+          mem_gb: {{.Values.instances.linux.amd64.bare_metal.mem_gb | quote}}
+          disk_size: {{.Values.instances.linux.amd64.bare_metal.disk_size | quote}}
+          enablePinning:
+            free: "free"
           

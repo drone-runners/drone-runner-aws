@@ -128,16 +128,32 @@ dlite:
   cname: "harness"
   accName: "HarnessGlobalDelegate"
 instances:
-  project_id: 'ci-play'
   linux:
     amd64:
-      pool_size: 1
-      pool_limit: 3
-      image: projects/ci-play/global/images/hosted-vm-64
-      machine_type: e2-standard-4
-      disk_size: 100
-      zones:
-        - asia-south1-b
+      fallback: true
+      free_fallback_enable: true
+      split: true
+      bare_metal_enabled: true
+      large_pool_enabled: true
+      free:
+        project_id: cie-hosted-vm-qa
+        pool_size: 0
+        pool_limit: 5
+        image: projects/cie-hosted-vm-qa/global/images/hosted-vm-64
+        machine_type: n1-standard-1
+        disk_size: 100
+        network: cie-hosted-vm-qa
+        subnetwork: subnet1
+        zones:
+          - us-west1-a
+          - us-west1-b
+          - us-west1-c
+        hibernate: true
+      bare_metal:
+        image: harness/vmimage:v1
+        cpus: "4"
+        mem_gb: "8"
+        disk_size: "120GB"
 service:
   enabled: true
   annotations: {}
@@ -222,3 +238,7 @@ postgres:
             POSTGRES_PASSWORD:
               name: ""
               property: ""
+bare_metal:
+  address: https://34.168.46.105:4646
+  certs: "# needed help here from arya"
+  enabled: true
