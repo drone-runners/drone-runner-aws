@@ -194,3 +194,12 @@ DLITE_GCP_SECRET_ACCOUNT: {{ include "harnesscommon.secrets.passwords.manage" (d
 {{- $localESOSecretCtxIdentifier := (include "harnesscommon.secrets.localESOSecretCtxIdentifier" (dict "ctx" $ )) }}
 {{- include "harnesscommon.secrets.manageVolumes" (dict "ctx" $ "variableName" .variableName "path" .path "overrideEnvName" .overrideEnvName "defaultKubernetesSecretName" .defaultKubernetesSecretName "providedSecretValues" .providedSecretValues "defaultKubernetesSecretKey" .defaultKubernetesSecretKey "extKubernetesSecretCtxs" (list $.Values.secrets.kubernetesSecrets) "esoSecretCtxs" (list (dict "secretCtxIdentifier" $localESOSecretCtxIdentifier "secretCtx" $.Values.secrets.secretManagement.externalSecretsOperator))) }}
 {{- end }}
+
+{{- define "code-api.deploymentEnv" -}}
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+        name: postgres
+        key: postgres-password
+- { name: APP_DATABASE_DATASOURCE, value: "{{ printf "postgres://postgres:$(DB_PASSWORD)@postgres:5432" }}" }
+{{- end }}

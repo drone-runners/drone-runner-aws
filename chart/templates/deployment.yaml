@@ -73,6 +73,8 @@ spec:
           value: "true"
         - name: DRONE_LITE_ENGINE_PATH
           value: https://storage.googleapis.com/harness-ti/local
+        - name: GITNESS_DATABASE_DATASOURCE
+          value: {{ include "harnesscommon.dbconnectionv2.postgresConnection" (dict "ctx" $ "database" "code_db" "keywordValueConnectionString" true "userVariableName" "$(POSTGRES_USER)" "passwordVariableName" "$(POSTGRES_PASSWORD)" ) | quote }}
         volumeMounts:
         - name: pool-cfg
           mountPath: /etc/config
