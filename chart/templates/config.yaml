@@ -11,6 +11,7 @@ metadata:
   annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 data:
+  # HARNESS_MANAGER_LB_ENDPOINT: {{.Values.global.loadbalancerURL}}
   pool: |-
     version: "1"
     instances:

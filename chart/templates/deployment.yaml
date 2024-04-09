@@ -78,7 +78,7 @@ spec:
         - name: DLITE_ACCOUNT_SECRET
           value: {{.Values.dlite.accountSecret | quote}}
         - name: DLITE_MANAGER_ENDPOINT
-          value: "https://{{ .Release.Namespace }}.pr2.harness.io"
+          value: "https://rageshm.pr2.harness.io"
         - name: DLITE_PARALLEL_WORKERS
           value: {{.Values.dlite.parallelWorkers | quote}}
         - name: DLITE_POLL_INTERVAL_MILLISECS
