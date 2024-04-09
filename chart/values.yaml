@@ -122,7 +122,7 @@ dlite:
   linux_name: dlite-linux
   accountId: "__GLOBAL_DELEGATE_ACCOUNT_ID__"
   accountSecret: "2f6b0988b6fb3370073c3d0505baee59"
-  managerEndpoint: "https://{{ .Release.Namespace }}.pr2.harness.io"
+  managerEndpoint: "http://harness-manager:9090"
   pollIntervalMs: "1000"
   parallelWorkers: "10000"
   cname: "harness"
@@ -243,5 +243,5 @@ postgres:
               property: ""
 bare_metal:
   address: https://34.168.46.105:4646
-  certs: "# needed help here from arya"
+  certs: ""
   enabled: true
