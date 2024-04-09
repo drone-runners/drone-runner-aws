@@ -451,7 +451,7 @@ func Linux(params *Params) (payload string) {
 
 const windowsScript = `
 <powershell>
-
+$ProgressPreference = 'SilentlyContinue'
 echo "[DRONE] Initialization Starting"
 
 echo "[DRONE] Installing Scoop Package Manager"
