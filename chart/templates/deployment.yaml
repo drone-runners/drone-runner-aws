@@ -87,8 +87,6 @@ spec:
           value: "true"
         - name: DRONE_TRACE
           value: "true"
-        - name: DRONE_LITE_ENGINE_PATH
-          value: https://storage.googleapis.com/harness-ti/local
         {{- include "harnesscommon.dbconnectionv2.postgresEnv" (dict "ctx" $ "userVariableName" "POSTGRES_USER" "passwordVariableName" "POSTGRES_PASSWORD") | indent 8 }}
         - name: DRONE_DISTRIBUTED_DATASOURCE
           value: {{ include "harnesscommon.dbconnectionv2.postgresConnection" (dict "ctx" $ "database" "dlite" "keywordValueConnectionString" true "userVariableName" "$(POSTGRES_USER)" "passwordVariableName" "$(POSTGRES_PASSWORD)" ) | quote }}
