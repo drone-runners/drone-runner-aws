@@ -1,0 +1,247 @@
+# Default values for ci-manager
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  commonAnnotations: {}
+  commonLabels: {}
+  loadbalancerURL: ""
+  airgap: false
+  imagePullSecrets: []
+  stackDriverLoggingEnabled: false
+  database:
+    postgres:
+      ## - installed = true if installed within cluster
+      installed: true
+      ## - protocol to use for connection
+      protocol: postgres
+      ## - host array for external
+      hosts:
+        - postgres:5432
+      ## - secret name containing external values
+      secretName: ""
+      ## - key within secret containing username
+      userKey: ""
+      ## - key within secret containing password
+      passwordKey: ""
+      ## - extra arguments set to connection string
+      extraArgs: ""
+      secrets:
+        kubernetesSecrets:
+          - secretName: ""
+            keys:
+              POSTGRES_USER: ""
+              POSTGRES_PASSWORD: ""
+        secretManagement:
+          externalSecretsOperator:
+            - secretStore:
+                name: ""
+                kind: ""
+              remoteKeys:
+                POSTGRES_USER:
+                  name: ""
+                  property: ""
+                POSTGRES_PASSWORD:
+                  name: ""
+                  property: ""
+    mongo:
+      installed: true
+      protocol: mongodb
+      # --  provide default values if mongo.installed is set to false
+      hosts: []
+      secretName: ""
+      userKey: ""
+      passwordKey: ""
+      extraArgs: ""
+      secrets:
+        kubernetesSecrets:
+          - secretName: ""
+            keys:
+              MONGO_USER: ""
+              MONGO_PASSWORD: ""
+        secretManagement:
+          externalSecretsOperator:
+            - secretStore:
+                name: ""
+                kind: ""
+              remoteKeys:
+                MONGO_USER:
+                  name: ""
+                  property: ""
+                MONGO_PASSWORD:
+                  name: ""
+                  property: ""
+  waitForInitContainer:
+    image:
+      registry: docker.io
+      repository: harness/helm-init-container
+      pullPolicy: IfNotPresent
+      tag: "latest"
+      digest: ""
+      imagePullSecrets: []
+enableAuth: true
+port: 3000
+name: dlite
+replicas: 1
+image:
+  registry: docker.io
+  repository: drone/drone-runner-aws
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+  digest: ""
+  imagePullSecrets: []
+podAnnotations: {}
+podSecurityContext: {}
+affinity: {}
+nodeSelector: {}
+tolerations: []
+waitForInitContainer:
+  image:
+    registry: docker.io
+    repository: harness/helm-init-container
+    pullPolicy: IfNotPresent
+    tag: "latest"
+    digest: ""
+    imagePullSecrets: []  
+  resources:
+    limits:
+      cpu: 128m
+      memory: 128Mi
+    requests:
+      cpu: 128m
+      memory: 128Mi
+  containerSecurityContext:
+    runAsUser: 65534
+    runAsNonRoot: true  
+
+securityContext:
+  runAsUser: 65534
+  runAsNonRoot: true
+dlite:
+  linux_name: dlite-linux
+  accountId: "__GLOBAL_DELEGATE_ACCOUNT_ID__"
+  accountSecret: "2f6b0988b6fb3370073c3d0505baee59"
+  managerEndpoint: "http://harness-manager:9090"
+  pollIntervalMs: "1000"
+  parallelWorkers: "10000"
+  cname: "harness"
+  accName: "HarnessGlobalDelegate"
+instances:
+  linux:
+    amd64:
+      fallback: true
+      free_fallback_enable: true
+      split: true
+      bare_metal_enabled: true
+      large_pool_enabled: true
+      free:
+        project_id: cie-hosted-vm-qa
+        pool_size: 0
+        pool_limit: 5
+        image: projects/cie-hosted-vm-qa/global/images/hosted-vm-64
+        machine_type: n1-standard-1
+        disk_size: 100
+        network: cie-hosted-vm-qa
+        subnetwork: subnet1
+        zones:
+          - us-west1-a
+          - us-west1-b
+          - us-west1-c
+        hibernate: true
+      bare_metal:
+        image: harness/vmimage:v1
+        cpus: "4"
+        mem_gb: "8"
+        disk_size: "120GB"
+service:
+  enabled: true
+  annotations: {}
+  type: ClusterIP
+  port: 80
+  targetPort: 9090
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "harness-default"
+
+database:
+  mongo:
+    harness:
+      enabled: false
+      protocol: ""
+      hosts: []
+      extraArgs: ""
+      secrets:
+        kubernetesSecrets:
+          - secretName: ""
+            keys:
+              MONGO_USER: ""
+              MONGO_PASSWORD: ""
+        secretManagement: 
+          externalSecretsOperator:
+            - secretStore:
+                name: ""
+                kind: ""
+              remoteKeys:
+                MONGO_USER:
+                  name: ""
+                  property: ""
+                MONGO_PASSWORD:
+                  name: ""
+                  property: ""
+
+secrets:
+  fileSecret:
+  - volumeMountPath: "/etc/dlite"
+    keys:
+      - key: QA_NOMAD_BARE_METAL_CERTS
+        path: "ca.bundle"
+  default:
+    QA_NOMAD_BARE_METAL_CERTS: ""
+  kubernetesSecrets:
+    - secretName: ""
+      keys:
+        QA_NOMAD_BARE_METAL_CERTS: ""
+  secretManagement:
+    externalSecretsOperator:
+      - secretStore:
+          name: ""
+          kind: ""
+        remoteKeys:
+          QA_NOMAD_BARE_METAL_CERTS:
+            name: ""
+            property: ""
+          
+postgres:
+  ## - protocol to use for connection
+  protocol: ""
+  ## - host array for external
+  hosts: []
+  extraArgs: ""
+  secrets:
+    kubernetesSecrets:
+      - secretName: ""
+        keys:
+          POSTGRES_USER: ""
+          POSTGRES_PASSWORD: ""
+    secretManagement:
+      externalSecretsOperator:
+        - secretStore:
+            name: ""
+            kind: ""
+          remoteKeys:
+            POSTGRES_USER:
+              name: ""
+              property: ""
+            POSTGRES_PASSWORD:
+              name: ""
+              property: ""
+bare_metal:
+  address: https://34.168.46.105:4646
+  certs: ""
+  enabled: true

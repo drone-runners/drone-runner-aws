@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlite
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- if .Values.global.commonLabels }}
+    {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.global.commonAnnotations }}
+  annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+data:
+  pool: |-
+    version: "1"
+    instances:
+    - name: linux-amd64-bare-metal
+      type: nomad
+      pool: 0
+      limit: 0
+      platform:
+        os: linux
+        arch: amd64
+      spec:
+        server:
+          address: {{.Values.bare_metal.address}}
+          client_key_path: /etc/dlite/ca.bundle
+          client_cert_path: /etc/dlite/ca.bundle
+          ca_cert_path: /etc/dlite/ca.bundle
+        vm:
+          image: {{.Values.instances.linux.amd64.bare_metal.image}}
+          cpus: {{.Values.instances.linux.amd64.bare_metal.cpus | quote}}
+          mem_gb: {{.Values.instances.linux.amd64.bare_metal.mem_gb | quote}}
+          disk_size: {{.Values.instances.linux.amd64.bare_metal.disk_size | quote}}
+          enablePinning:
+            free: "free"
+          
