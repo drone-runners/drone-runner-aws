@@ -228,8 +228,10 @@ github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=
 github.com/grpc-ecosystem/grpc-gateway v1.9.5/go.mod h1:vNeuVxBJEsws4ogUvrchl83t/GYV9WGTSLVdBhOQFDY=
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
-github.com/harness/lite-engine v0.5.65 h1:/c4iX/hSzJBVGj93oNJl/3jieu65Nj+J6JGWY9ha7Bg=
-github.com/harness/lite-engine v0.5.65/go.mod h1:vc/0o9yDC6mDcPRrSpWLV+94weYKPMtHE0gzGMXL/wM=
+github.com/harness/godotenv/v3 v3.0.0 h1:1YJU9nUk4tQygHOYkm+NZ5jL9IZQ3UqyBspCqL3EMQQ=
+github.com/harness/godotenv/v3 v3.0.0/go.mod h1:UIXXJtTM7NkSYMYknHYOO2d8BfDlAWMYZRuRsXcDDR0=
+github.com/harness/lite-engine v0.5.66 h1:3MidsJCxAWAN9IHQHNLaEBnXZZShYsUp0Z744M1k3Qg=
+github.com/harness/lite-engine v0.5.66/go.mod h1:BjEY0F45hXoGkYcUPe0axurUoYt4j8j48Otnk/9wlcI=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/cronexpr v1.1.1 h1:NJZDd87hGXjoZBdvyCF9mX4DCq5Wy7+A/w+A7q0wn6c=
