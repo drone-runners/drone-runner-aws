@@ -5,7 +5,7 @@
 global:
   commonAnnotations: {}
   commonLabels: {}
-  loadbalancerURL: "https://test"
+  loadbalancerURL: ""
   airgap: false
   imagePullSecrets: []
   stackDriverLoggingEnabled: false
@@ -245,4 +245,3 @@ bare_metal:
   address: https://34.168.46.105:4646
   certs: ""
   enabled: true
-# HARNESS_MANAGER_LB_ENDPOINT: ""
