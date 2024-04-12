@@ -455,7 +455,7 @@ $ProgressPreference = 'SilentlyContinue'
 echo "[DRONE] Initialization Starting"
 
 echo "[DRONE] Installing Scoop Package Manager"
-iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+iex "& {$(irm https://get.scoop.sh)} -RunAsAdmin"
 
 echo "[DRONE] Installing Git"
 scoop install git --global
