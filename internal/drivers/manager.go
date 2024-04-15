@@ -351,6 +351,11 @@ func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverNam
 	inst := free[0]
 	inst.State = types.StateInUse
 	inst.OwnerID = ownerID
+	if inst.IsHibernated {
+		// update started time after bringing instance from hibernate
+		// this will make sure that purger only picks it when it is actually used for max age
+		inst.Started = time.Now().Unix()
+	}
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
 		pool.Unlock()

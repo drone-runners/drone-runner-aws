@@ -229,5 +229,6 @@ SET
  ,is_hibernated 	= :is_hibernated
  ,instance_address  = :instance_address
  ,instance_owner_id = :instance_owner_id
+ ,instance_started  = :instance_started
 WHERE instance_id   = :instance_id
 `
