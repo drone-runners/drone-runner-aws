@@ -306,13 +306,14 @@ type EnvConfig struct {
 	}
 
 	Dlite struct {
-		AccountID             string              `envconfig:"DLITE_ACCOUNT_ID"`
-		AccountSecret         string              `envconfig:"DLITE_ACCOUNT_SECRET"`
-		ManagerEndpoint       string              `envconfig:"DLITE_MANAGER_ENDPOINT"`
-		Name                  string              `envconfig:"DLITE_NAME"`
-		ParallelWorkers       int                 `envconfig:"DLITE_PARALLEL_WORKERS" default:"100"`
-		PollIntervalMilliSecs int                 `envconfig:"DLITE_POLL_INTERVAL_MILLISECS" default:"3000"`
-		PoolMapByAccount      PoolMapperByAccount `envconfig:"DLITE_POOL_MAP_BY_ACCOUNT_ID"`
+		AccountID               string              `envconfig:"DLITE_ACCOUNT_ID"`
+		AccountSecret           string              `envconfig:"DLITE_ACCOUNT_SECRET"`
+		ManagerEndpoint         string              `envconfig:"DLITE_MANAGER_ENDPOINT"`
+		InternalManagerEndpoint string              `envconfig:"DLITE_INTERNAL_MANAGER_ENDPOINT"`
+		Name                    string              `envconfig:"DLITE_NAME"`
+		ParallelWorkers         int                 `envconfig:"DLITE_PARALLEL_WORKERS" default:"100"`
+		PollIntervalMilliSecs   int                 `envconfig:"DLITE_POLL_INTERVAL_MILLISECS" default:"3000"`
+		PoolMapByAccount        PoolMapperByAccount `envconfig:"DLITE_POOL_MAP_BY_ACCOUNT_ID"`
 	}
 
 	Settings struct {
