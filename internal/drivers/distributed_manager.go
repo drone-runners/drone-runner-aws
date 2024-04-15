@@ -126,6 +126,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 
 	if maxAgeBusy != 0 {
 		busyCondition := squirrel.And{
+			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
 		}
