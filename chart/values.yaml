@@ -199,21 +199,21 @@ secrets:
   fileSecret:
   - volumeMountPath: "/etc/dlite"
     keys:
-      - key: QA_NOMAD_BARE_METAL_CERTS
+      - key: NOMAD_BARE_METAL_CERTS
         path: "ca.bundle"
   default:
-    QA_NOMAD_BARE_METAL_CERTS: ""
+    NOMAD_BARE_METAL_CERTS: ""
   kubernetesSecrets:
     - secretName: ""
       keys:
-        QA_NOMAD_BARE_METAL_CERTS: ""
+        NOMAD_BARE_METAL_CERTS: ""
   secretManagement:
     externalSecretsOperator:
       - secretStore:
           name: ""
           kind: ""
         remoteKeys:
-          QA_NOMAD_BARE_METAL_CERTS:
+          NOMAD_BARE_METAL_CERTS:
             name: ""
             property: ""
           
