@@ -242,6 +242,6 @@ postgres:
               name: ""
               property: ""
 bare_metal:
-  address: https://34.168.46.105:4646
+  address: NOMAD_URL
   certs: ""
   enabled: true
