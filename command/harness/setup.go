@@ -34,6 +34,7 @@ type SetupVMRequest struct {
 	CorrelationID    string            `json:"correlation_id"`
 	LogKey           string            `json:"log_key"`
 	Context          Context           `json:"context,omitempty"`
+	ResourceClass    string            `json:"resource_class"`
 	api.SetupRequest `json:"setup_request"`
 }
 
@@ -212,7 +213,7 @@ func handleSetup(
 			RunnerName: env.Runner.Name,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, env, query)
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}

@@ -18,7 +18,7 @@ type IManager interface {
 	AddTmate(env *config.EnvConfig) error
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration, purgerTime time.Duration) error
-	Provision(ctx context.Context, poolName, runnerName, serverName, ownerID string, env *config.EnvConfig, query *types.QueryParams) (*types.Instance, error)
+	Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams) (*types.Instance, error)
 	Destroy(ctx context.Context, poolName, instanceID string) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error

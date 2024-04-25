@@ -296,7 +296,8 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),
 				nomad.WithEnablePinning(nomadConfig.VM.EnablePinning),
 				nomad.WithImage(nomadConfig.VM.Image),
-				nomad.WithNoop(nomadConfig.VM.Noop))
+				nomad.WithNoop(nomadConfig.VM.Noop),
+				nomad.WithResource(nomadConfig.VM.Resource))
 			if err != nil {
 				// TODO: We should return error here once bare metal has been tested on production
 				// Ignoring errors here for now to not cause production outages in case of nomad connectivity issues
