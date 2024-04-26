@@ -450,18 +450,17 @@ func Linux(params *Params) (payload string) {
 }
 
 const windowsScript = `
-<powershell>
 $ProgressPreference = 'SilentlyContinue'
 echo "[DRONE] Initialization Starting"
 
-echo "[DRONE] Installing Scoop Package Manager"
-iex "& {$(irm https://get.scoop.sh)} -RunAsAdmin"
-
-echo "[DRONE] Installing Git"
-scoop install git --global
-
-echo "[DRONE] Updating PATH so we have access to git commands (otherwise Scoop.sh shim files cannot be found)"
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+if (${{ .IsHosted }} -eq $false) {
+	echo "[DRONE] Installing Scoop Package Manager"
+	iex "& {$(irm https://get.scoop.sh)} -RunAsAdmin"
+	echo "[DRONE] Installing Git"
+	scoop install git --global
+	echo "[DRONE] Updating PATH so we have access to git commands (otherwise Scoop.sh shim files cannot be found)"
+	$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+}
 
 echo "[DRONE] Setup LiteEngine Certificates"
 
@@ -480,12 +479,6 @@ $object2 = "{{ .TLSKey | base64 }}"
 $Object = [System.Convert]::FromBase64String($object2)
 [system.io.file]::WriteAllBytes("{{ .KeyPath }}",$object)
 
-# create powershell profile
-
-if (test-path($profile) -eq "false")
-{
-	new-item -path $env:windir\System32\WindowsPowerShell\v1.0\profile.ps1 -itemtype file -force
-}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
 
@@ -508,8 +501,7 @@ if (${{ .IsHosted }} -eq $true) {
 	Write-Host "DNS server added to Ethernet interface."
 } 
 echo "[DRONE] Initialization Complete"
-
-</powershell>`
+`
 
 var windowsTemplate = template.Must(template.New(oshelp.OSWindows).Funcs(funcs).Parse(windowsScript))
 
