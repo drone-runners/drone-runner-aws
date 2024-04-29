@@ -92,6 +92,7 @@ type InstanceCreateOpts struct {
 	Tmate                Tmate
 	AccountID            string
 	IsHosted             bool
+	ResourceClass        string
 }
 
 // Platform defines the target platform.

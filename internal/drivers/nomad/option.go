@@ -1,5 +1,9 @@
 package nomad
 
+import (
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
+)
+
 type Option func(*config)
 
 func WithAddress(s string) Option {
@@ -77,5 +81,11 @@ func WithDiskSize(s string) Option {
 		if p.vmDiskSize == "" {
 			p.vmDiskSize = "100GB"
 		}
+	}
+}
+
+func WithResource(resource map[string]cf.NomadResource) Option {
+	return func(p *config) {
+		p.resource = resource
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
@@ -46,6 +47,7 @@ type config struct {
 	noop           bool
 	enablePinning  map[string]string
 	client         *api.Client
+	resource       map[string]cf.NomadResource
 }
 
 // SetPlatformDefaults comes up with default values of the platform
@@ -124,6 +126,26 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, errors.New("could  not convert VM memory to integer")
 	}
 
+	resource := cf.NomadResource{
+		MemoryGB: p.vmMemoryGB,
+		Cpus:     p.vmCpus,
+		DiskSize: p.vmDiskSize,
+	}
+
+	if opts.ResourceClass != "" && p.resource != nil {
+		if v, ok := p.resource[opts.ResourceClass]; ok {
+			cpus, err = strconv.Atoi(v.Cpus)
+			if err != nil {
+				return nil, errors.New("could not convert VM cpus to integer")
+			}
+			memGB, err = strconv.Atoi(v.MemoryGB)
+			if err != nil {
+				return nil, errors.New("could  not convert VM memory to integer")
+			}
+			resource = v
+		}
+	}
+
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
 	var resourceJob *api.Job
@@ -169,7 +191,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, startupScript, hostPort, id)
 	} else {
-		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, hostPort, id)
+		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, hostPort, id, resource)
 	}
 
 	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", hostPort)
@@ -364,7 +386,7 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 // initJob creates a job which is targeted to a specific node. The job does the following:
 //  1. Starts a VM with the provided config
 //  2. Runs a startup script inside the VM
-func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) (job *api.Job, id, group string) {
+func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string, resource cf.NomadResource) (job *api.Job, id, group string) {
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
@@ -376,9 +398,9 @@ func (p *config) initJob(vm, startupScript string, hostPort int, nodeID string) 
 		ignitePath,
 		p.vmImage,
 		vm,
-		p.vmCpus,
-		p.vmMemoryGB,
-		p.vmDiskSize,
+		resource.Cpus,
+		resource.MemoryGB,
+		resource.DiskSize,
 		hostPort,
 		strconv.Itoa(lehelper.LiteEnginePort),
 		hostPath,
