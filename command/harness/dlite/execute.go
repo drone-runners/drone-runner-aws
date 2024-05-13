@@ -68,6 +68,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logr.WithError(err).
 				WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
+				WithField("account_id", accountID).
 				Error("unable to generate token")
 			httphelper.WriteBadRequest(w, err)
 			return
@@ -92,6 +93,7 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(distributed)).Inc()
 		logr.WithError(err).
 			WithField("stage_runtime_id", req.ExecuteVMRequest.StageRuntimeID).
+			WithField("account_id", accountID).
 			Error("could not execute step")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
