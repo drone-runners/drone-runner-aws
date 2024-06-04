@@ -32,6 +32,7 @@ var (
 	minNomadCPUMhz          = 40
 	minNomadMemoryMb        = 20
 	machineFrequencyMhz     = 3500 // TODO: Find a way to extract this from the node directly
+	largebaremetalclass     = "largebaremetal"
 )
 
 type config struct {
@@ -143,6 +144,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 				return nil, errors.New("could  not convert VM memory to integer")
 			}
 			resource = v
+
+			if opts.ResourceClass == "large" || opts.ResourceClass == "xlarge" {
+				// use largebaremetal class if resource class is large or xlarge
+				class = largebaremetalclass
+			}
 		}
 	}
 
