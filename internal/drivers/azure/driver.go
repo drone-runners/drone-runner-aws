@@ -171,7 +171,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	logr.Traceln("azure: creating VM")
 	var imageReference *armcompute.ImageReference
-	if c.publisher == "" || c.offer == "" || c.sku == "" || c.version == "" {
+	if c.ID != "" {
 		imageReference = &armcompute.ImageReference{
 			ID: to.Ptr(c.ID),
 		}
