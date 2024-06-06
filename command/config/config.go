@@ -160,6 +160,7 @@ type (
 		Version   string `json:"version,omitempty"  yaml:"version,omitempty"`
 		Username  string `json:"username,omitempty"  yaml:"username,omitempty"`
 		Password  string `json:"password,omitempty"  yaml:"password,omitempty"`
+		ID        string `json:"id,omitempty"  yaml:"id,omitempty"`
 	}
 
 	// DigitalOcean specifies the configuration for a DigitalOcean instance.

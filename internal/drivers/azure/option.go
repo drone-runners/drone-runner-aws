@@ -88,6 +88,13 @@ func WithImage(publisher, offer, sku, version string) Option {
 		p.version = version
 	}
 }
+
+func WithId(id string) Option {
+	return func(p *config) {
+		p.ID = id
+	}
+}
+
 func WithUsername(username string) Option {
 	return func(p *config) {
 		p.username = username

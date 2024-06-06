@@ -31,6 +31,7 @@ type config struct {
 	securityGroupName string
 
 	rootDir string
+	ID      string
 
 	location string // region, example: East US
 
@@ -169,7 +170,19 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
 
 	logr.Traceln("azure: creating VM")
-
+	var imageReference *armcompute.ImageReference
+	if c.publisher == "" || c.offer == "" || c.sku == "" || c.version == "" {
+		imageReference = &armcompute.ImageReference{
+			ID: to.Ptr(c.ID),
+		}
+	} else {
+		imageReference = &armcompute.ImageReference{
+			Publisher: to.Ptr(c.publisher),
+			Offer:     to.Ptr(c.offer),
+			SKU:       to.Ptr(c.sku),
+			Version:   to.Ptr(c.version),
+		}
+	}
 	in := armcompute.VirtualMachine{
 		Location: to.Ptr(c.location),
 		Zones:    c.zones,
@@ -179,12 +192,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes(c.size)),
 			},
 			StorageProfile: &armcompute.StorageProfile{
-				ImageReference: &armcompute.ImageReference{
-					Publisher: to.Ptr(c.publisher),
-					Offer:     to.Ptr(c.offer),
-					SKU:       to.Ptr(c.sku),
-					Version:   to.Ptr(c.version),
-				},
+				ImageReference: imageReference,
 				OSDisk: &armcompute.OSDisk{
 					Name:         to.Ptr(diskName),
 					CreateOption: to.Ptr(armcompute.DiskCreateOptionTypesFromImage),
