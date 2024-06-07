@@ -31,7 +31,7 @@ type config struct {
 	securityGroupName string
 
 	rootDir      string
-	ID           string
+	id           string
 	securityType string
 
 	location string // region, example: East US
@@ -172,9 +172,9 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	logr.Traceln("azure: creating VM")
 	var imageReference *armcompute.ImageReference
-	if c.ID != "" {
+	if c.id != "" {
 		imageReference = &armcompute.ImageReference{
-			ID: to.Ptr(c.ID),
+			ID: to.Ptr(c.id),
 		}
 	} else {
 		imageReference = &armcompute.ImageReference{
@@ -221,7 +221,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		},
 	}
 
-	if c.ID != "" {
+	if c.id != "" {
 		securityProfile := &armcompute.SecurityProfile{
 			SecurityType: (*armcompute.SecurityTypes)(&c.securityType),
 		}
