@@ -30,8 +30,9 @@ type config struct {
 
 	securityGroupName string
 
-	rootDir string
-	ID      string
+	rootDir      string
+	ID           string
+	securityType string
 
 	location string // region, example: East US
 
@@ -183,7 +184,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			Version:   to.Ptr(c.version),
 		}
 	}
-	in := armcompute.VirtualMachine{
+
+	var in = armcompute.VirtualMachine{
 		Location: to.Ptr(c.location),
 		Zones:    c.zones,
 		Tags:     tags,
@@ -217,6 +219,13 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				},
 			},
 		},
+	}
+
+	if c.ID != "" {
+		securityProfile := &armcompute.SecurityProfile{
+			SecurityType: (*armcompute.SecurityTypes)(&c.securityType),
+		}
+		in.Properties.SecurityProfile = securityProfile
 	}
 
 	poller, err := c.service.BeginCreateOrUpdate(ctx, c.resourceGroupName, name, in, nil)

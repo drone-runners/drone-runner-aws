@@ -139,6 +139,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				azure.WithTags(az.Tags),
 				azure.WithSecurityGroupName(az.SecurityGroupName),
 				azure.WithId(az.Image.ID),
+				azure.WithSecurityType(az.SecurityType),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)

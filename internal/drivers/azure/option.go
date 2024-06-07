@@ -95,6 +95,12 @@ func WithId(id string) Option {
 	}
 }
 
+func WithSecurityType(securityType string) Option {
+	return func(p *config) {
+		p.securityType = securityType
+	}
+}
+
 func WithUsername(username string) Option {
 	return func(p *config) {
 		p.username = username

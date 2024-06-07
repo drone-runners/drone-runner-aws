@@ -144,6 +144,7 @@ type (
 		Zones             []string          `json:"zones,omitempty" yaml:"zones,omitempty"`
 		Tags              map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
 		SecurityGroupName string            `json:"security_group_name,omitempty" yaml:"security_group_name,omitempty"`
+		SecurityType      string            `json:"security_type,omitempty" yaml:"security_type,omitempty"`
 	}
 
 	AzureAccount struct {
