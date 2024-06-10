@@ -144,6 +144,7 @@ type (
 		Zones             []string          `json:"zones,omitempty" yaml:"zones,omitempty"`
 		Tags              map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
 		SecurityGroupName string            `json:"security_group_name,omitempty" yaml:"security_group_name,omitempty"`
+		SecurityType      string            `json:"security_type,omitempty" yaml:"security_type,omitempty"`
 	}
 
 	AzureAccount struct {
@@ -160,6 +161,7 @@ type (
 		Version   string `json:"version,omitempty"  yaml:"version,omitempty"`
 		Username  string `json:"username,omitempty"  yaml:"username,omitempty"`
 		Password  string `json:"password,omitempty"  yaml:"password,omitempty"`
+		ID        string `json:"id,omitempty"  yaml:"id,omitempty"`
 	}
 
 	// DigitalOcean specifies the configuration for a DigitalOcean instance.
