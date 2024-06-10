@@ -221,7 +221,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		},
 	}
 
-	if c.id != "" {
+	if c.securityType != "" {
 		securityProfile := &armcompute.SecurityProfile{
 			SecurityType: (*armcompute.SecurityTypes)(&c.securityType),
 		}
