@@ -89,7 +89,7 @@ func WithImage(publisher, offer, sku, version string) Option {
 	}
 }
 
-func WithId(id string) Option {
+func WithID(id string) Option {
 	return func(p *config) {
 		p.id = id
 	}

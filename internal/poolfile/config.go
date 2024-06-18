@@ -138,7 +138,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 				azure.WithZones(az.Zones...),
 				azure.WithTags(az.Tags),
 				azure.WithSecurityGroupName(az.SecurityGroupName),
-				azure.WithId(az.Image.ID),
+				azure.WithID(az.Image.ID),
 				azure.WithSecurityType(az.SecurityType),
 			)
 			if err != nil {
