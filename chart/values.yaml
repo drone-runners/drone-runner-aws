@@ -151,9 +151,9 @@ instances:
         hibernate: true
       bare_metal:
         image: harness/vmimage:v1
-        cpus: "4"
-        mem_gb: "8"
-        disk_size: "120GB"
+        cpus: "10"
+        mem_gb: "26"
+        disk_size: "350GB"
 service:
   enabled: true
   annotations: {}
