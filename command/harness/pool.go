@@ -16,7 +16,7 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.I
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 
-	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name)
+	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name, env)
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err

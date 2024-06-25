@@ -125,7 +125,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 			Fatalln("exec: unable to load pool file, or use an in memory pool file")
 	}
 
-	pools, err := poolfile.ProcessPool(configPool, runnerName)
+	pools, err := poolfile.ProcessPool(configPool, runnerName, &envConfig)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("exec: unable to process pool file")
