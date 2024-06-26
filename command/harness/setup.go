@@ -3,7 +3,6 @@ package harness
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -237,13 +236,22 @@ func handleSetup(
 				logr.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
 				// Serial console output is limited to 60000 characters since stackdriver only supports 64KB per log entry
-				l := math.Min(float64(len(out)), 60000) //nolint:gomnd
-				logrus.WithField("id", instanceID).
-					WithField("instance_name", instanceName).
-					WithField("ip", instanceIP).
-					WithField("pool_id", pool).
-					WithField("stage_runtime_id", stageRuntimeID).
-					Infof("serial console output: %s", out[len(out)-int(l):])
+				const maxLogLength = 60000
+				totalLength := len(out)
+				for start := 0; start < totalLength; start += maxLogLength {
+					end := start + maxLogLength
+					if end > totalLength {
+						end = totalLength
+					}
+					logIndex := start / maxLogLength
+					logrus.WithField("id", instanceID).
+						WithField("instance_name", instanceName).
+						WithField("ip", instanceIP).
+						WithField("pool_id", pool).
+						WithField("stage_runtime_id", stageRuntimeID).
+						WithField("log_index", logIndex).
+						Infof("serial console output: %s", out[start:end])
+				}
 			}
 		}
 		err = poolManager.Destroy(context.Background(), pool, instanceID)
