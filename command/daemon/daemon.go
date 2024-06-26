@@ -111,7 +111,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	logrus.Infoln(fmt.Sprintf("daemon: processing config for %s", env.Runner.Name))
-	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name)
+	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name, &env)
 	if err != nil {
 		logrus.WithError(err).
 			Fatalln("daemon: unable to process pool file")

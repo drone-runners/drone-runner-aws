@@ -88,8 +88,8 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 			Errorln("compile: unable to parse pool file")
 		return err
 	}
-
-	pools, err := poolfile.ProcessPool(poolFile, runnerName)
+	configEnv, err := config.FromEnviron()
+	pools, err := poolfile.ProcessPool(poolFile, runnerName, &configEnv)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("compile: unable to process pool file")

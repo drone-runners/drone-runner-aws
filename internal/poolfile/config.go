@@ -28,7 +28,7 @@ const (
 	DefaultPoolName = "testpool"
 )
 
-func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, error) { //nolint
+func ProcessPool(poolFile *config.PoolFile, runnerName string, env *config.EnvConfig) ([]drivers.Pool, error) { //nolint
 	var pools = []drivers.Pool{}
 
 	for i := range poolFile.Instances {
@@ -240,6 +240,9 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string) ([]drivers.Pool, 
 			pools = append(pools, pool)
 		case string(types.AnkaBuild):
 			var ankaBuild, ok = instance.Spec.(*config.AnkaBuild)
+			if ankaBuild.AuthToken == "" && env.AnkaBuild.Token != "" {
+				ankaBuild.AuthToken = env.AnkaBuild.Token
+			}
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
