@@ -48,13 +48,7 @@ func handleEnable(p *poller.Poller, d *dliteCommand) http.HandlerFunc {
 		p.SetFilter(func(ev *client.TaskEvent) bool {
 			return ev.TaskType != initTask && ev.TaskType != executeTaskV2 && ev.TaskType != cleanupTaskV2
 		})
-		var err error
-		if d.env.DistributedMode.Enabled {
-			err = d.distributedPoolManager.CleanPools(r.Context(), false, true)
-		} else {
-			err = d.poolManager.CleanPools(r.Context(), false, true)
-		}
-		if err != nil {
+		if err := d.distributedPoolManager.CleanPools(r.Context(), false, true); err != nil {
 			io.WriteString(w, err.Error()) //nolint: errcheck
 		}
 		io.WriteString(w, okStatus) //nolint: errcheck
