@@ -114,18 +114,10 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	ctx = context.WithValue(ctx, types.Hosted, true)
 	var poolConfig *config.PoolFile
 
-	if env.DistributedMode.Enabled {
-		poolConfig, err = c.setupDistributedPool(ctx)
-		defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
-		if err != nil {
-			return err
-		}
-	} else {
-		poolConfig, err = c.setupPool(ctx)
-		defer harness.Cleanup(&c.env, c.poolManager, true, true) //nolint: errcheck
-		if err != nil {
-			return err
-		}
+	poolConfig, err = c.setupDistributedPool(ctx)
+	defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
+	if err != nil {
+		return err
 	}
 
 	// Update running count from all the stores
@@ -147,13 +139,8 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		if c.env.DistributedMode.Enabled {
-			// only delete unused instances for distributed pool
-			err = harness.Cleanup(&c.env, c.distributedPoolManager, false, true)
-		} else {
-			err = harness.Cleanup(&c.env, c.poolManager, true, true)
-		}
-		return err
+		// delete unused instances for distributed pool
+		return harness.Cleanup(&c.env, c.distributedPoolManager, false, true)
 	})
 
 	g.Go(func() error {

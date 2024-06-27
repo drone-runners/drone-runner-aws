@@ -90,8 +90,6 @@ spec:
         {{- include "harnesscommon.dbconnectionv2.postgresEnv" (dict "ctx" $ "userVariableName" "POSTGRES_USER" "passwordVariableName" "POSTGRES_PASSWORD") | indent 8 }}
         - name: DRONE_DISTRIBUTED_DATASOURCE
           value: {{ include "harnesscommon.dbconnectionv2.postgresConnection" (dict "ctx" $ "database" "dlite" "keywordValueConnectionString" true "userVariableName" "$(POSTGRES_USER)" "passwordVariableName" "$(POSTGRES_PASSWORD)" ) | quote }}
-        - name: DRONE_DISTRIBUTED_ENABLED
-          value: "true"
         volumeMounts:
         {{- include "harnesscommon.mountRenderedSecretsAsVolumeMounts" (dict "ctx" $) | indent 8}}
         - name: pool-cfg
