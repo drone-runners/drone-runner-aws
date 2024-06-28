@@ -125,6 +125,7 @@ config:
   DLITE_PARALLEL_WORKERS: "10000"
   SKIP_PREPARE_SERVER: "true"
   DRONE_TRACE: "true"
+  DRONE_DISTRIBUTED_ENABLED: "true"
 dlite:  
   cname: "harness"
   accName: "HarnessGlobalDelegate"
