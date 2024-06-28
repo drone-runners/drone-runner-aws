@@ -118,13 +118,14 @@ waitForInitContainer:
 securityContext:
   runAsUser: 65534
   runAsNonRoot: true
-dlite:
-  linux_name: dlite-linux
-  accountId: "__GLOBAL_DELEGATE_ACCOUNT_ID__"
-  accountSecret: "2f6b0988b6fb3370073c3d0505baee59"
-  managerEndpoint: "http://harness-manager:9090"
-  pollIntervalMs: "1000"
-  parallelWorkers: "10000"
+config:
+  DLITE_NAME: dlite-linux
+  DLITE_MANAGER_ENDPOINT: "http://harness-manager:9090"
+  DLITE_POLL_INTERVAL_MILLISECS: "1000"
+  DLITE_PARALLEL_WORKERS: "10000"
+  SKIP_PREPARE_SERVER: "true"
+  DRONE_TRACE: "true"
+dlite:  
   cname: "harness"
   accName: "HarnessGlobalDelegate"
 instances:
@@ -203,6 +204,8 @@ secrets:
         path: "ca.bundle"
   default:
     NOMAD_BARE_METAL_CERTS: ""
+    DLITE_ACCOUNT_ID: "__GLOBAL_DELEGATE_ACCOUNT_ID__"
+    DLITE_ACCOUNT_SECRET: "2f6b0988b6fb3370073c3d0505baee59"
   kubernetesSecrets:
     - secretName: ""
       keys:
