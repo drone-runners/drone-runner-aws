@@ -59,7 +59,7 @@ spec:
       - name: dlite
         image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        #command: ["/app/drone-runner-aws", "dlite", "--pool=/etc/config/pool.yml"]
+        command: ["/app/drone-runner-aws", "dlite", "--pool=/etc/config/pool.yml"]
         securityContext:
           {{- toYaml .Values.securityContext | nindent 12 }}
         resources:
