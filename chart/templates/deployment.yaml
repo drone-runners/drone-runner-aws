@@ -71,7 +71,7 @@ spec:
             cpu: 1
         envFrom:
         - configMapRef:
-            name: dlite
+            name: dlite-config
         env:
         {{- include "harnesscommon.renderSecretsAsEnvironmentVariables" (dict "ctx" $) | indent 8 }}
         {{- include "harnesscommon.dbconnectionv2.postgresEnv" (dict "ctx" $ "userVariableName" "POSTGRES_USER" "passwordVariableName" "POSTGRES_PASSWORD") | indent 8 }}
