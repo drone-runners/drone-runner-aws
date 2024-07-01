@@ -34,4 +34,18 @@ data:
           disk_size: {{.Values.instances.linux.amd64.bare_metal.disk_size | quote}}
           enablePinning:
             free: "free"
-          
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlite-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- if .Values.global.commonLabels }}
+    {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.global.commonAnnotations }}
+  annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+data:
+ {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.config "context" $) | nindent 2}}
