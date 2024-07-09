@@ -103,6 +103,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, env *config.EnvCo
 				amazon.WithMarketType(a.MarketType),
 				amazon.WithTags(a.Tags),
 				amazon.WithHibernate(a.Hibernate),
+				amazon.WithIMDSv2(a.IMDSv2),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
