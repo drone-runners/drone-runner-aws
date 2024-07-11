@@ -120,7 +120,7 @@ securityContext:
   runAsNonRoot: true
 config:
   DLITE_NAME: dlite-linux
-  DLITE_MANAGER_ENDPOINT: "http://harness-manager:9090"
+  DLITE_MANAGER_ENDPOINT: "{{.Values.global.loadbalancerURL}}"
   DLITE_POLL_INTERVAL_MILLISECS: "1000"
   DLITE_PARALLEL_WORKERS: "10000"
   SKIP_PREPARE_SERVER: "true"
