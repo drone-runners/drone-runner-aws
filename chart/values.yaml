@@ -131,61 +131,97 @@ dlite:
 instances:
   linux:
     amd64:
-      fallback: true
       free_fallback_enable: true
       split: true
       bare_metal_enabled: true
       large_pool_enabled: true
       free:
-        project_id: cie-hosted-vm-qa
+        project_id: envSpecific
         pool_size: 0
         pool_limit: 5
-        image: projects/cie-hosted-vm-qa/global/images/hosted-vm-64
-        machine_type: n1-standard-1
+        image: envSpecific
+        machine_type: envSpecific
         disk_size: 100
-        network: cie-hosted-vm-qa
-        subnetwork: subnet1
-        zones:
-          - us-west1-a
-          - us-west1-b
-          - us-west1-c
+        network: envSpecific
+        subnetwork: envSpecific
+        zones: envSpecific
         hibernate: true
+      paid:
+        project_id: envSpecific
+        pool_size: 0
+        pool_limit: 5
+        image: envSpecific
+        machine_type: envSpecific
+        disk_size: 100
+        network: envSpecific
+        subnetwork: envSpecific
+        zones: envSpecific
+        hibernate: true
+      fallback:
+        project_id: envSpecific
+        pool_size: 0
+        pool_limit: 5
+        image: envSpecific
+        machine_type: envSpecific
+        disk_size: 100
+        network: envSpecific
+        subnetwork: envSpecific
+        zones: envSpecific
+        hibernate: true 
       bare_metal:
         image: harness/vmimage:v1
         cpus: "10"
         mem_gb: "26"
         disk_size: "350GB"
     arm64:
+      split: true
       paid:
-        project_id: cie-hosted-vm-paid-prod
+        project_id: envSpecific
         pool_size: 0
-        pool_limit: 50
-        image: projects/cie-hosted-vm-paid-prod/global/images/hosted-vm-164-arm
-        machine_type: t2a-standard-4
+        pool_limit: 5
+        image: envSpecific
+        machine_type: envSpecific
         disk_size: 100
-        network: "projects/sharedvpc-prod-362718/global/networks/cie-hosted-vm-prod-vpc"
-        subnetwork: "projects/sharedvpc-prod-362718/regions/us-central1/subnetworks/s1-central1-cie-hosted-vm-paid-prod"
-        zones:
-          - us-central1-a
-          - us-central1-b
-          - us-central1-f
+        network: envSpecific
+        subnetwork: envSpecific
+        zones: envSpecific
+        hibernate: false
+      free: 
+        project_id: envSpecific
+        pool_size: 0
+        pool_limit: 5
+        image: envSpecific
+        machine_type: envSpecific
+        disk_size: 100
+        network: envSpecific
+        subnetwork: envSpecific
+        zones: envSpecific
         hibernate: false
   windows:
     amd64:
+      split: true
       paid:
-        project_id: cie-hosted-vm-paid-prod
+        project_id: envSpecific
         pool_size: 0
-        pool_limit: 50
-        image: projects/cie-hosted-vm-paid-prod/global/images/hosted-vm-windows22--119
-        machine_type: n1-standard-1
+        pool_limit: 5
+        image: envSpecific
+        machine_type: envSpecific
         disk_size: 250
-        network: "projects/sharedvpc-prod-362718/global/networks/cie-hosted-vm-prod-vpc"
-        subnetwork: "projects/sharedvpc-prod-362718/regions/us-central1/subnetworks/s1-central1-cie-hosted-vm-paid-prod"
-        zones:
-          - us-central1-a
-          - us-central1-b
-          - us-central1-f
-        hibernate: false
+        network: envSpecific
+        subnetwork: envSpecific
+        zones: envSpecific
+        hibernate: true
+      free: 
+        project_id: envSpecific
+        pool_size: 0
+        pool_limit: 5
+        image: envSpecific
+        machine_type: envSpecific
+        disk_size: 250
+        network: envSpecific
+        subnetwork: envSpecific
+        zones: envSpecific
+        hibernate: true
 service:
   enabled: true
   annotations: {}
@@ -233,10 +269,6 @@ secrets:
     keys:
       - key: NOMAD_BARE_METAL_CERTS
         path: "ca.bundle"
-  - volumeMountPath: "/var/run/secret/cloud.google.com"
-    keys:
-      - key: DLITE_GCP_SERVICE_ACCOUNT
-        path: "service-account"
   default:
     NOMAD_BARE_METAL_CERTS: ""
     DLITE_ACCOUNT_ID: "__GLOBAL_DELEGATE_ACCOUNT_ID__"
