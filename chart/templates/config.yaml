@@ -34,6 +34,98 @@ data:
           disk_size: {{.Values.instances.linux.amd64.bare_metal.disk_size | quote}}
           enablePinning:
             free: "free"
+    - name: linux-amd64
+      type: google
+      pool: {{int .Values.instances.linux.amd64.paid.pool_size}}
+      limit: {{int .Values.instances.linux.amd64.paid.pool_limit}}
+      platform:
+        os: linux
+        arch: amd64
+      spec:
+        account:
+          project_id: {{.Values.instances.linux.amd64.paid.project_id}}
+          no_service_account: true
+        image: {{.Values.instances.linux.amd64.paid.image}}
+        machine_type: {{.Values.instances.linux.amd64.paid.machine_type}}
+        zone: {{ .Values.instances.linux.amd64.paid.zones | toYaml | nindent 10 }}
+        disk:
+          size: {{int .Values.instances.linux.amd64.paid.disk_size}}
+          type: "pd-balanced"
+        private_ip: true
+        network: {{.Values.instances.linux.amd64.paid.network}}
+        subnetwork: {{.Values.instances.linux.amd64.paid.subnetwork}}
+        tags:
+          - "allow-dlite"
+        hibernate: {{.Values.instances.linux.amd64.paid.hibernate}}
+    - name: linux-amd64-fallback
+      type: google
+      pool: {{int .Values.instances.linux.amd64.fallback.pool_size}}
+      limit: {{int .Values.instances.linux.amd64.fallback.pool_limit}}
+      platform:
+        os: linux
+        arch: amd64
+      spec:
+        account:
+          project_id: {{.Values.instances.linux.amd64.fallback.project_id}}
+          no_service_account: true
+        image: {{.Values.instances.linux.amd64.fallback.image}}
+        machine_type: {{.Values.instances.linux.amd64.fallback.machine_type}}
+        zone: {{ .Values.instances.linux.amd64.fallback.zones | toYaml | nindent 10 }}
+        disk:
+          size: {{int .Values.instances.linux.amd64.fallback.disk_size}}
+          type: "pd-balanced"
+        private_ip: true
+        network: {{.Values.instances.linux.amd64.fallback.network}}
+        subnetwork: {{.Values.instances.linux.amd64.fallback.subnetwork}}
+        tags:
+          - "allow-dlite"
+        hibernate: {{.Values.instances.linux.amd64.fallback.hibernate}}
+    - name: linux-arm64
+      type: google
+      pool: {{int .Values.instances.linux.arm64.paid.pool_size}}
+      limit: {{int .Values.instances.linux.arm64.paid.pool_limit}}
+      platform:
+        os: linux
+        arch: arm64
+      spec:
+        account:
+          project_id: {{.Values.instances.linux.arm64.paid.project_id}}
+          no_service_account: true
+        image: {{.Values.instances.linux.arm64.paid.image}}
+        machine_type: {{.Values.instances.linux.arm64.paid.machine_type}}
+        zone: {{ .Values.instances.linux.arm64.paid.zones | toYaml | nindent 10 }}
+        disk:
+          size: {{int .Values.instances.linux.arm64.paid.disk_size}}
+          type: "pd-balanced"
+        private_ip: true
+        network: {{.Values.instances.linux.arm64.paid.network}}
+        subnetwork: {{.Values.instances.linux.arm64.paid.subnetwork}}
+        tags:
+          - "allow-dlite"
+        hibernate: {{.Values.instances.linux.arm64.paid.hibernate}}
+    - name: windows-amd64
+      type: google
+      pool: {{int .Values.instances.windows.amd64.paid.pool_size}}
+      limit: {{int .Values.instances.windows.amd64.paid.pool_limit}}
+      platform:
+        os: windows
+        arch: amd64
+      spec:
+        account:
+          project_id: {{.Values.instances.windows.amd64.paid.project_id}}
+          no_service_account: true
+        image: {{.Values.instances.windows.amd64.paid.image}}
+        machine_type: {{.Values.instances.windows.amd64.paid.machine_type}}
+        zone: {{ .Values.instances.windows.amd64.paid.zones | toYaml | nindent 10 }}
+        disk:
+          size: {{int .Values.instances.windows.amd64.paid.disk_size}}
+          type: "pd-balanced"
+        private_ip: true
+        network: {{.Values.instances.windows.amd64.paid.network}}
+        subnetwork: {{.Values.instances.windows.amd64.paid.subnetwork}}
+        tags:
+          - "allow-dlite"
+        hibernate: {{.Values.instances.windows.amd64.paid.hibernate}}
 ---
 apiVersion: v1
 kind: ConfigMap
