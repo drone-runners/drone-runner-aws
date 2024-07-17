@@ -192,7 +192,14 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 // run a health check on the lite engine. It returns information about the setup
 // VM and an error if setup failed.
 // It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
-func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env *config.EnvConfig, poolManager drivers.IManager, pool, owner string, agentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
+func handleSetup(
+	ctx context.Context,
+	logr *logrus.Entry,
+	r *SetupVMRequest,
+	env *config.EnvConfig,
+	poolManager drivers.IManager,
+	pool, owner string,
+	agentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, fmt.Errorf("could not find pool: %s", pool)
