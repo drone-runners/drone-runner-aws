@@ -237,28 +237,28 @@ echo "starting lite engine server"
 echo "done starting lite engine server"
 
 echo "install certs"
-sudo apt-get update
-sudo apt-get install ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-sudo apt-get update
-sudo apt-get --yes --force-yes install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo groupadd docker
-sudo mkdir -p /opt/gitspaceagent
+apt-get update
+apt-get install ca-certificates curl
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+apt-get update
+apt-get --yes --force-yes install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+groupadd docker
+mkdir -p /opt/gitspaceagent
 echo "done installing certs"
 
 echo "downloading gitspaces agent binary"
-sudo echo HARNESS_JWT_SECRET={{ .Secret }} >> /etc/profile
+echo HARNESS_JWT_SECRET={{ .Secret }} >> /etc/profile
 export HARNESS_JWT_SECRET={{ .Secret }}
-sudo curl -X GET -H "Authorization: Bearer {{ .AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
-sudo chmod 755 /opt/gitspaceagent/agent
+curl -X GET -H "Authorization: Bearer {{ .AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
+chmod 755 /opt/gitspaceagent/agent
 echo "done downloading gitspace agent binary"
 
 echo "starting gitspaces agent"
-sudo nohup /opt/gitspaceagent/agent 2>&1 &
-sudo useradd -K MAIL_DIR=/dev/null gitspaceagent
-sudo usermod -aG docker gitspaceagent
+nohup /opt/gitspaceagent/agent 2>&1 &
+useradd -K MAIL_DIR=/dev/null gitspaceagent
+usermod -aG docker gitspaceagent
 echo "done starting gitspaces agent"
 `
 

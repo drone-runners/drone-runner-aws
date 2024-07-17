@@ -109,7 +109,8 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
-	startupScript := generateStartupScript(opts)
+	isGitspaceRequest := opts.Secret != "" && opts.AccessToken != ""
+	startupScript := generateStartupScript(opts, isGitspaceRequest)
 
 	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
@@ -156,14 +157,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// oversubscribing the node
 	var resourceJob *api.Job
 	var resourceJobID string
-	isGitspacesRequest := opts.Secret != "" && opts.AccessToken != ""
 	if p.noop {
-		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, isGitspacesRequest)
+		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, isGitspaceRequest)
 	} else {
 		if class != "" {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class, isGitspacesRequest)
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class, isGitspaceRequest)
 		} else {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount, isGitspacesRequest)
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount, isGitspaceRequest)
 		}
 	}
 
@@ -186,7 +186,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Infoln("scheduler: found a node with available resources")
 
 	// get the machine details where the resource job was allocated
-	ip, id, hostPorts, err := p.fetchMachine(logr, resourceJobID)
+	ip, id, hostPorts, err := p.fetchMachine(logr, resourceJobID, isGitspaceRequest)
 	if err != nil {
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, err
@@ -194,7 +194,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	liteEnginePort := hostPorts[0]
 	gitspacesAgentPort := -1
 	gitspacesSshPort := -1
-	if isGitspacesRequest && len(hostPorts) == 3 {
+	if isGitspaceRequest && len(hostPorts) == 3 {
 		gitspacesAgentPort = hostPorts[1]
 		gitspacesSshPort = hostPorts[2]
 	}
@@ -345,7 +345,7 @@ func (p *config) resourceJob(cpus, memGB int, vm, accountID string, isGitspacesR
 }
 
 // fetchMachine returns details of the machine where the job has been allocated
-func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string, ports []int, err error) {
+func (p *config) fetchMachine(logr logger.Logger, id string, isGitspaceRequest bool) (ip, nodeID string, ports []int, err error) {
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
 	l, _, err := p.client.Jobs().Allocations(id, false, nil)
@@ -376,8 +376,10 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 
 	ports = []int{
 		alloc.Resources.Networks[0].DynamicPorts[0].Value,
-		alloc.Resources.Networks[0].DynamicPorts[1].Value,
-		alloc.Resources.Networks[0].DynamicPorts[2].Value,
+	}
+	if isGitspaceRequest {
+		ports = append(ports, alloc.Resources.Networks[0].DynamicPorts[1].Value)
+		ports = append(ports, alloc.Resources.Networks[0].DynamicPorts[2].Value)
 	}
 
 	// sanity check
@@ -693,7 +695,7 @@ func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error 
 	return nil
 }
 
-func generateStartupScript(opts *types.InstanceCreateOpts) string {
+func generateStartupScript(opts *types.InstanceCreateOpts, isGitspaceRequest bool) string {
 	params := &cloudinit.Params{
 		Platform:             opts.Platform,
 		CACert:               string(opts.CACert),
@@ -705,7 +707,7 @@ func generateStartupScript(opts *types.InstanceCreateOpts) string {
 		PluginBinaryURI:      opts.PluginBinaryURI,
 		Tmate:                opts.Tmate,
 	}
-	if opts.Secret != "" && opts.AccessToken != "" {
+	if isGitspaceRequest {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{Secret: opts.Secret, AccessToken: opts.AccessToken}
 	}
 	return cloudinit.LinuxBash(params)
