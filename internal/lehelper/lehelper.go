@@ -12,7 +12,9 @@ import (
 )
 
 const (
-	LiteEnginePort = 9079
+	LiteEnginePort     = 9079
+	GitspacesAgentPort = 8083
+	GitspacesSshPort   = 8088
 )
 
 func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {

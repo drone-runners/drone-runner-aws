@@ -30,6 +30,7 @@ type Params struct {
 	PluginBinaryURI      string
 	Tmate                types.Tmate
 	IsHosted             bool
+	types.GitspaceAgentConfig
 }
 
 var funcs = map[string]interface{}{
@@ -158,6 +159,109 @@ echo "starting lite engine server"
 echo "done starting lite engine server"
 `
 
+const gitspacesLinuxScript = `
+#!/usr/bin/bash
+mkdir {{ .CertDir }}
+
+echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
+chmod 0600 {{ .CaCertPath }}
+
+echo {{ .TLSCert | base64 }} | base64 -d  >> {{ .CertPath }}
+chmod 0600 {{ .CertPath }}
+
+echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
+chmod 0600 {{ .KeyPath }}
+
+echo "setting up swap space"
+fallocate -l 30G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo "done setting up swap space"
+
+echo "downloading lite engine binary"
+/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `
+echo "done downloading lite engine binary"
+chmod 777 /usr/bin/lite-engine
+touch $HOME/.env
+cp "/etc/environment" $HOME/.env
+echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
+
+{{ if .PluginBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `
+chmod 777 /usr/bin/plugin
+{{ end }}
+
+{{ if .HarnessTestBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + `
+chmod 777 /usr/bin/split_tests
+{{ end }}
+
+{{ if eq .Platform.Arch "amd64" }}
+curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
+chmod 777 /usr/bin/envman
+{{ end }}
+
+systemctl disable docker.service
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+echo "restarting docker"
+service docker start
+echo "docker service restarted"
+
+echo "updating conf"
+cp /etc/resolv.conf /etc/resolv_orig.conf
+rm /etc/resolv.conf
+echo "nameserver 127.0.0.53" > /etc/resolv.conf 
+cat /etc/resolv_orig.conf >> /etc/resolv.conf
+echo "options edns0 trust-ad
+search ." >> /etc/resolv.conf
+echo "updating config done"
+
+{{ if .Tmate.Enabled }}
+mkdir /addon
+{{ if eq .Platform.Arch "amd64" }}
+wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
+tar -xf /addon/tmate.xz -C /addon/
+chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate
+mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
+{{ else if eq .Platform.Arch "arm64" }}
+wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz
+tar -xf /addon/tmate.xz -C /addon/
+chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate
+mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
+{{ end }}
+{{ end }}
+unlink /snap/bin/google-cloud-cli.gcloud
+echo "starting lite engine server"
+/usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
+echo "done starting lite engine server"
+
+echo "install certs"
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+sudo apt-get update
+sudo apt-get --yes --force-yes install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo groupadd docker
+sudo mkdir -p /opt/gitspaceagent
+echo "done installing certs"
+
+echo "downloading gitspaces agent binary"
+sudo echo HARNESS_JWT_SECRET={{ .Secret }} >> /etc/profile
+export HARNESS_JWT_SECRET={{ .Secret }}
+sudo curl -X GET -H "Authorization: Bearer {{ .AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
+sudo chmod 755 /opt/gitspaceagent/agent
+echo "done downloading gitspace agent binary"
+
+echo "starting gitspaces agent"
+sudo nohup /opt/gitspaceagent/agent 2>&1 &
+sudo useradd -K MAIL_DIR=/dev/null gitspaceagent
+sudo usermod -aG docker gitspaceagent
+echo "done starting gitspaces agent"
+`
+
 const macScript = `
 #!/usr/bin/env bash
 mkdir /tmp/certs/
@@ -216,6 +320,7 @@ chmod 777 /usr/local/bin/envman
 var macTemplate = template.Must(template.New("mac").Funcs(funcs).Parse(macScript))
 var macArm64Template = template.Must(template.New("mac-arm64").Funcs(funcs).Parse(macArm64Script))
 var linuxBashTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(linuxScript))
+var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(gitspacesLinuxScript))
 
 func Mac(params *Params) (payload string) {
 	sb := &strings.Builder{}
@@ -274,7 +379,12 @@ func LinuxBash(params *Params) (payload string) {
 		KeyPath:    keyPath,
 	}
 
-	err := linuxBashTemplate.Execute(sb, p)
+	var err error
+	if params.Secret != "" && params.AccessToken != "" {
+		err = gitspacesLinuxTemplate.Execute(sb, p)
+	} else {
+		err = linuxBashTemplate.Execute(sb, p)
+	}
 	if err != nil {
 		err = fmt.Errorf("failed to execute linux bash template to get init script: %w", err)
 		panic(err)

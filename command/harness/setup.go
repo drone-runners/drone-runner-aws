@@ -38,8 +38,10 @@ type SetupVMRequest struct {
 }
 
 type SetupVMResponse struct {
-	IPAddress  string `json:"ip_address"`
-	InstanceID string `json:"instance_id"`
+	IPAddress          string `json:"ip_address"`
+	InstanceID         string `json:"instance_id"`
+	GitspacesAgentPort int64  `json:"gitspaces_agent_port"`
+	GitspacesSshPort   int64  `json:"gitspaces_ssh_port"`
 }
 
 var (
@@ -51,8 +53,7 @@ var (
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager,
-	metrics *metric.Metrics) (*SetupVMResponse, string, error) {
+func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager, metrics *metric.Metrics, gitspaceAgentConfig *types.GitspaceAgentConfig) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
@@ -130,7 +131,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
-		instance, poolErr = handleSetup(ctx, logr, r, env, poolManager, pool, owner)
+		instance, poolErr = handleSetup(ctx, logr, r, env, poolManager, pool, owner, gitspaceAgentConfig)
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
 			continue
@@ -174,7 +175,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	}
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner).Inc()
-	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address}
+	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesAgentPort: instance.GitspacesAgentPort, GitspacesSshPort: instance.GitspacesSshPort}
 
 	logr.WithField("selected_pool", selectedPool).
 		WithField("ip", instance.Address).
@@ -191,13 +192,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 // run a health check on the lite engine. It returns information about the setup
 // VM and an error if setup failed.
 // It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
-func handleSetup(
-	ctx context.Context,
-	logr *logrus.Entry,
-	r *SetupVMRequest,
-	env *config.EnvConfig,
-	poolManager drivers.IManager,
-	pool, owner string) (*types.Instance, error) {
+func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env *config.EnvConfig, poolManager drivers.IManager, pool, owner string, agentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, fmt.Errorf("could not find pool: %s", pool)
@@ -212,7 +207,7 @@ func handleSetup(
 			RunnerName: env.Runner.Name,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query)
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, agentConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}

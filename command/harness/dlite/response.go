@@ -15,6 +15,12 @@ type VMTaskExecutionResponse struct {
 	OptimizationState      string                 `json:"optimization_state"`
 }
 
+type GitspacesVMTaskExecutionResponse struct {
+	VMTaskExecutionResponse
+	GitspacesAgentPort int64 `json:"gitspaces_agent_port"`
+	GitspacesSshPort   int64 `json:"gitspaces_ssh_port"`
+}
+
 type DelegateMetaInfo struct {
 	ID       string `json:"id"`
 	HostName string `json:"host_name"`

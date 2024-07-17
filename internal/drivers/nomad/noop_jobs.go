@@ -57,7 +57,7 @@ func (p *config) initJobNoop(vm, startupScript string, hostPort int, nodeID stri
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJobNoop(cpus, memGB int, vm string) (job *api.Job, id string) { //nolint:unparam
+func (p *config) resourceJobNoop(cpus, memGB int, vm string, isGitspacesRequest bool) (job *api.Job, id string) { //nolint:unparam
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -75,7 +75,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string) (job *api.Job, id s
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks:                  []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: portLabel}}}},
+				Networks:                  getNetworkResources(portLabel, isGitspacesRequest),
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
