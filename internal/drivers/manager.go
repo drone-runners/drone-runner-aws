@@ -306,7 +306,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, agentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
+func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
 	m.runnerName = runnerName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
@@ -335,7 +335,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverNam
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, agentConfig)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -572,6 +572,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	if agentConfig != nil {
 		createOptions.Secret = agentConfig.Secret
 		createOptions.AccessToken = agentConfig.AccessToken
+		createOptions.Ports = agentConfig.Ports
 	}
 	if err != nil {
 		logrus.WithError(err).

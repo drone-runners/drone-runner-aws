@@ -17,8 +17,7 @@ type VMTaskExecutionResponse struct {
 
 type GitspacesVMTaskExecutionResponse struct {
 	VMTaskExecutionResponse
-	GitspacesAgentPort int64 `json:"gitspaces_agent_port"`
-	GitspacesSshPort   int64 `json:"gitspaces_ssh_port"`
+	GitspacesPortMappings map[int]int `json:"gitspaces_port_mappings"`
 }
 
 type DelegateMetaInfo struct {

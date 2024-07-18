@@ -76,8 +76,7 @@ func (t *GitspacesVMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			},
 			PoolDriverUsed: selectedPoolDriver,
 		},
-		GitspacesAgentPort: setupResp.GitspacesAgentPort,
-		GitspacesSshPort:   setupResp.GitspacesSshPort,
+		GitspacesPortMappings: setupResp.GitspacesPortMappings,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }

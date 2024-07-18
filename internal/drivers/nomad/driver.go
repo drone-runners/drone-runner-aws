@@ -109,8 +109,7 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
-	isGitspaceRequest := opts.Secret != "" && opts.AccessToken != ""
-	startupScript := generateStartupScript(opts, isGitspaceRequest)
+	startupScript := generateStartupScript(opts)
 
 	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
@@ -158,12 +157,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	var resourceJob *api.Job
 	var resourceJobID string
 	if p.noop {
-		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, isGitspaceRequest)
+		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, opts.Ports)
 	} else {
 		if class != "" {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class, isGitspaceRequest)
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class, opts.Ports)
 		} else {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount, isGitspaceRequest)
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount, opts.Ports)
 		}
 	}
 
@@ -186,17 +185,22 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Infoln("scheduler: found a node with available resources")
 
 	// get the machine details where the resource job was allocated
-	ip, id, hostPorts, err := p.fetchMachine(logr, resourceJobID, isGitspaceRequest)
+	ip, id, hostPorts, err := p.fetchMachine(logr, resourceJobID)
 	if err != nil {
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, err
 	}
-	liteEnginePort := hostPorts[0]
-	gitspacesAgentPort := -1
-	gitspacesSshPort := -1
-	if isGitspaceRequest && len(hostPorts) == 3 {
-		gitspacesAgentPort = hostPorts[1]
-		gitspacesSshPort = hostPorts[2]
+	liteEnginePort := hostPorts[vm]
+	var gitspacesPortMappingsString string
+	gitspacesPortMappings := make(map[int]int)
+	if len(hostPorts) > 1 {
+		for _, vmPort := range opts.Ports {
+			label := fmt.Sprintf("%s_%d", vm, vmPort)
+			if hostPort, found := hostPorts[label]; found {
+				gitspacesPortMappings[vmPort] = hostPort
+				gitspacesPortMappingsString += fmt.Sprintf("%d->%d;", hostPort, vmPort)
+			}
+		}
 	}
 
 	// create a VM on the same machine where the resource job was allocated
@@ -205,29 +209,31 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, startupScript, liteEnginePort, id)
 	} else {
-		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, liteEnginePort, gitspacesAgentPort, gitspacesSshPort, id, resource)
+		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, liteEnginePort, gitspacesPortMappings, id, resource)
 	}
 
 	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteEnginePort)
+	if gitspacesPortMappingsString != "" {
+		logr = logr.WithField("gitspaces_port_mapping", gitspacesPortMappingsString)
+	}
 
 	instance := &types.Instance{
-		ID:                 vm,
-		NodeID:             id,
-		Name:               vm,
-		Platform:           opts.Platform,
-		State:              types.StateCreated,
-		CACert:             opts.CACert,
-		CAKey:              opts.CAKey,
-		TLSCert:            opts.TLSCert,
-		TLSKey:             opts.TLSKey,
-		Provider:           types.Nomad,
-		Pool:               opts.PoolName,
-		Started:            time.Now().Unix(),
-		Updated:            time.Now().Unix(),
-		Port:               int64(liteEnginePort),
-		GitspacesAgentPort: int64(gitspacesAgentPort),
-		GitspacesSshPort:   int64(gitspacesSshPort),
-		Address:            ip,
+		ID:                   vm,
+		NodeID:               id,
+		Name:                 vm,
+		Platform:             opts.Platform,
+		State:                types.StateCreated,
+		CACert:               opts.CACert,
+		CAKey:                opts.CAKey,
+		TLSCert:              opts.TLSCert,
+		TLSKey:               opts.TLSKey,
+		Provider:             types.Nomad,
+		Pool:                 opts.PoolName,
+		Started:              time.Now().Unix(),
+		Updated:              time.Now().Unix(),
+		Port:                 int64(liteEnginePort),
+		GitspacePortMappings: gitspacesPortMappings,
+		Address:              ip,
 	}
 
 	logr.Debugln("scheduler: submitting VM creation job")
@@ -286,7 +292,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB int, vm, accountID string, isGitspacesRequest bool) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB int, vm, accountID string, ports []int) (job *api.Job, id string) {
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -316,7 +322,7 @@ func (p *config) resourceJob(cpus, memGB int, vm, accountID string, isGitspacesR
 		Constraints: constraintList,
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks:                  getNetworkResources(portLabel, isGitspacesRequest),
+				Networks:                  getNetworkResources(portLabel, ports),
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
@@ -345,7 +351,7 @@ func (p *config) resourceJob(cpus, memGB int, vm, accountID string, isGitspacesR
 }
 
 // fetchMachine returns details of the machine where the job has been allocated
-func (p *config) fetchMachine(logr logger.Logger, id string, isGitspaceRequest bool) (ip, nodeID string, ports []int, err error) {
+func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string, ports map[string]int, err error) {
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
 	l, _, err := p.client.Jobs().Allocations(id, false, nil)
@@ -374,12 +380,9 @@ func (p *config) fetchMachine(logr logger.Logger, id string, isGitspaceRequest b
 		return ip, nodeID, ports, err
 	}
 
-	ports = []int{
-		alloc.Resources.Networks[0].DynamicPorts[0].Value,
-	}
-	if isGitspaceRequest {
-		ports = append(ports, alloc.Resources.Networks[0].DynamicPorts[1].Value)
-		ports = append(ports, alloc.Resources.Networks[0].DynamicPorts[2].Value)
+	ports = map[string]int{}
+	for i := range alloc.Resources.Networks[0].DynamicPorts {
+		ports[alloc.Resources.Networks[0].DynamicPorts[i].Label] = alloc.Resources.Networks[0].DynamicPorts[i].Value
 	}
 
 	// sanity check
@@ -410,7 +413,7 @@ func (p *config) fetchMachine(logr logger.Logger, id string, isGitspaceRequest b
 // initJob creates a job which is targeted to a specific node. The job does the following:
 //  1. Starts a VM with the provided config
 //  2. Runs a startup script inside the VM
-func (p *config) initJob(vm, startupScript string, liteEnginePort, gitspacesAgentPort, gitspacesSshPort int, nodeID string, resource cf.NomadResource) (job *api.Job, id, group string) {
+func (p *config) initJob(vm, startupScript string, liteEnginePort int, gitspacesPortMappings map[int]int, nodeID string, resource cf.NomadResource) (job *api.Job, id, group string) {
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
@@ -419,13 +422,13 @@ func (p *config) initJob(vm, startupScript string, liteEnginePort, gitspacesAgen
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 
 	var runCmdFormat string
+	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s"
 	args := []interface{}{ignitePath, p.vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, liteEnginePort, strconv.Itoa(lehelper.LiteEnginePort)}
-	if gitspacesAgentPort > -1 && gitspacesSshPort > -1 {
-		runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --ports %d:%s --ports %d:%s --copy-files %s:%s"
-		args = append(args, gitspacesAgentPort, strconv.Itoa(lehelper.GitspacesAgentPort), gitspacesSshPort, strconv.Itoa(lehelper.GitspacesSshPort))
-	} else {
-		runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
+	for vmPort, hostPort := range gitspacesPortMappings {
+		runCmdFormat += " --ports %d:%d"
+		args = append(args, hostPort, vmPort)
 	}
+	runCmdFormat += " --copy-files %s:%s"
 	args = append(args, hostPath, vmPath)
 	runCmd := fmt.Sprintf(runCmdFormat, args...)
 	job = &api.Job{
@@ -695,7 +698,7 @@ func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error 
 	return nil
 }
 
-func generateStartupScript(opts *types.InstanceCreateOpts, isGitspaceRequest bool) string {
+func generateStartupScript(opts *types.InstanceCreateOpts) string {
 	params := &cloudinit.Params{
 		Platform:             opts.Platform,
 		CACert:               string(opts.CACert),
@@ -707,7 +710,7 @@ func generateStartupScript(opts *types.InstanceCreateOpts, isGitspaceRequest boo
 		PluginBinaryURI:      opts.PluginBinaryURI,
 		Tmate:                opts.Tmate,
 	}
-	if isGitspaceRequest {
+	if opts.Secret != "" && opts.AccessToken != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{Secret: opts.Secret, AccessToken: opts.AccessToken}
 	}
 	return cloudinit.LinuxBash(params)
@@ -789,15 +792,10 @@ func generateDestroyCommand(vm string) string {
 	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)
 }
 
-func getNetworkResources(portLabel string, isGitspacesRequest bool) []*api.NetworkResource {
-	if isGitspacesRequest {
-		return []*api.NetworkResource{{DynamicPorts: []api.Port{
-			{Label: portLabel},
-			{Label: portLabel + "_gitspaces_agent"},
-			{Label: portLabel + "_gitspaces_ssh"},
-		}}}
+func getNetworkResources(portLabel string, ports []int) []*api.NetworkResource {
+	dynamicPorts := []api.Port{{Label: portLabel}}
+	for _, port := range ports {
+		dynamicPorts = append(dynamicPorts, api.Port{Label: fmt.Sprintf("%s_%d", portLabel, port)})
 	}
-	return []*api.NetworkResource{{DynamicPorts: []api.Port{
-		{Label: portLabel},
-	}}}
+	return []*api.NetworkResource{{DynamicPorts: dynamicPorts}}
 }

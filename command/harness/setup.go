@@ -38,10 +38,9 @@ type SetupVMRequest struct {
 }
 
 type SetupVMResponse struct {
-	IPAddress          string `json:"ip_address"`
-	InstanceID         string `json:"instance_id"`
-	GitspacesAgentPort int64  `json:"gitspaces_agent_port"`
-	GitspacesSshPort   int64  `json:"gitspaces_ssh_port"`
+	IPAddress             string      `json:"ip_address"`
+	InstanceID            string      `json:"instance_id"`
+	GitspacesPortMappings map[int]int `json:"gitspaces_port_mappings"`
 }
 
 var (
@@ -175,7 +174,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	}
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner).Inc()
-	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesAgentPort: instance.GitspacesAgentPort, GitspacesSshPort: instance.GitspacesSshPort}
+	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings}
 
 	logr.WithField("selected_pool", selectedPool).
 		WithField("ip", instance.Address).
@@ -199,7 +198,7 @@ func handleSetup(
 	env *config.EnvConfig,
 	poolManager drivers.IManager,
 	pool, owner string,
-	agentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
+	gitspaceAgentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, fmt.Errorf("could not find pool: %s", pool)
@@ -214,7 +213,7 @@ func handleSetup(
 			RunnerName: env.Runner.Name,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, agentConfig)
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, gitspaceAgentConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}

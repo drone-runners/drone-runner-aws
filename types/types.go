@@ -42,31 +42,30 @@ const (
 )
 
 type Instance struct {
-	ID                 string        `db:"instance_id" json:"id"`
-	NodeID             string        `db:"instance_node_id" json:"node_id"`
-	Name               string        `db:"instance_name" json:"name"`
-	Address            string        `db:"instance_address" json:"address"`
-	Provider           DriverType    `db:"instance_provider" json:"provider"` // this is driver, though its the old legacy name of provider
-	State              InstanceState `db:"instance_state" json:"state"`
-	Pool               string        `db:"instance_pool" json:"pool"`
-	Image              string        `db:"instance_image" json:"image"`
-	Region             string        `db:"instance_region" json:"region"`
-	Zone               string        `db:"instance_zone" json:"zone"`
-	Size               string        `db:"instance_size" json:"size"`
-	OwnerID            string        `db:"instance_owner_id" json:"owner_id"`
-	Platform           `json:"platform"`
-	CAKey              []byte `db:"instance_ca_key" json:"ca_key"`
-	CACert             []byte `db:"instance_ca_cert" json:"ca_cert"`
-	TLSKey             []byte `db:"instance_tls_key" json:"tls_key"`
-	TLSCert            []byte `db:"instance_tls_cert" json:"tls_cert"`
-	Stage              string `db:"instance_stage" json:"stage"`
-	Updated            int64  `db:"instance_updated" json:"updated"`
-	Started            int64  `db:"instance_started" json:"started"`
-	IsHibernated       bool   `db:"is_hibernated" json:"is_hibernated"`
-	Port               int64  `db:"instance_port" json:"port"`
-	GitspacesAgentPort int64  `json:"gitspaces_agent_port"`
-	GitspacesSshPort   int64  `json:"gitspaces_ssh_port"`
-	RunnerName         string `db:"runner_name" json:"runner_name"`
+	ID                   string        `db:"instance_id" json:"id"`
+	NodeID               string        `db:"instance_node_id" json:"node_id"`
+	Name                 string        `db:"instance_name" json:"name"`
+	Address              string        `db:"instance_address" json:"address"`
+	Provider             DriverType    `db:"instance_provider" json:"provider"` // this is driver, though its the old legacy name of provider
+	State                InstanceState `db:"instance_state" json:"state"`
+	Pool                 string        `db:"instance_pool" json:"pool"`
+	Image                string        `db:"instance_image" json:"image"`
+	Region               string        `db:"instance_region" json:"region"`
+	Zone                 string        `db:"instance_zone" json:"zone"`
+	Size                 string        `db:"instance_size" json:"size"`
+	OwnerID              string        `db:"instance_owner_id" json:"owner_id"`
+	Platform             `json:"platform"`
+	CAKey                []byte      `db:"instance_ca_key" json:"ca_key"`
+	CACert               []byte      `db:"instance_ca_cert" json:"ca_cert"`
+	TLSKey               []byte      `db:"instance_tls_key" json:"tls_key"`
+	TLSCert              []byte      `db:"instance_tls_cert" json:"tls_cert"`
+	Stage                string      `db:"instance_stage" json:"stage"`
+	Updated              int64       `db:"instance_updated" json:"updated"`
+	Started              int64       `db:"instance_started" json:"started"`
+	IsHibernated         bool        `db:"is_hibernated" json:"is_hibernated"`
+	Port                 int64       `db:"instance_port" json:"port"`
+	RunnerName           string      `db:"runner_name" json:"runner_name"`
+	GitspacePortMappings map[int]int `json:"gitspaces_port_mappings"`
 }
 
 type Tmate struct {
@@ -122,9 +121,11 @@ type StageOwner struct {
 type GitspaceOpts struct {
 	Secret      string
 	AccessToken string
+	Ports       []int
 }
 
 type GitspaceAgentConfig struct {
 	Secret      string `json:"secret"`
 	AccessToken string `json:"access_token"`
+	Ports       []int  `json:"ports"`
 }
