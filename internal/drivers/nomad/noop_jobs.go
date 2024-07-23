@@ -11,7 +11,7 @@ import (
 
 // initJobNoop creates a job which is targeted to a node. It doesn't create or run a VM,
 // all it does is sleep for 30 seconds (approximate time of VM creation). This job can be used for scale testing.
-func (p *config) initJobNoop(vm, startupScript string, liteHostEnginePort int, nodeID string) (initJob *api.Job, initjobID, initTaskGroup string) { //nolint:unparam
+func (p *config) initJobNoop(vm, startupScript string, liteEngineHostPort int, nodeID string) (initJob *api.Job, initjobID, initTaskGroup string) { //nolint:unparam
 	initjobID = initJobID(vm)
 	initTaskGroup = fmt.Sprintf("init_task_group_%s", vm)
 
@@ -57,7 +57,7 @@ func (p *config) initJobNoop(vm, startupScript string, liteHostEnginePort int, n
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJobNoop(cpus, memGB int, vm string, ports []int) (job *api.Job, id string) { //nolint:unparam
+func (p *config) resourceJobNoop(cpus, memGB int, vm string, portsCount int) (job *api.Job, id string) { //nolint:unparam
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -75,7 +75,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string, ports []int) (job *
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks:                  getNetworkResources(portLabel, ports),
+				Networks:                  getNetworkResources(portLabel, portsCount),
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),

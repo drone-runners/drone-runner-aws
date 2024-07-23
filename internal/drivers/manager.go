@@ -316,6 +316,14 @@ func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverNam
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
+	if gitspaceAgentConfig != nil {
+		if pool.Driver.DriverName() != "nomad" {
+			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad")
+		}
+		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig)
+		return inst, err
+	}
+
 	strategy := m.strategy
 	if strategy == nil {
 		strategy = Greedy{}
@@ -570,9 +578,11 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
 	if agentConfig != nil {
-		createOptions.GitspaceOpts.Secret = agentConfig.Secret
-		createOptions.GitspaceOpts.AccessToken = agentConfig.AccessToken
-		createOptions.GitspaceOpts.Ports = agentConfig.Ports
+		createOptions.GitspaceOpts = types.GitspaceOpts{
+			Secret:      agentConfig.Secret,
+			AccessToken: agentConfig.AccessToken,
+			Ports:       agentConfig.Ports,
+		}
 	}
 	if err != nil {
 		logrus.WithError(err).
