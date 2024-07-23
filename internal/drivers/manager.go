@@ -570,9 +570,9 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
 	if agentConfig != nil {
-		createOptions.Secret = agentConfig.Secret
-		createOptions.AccessToken = agentConfig.AccessToken
-		createOptions.Ports = agentConfig.Ports
+		createOptions.GitspaceOpts.Secret = agentConfig.Secret
+		createOptions.GitspaceOpts.AccessToken = agentConfig.AccessToken
+		createOptions.GitspaceOpts.Ports = agentConfig.Ports
 	}
 	if err != nil {
 		logrus.WithError(err).

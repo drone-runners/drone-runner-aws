@@ -94,7 +94,7 @@ type InstanceCreateOpts struct {
 	AccountID            string
 	IsHosted             bool
 	ResourceClass        string
-	GitspaceOpts
+	GitspaceOpts         GitspaceOpts
 }
 
 // Platform defines the target platform.

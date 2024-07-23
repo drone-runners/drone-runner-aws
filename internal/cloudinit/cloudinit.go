@@ -30,7 +30,7 @@ type Params struct {
 	PluginBinaryURI      string
 	Tmate                types.Tmate
 	IsHosted             bool
-	types.GitspaceAgentConfig
+	GitspaceAgentConfig  types.GitspaceAgentConfig
 }
 
 var funcs = map[string]interface{}{
@@ -249,9 +249,9 @@ mkdir -p /opt/gitspaceagent
 echo "done installing certs"
 
 echo "downloading gitspaces agent binary"
-echo HARNESS_JWT_SECRET={{ .Secret }} >> /etc/profile
-export HARNESS_JWT_SECRET={{ .Secret }}
-curl -X GET -H "Authorization: Bearer {{ .AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
+echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
+export HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }}
+curl -X GET -H "Authorization: Bearer {{ .GitspaceAgentConfig.AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
 chmod 755 /opt/gitspaceagent/agent
 echo "done downloading gitspace agent binary"
 
@@ -380,7 +380,7 @@ func LinuxBash(params *Params) (payload string) {
 	}
 
 	var err error
-	if params.Secret != "" && params.AccessToken != "" {
+	if params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "" {
 		err = gitspacesLinuxTemplate.Execute(sb, p)
 	} else {
 		err = linuxBashTemplate.Execute(sb, p)

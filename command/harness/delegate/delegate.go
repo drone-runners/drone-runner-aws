@@ -189,7 +189,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, _, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics, nil)
+	resp, _, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, &c.env, c.poolManager, c.metrics)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not setup VM")
 		writeError(w, err)

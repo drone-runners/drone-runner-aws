@@ -3,6 +3,7 @@ package dlite
 import (
 	"context"
 	"encoding/json"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,9 +23,10 @@ type VMInitTask struct {
 }
 
 type VMInitRequest struct {
-	SetupVMRequest harness.SetupVMRequest      `json:"setup_vm_request"`
-	Services       []*harness.ExecuteVMRequest `json:"services"`
-	Distributed    bool                        `json:"distributed,omitempty"`
+	SetupVMRequest      harness.SetupVMRequest      `json:"setup_vm_request"`
+	Services            []*harness.ExecuteVMRequest `json:"services"`
+	Distributed         bool                        `json:"distributed,omitempty"`
+	GitspaceAgentConfig types.GitspaceAgentConfig   `json:"gitspace_agent_config"`
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +62,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Make the setup call
 	req.SetupVMRequest.CorrelationID = task.ID
 	poolManager := t.c.getPoolManager(req.Distributed)
-	setupResp, selectedPoolDriver, err := harness.HandleSetup(ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics, nil)
+	setupResp, selectedPoolDriver, err := harness.HandleSetup(ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not setup VM")
@@ -96,7 +98,8 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			HostName: t.c.delegateInfo.Host,
 			ID:       t.c.delegateInfo.ID,
 		},
-		PoolDriverUsed: selectedPoolDriver,
+		PoolDriverUsed:        selectedPoolDriver,
+		GitspacesPortMappings: setupResp.GitspacesPortMappings,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }

@@ -157,12 +157,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	var resourceJob *api.Job
 	var resourceJobID string
 	if p.noop {
-		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, opts.Ports)
+		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, opts.GitspaceOpts.Ports)
 	} else {
 		if class != "" {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class, opts.Ports)
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class, opts.GitspaceOpts.Ports)
 		} else {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount, opts.Ports)
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount, opts.GitspaceOpts.Ports)
 		}
 	}
 
@@ -190,11 +190,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, err
 	}
-	liteEnginePort := hostPorts[vm]
+	liteHostEnginePort := hostPorts[vm]
 	var gitspacesPortMappingsString string
 	gitspacesPortMappings := make(map[int]int)
 	if len(hostPorts) > 1 {
-		for _, vmPort := range opts.Ports {
+		for _, vmPort := range opts.GitspaceOpts.Ports {
 			label := fmt.Sprintf("%s_%d", vm, vmPort)
 			if hostPort, found := hostPorts[label]; found {
 				gitspacesPortMappings[vmPort] = hostPort
@@ -207,12 +207,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	var initJob *api.Job
 	var initJobID, initTaskGroup string
 	if p.noop {
-		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, startupScript, liteEnginePort, id)
+		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, startupScript, liteHostEnginePort, id)
 	} else {
-		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, liteEnginePort, gitspacesPortMappings, id, resource)
+		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, liteHostEnginePort, gitspacesPortMappings, id, resource)
 	}
 
-	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteEnginePort)
+	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteHostEnginePort)
 	if gitspacesPortMappingsString != "" {
 		logr = logr.WithField("gitspaces_port_mapping", gitspacesPortMappingsString)
 	}
@@ -231,7 +231,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Pool:                 opts.PoolName,
 		Started:              time.Now().Unix(),
 		Updated:              time.Now().Unix(),
-		Port:                 int64(liteEnginePort),
+		Port:                 int64(liteHostEnginePort),
 		GitspacePortMappings: gitspacesPortMappings,
 		Address:              ip,
 	}
@@ -413,7 +413,7 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 // initJob creates a job which is targeted to a specific node. The job does the following:
 //  1. Starts a VM with the provided config
 //  2. Runs a startup script inside the VM
-func (p *config) initJob(vm, startupScript string, liteEnginePort int, gitspacesPortMappings map[int]int, nodeID string, resource cf.NomadResource) (job *api.Job, id, group string) {
+func (p *config) initJob(vm, startupScript string, liteHostEnginePort int, gitspacesPortMappings map[int]int, nodeID string, resource cf.NomadResource) (job *api.Job, id, group string) {
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
@@ -422,14 +422,12 @@ func (p *config) initJob(vm, startupScript string, liteEnginePort int, gitspaces
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 
 	var runCmdFormat string
-	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s"
-	args := []interface{}{ignitePath, p.vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, liteEnginePort, strconv.Itoa(lehelper.LiteEnginePort)}
+	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
+	args := []interface{}{ignitePath, p.vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, liteHostEnginePort, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
 	for vmPort, hostPort := range gitspacesPortMappings {
 		runCmdFormat += " --ports %d:%d"
 		args = append(args, hostPort, vmPort)
 	}
-	runCmdFormat += " --copy-files %s:%s"
-	args = append(args, hostPath, vmPath)
 	runCmd := fmt.Sprintf(runCmdFormat, args...)
 	job = &api.Job{
 		ID:          &id,
@@ -710,8 +708,8 @@ func generateStartupScript(opts *types.InstanceCreateOpts) string {
 		PluginBinaryURI:      opts.PluginBinaryURI,
 		Tmate:                opts.Tmate,
 	}
-	if opts.Secret != "" && opts.AccessToken != "" {
-		params.GitspaceAgentConfig = types.GitspaceAgentConfig{Secret: opts.Secret, AccessToken: opts.AccessToken}
+	if opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "" {
+		params.GitspaceAgentConfig = types.GitspaceAgentConfig{Secret: opts.GitspaceOpts.Secret, AccessToken: opts.GitspaceOpts.AccessToken}
 	}
 	return cloudinit.LinuxBash(params)
 }
