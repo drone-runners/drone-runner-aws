@@ -292,7 +292,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB int, vm, accountID string, portsCount int) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB int, vm, accountID string, gitspacesPortCount int) (job *api.Job, id string) {
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -322,7 +322,7 @@ func (p *config) resourceJob(cpus, memGB int, vm, accountID string, portsCount i
 		Constraints: constraintList,
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks:                  getNetworkResources(portLabel, portsCount),
+				Networks:                  getNetworkResources(portLabel, gitspacesPortCount),
 				StopAfterClientDisconnect: &clientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
@@ -799,9 +799,9 @@ func generateDestroyCommand(vm string) string {
 // 1 for lite engine and another n ports for gitspaces as requested
 // Since the port labels have to be unique, VM ID is used usually.
 // For gitspaces port, prefix of _gitspaces_{port_number_count} is added to the label to keep it unique
-func getNetworkResources(portLabel string, portsCount int) []*api.NetworkResource {
+func getNetworkResources(portLabel string, gitspacesPortCount int) []*api.NetworkResource {
 	dynamicPorts := []api.Port{{Label: portLabel}}
-	for i := 0; i < portsCount; i++ {
+	for i := 0; i < gitspacesPortCount; i++ {
 		dynamicPorts = append(dynamicPorts, api.Port{Label: fmt.Sprintf("%s_gitspaces_%d", portLabel, i+1)})
 	}
 	return []*api.NetworkResource{{DynamicPorts: dynamicPorts}}
