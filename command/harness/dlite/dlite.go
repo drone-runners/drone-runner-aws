@@ -175,25 +175,6 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *dliteCommand) setupPool(ctx context.Context) (*config.PoolFile, error) {
-	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
-	if err != nil {
-		logrus.WithError(err).Fatalln("Unable to start the database")
-	}
-	c.poolManager = drivers.NewManager(ctx, instanceStore, stageOwnerStore, &c.env)
-	poolConfig, err := harness.SetupPool(ctx, &c.env, c.poolManager, c.poolFile)
-	if err != nil {
-		logrus.WithError(err).Error("could not setup pool")
-		return poolConfig, err
-	}
-	c.metrics.AddMetricStore(&metric.Store{
-		Store:       instanceStore,
-		Query:       nil,
-		Distributed: false,
-	})
-	return poolConfig, nil
-}
-
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
 	logrus.Infoln("Starting postgres database")
 	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
