@@ -13,6 +13,7 @@ type VMTaskExecutionResponse struct {
 	PoolDriverUsed         string                 `json:"pool_driver_used"`
 	Outputs                []*api.OutputV2        `json:"outputs"`
 	OptimizationState      string                 `json:"optimization_state"`
+	GitspacesPortMappings  map[int]int            `json:"gitspaces_port_mappings"`
 }
 
 type DelegateMetaInfo struct {
