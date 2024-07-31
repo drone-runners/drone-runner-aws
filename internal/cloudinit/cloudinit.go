@@ -612,6 +612,10 @@ if (${{ .IsHosted }} -eq $true) {
 	ipconfig /flushdns
 	Write-Host "DNS server added to Ethernet interface."
 } 
+
+echo "[DRONE] Restarting docker"
+restart-service *docker*
+
 echo "[DRONE] Initialization Complete"
 
 </powershell>`
