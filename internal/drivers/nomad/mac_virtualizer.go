@@ -11,20 +11,20 @@ import (
 	"time"
 )
 
-type TartVirtualizer struct{}
+type MacVirtualizer struct{}
 
-func NewTartVirtualizer() *TartVirtualizer {
-	return &TartVirtualizer{}
+func NewMacVirtualizer() *MacVirtualizer {
+	return &MacVirtualizer{}
 }
 
-func (tv *TartVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) {
-	encodedUserData := base64.StdEncoding.EncodeToString([]byte(tv.generateUserData(userData, opts)))
-	startupScript := base64.StdEncoding.EncodeToString([]byte(tv.generateStartupScript(vm, vmImage, username, password, resource, port)))
+func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) {
+	encodedUserData := base64.StdEncoding.EncodeToString([]byte(mv.generateUserData(userData, opts)))
+	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, vmImage, username, password, resource, port)))
 	vmStartupScriptPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	cloudInitScriptPath := fmt.Sprintf("/usr/local/bin/cloud_init_%s.sh", vm)
 	id = "tart_job_" + vm
 	group = fmt.Sprintf("init_task_group_%s", vm)
-	entrypoint := tv.GetEntryPoint()
+	entrypoint := mv.GetEntryPoint()
 
 	tart_job := &api.Job{
 		ID:          stringToPtr(id),
@@ -70,7 +70,7 @@ func (tv *TartVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, p
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", tv.getStartCloudInitScript(cloudInitScriptPath, vm, username, password)},
+							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, username, password)},
 						},
 					},
 					{
@@ -79,7 +79,7 @@ func (tv *TartVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, p
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", tv.getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vm)},
+							"args":    []string{"-c", mv.getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vm)},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -93,11 +93,11 @@ func (tv *TartVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, p
 	return tart_job, id, group
 }
 
-func (tv *TartVirtualizer) generateUserData(userData string, opts *types.InstanceCreateOpts) string {
+func (mv *MacVirtualizer) generateUserData(userData string, opts *types.InstanceCreateOpts) string {
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (tv *TartVirtualizer) generateStartupScript(vmID, vmImage, username, password string, resource cf.NomadResource, port int) string {
+func (mv *MacVirtualizer) generateStartupScript(vmID, vmImage, username, password string, resource cf.NomadResource, port int) string {
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
 	return fmt.Sprintf(`
@@ -178,19 +178,19 @@ echo "Tart VM Started"
 `, vmImage, vmID, username, password, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, port, vmID)
 }
 
-func (tv *TartVirtualizer) GetMachineFrequency() int {
+func (mv *MacVirtualizer) GetMachineFrequency() int {
 	return macMachineFrequencyMhz
 }
 
-func (tv *TartVirtualizer) GetGlobalAccountID() string {
+func (mv *MacVirtualizer) GetGlobalAccountID() string {
 	return globalAccountMac
 }
 
-func (tv *TartVirtualizer) GetEntryPoint() string {
+func (mv *MacVirtualizer) GetEntryPoint() string {
 	return "/bin/sh"
 }
 
-func (tv *TartVirtualizer) GetHealthCheckupGenerator() func(time.Duration, string, string) string {
+func (mv *MacVirtualizer) GetHealthCheckupGenerator() func(time.Duration, string, string) string {
 	return func(sleep time.Duration, vm, port string) string {
 		sleepSecs := sleep.Seconds()
 		return fmt.Sprintf(`
@@ -218,7 +218,7 @@ while true
 	}
 }
 
-func (tv *TartVirtualizer) GetDestroyScriptGenerator() func(string) string {
+func (mv *MacVirtualizer) GetDestroyScriptGenerator() func(string) string {
 	return func(vm string) string {
 		return fmt.Sprintf(`
 	    /opt/homebrew/bin/tart stop %s; /opt/homebrew/bin/tart delete %s
@@ -233,7 +233,7 @@ func (tv *TartVirtualizer) GetDestroyScriptGenerator() func(string) string {
 }
 
 // This will be responsible to copy the script from host to vm and run it
-func (tv *TartVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, username, password string) string {
+func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, username, password string) string {
 	return fmt.Sprintf(`
 VM_USER="%s"
 VM_PASSWORD="%s"
@@ -244,7 +244,7 @@ VM_PASSWORD="%s"
 }
 
 // This will be responsible to port forward the traffic from host to VM
-func (tv *TartVirtualizer) getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vmID string) string {
+func (mv *MacVirtualizer) getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vmID string) string {
 	return fmt.Sprintf(`
 echo "Cleaning up vm startup and cloudinit script"
 rm %s %s

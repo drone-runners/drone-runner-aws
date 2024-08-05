@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type virtualizer interface {
+type Virtualizer interface {
 	// InitJob creates a job which is targeted to a specific node. The job does the following:
 	//  1. Starts a VM with the provided config
 	//  2. Runs a startup script inside the VM

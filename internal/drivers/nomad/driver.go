@@ -35,24 +35,24 @@ var (
 )
 
 type config struct {
-	address        string
-	vmImage        string
-	vmMemoryGB     string
-	vmCpus         string
-	vmDiskSize     string
-	caCertPath     string
-	clientCertPath string
-	clientKeyPath  string
-	insecure       bool
-	noop           bool
-	enablePinning  map[string]string
-	client         *api.Client
-	virtualizer    virtualizer
-	resource       map[string]cf.NomadResource
-	username       string
-	password       string
-	userData       string
-	driverName     string
+	address           string
+	vmImage           string
+	vmMemoryGB        string
+	vmCpus            string
+	vmDiskSize        string
+	caCertPath        string
+	clientCertPath    string
+	clientKeyPath     string
+	insecure          bool
+	noop              bool
+	enablePinning     map[string]string
+	client            *api.Client
+	virtualizer       Virtualizer
+	resource          map[string]cf.NomadResource
+	username          string
+	password          string
+	userData          string
+	virtualizerEngine string
 }
 
 // SetPlatformDefaults comes up with default values of the platform
@@ -87,16 +87,16 @@ func New(opts ...Option) (drivers.Driver, error) {
 		}
 		p.client = client
 	}
-	if p.driverName == "tart" {
-		p.virtualizer = NewTartVirtualizer()
+	if p.virtualizerEngine == "tart" {
+		p.virtualizer = NewMacVirtualizer()
 	} else {
-		p.virtualizer = NewNomadVirtualizer()
+		p.virtualizer = NewLinuxVirtualizer()
 	}
 	return p, nil
 }
 
 func (p *config) DriverName() string {
-	return p.driverName
+	return "nomad"
 }
 
 func (p *config) RootDir() string {

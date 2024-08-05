@@ -13,16 +13,16 @@ import (
 	"time"
 )
 
-type NomadVirtualizer struct{}
+type LinuxVirtualizer struct{}
 
-func NewNomadVirtualizer() *NomadVirtualizer {
-	return &NomadVirtualizer{}
+func NewLinuxVirtualizer() *LinuxVirtualizer {
+	return &LinuxVirtualizer{}
 }
 
-func (nv *NomadVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) {
+func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) {
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
-	uData := nv.generateUserData(opts)
+	uData := lv.generateUserData(opts)
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
 
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
@@ -35,7 +35,7 @@ func (nv *NomadVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 		args = append(args, hostPort, vmPort)
 	}
 	runCmd := fmt.Sprintf(runCmdFormat, args...)
-	entrypoint := nv.GetEntryPoint()
+	entrypoint := lv.GetEntryPoint()
 
 	job = &api.Job{
 		ID:          &id,
@@ -133,7 +133,7 @@ func (nv *NomadVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	return job, id, group
 }
 
-func (nv *NomadVirtualizer) generateUserData(opts *types.InstanceCreateOpts) string {
+func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) string {
 	params := &cloudinit.Params{
 		Platform:             opts.Platform,
 		CACert:               string(opts.CACert),
@@ -151,19 +151,19 @@ func (nv *NomadVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 	return cloudinit.LinuxBash(params)
 }
 
-func (nv *NomadVirtualizer) GetMachineFrequency() int {
+func (lv *LinuxVirtualizer) GetMachineFrequency() int {
 	return machineFrequencyMhz
 }
 
-func (nv *NomadVirtualizer) GetGlobalAccountID() string {
+func (lv *LinuxVirtualizer) GetGlobalAccountID() string {
 	return globalAccount
 }
 
-func (nv *NomadVirtualizer) GetEntryPoint() string {
+func (lv *LinuxVirtualizer) GetEntryPoint() string {
 	return "/usr/bin/su"
 }
 
-func (nv *NomadVirtualizer) GetHealthCheckupGenerator() func(time.Duration, string, string) string {
+func (lv *LinuxVirtualizer) GetHealthCheckupGenerator() func(time.Duration, string, string) string {
 	return func(sleep time.Duration, vm, port string) string {
 		sleepSecs := sleep.Seconds()
 		return fmt.Sprintf(`
@@ -194,7 +194,7 @@ while true
 	}
 }
 
-func (nv *NomadVirtualizer) GetDestroyScriptGenerator() func(string) string {
+func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string) string {
 	return func(vm string) string {
 		return fmt.Sprintf(`
 	    %s stop %s; %s rm %s

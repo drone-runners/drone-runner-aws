@@ -121,6 +121,12 @@ type (
 		EnablePinning map[string]string        `json:"enablePinning" yaml:"enablePinning"`
 		Noop          bool                     `json:"noop" yaml:"noop"`
 		Resource      map[string]NomadResource `json:"resource" yaml:"resource"`
+		Account       struct {
+			Username string `json:"username,omitempty"  yaml:"username"`
+			Password string `json:"password,omitempty"  yaml:"password"`
+		} `json:"account" yaml:"account"`
+		UserData     string `json:"user_data,omitempty" yaml:"user_data"`
+		UserDataPath string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
 
 	NomadResource struct {
@@ -231,24 +237,6 @@ type (
 	// Noop specifies the configuration for a Noop instance.
 	Noop struct {
 		Hibernate bool `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
-	}
-
-	Tart struct {
-		Server NomadServer `json:"server" yaml:"server"`
-		VM     TartVM      `json:"vm" yaml:"vm"`
-	}
-
-	TartVM struct {
-		Account struct {
-			Username string `json:"username,omitempty"  yaml:"username"`
-			Password string `json:"password,omitempty"  yaml:"password"`
-		} `json:"account" yaml:"account"`
-		VMID         string `json:"vm_id,omitempty" yaml:"vm_id"`
-		CPU          string `json:"cpu,omitempty" yaml:"cpu"`
-		Memory       string `json:"memory,omitempty" yaml:"memory"`
-		Disk         string `json:"disk_size,omitempty" yaml:"disk_size"`
-		UserData     string `json:"user_data,omitempty" yaml:"user_data"`
-		UserDataPath string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
 
 	// disk provides disk size and type.
@@ -495,8 +483,6 @@ func (s *Instance) populateSpec() error {
 		s.Spec = new(Noop)
 	case string(types.Nomad):
 		s.Spec = new(Nomad)
-	case string(types.Tart):
-		s.Spec = new(Tart)
 	default:
 		return fmt.Errorf("unknown instance type %s", s.Type)
 	}

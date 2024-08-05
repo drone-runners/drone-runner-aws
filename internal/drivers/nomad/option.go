@@ -123,8 +123,8 @@ func WithUserData(text, path string) Option {
 	}
 }
 
-func WithDriverName(driver string) Option {
+func WithVirtualizerEngine(driver string) Option {
 	return func(p *config) {
-		p.driverName = driver
+		p.virtualizerEngine = driver
 	}
 }

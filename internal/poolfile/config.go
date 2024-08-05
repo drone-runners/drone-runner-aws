@@ -270,35 +270,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, env *config.EnvCo
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
-		case string(types.Tart):
-			var tartConfig, ok = instance.Spec.(*config.Tart)
-			if !ok {
-				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
-			}
-			if tartConfig.VM.Account.Password == "" && env.TartBuild.Password != "" {
-				tartConfig.VM.Account.Password = env.TartBuild.Password
-			}
-			driver, err := nomad.New(
-				nomad.WithAddress(tartConfig.Server.Address),
-				nomad.WithCaCertPath(tartConfig.Server.CaCertPath),
-				nomad.WithClientKeyPath(tartConfig.Server.ClientKeyPath),
-				nomad.WithClientCertPath(tartConfig.Server.ClientCertPath),
-				nomad.WithInsecure(tartConfig.Server.Insecure),
-				nomad.WithUsername(tartConfig.VM.Account.Username),
-				nomad.WithPassword(tartConfig.VM.Account.Password),
-				nomad.WithImage(tartConfig.VM.VMID),
-				nomad.WithCpus(tartConfig.VM.CPU),
-				nomad.WithMemory(tartConfig.VM.Memory),
-				nomad.WithDiskSize(tartConfig.VM.Disk),
-				nomad.WithUserData(tartConfig.VM.UserData, tartConfig.VM.UserDataPath),
-				nomad.WithDriverName("tart"),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
-			}
-			pool := mapPool(&instance, runnerName)
-			pool.Driver = driver
-			pools = append(pools, pool)
 		case string(types.Noop):
 			var noopBuild, ok = instance.Spec.(*config.Noop)
 			if !ok {
@@ -320,11 +291,23 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, env *config.EnvCo
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
+
+			if nomadConfig.VM.Account.Password == "" && env.TartBuild.Password != "" {
+				nomadConfig.VM.Account.Password = env.TartBuild.Password
+			}
+
+			platform := instance.Platform
+			virtualizerEngine := "ignite"
+			if platform.OS == oshelp.OSMac {
+				virtualizerEngine = "tart"
+			}
 			driver, err := nomad.New(nomad.WithAddress(nomadConfig.Server.Address),
 				nomad.WithCaCertPath(nomadConfig.Server.CaCertPath),
 				nomad.WithClientCertPath(nomadConfig.Server.ClientCertPath),
 				nomad.WithClientKeyPath(nomadConfig.Server.ClientKeyPath),
 				nomad.WithInsecure(nomadConfig.Server.Insecure),
+				nomad.WithUsername(nomadConfig.VM.Account.Username),
+				nomad.WithPassword(nomadConfig.VM.Account.Password),
 				nomad.WithCpus(nomadConfig.VM.Cpus),
 				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),
@@ -332,7 +315,8 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, env *config.EnvCo
 				nomad.WithImage(nomadConfig.VM.Image),
 				nomad.WithNoop(nomadConfig.VM.Noop),
 				nomad.WithResource(nomadConfig.VM.Resource),
-				nomad.WithDriverName("nomad"))
+				nomad.WithUserData(nomadConfig.VM.UserData, nomadConfig.VM.UserDataPath),
+				nomad.WithVirtualizerEngine(virtualizerEngine))
 			if err != nil {
 				// TODO: We should return error here once bare metal has been tested on production
 				// Ignoring errors here for now to not cause production outages in case of nomad connectivity issues
