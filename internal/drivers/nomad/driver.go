@@ -2,7 +2,6 @@ package nomad
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -11,9 +10,7 @@ import (
 	"time"
 
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -33,22 +30,29 @@ var (
 	minNomadMemoryMb        = 20
 	machineFrequencyMhz     = 3500 // TODO: Find a way to extract this from the node directly
 	largebaremetalclass     = "largebaremetal"
+	globalAccountMac        = "GLOBAL_ACCOUNT_ID_MAC"
+	macMachineFrequencyMhz  = 3200
 )
 
 type config struct {
-	address        string
-	vmImage        string
-	vmMemoryGB     string
-	vmCpus         string
-	vmDiskSize     string
-	caCertPath     string
-	clientCertPath string
-	clientKeyPath  string
-	insecure       bool
-	noop           bool
-	enablePinning  map[string]string
-	client         *api.Client
-	resource       map[string]cf.NomadResource
+	address           string
+	vmImage           string
+	vmMemoryGB        string
+	vmCpus            string
+	vmDiskSize        string
+	caCertPath        string
+	clientCertPath    string
+	clientKeyPath     string
+	insecure          bool
+	noop              bool
+	enablePinning     map[string]string
+	client            *api.Client
+	virtualizer       Virtualizer
+	resource          map[string]cf.NomadResource
+	username          string
+	password          string
+	userData          string
+	virtualizerEngine string
 }
 
 // SetPlatformDefaults comes up with default values of the platform
@@ -83,6 +87,11 @@ func New(opts ...Option) (drivers.Driver, error) {
 		}
 		p.client = client
 	}
+	if p.virtualizerEngine == "tart" {
+		p.virtualizer = NewMacVirtualizer()
+	} else {
+		p.virtualizer = NewLinuxVirtualizer()
+	}
 	return p, nil
 }
 
@@ -109,8 +118,6 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
-	startupScript := generateStartupScript(opts)
-
 	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
 	for k, v := range p.enablePinning {
@@ -160,9 +167,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
 	} else {
 		if class != "" {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, class, len(opts.GitspaceOpts.Ports))
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, p.virtualizer.GetHealthCheckupGenerator())
 		} else {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, vm, globalAccount, len(opts.GitspaceOpts.Ports))
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, p.virtualizer.GetGlobalAccountID(), p.virtualizer.GetHealthCheckupGenerator())
 		}
 	}
 
@@ -207,9 +214,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	var initJob *api.Job
 	var initJobID, initTaskGroup string
 	if p.noop {
-		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, startupScript, liteEngineHostPort, id)
+		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, id, liteEngineHostPort)
 	} else {
-		initJob, initJobID, initTaskGroup = p.initJob(vm, startupScript, liteEngineHostPort, gitspacesPortMappings, id, resource)
+		initJob, initJobID, initTaskGroup = p.virtualizer.GetInitJob(vm, id, p.vmImage, p.userData, p.username, p.password, liteEngineHostPort, resource, opts, gitspacesPortMappings)
 	}
 
 	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteEngineHostPort)
@@ -292,7 +299,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB int, vm, accountID string, gitspacesPortCount int) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) {
 	id = resourceJobID(vm)
 	portLabel := vm
 
@@ -339,8 +346,8 @@ func (p *config) resourceJob(cpus, memGB int, vm, accountID string, gitspacesPor
 						},
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", generateHealthCheckScript(sleepTime, fmt.Sprintf("$NOMAD_PORT_%s", portLabel))},
+							"command": p.virtualizer.GetEntryPoint(),
+							"args":    []string{"-c", healthCheckGenerator(sleepTime, vm, fmt.Sprintf("$NOMAD_PORT_%s", portLabel))},
 						},
 					},
 				},
@@ -415,123 +422,8 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 	return ip, nodeID, liteEngineHostPort, ports, nil
 }
 
-// initJob creates a job which is targeted to a specific node. The job does the following:
-//  1. Starts a VM with the provided config
-//  2. Runs a startup script inside the VM
-func (p *config) initJob(vm, startupScript string, liteEngineHostPort int, gitspacesPortMappings map[int]int, nodeID string, resource cf.NomadResource) (job *api.Job, id, group string) {
-	id = initJobID(vm)
-	group = fmt.Sprintf("init_task_group_%s", vm)
-	encodedStartupScript := base64.StdEncoding.EncodeToString([]byte(startupScript))
-
-	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
-	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
-
-	var runCmdFormat string
-	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
-	args := []interface{}{ignitePath, p.vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, liteEngineHostPort, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
-	for vmPort, hostPort := range gitspacesPortMappings {
-		runCmdFormat += " --ports %d:%d"
-		args = append(args, hostPort, vmPort)
-	}
-	runCmd := fmt.Sprintf(runCmdFormat, args...)
-	job = &api.Job{
-		ID:          &id,
-		Name:        stringToPtr(vm),
-		Type:        stringToPtr("batch"),
-		Datacenters: []string{"dc1"},
-		Constraints: []*api.Constraint{
-			{
-				LTarget: "${node.unique.id}",
-				RTarget: nodeID,
-				Operand: "=",
-			},
-		},
-		Reschedule: &api.ReschedulePolicy{
-			Attempts:  intToPtr(0),
-			Unlimited: boolToPtr(false),
-		},
-		TaskGroups: []*api.TaskGroup{
-			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
-				RestartPolicy: &api.RestartPolicy{
-					Attempts: intToPtr(0),
-				},
-				Name:  stringToPtr(group),
-				Count: intToPtr(1),
-				Tasks: []*api.Task{
-					{
-						Name:      "create_startup_script_on_host",
-						Driver:    "raw_exec",
-						Resources: minNomadResources(),
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedStartupScript, hostPath)},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "prestart",
-						},
-					},
-
-					{
-						Name:      "enable_port_forwarding",
-						Driver:    "raw_exec",
-						Resources: minNomadResources(),
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", "iptables -P FORWARD ACCEPT"},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "prestart",
-						},
-					},
-
-					{
-						Name:      "ignite_run",
-						Driver:    "raw_exec",
-						Resources: minNomadResources(),
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", runCmd},
-						},
-					},
-
-					{
-						Name:      "ignite_exec",
-						Driver:    "raw_exec",
-						Resources: minNomadResources(),
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("%s exec %s 'cat %s | base64 --decode | bash'", ignitePath, vm, vmPath)},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "poststop",
-						},
-					},
-					{
-						Name:      "cleanup_startup_script_from_host",
-						Driver:    "raw_exec",
-						Resources: minNomadResources(),
-						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", fmt.Sprintf("rm %s", hostPath)},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "poststop",
-						},
-					},
-				},
-			},
-		},
-	}
-	return job, id, group
-}
-
 // destroyJob returns a job targeted to the given node which stops and removes the VM
-func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
+func (p *config) destroyJob(vm, nodeID string, destroyGenerator func(string) string) (job *api.Job, id string) {
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
@@ -561,8 +453,8 @@ func (p *config) destroyJob(vm, nodeID string) (job *api.Job, id string) {
 						Resources: minNomadResources(),
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
-							"command": "/usr/bin/su",
-							"args":    []string{"-c", generateDestroyCommand(vm)},
+							"command": p.virtualizer.GetEntryPoint(),
+							"args":    []string{"-c", destroyGenerator(vm)},
 						},
 					},
 				},
@@ -579,7 +471,7 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 		if p.noop {
 			job, jobID = p.destroyJobNoop(instance.ID, instance.NodeID)
 		} else {
-			job, jobID = p.destroyJob(instance.ID, instance.NodeID)
+			job, jobID = p.destroyJob(instance.ID, instance.NodeID, p.virtualizer.GetDestroyScriptGenerator())
 		}
 
 		resourceJobID := resourceJobID(instance.ID)
@@ -701,24 +593,6 @@ func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error 
 	return nil
 }
 
-func generateStartupScript(opts *types.InstanceCreateOpts) string {
-	params := &cloudinit.Params{
-		Platform:             opts.Platform,
-		CACert:               string(opts.CACert),
-		LiteEngineLogsPath:   oshelp.GetLiteEngineLogsPath(opts.OS),
-		TLSCert:              string(opts.TLSCert),
-		TLSKey:               string(opts.TLSKey),
-		LiteEnginePath:       opts.LiteEnginePath,
-		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
-		PluginBinaryURI:      opts.PluginBinaryURI,
-		Tmate:                opts.Tmate,
-	}
-	if opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "" {
-		params.GitspaceAgentConfig = types.GitspaceAgentConfig{Secret: opts.GitspaceOpts.Secret, AccessToken: opts.GitspaceOpts.AccessToken}
-	}
-	return cloudinit.LinuxBash(params)
-}
-
 // generate a job ID for a destroy job
 func destroyJobID(s string) string {
 	return fmt.Sprintf("destroy_job_%s", s)
@@ -752,47 +626,6 @@ func minNomadResources() *api.Resources {
 		CPU:      intToPtr(minNomadCPUMhz),
 		MemoryMB: intToPtr(minNomadMemoryMb),
 	}
-}
-
-// To make nomad keep resources occupied until the VM is alive, we do a periodic health check
-// by checking whether the lite engine port on the VM is open or not.
-func generateHealthCheckScript(sleep time.Duration, port string) string {
-	sleepSecs := sleep.Seconds()
-	return fmt.Sprintf(`
-#!/usr/bin/bash
-sleep %f
-echo "done sleeping, port is: %s"
-cntr=0
-while true
-	do
-		nc -vz localhost %s
-		if [ $? -eq 1 ]; then
-		    echo "port check failed, incrementing counter:"
-			echo "cntr: "$cntr
-			((cntr++))
-			if [ $cntr -eq 3 ]; then
-				echo "port check failed three times. output of ignite command:"
-				ignite ps
-				echo "output of iptables:"
-				iptables -L -v -n
-				exit 1
-			fi
-		else
-			cntr=0
-			echo "Port check passed..."
-		fi
-		sleep 20
-	done`, sleepSecs, port, port)
-}
-
-func generateDestroyCommand(vm string) string {
-	// Try to force stop and remove if graceful case doesn't work
-	return fmt.Sprintf(`
-	    %s stop %s; %s rm %s
-		if [ $? -ne 0 ]; then
-		  %s stop -f %s; %s rm -f %s
-		fi
-	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)
 }
 
 // Request Nomad to assign available ports dynamically.

@@ -121,6 +121,12 @@ type (
 		EnablePinning map[string]string        `json:"enablePinning" yaml:"enablePinning"`
 		Noop          bool                     `json:"noop" yaml:"noop"`
 		Resource      map[string]NomadResource `json:"resource" yaml:"resource"`
+		Account       struct {
+			Username string `json:"username,omitempty"  yaml:"username"`
+			Password string `json:"password,omitempty"  yaml:"password"`
+		} `json:"account" yaml:"account"`
+		UserData     string `json:"user_data,omitempty" yaml:"user_data"`
+		UserDataPath string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
 	}
 
 	NomadResource struct {
@@ -254,6 +260,10 @@ type EnvConfig struct {
 		VMName string `envconfig:"ANKA_BUILD_VM_NAME"`
 		URL    string `envconfig:"ANKA_BUILD_URL"`
 		Token  string `envconfig:"ANKA_BUILD_TOKEN"`
+	}
+
+	TartBuild struct {
+		Password string `envconfig:"TART_VM_PASSWORD"`
 	}
 
 	AWS struct {

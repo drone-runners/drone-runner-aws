@@ -291,18 +291,32 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, env *config.EnvCo
 			if !ok {
 				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
 			}
+
+			if nomadConfig.VM.Account.Password == "" && env.TartBuild.Password != "" {
+				nomadConfig.VM.Account.Password = env.TartBuild.Password
+			}
+
+			platform := instance.Platform
+			virtualizerEngine := "ignite"
+			if platform.OS == oshelp.OSMac {
+				virtualizerEngine = "tart"
+			}
 			driver, err := nomad.New(nomad.WithAddress(nomadConfig.Server.Address),
 				nomad.WithCaCertPath(nomadConfig.Server.CaCertPath),
 				nomad.WithClientCertPath(nomadConfig.Server.ClientCertPath),
 				nomad.WithClientKeyPath(nomadConfig.Server.ClientKeyPath),
 				nomad.WithInsecure(nomadConfig.Server.Insecure),
+				nomad.WithUsername(nomadConfig.VM.Account.Username),
+				nomad.WithPassword(nomadConfig.VM.Account.Password),
 				nomad.WithCpus(nomadConfig.VM.Cpus),
 				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),
 				nomad.WithEnablePinning(nomadConfig.VM.EnablePinning),
 				nomad.WithImage(nomadConfig.VM.Image),
 				nomad.WithNoop(nomadConfig.VM.Noop),
-				nomad.WithResource(nomadConfig.VM.Resource))
+				nomad.WithResource(nomadConfig.VM.Resource),
+				nomad.WithUserData(nomadConfig.VM.UserData, nomadConfig.VM.UserDataPath),
+				nomad.WithVirtualizerEngine(virtualizerEngine))
 			if err != nil {
 				// TODO: We should return error here once bare metal has been tested on production
 				// Ignoring errors here for now to not cause production outages in case of nomad connectivity issues
