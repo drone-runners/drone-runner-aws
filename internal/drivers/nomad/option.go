@@ -2,6 +2,8 @@ package nomad
 
 import (
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/sirupsen/logrus"
+	"os"
 )
 
 type Option func(*config)
@@ -87,5 +89,42 @@ func WithDiskSize(s string) Option {
 func WithResource(resource map[string]cf.NomadResource) Option {
 	return func(p *config) {
 		p.resource = resource
+	}
+}
+
+func WithUsername(s string) Option {
+	return func(p *config) {
+		p.username = s
+	}
+}
+
+func WithPassword(s string) Option {
+	return func(p *config) {
+		p.password = s
+	}
+}
+
+func WithUserData(text, path string) Option {
+	if text != "" {
+		return func(p *config) {
+			p.userData = text
+		}
+	}
+	return func(p *config) {
+		if path != "" {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				logrus.WithError(err).
+					Fatalln("failed to read user_data file")
+				return
+			}
+			p.userData = string(data)
+		}
+	}
+}
+
+func WithDriverName(driver string) Option {
+	return func(p *config) {
+		p.driverName = driver
 	}
 }

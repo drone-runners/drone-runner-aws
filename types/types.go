@@ -32,6 +32,7 @@ const (
 	VMFusion     = DriverType("vmfusion")
 	Noop         = DriverType("noop")
 	Nomad        = DriverType("nomad")
+	Tart         = DriverType("tart")
 )
 
 // InstanceState type enumeration.
