@@ -316,7 +316,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverNam
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
-	if gitspaceAgentConfig != nil {
+	if gitspaceAgentConfig != nil && len(gitspaceAgentConfig.Ports) > 0 {
 		if pool.Driver.DriverName() != "nomad" {
 			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad")
 		}
