@@ -1,9 +1,10 @@
 package nomad
 
 import (
+	"os"
+
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 type Option func(*config)

@@ -3,12 +3,13 @@ package nomad
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
+	"time"
+
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/hashicorp/nomad/api"
-	"strconv"
-	"time"
 )
 
 type MacVirtualizer struct{}
@@ -17,7 +18,7 @@ func NewMacVirtualizer() *MacVirtualizer {
 	return &MacVirtualizer{}
 }
 
-func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) {
+func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) { //nolint
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(mv.generateUserData(userData, opts)))
 	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, vmImage, username, password, resource, port)))
 	vmStartupScriptPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
@@ -26,7 +27,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, pa
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	entrypoint := mv.GetEntryPoint()
 
-	tart_job := &api.Job{
+	tartJob := &api.Job{
 		ID:          stringToPtr(id),
 		Name:        stringToPtr(id),
 		Type:        stringToPtr("batch"),
@@ -57,7 +58,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, pa
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s; echo %s | base64 --decode >> %s; cat %s | base64 --decode | bash", startupScript, vmStartupScriptPath, encodedUserData, cloudInitScriptPath, vmStartupScriptPath)},
+							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s; echo %s | base64 --decode >> %s; cat %s | base64 --decode | bash", startupScript, vmStartupScriptPath, encodedUserData, cloudInitScriptPath, vmStartupScriptPath)}, //nolint
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -90,7 +91,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, pa
 			},
 		},
 	}
-	return tart_job, id, group
+	return tartJob, id, group
 }
 
 func (mv *MacVirtualizer) generateUserData(userData string, opts *types.InstanceCreateOpts) string {

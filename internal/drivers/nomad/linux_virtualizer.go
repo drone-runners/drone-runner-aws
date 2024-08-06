@@ -3,14 +3,15 @@ package nomad
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
+	"time"
+
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/internal/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/hashicorp/nomad/api"
-	"strconv"
-	"time"
 )
 
 type LinuxVirtualizer struct{}
@@ -19,7 +20,7 @@ func NewLinuxVirtualizer() *LinuxVirtualizer {
 	return &LinuxVirtualizer{}
 }
 
-func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) {
+func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) { //nolint
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	uData := lv.generateUserData(opts)
