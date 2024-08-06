@@ -169,7 +169,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		if class != "" {
 			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, p.virtualizer.GetHealthCheckupGenerator())
 		} else {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, p.virtualizer.GetGlobalAccountID(), p.virtualizer.GetHealthCheckupGenerator())
+			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, p.virtualizer.GetGlobalAccountID(), p.virtualizer.GetHealthCheckupGenerator()) //nolint
 		}
 	}
 
@@ -203,11 +203,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	if len(opts.GitspaceOpts.Ports) != len(gitspacesPorts) {
 		return nil, fmt.Errorf("scheduler: could not allocate required number of ports for gitspaces")
-	} else {
-		for i, vmPort := range opts.GitspaceOpts.Ports {
-			gitspacesPortMappings[vmPort] = gitspacesPorts[i]
-			gitspacesPortMappingsString += fmt.Sprintf("%d->%d;", gitspacesPorts[i], vmPort)
-		}
+	}
+
+	for i, vmPort := range opts.GitspaceOpts.Ports {
+		gitspacesPortMappings[vmPort] = gitspacesPorts[i]
+		gitspacesPortMappingsString += fmt.Sprintf("%d->%d;", gitspacesPorts[i], vmPort)
 	}
 
 	// create a VM on the same machine where the resource job was allocated
@@ -299,7 +299,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) {
+func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) { //nolint
 	id = resourceJobID(vm)
 	portLabel := vm
 
