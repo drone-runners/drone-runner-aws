@@ -3,10 +3,11 @@ package dlite
 import (
 	"context"
 	"encoding/json"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/sirupsen/logrus"
