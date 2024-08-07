@@ -680,15 +680,16 @@ func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error 
 
 func generateStartupScript(opts *types.InstanceCreateOpts) string {
 	params := &cloudinit.Params{
-		Platform:             opts.Platform,
-		CACert:               string(opts.CACert),
-		LiteEngineLogsPath:   oshelp.GetLiteEngineLogsPath(opts.OS),
-		TLSCert:              string(opts.TLSCert),
-		TLSKey:               string(opts.TLSKey),
-		LiteEnginePath:       opts.LiteEnginePath,
-		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
-		PluginBinaryURI:      opts.PluginBinaryURI,
-		Tmate:                opts.Tmate,
+		Platform:               opts.Platform,
+		CACert:                 string(opts.CACert),
+		LiteEngineLogsPath:     oshelp.GetLiteEngineLogsPath(opts.OS),
+		TLSCert:                string(opts.TLSCert),
+		TLSKey:                 string(opts.TLSKey),
+		LiteEnginePath:         opts.LiteEnginePath,
+		HarnessTestBinaryURI:   opts.HarnessTestBinaryURI,
+		PluginBinaryURI:        opts.PluginBinaryURI,
+		Tmate:                  opts.Tmate,
+		AutoInjectionBinaryURI: opts.AutoInjectionBinaryURI,
 	}
 	return cloudinit.LinuxBash(params)
 }

@@ -83,16 +83,17 @@ type InstanceCreateOpts struct {
 	TLSCert        []byte
 	LiteEnginePath string
 	Platform
-	PoolName             string
-	RunnerName           string
-	Limit                int
-	Pool                 int
-	HarnessTestBinaryURI string
-	PluginBinaryURI      string
-	Tmate                Tmate
-	AccountID            string
-	IsHosted             bool
-	ResourceClass        string
+	PoolName               string
+	RunnerName             string
+	Limit                  int
+	Pool                   int
+	HarnessTestBinaryURI   string
+	PluginBinaryURI        string
+	Tmate                  Tmate
+	AccountID              string
+	IsHosted               bool
+	ResourceClass          string
+	AutoInjectionBinaryURI string
 }
 
 // Platform defines the target platform.
