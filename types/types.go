@@ -95,6 +95,7 @@ type InstanceCreateOpts struct {
 	IsHosted             bool
 	ResourceClass        string
 	GitspaceOpts         GitspaceOpts
+	AutoInjectionBinaryURI string
 }
 
 // Platform defines the target platform.

@@ -23,17 +23,18 @@ import (
 
 type (
 	Manager struct {
-		globalCtx            context.Context
-		poolMap              map[string]*poolEntry
-		strategy             Strategy
-		cleanupTimer         *time.Ticker
-		runnerName           string
-		liteEnginePath       string
-		instanceStore        store.InstanceStore
-		stageOwnerStore      store.StageOwnerStore
-		harnessTestBinaryURI string
-		pluginBinaryURI      string
-		tmate                types.Tmate
+		globalCtx              context.Context
+		poolMap                map[string]*poolEntry
+		strategy               Strategy
+		cleanupTimer           *time.Ticker
+		runnerName             string
+		liteEnginePath         string
+		instanceStore          store.InstanceStore
+		stageOwnerStore        store.StageOwnerStore
+		harnessTestBinaryURI   string
+		pluginBinaryURI        string
+		tmate                  types.Tmate
+		autoInjectionBinaryURI string
 	}
 
 	poolEntry struct {
@@ -48,12 +49,13 @@ func New(
 	env *config.EnvConfig,
 ) *Manager {
 	return &Manager{
-		globalCtx:            globalContext,
-		instanceStore:        instanceStore,
-		runnerName:           env.Runner.Name,
-		liteEnginePath:       env.LiteEngine.Path,
-		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
-		pluginBinaryURI:      env.Settings.PluginBinaryURI,
+		globalCtx:              globalContext,
+		instanceStore:          instanceStore,
+		runnerName:             env.Runner.Name,
+		liteEnginePath:         env.LiteEngine.Path,
+		harnessTestBinaryURI:   env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:        env.Settings.PluginBinaryURI,
+		autoInjectionBinaryURI: env.Settings.AutoInjectionBinaryURI,
 	}
 }
 
@@ -64,13 +66,14 @@ func NewManager(
 	env *config.EnvConfig,
 ) *Manager {
 	return &Manager{
-		globalCtx:            globalContext,
-		instanceStore:        instanceStore,
-		stageOwnerStore:      stageOwnerStore,
-		runnerName:           env.Runner.Name,
-		liteEnginePath:       env.LiteEngine.Path,
-		harnessTestBinaryURI: env.Settings.HarnessTestBinaryURI,
-		pluginBinaryURI:      env.Settings.PluginBinaryURI,
+		globalCtx:              globalContext,
+		instanceStore:          instanceStore,
+		stageOwnerStore:        stageOwnerStore,
+		runnerName:             env.Runner.Name,
+		liteEnginePath:         env.LiteEngine.Path,
+		harnessTestBinaryURI:   env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:        env.Settings.PluginBinaryURI,
+		autoInjectionBinaryURI: env.Settings.AutoInjectionBinaryURI,
 	}
 }
 
@@ -577,6 +580,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
+	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	if agentConfig != nil {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:      agentConfig.Secret,
