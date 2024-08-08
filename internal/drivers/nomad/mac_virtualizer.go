@@ -240,7 +240,7 @@ VM_USER="%s"
 VM_PASSWORD="%s"
 /opt/homebrew/bin/sshpass -p "$VM_PASSWORD" scp %s $VM_USER@$(/opt/homebrew/bin/tart ip %s):/Users/anka/cloud_init.sh
 
-/opt/homebrew/bin/sshpass -p "$VM_PASSWORD" ssh -o "ConnectTimeout=1" -o "StrictHostKeyChecking no" $VM_USER@$(/opt/homebrew/bin/tart ip %s) "echo $VM_PASSWORD | sudo -S sh /Users/anka/cloud_init.sh"
+/opt/homebrew/bin/sshpass -p "$VM_PASSWORD" ssh -o "ConnectTimeout=1" -o "StrictHostKeyChecking no" $VM_USER@$(/opt/homebrew/bin/tart ip %s) "echo $VM_PASSWORD | sh /Users/anka/cloud_init.sh"
 `, username, password, cloudInitScriptPath, vmID, vmID)
 }
 
