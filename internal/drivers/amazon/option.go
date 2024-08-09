@@ -276,3 +276,9 @@ func WithUser(user, platform string) Option {
 		}
 	}
 }
+
+func WithIMDSv2(imdsv2 bool) Option {
+	return func(p *config) {
+		p.imdsv2 = imdsv2
+	}
+}

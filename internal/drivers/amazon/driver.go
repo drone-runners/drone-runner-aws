@@ -54,6 +54,7 @@ type config struct {
 	iamProfileArn string
 	tags          map[string]string // user defined tags
 	hibernate     bool
+	imdsv2        bool
 
 	service *ec2.EC2
 }
@@ -297,6 +298,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 		in.HibernationOptions = &ec2.HibernationOptionsRequest{
 			Configured: aws.Bool(true),
+		}
+	}
+
+	if p.imdsv2 {
+		in.MetadataOptions = &ec2.InstanceMetadataOptionsRequest{
+			HttpEndpoint:            aws.String(ec2.InstanceMetadataEndpointStateEnabled),
+			HttpPutResponseHopLimit: aws.Int64(1),
+			HttpTokens:              aws.String(ec2.HttpTokensStateRequired),
 		}
 	}
 
