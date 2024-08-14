@@ -76,11 +76,12 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// setting this only for distributed mode
 		req.ExecuteVMRequest.StartStepRequest.StageRuntimeID = req.ExecuteVMRequest.StageRuntimeID
 		req.ExecuteVMRequest.StepStatus = api.StepStatusConfig{
-			Endpoint:   t.c.env.Dlite.ManagerEndpoint,
-			AccountID:  t.c.env.Dlite.AccountID,
-			TaskID:     req.ExecuteVMRequest.TaskID,
-			DelegateID: task.DelegateInfo.ID,
-			Token:      token,
+			Endpoint:       t.c.env.Dlite.ManagerEndpoint,
+			AccountID:      t.c.env.Dlite.AccountID,
+			TaskID:         req.ExecuteVMRequest.TaskID,
+			DelegateID:     task.DelegateInfo.ID,
+			Token:          token,
+			RunnerResponse: task.RunnerResponse,
 		}
 	} else {
 		harness.GetCtxState().Add(cancel, req.ExecuteVMRequest.StageRuntimeID, task.ID)
