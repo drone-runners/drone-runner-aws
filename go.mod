@@ -39,7 +39,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/wings-software/dlite v1.0.0-rc.10.0.20240814162216-f8ba0cbef767
+	github.com/wings-software/dlite v1.0.0-rc.10.0.20240815144723-959a84361749
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb
 	golang.org/x/oauth2 v0.7.0
 	golang.org/x/sync v0.3.0

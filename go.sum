@@ -620,6 +620,10 @@ github.com/wings-software/dlite v1.0.0-rc.10 h1:epasWALCQSsJt9J8go7jJ4JeXVlqJ30C
 github.com/wings-software/dlite v1.0.0-rc.10/go.mod h1:zZd6iaMk8Av1QSABGuDWdxBFO82MxE0r6PRoDsLDvCE=
 github.com/wings-software/dlite v1.0.0-rc.10.0.20240814162216-f8ba0cbef767 h1:qPsR/5fV6eL5kH1V8ltUYO4wJxrP0p/e0QNjnLgtkKM=
 github.com/wings-software/dlite v1.0.0-rc.10.0.20240814162216-f8ba0cbef767/go.mod h1:zZd6iaMk8Av1QSABGuDWdxBFO82MxE0r6PRoDsLDvCE=
+github.com/wings-software/dlite v1.0.0-rc.10.0.20240815140345-fd5f9a3783ea h1:KuinV/x6M7Vgjh24KMBiaOabEP9AALYxHTMjzfvr5IQ=
+github.com/wings-software/dlite v1.0.0-rc.10.0.20240815140345-fd5f9a3783ea/go.mod h1:zZd6iaMk8Av1QSABGuDWdxBFO82MxE0r6PRoDsLDvCE=
+github.com/wings-software/dlite v1.0.0-rc.10.0.20240815144723-959a84361749 h1:dPNucBCqbHbSUTVBDy1O+4J8oCZ5SdgflFqnZKEN1VM=
+github.com/wings-software/dlite v1.0.0-rc.10.0.20240815144723-959a84361749/go.mod h1:zZd6iaMk8Av1QSABGuDWdxBFO82MxE0r6PRoDsLDvCE=
 github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 h1:nIPpBwaJSVYIxUFsDv3M8ofmx9yWTog9BfvIu0q41lo=
 github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8/go.mod h1:HUYIGzjTL3rfEspMxjDjgmT5uz5wzYJKVo23qUhYTos=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
