@@ -204,6 +204,11 @@ wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429
 chmod 777 /usr/bin/split_tests
 {{ end }}
 
+{{ if .AutoInjectionBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + `
+chmod 777 /usr/bin/auto-injection
+{{ end }}
+
 {{ if eq .Platform.Arch "amd64" }}
 curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
 chmod 777 /usr/bin/envman

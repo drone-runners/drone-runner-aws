@@ -145,6 +145,7 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
 		PluginBinaryURI:      opts.PluginBinaryURI,
 		Tmate:                opts.Tmate,
+		AutoInjectionBinaryURI: opts.AutoInjectionBinaryURI,
 	}
 	if opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{Secret: opts.GitspaceOpts.Secret, AccessToken: opts.GitspaceOpts.AccessToken}
