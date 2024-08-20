@@ -235,8 +235,8 @@ github.com/grpc-ecosystem/grpc-gateway v1.9.5/go.mod h1:vNeuVxBJEsws4ogUvrchl83t
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
 github.com/harness/godotenv/v3 v3.0.0 h1:1YJU9nUk4tQygHOYkm+NZ5jL9IZQ3UqyBspCqL3EMQQ=
 github.com/harness/godotenv/v3 v3.0.0/go.mod h1:UIXXJtTM7NkSYMYknHYOO2d8BfDlAWMYZRuRsXcDDR0=
-github.com/harness/lite-engine v1.0.0-rc.137.0.20240814162908-4133030febb3 h1:f3gn3lR8G9qoSgZklZB9xnfi2sBwuQ5QSXPO5aq/jhc=
-github.com/harness/lite-engine v1.0.0-rc.137.0.20240814162908-4133030febb3/go.mod h1:9/X8f9M49d9hDXdIb99p36UnI5EfDmHd/1sgHyVdz/M=
+github.com/harness/lite-engine v0.5.80 h1:FJQDIOSUoqYzu3uTz1l63SlOIX40BdhPFc0B/t67RlA=
+github.com/harness/lite-engine v0.5.80/go.mod h1:PsAozzLF9X5fiKR5KTPwz2aoy0jSOSY4j3+jt0EwJY8=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/cronexpr v1.1.1 h1:NJZDd87hGXjoZBdvyCF9mX4DCq5Wy7+A/w+A7q0wn6c=
