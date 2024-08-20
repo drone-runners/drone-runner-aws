@@ -394,14 +394,19 @@ func LinuxBash(params *Params) (payload string) {
 
 const ubuntuScript = `
 #cloud-config
+{{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
+packages:
+  - wget
+{{ else }}
 apt:
   sources:
     docker.list:
       source: deb [arch={{ .Platform.Arch }}] https://download.docker.com/linux/ubuntu $RELEASE stable
       keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 packages:
-- wget
-- docker-ce
+  - wget
+  - docker-ce
+{{ end }}
 write_files:
 - path: {{ .CaCertPath }}
   permissions: '0600'
