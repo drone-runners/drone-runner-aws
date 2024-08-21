@@ -20,17 +20,17 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	LiteEnginePath       string
-	LiteEngineLogsPath   string
-	CACert               string
-	TLSCert              string
-	TLSKey               string
-	Platform             types.Platform
-	HarnessTestBinaryURI string
-	PluginBinaryURI      string
-	Tmate                types.Tmate
-	IsHosted             bool
-	GitspaceAgentConfig  types.GitspaceAgentConfig
+	LiteEnginePath         string
+	LiteEngineLogsPath     string
+	CACert                 string
+	TLSCert                string
+	TLSKey                 string
+	Platform               types.Platform
+	HarnessTestBinaryURI   string
+	PluginBinaryURI        string
+	Tmate                  types.Tmate
+	IsHosted               bool
+	GitspaceAgentConfig    types.GitspaceAgentConfig
 	AutoInjectionBinaryURI string
 }
 
@@ -48,7 +48,7 @@ const pluginUsrLocalBinPath = `{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-
 const splitTestsUsrBinPath = `{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/bin/split_tests`
 const liteEngineUsrLocalBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine`
 const liteEngineHomebrewBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine`
-const AutoInjectionUsrBinPath = `{{ .AutoInjectionBinaryURI }}/auto-detection-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/auto-injection`
+const AutoInjectionUsrBinPath = `"{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection`
 
 // Custom creates a custom userdata file.
 func Custom(templateText string, params *Params) (payload string, err error) {
@@ -441,7 +441,7 @@ runcmd:
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if .AutoInjectionBinaryURI }}
-- 'wget -nv "{{ .AutoInjectionBinaryURI }}/auto-detection-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/auto-injection'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + `'
 - 'chmod 777 /usr/bin/auto-injection'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
@@ -504,8 +504,8 @@ runcmd:
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if .AutoInjectionBinaryURI }}
-- 'wget -nv "{{ .AutoInjectionBinaryURI }}/auto-injection-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/auto-injection'
-- 'chmod 777 /usr/bin/auto-injection'
+-'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + `'
+-'chmod 777 /usr/bin/auto-injection'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
 - 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
