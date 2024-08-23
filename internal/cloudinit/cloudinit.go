@@ -236,17 +236,8 @@ echo "starting lite engine server"
 /usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 echo "done starting lite engine server"
 
-echo "install certs"
-apt-get update
-apt-get install ca-certificates curl
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-chmod a+r /etc/apt/keyrings/docker.asc
-apt-get update
-apt-get --yes --force-yes install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 groupadd docker
 mkdir -p /opt/gitspaceagent
-echo "done installing certs"
 
 echo "downloading gitspaces agent binary"
 echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
@@ -256,6 +247,7 @@ chmod 755 /opt/gitspaceagent/agent
 echo "done downloading gitspace agent binary"
 
 echo "starting gitspaces agent"
+export DOCKER_API_VERSION=1.41
 nohup /opt/gitspaceagent/agent 2>&1 &
 useradd -K MAIL_DIR=/dev/null gitspaceagent
 usermod -aG docker gitspaceagent
