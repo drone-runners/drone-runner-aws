@@ -159,6 +159,11 @@ echo "Re-starting tart VM with id $VM_ID"
 # Run the VM in background
 /opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run "$VM_ID" --no-graphics
 
+# Remove known_hosts file to avoid too many authentication errors
+if [ -f ~/.ssh/known_hosts ]; then
+    rm ~/.ssh/known_hosts
+fi
+
 # Wait for ssh to become available
 MAX_RETRIES=15  # Set the maximum number of retries
 RETRY_COUNT=0
@@ -238,7 +243,7 @@ func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, use
 	return fmt.Sprintf(`
 VM_USER="%s"
 VM_PASSWORD="%s"
-/opt/homebrew/bin/sshpass -p "$VM_PASSWORD" scp %s $VM_USER@$(/opt/homebrew/bin/tart ip %s):/Users/anka/cloud_init.sh
+/opt/homebrew/bin/sshpass -p "$VM_PASSWORD" scp -o "ConnectTimeout=1" -o "StrictHostKeyChecking no" %s $VM_USER@$(/opt/homebrew/bin/tart ip %s):/Users/anka/cloud_init.sh
 
 /opt/homebrew/bin/sshpass -p "$VM_PASSWORD" ssh -o "ConnectTimeout=1" -o "StrictHostKeyChecking no" $VM_USER@$(/opt/homebrew/bin/tart ip %s) "echo $VM_PASSWORD | sh /Users/anka/cloud_init.sh"
 `, username, password, cloudInitScriptPath, vmID, vmID)
