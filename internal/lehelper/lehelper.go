@@ -17,16 +17,17 @@ const (
 
 func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 	var params = cloudinit.Params{
-		Platform:             opts.Platform,
-		CACert:               string(opts.CACert),
-		TLSCert:              string(opts.TLSCert),
-		TLSKey:               string(opts.TLSKey),
-		LiteEnginePath:       opts.LiteEnginePath,
-		LiteEngineLogsPath:   oshelp.GetLiteEngineLogsPath(opts.Platform.OS),
-		HarnessTestBinaryURI: opts.HarnessTestBinaryURI,
-		PluginBinaryURI:      opts.PluginBinaryURI,
-		Tmate:                opts.Tmate,
-		IsHosted:             opts.IsHosted,
+		Platform:               opts.Platform,
+		CACert:                 string(opts.CACert),
+		TLSCert:                string(opts.TLSCert),
+		TLSKey:                 string(opts.TLSKey),
+		LiteEnginePath:         opts.LiteEnginePath,
+		LiteEngineLogsPath:     oshelp.GetLiteEngineLogsPath(opts.Platform.OS),
+		HarnessTestBinaryURI:   opts.HarnessTestBinaryURI,
+		PluginBinaryURI:        opts.PluginBinaryURI,
+		Tmate:                  opts.Tmate,
+		IsHosted:               opts.IsHosted,
+		AutoInjectionBinaryURI: opts.AutoInjectionBinaryURI,
 	}
 
 	if userdata == "" {

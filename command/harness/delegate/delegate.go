@@ -86,6 +86,9 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	if env.Settings.HarnessTestBinaryURI == "" {
 		env.Settings.HarnessTestBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/split_tests"
 	}
+	if env.Settings.AutoInjectionBinaryURI == "" {
+		env.Settings.AutoInjectionBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.2"
+	}
 	c.env = env
 	// setup the global logrus logger.
 	harness.SetupLogger(&c.env)

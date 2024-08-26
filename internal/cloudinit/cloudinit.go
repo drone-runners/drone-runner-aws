@@ -20,17 +20,18 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	LiteEnginePath       string
-	LiteEngineLogsPath   string
-	CACert               string
-	TLSCert              string
-	TLSKey               string
-	Platform             types.Platform
-	HarnessTestBinaryURI string
-	PluginBinaryURI      string
-	Tmate                types.Tmate
-	IsHosted             bool
-	GitspaceAgentConfig  types.GitspaceAgentConfig
+	LiteEnginePath         string
+	LiteEngineLogsPath     string
+	CACert                 string
+	TLSCert                string
+	TLSKey                 string
+	Platform               types.Platform
+	HarnessTestBinaryURI   string
+	PluginBinaryURI        string
+	Tmate                  types.Tmate
+	IsHosted               bool
+	GitspaceAgentConfig    types.GitspaceAgentConfig
+	AutoInjectionBinaryURI string
 }
 
 var funcs = map[string]interface{}{
@@ -47,6 +48,7 @@ const pluginUsrLocalBinPath = `{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-
 const splitTestsUsrBinPath = `{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/bin/split_tests`
 const liteEngineUsrLocalBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine`
 const liteEngineHomebrewBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine`
+const AutoInjectionUsrBinPath = `"{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection`
 
 // Custom creates a custom userdata file.
 func Custom(templateText string, params *Params) (payload string, err error) {
@@ -119,6 +121,11 @@ chmod 777 /usr/bin/plugin
 {{ if .HarnessTestBinaryURI }}
 wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + `
 chmod 777 /usr/bin/split_tests
+{{ end }}
+
+{{ if .AutoInjectionBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + `
+chmod 777 /usr/bin/auto-injection
 {{ end }}
 
 {{ if eq .Platform.Arch "amd64" }}
@@ -195,6 +202,11 @@ chmod 777 /usr/bin/plugin
 {{ if .HarnessTestBinaryURI }}
 wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + `
 chmod 777 /usr/bin/split_tests
+{{ end }}
+
+{{ if .AutoInjectionBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + `
+chmod 777 /usr/bin/auto-injection
 {{ end }}
 
 {{ if eq .Platform.Arch "amd64" }}
@@ -425,6 +437,10 @@ runcmd:
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + pluginUsrBinPath + `'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
+{{ if .AutoInjectionBinaryURI }}
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + `'
+- 'chmod 777 /usr/bin/auto-injection'
+{{ end }}
 {{ if eq .Platform.Arch "amd64" }}
 - 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
 - 'chmod 777 /usr/bin/envman'
@@ -483,6 +499,10 @@ runcmd:
 {{ if .PluginBinaryURI }}
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `'
 - 'chmod 777 /usr/bin/plugin'
+{{ end }}
+{{ if .AutoInjectionBinaryURI }}
+-'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + `'
+-'chmod 777 /usr/bin/auto-injection'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
 - 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
