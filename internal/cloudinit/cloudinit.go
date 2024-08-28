@@ -168,7 +168,83 @@ echo "done starting lite engine server"
 
 const gitspacesLinuxScript = `
 #!/usr/bin/bash
-echo "done starting gitspaces agent"
+mkdir {{ .CertDir }}
+
+echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
+chmod 0600 {{ .CaCertPath }}
+
+echo {{ .TLSCert | base64 }} | base64 -d  >> {{ .CertPath }}
+chmod 0600 {{ .CertPath }}
+
+echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
+chmod 0600 {{ .KeyPath }}
+
+echo "setting up swap space"
+fallocate -l 30G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo "done setting up swap space"
+
+echo "downloading lite engine binary"
+/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `
+echo "done downloading lite engine binary"
+chmod 777 /usr/bin/lite-engine
+touch $HOME/.env
+cp "/etc/environment" $HOME/.env
+echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
+
+{{ if .PluginBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `
+chmod 777 /usr/bin/plugin
+{{ end }}
+
+{{ if .HarnessTestBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + splitTestsUsrBinPath + `
+chmod 777 /usr/bin/split_tests
+{{ end }}
+
+{{ if .AutoInjectionBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + AutoInjectionUsrBinPath + `
+chmod 777 /usr/bin/auto-injection
+{{ end }}
+
+{{ if eq .Platform.Arch "amd64" }}
+curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
+chmod 777 /usr/bin/envman
+{{ end }}
+
+systemctl disable docker.service
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+echo "restarting docker"
+service docker start
+echo "docker service restarted"
+
+cp /etc/resolv.conf /etc/resolv_orig.conf
+rm /etc/resolv.conf
+echo "nameserver 127.0.0.53" > /etc/resolv.conf 
+cat /etc/resolv_orig.conf >> /etc/resolv.conf
+echo "options edns0 trust-ad
+search ." >> /etc/resolv.conf
+
+{{ if .Tmate.Enabled }}
+mkdir /addon
+{{ if eq .Platform.Arch "amd64" }}
+wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz
+tar -xf /addon/tmate.xz -C /addon/
+chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate
+mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
+{{ else if eq .Platform.Arch "arm64" }}
+wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz
+tar -xf /addon/tmate.xz -C /addon/
+chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate
+mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
+{{ end }}
+{{ end }}
+unlink /snap/bin/google-cloud-cli.gcloud
+echo "starting lite engine server"
+/usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
+echo "done starting lite engine server"
 `
 
 const macScript = `
