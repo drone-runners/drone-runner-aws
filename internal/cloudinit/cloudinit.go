@@ -245,6 +245,22 @@ unlink /snap/bin/google-cloud-cli.gcloud
 echo "starting lite engine server"
 /usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 echo "done starting lite engine server"
+
+groupadd docker
+mkdir -p /opt/gitspaceagent
+
+echo "downloading gitspaces agent binary"
+echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
+export HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }}
+curl -X GET -H "Authorization: Bearer {{ .GitspaceAgentConfig.AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
+chmod 755 /opt/gitspaceagent/agent
+echo "done downloading gitspace agent binary"
+
+echo "starting gitspaces agent"
+export DOCKER_API_VERSION=1.41
+useradd -K MAIL_DIR=/dev/null gitspaceagent
+usermod -aG docker gitspaceagent
+echo "done starting gitspaces agent"
 `
 
 const macScript = `
