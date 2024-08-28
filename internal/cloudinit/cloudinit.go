@@ -220,14 +220,12 @@ echo "restarting docker"
 service docker start
 echo "docker service restarted"
 
-echo "updating conf"
 cp /etc/resolv.conf /etc/resolv_orig.conf
 rm /etc/resolv.conf
 echo "nameserver 127.0.0.53" > /etc/resolv.conf 
 cat /etc/resolv_orig.conf >> /etc/resolv.conf
 echo "options edns0 trust-ad
 search ." >> /etc/resolv.conf
-echo "updating config done"
 
 {{ if .Tmate.Enabled }}
 mkdir /addon
@@ -247,23 +245,6 @@ unlink /snap/bin/google-cloud-cli.gcloud
 echo "starting lite engine server"
 /usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 echo "done starting lite engine server"
-
-groupadd docker
-mkdir -p /opt/gitspaceagent
-
-echo "downloading gitspaces agent binary"
-echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
-export HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }}
-curl -X GET -H "Authorization: Bearer {{ .GitspaceAgentConfig.AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
-chmod 755 /opt/gitspaceagent/agent
-echo "done downloading gitspace agent binary"
-
-echo "starting gitspaces agent"
-export DOCKER_API_VERSION=1.41
-nohup /opt/gitspaceagent/agent 2>&1 &
-useradd -K MAIL_DIR=/dev/null gitspaceagent
-usermod -aG docker gitspaceagent
-echo "done starting gitspaces agent"
 `
 
 const macScript = `
