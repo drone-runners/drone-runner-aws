@@ -258,6 +258,7 @@ echo "done downloading gitspace agent binary"
 
 echo "starting gitspaces agent"
 export DOCKER_API_VERSION=1.41
+nohup /opt/gitspaceagent/agent > /dev/null 2>&1 &
 useradd -K MAIL_DIR=/dev/null gitspaceagent
 usermod -aG docker gitspaceagent
 echo "done starting gitspaces agent"
