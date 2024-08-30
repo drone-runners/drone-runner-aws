@@ -155,6 +155,9 @@ echo "$ANCHOR_CONTENT" > "$ANCHOR_FILE"
 # Reload packet filter
 sudo pfctl -Fa -f /etc/pf.conf
 
+# Sleep of 5s so that internet connectivity is not affected in VM after packer filter reload
+sleep 5
+
 echo "Re-starting tart VM with id $VM_ID"
 # Run the VM in background
 /opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run "$VM_ID" --no-graphics
@@ -168,17 +171,41 @@ fi
 MAX_RETRIES=15  # Set the maximum number of retries
 RETRY_COUNT=0
 
-while ! /opt/homebrew/bin/sshpass -p "$VM_PASSWORD" ssh -o "ConnectTimeout=1" -o "StrictHostKeyChecking=no" $VM_USER@$VM_IP exit 0>/dev/null; do
-  if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    echo "Failed to connect to VM after $RETRY_COUNT attempts"
-    exit 1
-  fi
+while true
+	do
+		expect <<- DONE
+			set timeout 10
+			spawn ssh -v -o "ConnectTimeout=10" -o "StrictHostKeyChecking=no" $VM_USER@$VM_IP exit
+			expect {
+				"*yes/no*" {
+					send "yes\r"
+					exp_continue
+				}
+				"*Password:*" {
+					send "$VM_PASSWORD\r"
+					exp_continue
+				}
+				eof {
+					set exit_status [lindex [wait] 3]
+					exit $exit_status
+				}
+			}
+		DONE
 
-  RETRY_COUNT=$((RETRY_COUNT + 1))
-  echo "Waiting for VM to come up (attempt $RETRY_COUNT/$MAX_RETRIES)"
-  sleep 1
-done
+		if [ $? -eq 0 ]; then
+			echo "Successfully connected to the VM."
+			break
+		fi
 
+		if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+			echo "Failed to connect to VM after $RETRY_COUNT attempts."
+			exit 1
+		fi
+
+		RETRY_COUNT=$((RETRY_COUNT + 1))
+		echo "Waiting for VM to come up (attempt $RETRY_COUNT/$MAX_RETRIES)"
+		sleep 1
+	done
 echo "Tart VM Started"
 
 `, vmImage, vmID, username, password, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, port, vmID)
@@ -243,10 +270,28 @@ func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, use
 	return fmt.Sprintf(`
 VM_USER="%s"
 VM_PASSWORD="%s"
-/opt/homebrew/bin/sshpass -p "$VM_PASSWORD" scp -o "ConnectTimeout=1" -o "StrictHostKeyChecking no" %s $VM_USER@$(/opt/homebrew/bin/tart ip %s):/Users/anka/cloud_init.sh
 
-/opt/homebrew/bin/sshpass -p "$VM_PASSWORD" ssh -o "ConnectTimeout=1" -o "StrictHostKeyChecking no" $VM_USER@$(/opt/homebrew/bin/tart ip %s) "echo $VM_PASSWORD | sh /Users/anka/cloud_init.sh"
-`, username, password, cloudInitScriptPath, vmID, vmID)
+# Get VM IP
+VM_IP=$(/opt/homebrew/bin/tart ip %s)
+
+# SCP command using expect
+expect <<- DONE
+    spawn scp -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "%s" "$VM_USER@$VM_IP:/Users/anka/cloud_init.sh"
+    expect {
+		"*yes/no*" { send "yes\r"; exp_continue }
+        "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
+    }
+DONE
+
+# SSH command using expect
+expect <<- DONE
+    spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /Users/anka/cloud_init.sh"
+    expect {
+		"*yes/no*" { send "yes\r"; exp_continue }
+        "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
+    }
+DONE
+`, username, password, vmID, cloudInitScriptPath)
 }
 
 // This will be responsible to port forward the traffic from host to VM
