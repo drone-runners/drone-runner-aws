@@ -651,7 +651,11 @@ func getInstanceName(runner, pool string) string {
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
 	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd
-	return substrSuffix(name, maxInstanceNameLen)
+	trimmedName := substrSuffix(name, maxInstanceNameLen)
+	if trimmedName[0] == '-' {
+		trimmedName = "d" + trimmedName[1:]
+	}
+	return trimmedName
 }
 
 func shouldRetry(err error) bool {
