@@ -583,9 +583,11 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	if agentConfig != nil {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
-			Secret:      agentConfig.Secret,
-			AccessToken: agentConfig.AccessToken,
-			Ports:       agentConfig.Ports,
+			Secret:                   agentConfig.Secret,
+			AccessToken:              agentConfig.AccessToken,
+			Ports:                    agentConfig.Ports,
+			GitspaceConfigIdentifier: agentConfig.GitspaceConfigIdentifier,
+			CephPoolIdentifier:       agentConfig.CephPoolIdentifier,
 		}
 	}
 	if err != nil {

@@ -120,13 +120,17 @@ type StageOwner struct {
 }
 
 type GitspaceOpts struct {
-	Secret      string
-	AccessToken string
-	Ports       []int
+	Secret                   string
+	AccessToken              string
+	Ports                    []int
+	GitspaceConfigIdentifier string
+	CephPoolIdentifier       string
 }
 
 type GitspaceAgentConfig struct {
-	Secret      string `json:"secret"`
-	AccessToken string `json:"access_token"`
-	Ports       []int  `json:"ports"`
+	Secret                   string `json:"secret"`
+	AccessToken              string `json:"access_token"`
+	Ports                    []int  `json:"ports"`
+	GitspaceConfigIdentifier string `json:"gitspace_config_identifier"`
+	CephPoolIdentifier       string `json:"ceph_pool_identifier"`
 }

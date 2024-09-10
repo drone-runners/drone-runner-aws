@@ -1,9 +1,12 @@
 package nomad
 
 import (
+	_ "embed"
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
+	"text/template"
 	"time"
 
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
@@ -14,10 +17,23 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
+//go:embed gitspace/scripts/provision_ceph_storage.sh
+var provisionCephStorageScript string
+
+//go:embed gitspace/scripts/deprovision_ceph_storage.sh
+var rbdUmountAndUnmap string
+
 type LinuxVirtualizer struct{}
 
 func NewLinuxVirtualizer() *LinuxVirtualizer {
 	return &LinuxVirtualizer{}
+}
+
+var funcs = map[string]interface{}{
+	"base64": func(src string) string {
+		return base64.StdEncoding.EncodeToString([]byte(src))
+	},
+	"trim": strings.TrimSpace,
 }
 
 func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) { //nolint
@@ -31,12 +47,40 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	var runCmdFormat string
 	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
 	args := []interface{}{ignitePath, vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
+
+	// gitspace args
+	provisionCephStorageScriptPath := fmt.Sprintf("/usr/local/bin/%s_provision_ceph_storage.sh", vm)
 	for vmPort, hostPort := range gitspacesPortMappings {
 		runCmdFormat += " --ports %d:%d"
 		args = append(args, hostPort, vmPort)
 	}
+	cleanUpCmdFormat := "rm %s"
+	cleanUpCmdArgs := []interface{}{hostPath}
+	if opts.GitspaceOpts.GitspaceConfigIdentifier != "" {
+		runCmdFormat += " --volumes $(findmnt -no SOURCE /%s):/mygitspace"
+		args = append(args, opts.GitspaceOpts.GitspaceConfigIdentifier)
+		cleanUpCmdFormat += " %s"
+		cleanUpCmdArgs = append(cleanUpCmdArgs, provisionCephStorageScriptPath)
+	}
+
 	runCmd := fmt.Sprintf(runCmdFormat, args...)
+	cleanUpCmd := fmt.Sprintf(cleanUpCmdFormat, cleanUpCmdArgs...)
 	entrypoint := lv.GetEntryPoint()
+	provisionCephStorageTemplate := template.Must(template.New("provision-ceph-storage").Funcs(funcs).Parse(provisionCephStorageScript))
+	sb := &strings.Builder{}
+	params := struct {
+		GitspaceConfigIdentifier string
+		CephPoolIdentifier       string
+	}{
+		GitspaceConfigIdentifier: opts.GitspaceOpts.GitspaceConfigIdentifier,
+		CephPoolIdentifier:       opts.GitspaceOpts.CephPoolIdentifier,
+	}
+	err := provisionCephStorageTemplate.Execute(sb, params)
+	if err != nil {
+		err = fmt.Errorf("failed to execute provision-ceph-storage template to get the script: %w", err)
+		panic(err)
+	}
+	provisionCephStorageScriptEncoded := base64.StdEncoding.EncodeToString([]byte(sb.String()))
 
 	job = &api.Job{
 		ID:          &id,
@@ -64,6 +108,38 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 				Count: intToPtr(1),
 				Tasks: []*api.Task{
 					{
+						Name:      "create_ceph_storage_script_on_host",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
+						Config: map[string]interface{}{
+							"command": entrypoint,
+							"args": []string{
+								"-c",
+								fmt.Sprintf(`echo %s >> %s`, provisionCephStorageScriptEncoded, provisionCephStorageScriptPath),
+							},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "prestart",
+						},
+					},
+					{
+						Name:      "map_ceph_storage",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
+						Config: map[string]interface{}{
+							"command": entrypoint,
+							"args": []string{
+								"-c",
+								fmt.Sprintf("cat %s | base64 --decode | bash", provisionCephStorageScriptPath),
+							},
+						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "prestart",
+						},
+					},
+					{
 						Name:      "create_startup_script_on_host",
 						Driver:    "raw_exec",
 						Resources: minNomadResources(),
@@ -76,21 +152,6 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 							Hook:    "prestart",
 						},
 					},
-
-					{
-						Name:      "enable_port_forwarding",
-						Driver:    "raw_exec",
-						Resources: minNomadResources(),
-						Config: map[string]interface{}{
-							"command": entrypoint,
-							"args":    []string{"-c", "iptables -P FORWARD ACCEPT"},
-						},
-						Lifecycle: &api.TaskLifecycle{
-							Sidecar: false,
-							Hook:    "prestart",
-						},
-					},
-
 					{
 						Name:      "ignite_run",
 						Driver:    "raw_exec",
@@ -120,7 +181,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", fmt.Sprintf("rm %s", hostPath)},
+							"args":    []string{"-c", cleanUpCmd},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
