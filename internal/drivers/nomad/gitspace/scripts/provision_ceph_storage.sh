@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 # Variables
-RBD={{ .GitspaceConfigIdentifier }}
+RBD={{ .RBDIdentifier }}
 POOL={{ .CephPoolIdentifier }}
 MOUNT_POINT="/${RBD}"
 RBD_DEVICE="/dev/rbd/${POOL}/${RBD}"

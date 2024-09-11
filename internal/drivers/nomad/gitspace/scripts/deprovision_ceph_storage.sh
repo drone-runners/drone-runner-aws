@@ -1,10 +1,10 @@
 #!/usr/bin/bash
 
 # Variables
-POOL="harness-gitspaces-pool-1"
-IMAGE="mygitspace-bcfq6b-1j3la8"
-MOUNT_POINT="/mygitspace-bcfq6b-1j3la8"
-RBD_DEVICE="/dev/rbd/${POOL}/${IMAGE}"
+RBD={{ .RBDIdentifier }}
+POOL={{ .CephPoolIdentifier }}
+MOUNT_POINT="/${RBD}"
+RBD_DEVICE="/dev/rbd/${POOL}/${RBD}"
 
 # Check if the RBD image is mounted and unmount it
 if mount | grep -q "${MOUNT_POINT}"; then
@@ -25,10 +25,10 @@ else
 fi
 
 # Check if the RBD image is mapped and unmap it
-if rbd showmapped | grep -q "${POOL}.*${IMAGE}"; then
-    echo "Unmapping RBD image ${POOL}/${IMAGE}..."
+if rbd showmapped | grep -q "${POOL}.*${RBD}"; then
+    echo "Unmapping RBD image ${POOL}/${RBD}..."
     sudo rbd unmap "${RBD_DEVICE}"
     echo "RBD image unmapped."
 else
-    echo "RBD image ${POOL}/${IMAGE} is not mapped."
+    echo "RBD image ${POOL}/${RBD} is not mapped."
 fi

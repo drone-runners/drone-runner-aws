@@ -66,6 +66,7 @@ type Instance struct {
 	Port                 int64       `db:"instance_port" json:"port"`
 	RunnerName           string      `db:"runner_name" json:"runner_name"`
 	GitspacePortMappings map[int]int `json:"gitspaces_port_mappings"`
+	StorageIdentifier    string      `db:"instance_storage_identifier" json:"storage_identifier"`
 }
 
 type Tmate struct {
@@ -95,6 +96,7 @@ type InstanceCreateOpts struct {
 	IsHosted               bool
 	ResourceClass          string
 	GitspaceOpts           GitspaceOpts
+	StorageIdentifier      string
 	AutoInjectionBinaryURI string
 }
 
@@ -120,17 +122,13 @@ type StageOwner struct {
 }
 
 type GitspaceOpts struct {
-	Secret                   string
-	AccessToken              string
-	Ports                    []int
-	GitspaceConfigIdentifier string
-	CephPoolIdentifier       string
+	Secret      string
+	AccessToken string
+	Ports       []int
 }
 
 type GitspaceAgentConfig struct {
-	Secret                   string `json:"secret"`
-	AccessToken              string `json:"access_token"`
-	Ports                    []int  `json:"ports"`
-	GitspaceConfigIdentifier string `json:"gitspace_config_identifier"`
-	CephPoolIdentifier       string `json:"ceph_pool_identifier"`
+	Secret      string `json:"secret"`
+	AccessToken string `json:"access_token"`
+	Ports       []int  `json:"ports"`
 }
