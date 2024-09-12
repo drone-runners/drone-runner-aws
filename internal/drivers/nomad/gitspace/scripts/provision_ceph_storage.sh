@@ -9,7 +9,7 @@ RBD_DEVICE="/dev/rbd/${POOL}/${RBD}"
 # Check if the RBD image exists
 if ! rbd info ${POOL}/${RBD} &>/dev/null; then
     echo "Creating RBD image ${POOL}/${RBD}..."
-    rbd create --size 8M ${POOL}/${RBD}
+    rbd create --size 20480 ${POOL}/${RBD}
     # Indicate that the image has been created and needs formatting
     IMAGE_CREATED=true
 else
@@ -18,12 +18,14 @@ else
 fi
 
 # Check if the RBD image is already mapped
+rbd showmapped
 if rbd showmapped | grep -q "${POOL}.*${RBD}"; then
     echo "RBD image ${POOL}/${RBD} is already mapped."
 else
     echo "Mapping RBD image ${POOL}/${RBD}..."
     sudo rbd map ${POOL}/${RBD} --name client.admin
 fi
+rbd showmapped
 
 # Format the RBD image only if it was newly created
 if [ "${IMAGE_CREATED}" = true ]; then
@@ -34,11 +36,13 @@ else
 fi
 
 # Mount the RBD image
-if mount | grep -q "${MOUNT_POINT}"; then
+mount | grep "${MOUNT_POINT}"
+if mount | grep "${MOUNT_POINT}"; then
     echo "RBD image is already mounted at ${MOUNT_POINT}."
 else
-    echo "Mounting RBD image ${POOL}/${RBD} to ${MOUNT_POINT}..."
+    echo "Mounting RBD image ${RBD_DEVICE} to ${MOUNT_POINT}..."
     sudo mkdir -p "${MOUNT_POINT}"
     sudo mount "${RBD_DEVICE}" "${MOUNT_POINT}"
     echo "RBD image mounted successfully."
 fi
+mount | grep "${MOUNT_POINT}"
