@@ -264,14 +264,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		// Destroy the VM if it's in a partially created state
-		defer p.Destroy(context.Background(), []*types.Instance{instance}, nil) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
 	// Make sure all subtasks in the init job passed
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
 	if err != nil {
-		defer p.Destroy(context.Background(), []*types.Instance{instance}, nil) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
@@ -281,7 +281,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobID, initJobID, vm)
 	}
 	if job == nil || isTerminal(job) {
-		defer p.Destroy(context.Background(), []*types.Instance{instance}, nil) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)
 	}
 
@@ -435,7 +435,6 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
 func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerator func(string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) {
-	defaultStorageCleanupType := storage.Delete
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
@@ -446,10 +445,7 @@ func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerat
 
 	var cephStorageScriptEncoded string
 	var cephStorageScriptPath string
-	if storageIdentifier != "" {
-		if storageCleanupType == nil {
-			storageCleanupType = &defaultStorageCleanupType
-		}
+	if storageIdentifier != "" && storageCleanupType != nil {
 		var cephStorageCleanupScriptTemplate *template.Template
 		if *storageCleanupType == storage.Detach {
 			cephStorageCleanupScriptTemplate = template.Must(template.New("detach-ceph-storage").Funcs(funcs).Parse(detachCephStorageScript))
@@ -513,8 +509,13 @@ func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerat
 	return job, id
 }
 
-// Destroy destroys the VM in the bare metal machine
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+	storageCleanupType := storage.Delete
+	return p.DestroyInstanceAndStorage(ctx, instances, &storageCleanupType)
+}
+
+// DestroyInstanceAndStorage destroys the VM in the bare metal machine
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
 	for _, instance := range instances {
 		var job *api.Job
 		var jobID string

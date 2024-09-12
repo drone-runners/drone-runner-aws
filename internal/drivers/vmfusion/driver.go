@@ -216,7 +216,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return instance, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+	return p.DestroyInstanceAndStorage(ctx, instances, nil)
+}
+
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)

@@ -60,7 +60,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+	return p.DestroyInstanceAndStorage(ctx, instances, nil)
+}
+
+func (p *config) DestroyInstanceAndStorage(_ context.Context, _ []*types.Instance, _ *storage.CleanupType) (err error) {
 	time.Sleep(time.Duration(p.destroyWaitSecs) * time.Second)
 	return nil
 }

@@ -278,7 +278,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 							logr.Infof("purger: Terminating %d stale instances\n", len(instances))
 
-							err = pool.Driver.Destroy(ctx, instances, nil)
+							err = pool.Driver.Destroy(ctx, instances)
 							if err != nil {
 								return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
 							}
@@ -396,7 +396,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, stor
 		return err
 	}
 
-	err = pool.Driver.Destroy(ctx, []*types.Instance{instance}, storageCleanupType)
+	err = pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
@@ -434,7 +434,7 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 		return nil
 	}
 
-	err = pool.Driver.Destroy(ctx, instances, nil)
+	err = pool.Driver.Destroy(ctx, instances)
 	if err != nil {
 		return err
 	}
@@ -521,7 +521,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			instances[i] = instFree[i]
 		}
 
-		err := pool.Driver.Destroy(ctx, instances, nil)
+		err := pool.Driver.Destroy(ctx, instances)
 		if err != nil {
 			logr.WithError(err).Errorln("build pool: failed to destroy excess instances")
 		}
@@ -614,7 +614,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to store instance")
-		_ = pool.Driver.Destroy(ctx, []*types.Instance{inst}, nil)
+		_ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
 		return nil, err
 	}
 
