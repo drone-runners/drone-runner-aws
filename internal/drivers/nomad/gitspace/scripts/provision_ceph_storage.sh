@@ -18,14 +18,12 @@ else
 fi
 
 # Check if the RBD image is already mapped
-rbd showmapped
 if rbd showmapped | grep -q "${POOL}.*${RBD}"; then
     echo "RBD image ${POOL}/${RBD} is already mapped."
 else
     echo "Mapping RBD image ${POOL}/${RBD}..."
     sudo rbd map ${POOL}/${RBD} --name client.admin
 fi
-rbd showmapped
 
 # Format the RBD image only if it was newly created
 if [ "${IMAGE_CREATED}" = true ]; then
@@ -36,7 +34,6 @@ else
 fi
 
 # Mount the RBD image
-mount | grep "${MOUNT_POINT}"
 if mount | grep "${MOUNT_POINT}"; then
     echo "RBD image is already mounted at ${MOUNT_POINT}."
 else
@@ -45,4 +42,3 @@ else
     sudo mount "${RBD_DEVICE}" "${MOUNT_POINT}"
     echo "RBD image mounted successfully."
 fi
-mount | grep "${MOUNT_POINT}"
