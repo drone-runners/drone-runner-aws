@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
@@ -360,7 +361,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 }
 
 // Destroy destroys the server AWS EC2 instances.
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)

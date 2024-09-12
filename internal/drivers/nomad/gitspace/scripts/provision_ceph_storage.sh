@@ -3,13 +3,14 @@
 # Variables
 RBD={{ .RBDIdentifier }}
 POOL={{ .CephPoolIdentifier }}
+SIZE={{ .Size }}
 MOUNT_POINT="/${RBD}"
 RBD_DEVICE="/dev/rbd/${POOL}/${RBD}"
 
 # Check if the RBD image exists
 if ! rbd info ${POOL}/${RBD} &>/dev/null; then
     echo "Creating RBD image ${POOL}/${RBD}..."
-    rbd create --size 20480 ${POOL}/${RBD}
+    rbd create --size ${SIZE} ${POOL}/${RBD}
     # Indicate that the image has been created and needs formatting
     IMAGE_CREATED=true
 else

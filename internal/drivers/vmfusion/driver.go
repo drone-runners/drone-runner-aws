@@ -10,6 +10,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -215,7 +216,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return instance, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)

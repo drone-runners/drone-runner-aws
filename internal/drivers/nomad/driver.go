@@ -13,6 +13,7 @@ import (
 	"time"
 
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -21,8 +22,11 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-//go:embed gitspace/scripts/deprovision_ceph_storage.sh
-var deProvisionCephStorageScript string
+//go:embed gitspace/scripts/delete_ceph_storage.sh
+var deleteCephStorageScript string
+
+//go:embed gitspace/scripts/detach_ceph_storage.sh
+var detachCephStorageScript string
 
 var (
 	ignitePath              = "/usr/local/bin/ignite"
@@ -260,14 +264,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		// Destroy the VM if it's in a partially created state
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}, nil) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
 	// Make sure all subtasks in the init job passed
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
 	if err != nil {
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}, nil) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
@@ -277,7 +281,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobID, initJobID, vm)
 	}
 	if job == nil || isTerminal(job) {
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{instance}, nil) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)
 	}
 
@@ -430,12 +434,46 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
-func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerator func(string) string) (job *api.Job, id string) {
+func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerator func(string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) {
+	defaultStorageCleanupType := storage.Delete
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
 		RTarget: nodeID,
 		Operand: "=",
+	}
+	destroyCmd := destroyGenerator(vm)
+
+	var cephStorageScriptEncoded string
+	var cephStorageScriptPath string
+	if storageIdentifier != "" {
+		if storageCleanupType == nil {
+			storageCleanupType = &defaultStorageCleanupType
+		}
+		var cephStorageCleanupScriptTemplate *template.Template
+		if *storageCleanupType == storage.Detach {
+			cephStorageCleanupScriptTemplate = template.Must(template.New("detach-ceph-storage").Funcs(funcs).Parse(detachCephStorageScript))
+		} else {
+			cephStorageCleanupScriptTemplate = template.Must(template.New("delete-ceph-storage").Funcs(funcs).Parse(deleteCephStorageScript))
+		}
+
+		sb := &strings.Builder{}
+		storageIdentifierSplit := strings.Split(storageIdentifier, "/")
+		params := struct {
+			CephPoolIdentifier string
+			RBDIdentifier      string
+		}{
+			CephPoolIdentifier: storageIdentifierSplit[0],
+			RBDIdentifier:      storageIdentifierSplit[1],
+		}
+		err := cephStorageCleanupScriptTemplate.Execute(sb, params)
+		if err != nil {
+			err = fmt.Errorf("failed to execute de-provision-ceph-storage template to get the script: %w", err)
+			panic(err)
+		}
+		cephStorageScriptEncoded = base64.StdEncoding.EncodeToString([]byte(sb.String()))
+		cephStorageScriptPath = fmt.Sprintf("/usr/local/bin/%s_delete_ceph_storage.sh", vm)
+		destroyCmd += fmt.Sprintf("\ncat %s | base64 --decode | bash", cephStorageScriptPath)
 	}
 	job = &api.Job{
 		ID:   &id,
@@ -461,7 +499,7 @@ func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerat
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": p.virtualizer.GetEntryPoint(),
-							"args":    []string{"-c", destroyGenerator(vm)},
+							"args":    []string{"-c", destroyCmd},
 						},
 					},
 				},
@@ -469,25 +507,21 @@ func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerat
 		},
 	}
 	if storageIdentifier != "" {
-		storageCleanupTasks, err := p.getStorageCleanupTasks(vm, storageIdentifier)
-		if err != nil {
-			err = fmt.Errorf("failed to get ceph storage cleanup tasks: %w", err)
-			panic(err)
-		}
-		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, storageCleanupTasks...)
+		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, p.getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephStorageScriptPath))
+		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, p.getCephStorageScriptCleanupTask(cephStorageScriptPath))
 	}
 	return job, id
 }
 
 // Destroy destroys the VM in the bare metal machine
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
 	for _, instance := range instances {
 		var job *api.Job
 		var jobID string
 		if p.noop {
-			job, jobID = p.destroyJobNoop(instance.ID, instance.NodeID, instance.StorageIdentifier)
+			job, jobID = p.destroyJobNoop(instance.ID, instance.NodeID)
 		} else {
-			job, jobID = p.destroyJob(instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator())
+			job, jobID = p.destroyJob(instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator(), storageCleanupType)
 		}
 
 		resourceJobID := resourceJobID(instance.ID)
@@ -609,67 +643,39 @@ func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error 
 	return nil
 }
 
-func (p *config) getStorageCleanupTasks(vm string, storageIdentifier string) ([]*api.Task, error) {
-	deProvisionCephStorageTemplate := template.Must(template.New("deprovision-ceph-storage").Funcs(funcs).Parse(deProvisionCephStorageScript))
-	sb := &strings.Builder{}
-	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
-	params := struct {
-		CephPoolIdentifier string
-		RBDIdentifier      string
-	}{
-		CephPoolIdentifier: storageIdentifierSplit[0],
-		RBDIdentifier:      storageIdentifierSplit[1],
+func (p *config) getCephStorageScriptCleanupTask(deProvisionCephStorageScriptPath string) *api.Task {
+	return &api.Task{
+		Name:      "cleanup_script_from_host",
+		Driver:    "raw_exec",
+		Resources: minNomadResources(),
+		Config: map[string]interface{}{
+			"command": p.virtualizer.GetEntryPoint(),
+			"args":    []string{"-c", fmt.Sprintf("rm %s", deProvisionCephStorageScriptPath)},
+		},
+		Lifecycle: &api.TaskLifecycle{
+			Sidecar: false,
+			Hook:    "poststop",
+		},
 	}
-	err := deProvisionCephStorageTemplate.Execute(sb, params)
-	if err != nil {
-		err = fmt.Errorf("failed to execute de-provision-ceph-storage template to get the script: %w", err)
-		panic(err)
+}
+
+func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded string, cephStorageScriptPath string) *api.Task {
+	return &api.Task{
+		Name:      "create_ceph_storage_cleanup_script_on_host",
+		Driver:    "raw_exec",
+		Resources: minNomadResources(),
+		Config: map[string]interface{}{
+			"command": p.virtualizer.GetEntryPoint(),
+			"args": []string{
+				"-c",
+				fmt.Sprintf(`echo %s >> %s`, cephStorageScriptEncoded, cephStorageScriptPath),
+			},
+		},
+		Lifecycle: &api.TaskLifecycle{
+			Sidecar: false,
+			Hook:    "prestart",
+		},
 	}
-	deProvisionCephStorageScriptEncoded := base64.StdEncoding.EncodeToString([]byte(sb.String()))
-	deProvisionCephStorageScriptPath := fmt.Sprintf("/usr/local/bin/%s_de_provision_ceph_storage.sh", vm)
-	return []*api.Task{
-		{
-			Name:      "create_ceph_storage_cleanup_script_on_host",
-			Driver:    "raw_exec",
-			Resources: minNomadResources(),
-			Config: map[string]interface{}{
-				"command": p.virtualizer.GetEntryPoint(),
-				"args": []string{
-					"-c",
-					fmt.Sprintf(`echo %s >> %s`, deProvisionCephStorageScriptEncoded, deProvisionCephStorageScriptPath),
-				},
-			},
-			Lifecycle: &api.TaskLifecycle{
-				Sidecar: false,
-				Hook:    "prestart",
-			},
-		},
-		{
-			Name:      "map_ceph_storage",
-			Driver:    "raw_exec",
-			Resources: minNomadResources(),
-			Config: map[string]interface{}{
-				"command": p.virtualizer.GetEntryPoint(),
-				"args": []string{
-					"-c",
-					fmt.Sprintf("cat %s | base64 --decode | bash", deProvisionCephStorageScriptPath),
-				},
-			},
-		},
-		{
-			Name:      "cleanup_startup_script_from_host",
-			Driver:    "raw_exec",
-			Resources: minNomadResources(),
-			Config: map[string]interface{}{
-				"command": p.virtualizer.GetEntryPoint(),
-				"args":    []string{"-c", fmt.Sprintf("rm %s", deProvisionCephStorageScriptPath)},
-			},
-			Lifecycle: &api.TaskLifecycle{
-				Sidecar: false,
-				Hook:    "poststop",
-			},
-		},
-	}, nil
 }
 
 // generate a job ID for a destroy job

@@ -156,7 +156,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 
 	logr.Infof("distributed dlite: purger: Terminating stale instances\n%s", instanceNames)
 
-	err = pool.Driver.Destroy(ctx, instances)
+	err = pool.Driver.Destroy(ctx, instances, nil)
 	if err != nil {
 		return fmt.Errorf("distributed dlite: failed to delete instances of pool=%q error: %w", pool.Name, err)
 	}

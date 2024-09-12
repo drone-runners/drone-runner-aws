@@ -101,7 +101,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount 
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
-func (p *config) destroyJobNoop(vm, nodeID, storageIdentifier string) (job *api.Job, id string) {
+func (p *config) destroyJobNoop(vm, nodeID string) (job *api.Job, id string) {
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
@@ -138,14 +138,6 @@ func (p *config) destroyJobNoop(vm, nodeID, storageIdentifier string) (job *api.
 				},
 			},
 		},
-	}
-	if storageIdentifier != "" {
-		storageCleanupTasks, err := p.getStorageCleanupTasks(vm, storageIdentifier)
-		if err != nil {
-			err = fmt.Errorf("failed to get ceph storage cleanup tasks: %w", err)
-			panic(err)
-		}
-		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, storageCleanupTasks...)
 	}
 	return job, id
 }

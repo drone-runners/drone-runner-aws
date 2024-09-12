@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -163,7 +164,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	inst, err := p.create(ctx, opts, name)
 	if err != nil {
-		defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}) //nolint:errcheck
+		defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}, nil) //nolint:errcheck
 		return nil, err
 	}
 	return inst, nil
@@ -349,7 +350,7 @@ func (p *config) setTags(ctx context.Context, instance *types.Instance,
 	return err
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)

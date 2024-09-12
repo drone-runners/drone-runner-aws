@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"strings"
 	"time"
 
@@ -260,7 +261,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return &instanceMap, nil
 }
 
-func (c *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (c *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)

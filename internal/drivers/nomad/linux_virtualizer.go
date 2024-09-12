@@ -57,7 +57,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 		runCmdFormat = "cat %s | base64 --decode | bash; " + runCmdFormat
 		args = append([]interface{}{provisionCephStorageScriptPath}, args...)
 		storageIdentifierSplit := strings.Split(opts.StorageIdentifier, "/")
-		runCmdFormat += " --volumes $(findmnt -no SOURCE /%s):/mygitspace"
+		runCmdFormat += " --volumes $(findmnt -no SOURCE /%s):/mnt/disks/mountdevcontainer"
 		args = append(args, storageIdentifierSplit[1])
 	}
 
@@ -71,9 +71,11 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	params := struct {
 		CephPoolIdentifier string
 		RBDIdentifier      string
+		Size               string
 	}{
 		CephPoolIdentifier: storageIdentifierSplit[0],
 		RBDIdentifier:      storageIdentifierSplit[1],
+		Size:               resource.DiskSize,
 	}
 	err := provisionCephStorageTemplate.Execute(sb, params)
 	if err != nil {

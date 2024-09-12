@@ -3,6 +3,7 @@ package digitalocean
 import (
 	"context"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"strconv"
 	"time"
 
@@ -175,7 +176,7 @@ poller:
 }
 
 // Destroy destroys the server AWS EC2 instances.
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)
