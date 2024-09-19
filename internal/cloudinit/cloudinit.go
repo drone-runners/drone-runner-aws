@@ -250,6 +250,17 @@ echo "done starting lite engine server"
 groupadd docker
 mkdir -p /opt/gitspaceagent
 
+echo "Updating docker root dir"
+systemctl stop docker
+mkdir -p /mnt/disks/mountdevcontainer/docker
+tee /etc/docker/daemon.json <<EOF
+{
+  "data-root": "/mnt/disks/mountdevcontainer/docker"
+}
+EOF
+systemctl start docker
+echo "Successfully updated docker root dir"
+
 echo "downloading gitspaces agent binary"
 echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
 export HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }}
