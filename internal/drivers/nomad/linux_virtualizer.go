@@ -56,7 +56,6 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	var storageTask *api.Task
 	if opts.StorageIdentifier != "" {
 		runCmdFormat = "cat %s | base64 --decode | bash; " + runCmdFormat
-		args = append([]interface{}{provisionCephStorageScriptPath}, args...)
 		storageIdentifierSplit := strings.Split(opts.StorageIdentifier, "/")
 		if len(storageIdentifierSplit) != 2 {
 			err := fmt.Errorf("failed to extract cephPoolIdentifier and rbdIdentifier")
@@ -67,6 +66,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 		runCmdFormat += " --volumes $(findmnt -no SOURCE /%s):/mnt/disks/mountdevcontainer"
 		args = append(args, rbdIdentifier)
 		provisionCephStorageScriptPath = fmt.Sprintf("/usr/local/bin/%s_provision_ceph_storage.sh", vm)
+		args = append([]interface{}{provisionCephStorageScriptPath}, args...)
 		storageTask = lv.getCephStorageTask(cephPoolIdentifier, rbdIdentifier, provisionCephStorageScriptPath, resource.DiskSize)
 	}
 
@@ -167,7 +167,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 		},
 	}
 	if opts.StorageIdentifier != "" && storageTask != nil {
-		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, storageTask)
+		job.TaskGroups[0].Tasks = append([]*api.Task{storageTask}, job.TaskGroups[0].Tasks...)
 	}
 	return job, id, group
 }
