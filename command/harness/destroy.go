@@ -3,11 +3,11 @@ package harness
 import (
 	"context"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"strconv"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"

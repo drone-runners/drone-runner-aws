@@ -434,7 +434,8 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
-func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerator func(string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) {
+func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier string, destroyGenerator func(string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) {
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("destroy_job_id", destroyJobID)
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
@@ -445,31 +446,13 @@ func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerat
 
 	var cephStorageScriptEncoded string
 	var cephStorageScriptPath string
+	var err error
 	if storageIdentifier != "" && storageCleanupType != nil {
-		var cephStorageCleanupScriptTemplate *template.Template
-		if *storageCleanupType == storage.Detach {
-			cephStorageCleanupScriptTemplate = template.Must(template.New("detach-ceph-storage").Funcs(funcs).Parse(detachCephStorageScript))
-		} else {
-			cephStorageCleanupScriptTemplate = template.Must(template.New("delete-ceph-storage").Funcs(funcs).Parse(deleteCephStorageScript))
-		}
-
-		sb := &strings.Builder{}
-		storageIdentifierSplit := strings.Split(storageIdentifier, "/")
-		params := struct {
-			CephPoolIdentifier string
-			RBDIdentifier      string
-		}{
-			CephPoolIdentifier: storageIdentifierSplit[0],
-			RBDIdentifier:      storageIdentifierSplit[1],
-		}
-		err := cephStorageCleanupScriptTemplate.Execute(sb, params)
+		cephStorageScriptEncoded, cephStorageScriptPath, err = cleanupStorage(vm, storageIdentifier, storageCleanupType, &destroyCmd)
 		if err != nil {
-			err = fmt.Errorf("failed to execute de-provision-ceph-storage template to get the script: %w", err)
-			panic(err)
+			logr.Errorln(err)
+			return job, id
 		}
-		cephStorageScriptEncoded = base64.StdEncoding.EncodeToString([]byte(sb.String()))
-		cephStorageScriptPath = fmt.Sprintf("/usr/local/bin/%s_delete_ceph_storage.sh", vm)
-		destroyCmd += fmt.Sprintf("\ncat %s | base64 --decode | bash", cephStorageScriptPath)
 	}
 	job = &api.Job{
 		ID:   &id,
@@ -509,6 +492,36 @@ func (p *config) destroyJob(vm, nodeID, storageIdentifier string, destroyGenerat
 	return job, id
 }
 
+func cleanupStorage(vm string, storageIdentifier string, storageCleanupType *storage.CleanupType, destroyCmd *string) (string, string, error) {
+	var cephStorageCleanupScriptTemplate *template.Template
+	if *storageCleanupType == storage.Detach {
+		cephStorageCleanupScriptTemplate = template.Must(template.New("detach-ceph-storage").Funcs(funcs).Parse(detachCephStorageScript))
+	} else {
+		cephStorageCleanupScriptTemplate = template.Must(template.New("delete-ceph-storage").Funcs(funcs).Parse(deleteCephStorageScript))
+	}
+
+	sb := &strings.Builder{}
+	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
+	if len(storageIdentifierSplit) != 2 {
+		return "", "", fmt.Errorf("scheduler: could not parse storage identifier %s", storageIdentifier)
+	}
+	params := struct {
+		CephPoolIdentifier string
+		RBDIdentifier      string
+	}{
+		CephPoolIdentifier: storageIdentifierSplit[0],
+		RBDIdentifier:      storageIdentifierSplit[1],
+	}
+	err := cephStorageCleanupScriptTemplate.Execute(sb, params)
+	if err != nil {
+		return "", "", fmt.Errorf("scheduler: failed to execute de-provision-ceph-storage template to get the script: %w", err)
+	}
+	cephStorageScriptEncoded := base64.StdEncoding.EncodeToString([]byte(sb.String()))
+	cephStorageScriptPath := fmt.Sprintf("/usr/local/bin/%s_delete_ceph_storage.sh", vm)
+	*destroyCmd += fmt.Sprintf("\ncat %s | base64 --decode | bash", cephStorageScriptPath)
+	return cephStorageScriptEncoded, cephStorageScriptPath, nil
+}
+
 func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
 	storageCleanupType := storage.Delete
 	return p.DestroyInstanceAndStorage(ctx, instances, &storageCleanupType)
@@ -522,7 +535,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		if p.noop {
 			job, jobID = p.destroyJobNoop(instance.ID, instance.NodeID)
 		} else {
-			job, jobID = p.destroyJob(instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator(), storageCleanupType)
+			job, jobID = p.destroyJob(ctx, instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator(), storageCleanupType)
 		}
 
 		resourceJobID := resourceJobID(instance.ID)
@@ -646,7 +659,7 @@ func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error 
 
 func (p *config) getCephStorageScriptCleanupTask(deProvisionCephStorageScriptPath string) *api.Task {
 	return &api.Task{
-		Name:      "cleanup_script_from_host",
+		Name:      "cleanup_ceph_storage_script_from_host",
 		Driver:    "raw_exec",
 		Resources: minNomadResources(),
 		Config: map[string]interface{}{
