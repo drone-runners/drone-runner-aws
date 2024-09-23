@@ -129,7 +129,7 @@ type GitspaceOpts struct {
 
 type StorageOpts struct {
 	CephPoolIdentifier string
-	StorageIdentifier  string
+	Identifier         string
 	Size               string
 }
 
@@ -141,6 +141,6 @@ type GitspaceAgentConfig struct {
 
 type StorageConfig struct {
 	CephPoolIdentifier string `json:"ceph_pool_identifier"`
-	StorageIdentifier  string `json:"storage_identifier"`
+	Identifier         string `json:"identifier"`
 	Size               string `json:"size"`
 }

@@ -584,7 +584,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	if storageConfig != nil {
 		createOptions.StorageOpts = types.StorageOpts{
 			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
-			StorageIdentifier:  storageConfig.StorageIdentifier,
+			Identifier:         storageConfig.Identifier,
 			Size:               storageConfig.Size,
 		}
 	}

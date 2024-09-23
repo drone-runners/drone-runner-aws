@@ -31,7 +31,7 @@ type Params struct {
 	Tmate                  types.Tmate
 	IsHosted               bool
 	GitspaceAgentConfig    types.GitspaceAgentConfig
-	StorageIdentifier      types.StorageConfig
+	StorageConfig          types.StorageConfig
 	AutoInjectionBinaryURI string
 }
 

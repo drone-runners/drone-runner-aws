@@ -251,7 +251,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Port:                 int64(liteEngineHostPort),
 		GitspacePortMappings: gitspacesPortMappings,
 		Address:              ip,
-		StorageIdentifier:    opts.StorageOpts.CephPoolIdentifier + "/" + opts.StorageOpts.StorageIdentifier,
+		StorageIdentifier:    opts.StorageOpts.CephPoolIdentifier + "/" + opts.StorageOpts.Identifier,
 	}
 
 	logr.Debugln("scheduler: submitting VM creation job")
