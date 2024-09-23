@@ -269,6 +269,7 @@ chmod 755 /opt/gitspaceagent/agent
 echo "done downloading gitspace agent binary"
 
 echo "starting gitspaces agent"
+mkdir -p /mnt/disks/mountdevcontainer/gitspace
 export DOCKER_API_VERSION=1.41
 nohup /opt/gitspaceagent/agent > /dev/null 2>&1 &
 useradd -K MAIL_DIR=/dev/null gitspaceagent
