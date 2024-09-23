@@ -137,6 +137,7 @@ func (p *config) destroyJobNoop(vm, nodeID string) (job *api.Job, id string) {
 					},
 				},
 			},
-		}}
+		},
+	}
 	return job, id
 }

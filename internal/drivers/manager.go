@@ -10,6 +10,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/certs"
 	itypes "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -309,7 +310,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig) (*types.Instance, error) { //nolint
+func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageIdentifier string) (*types.Instance, error) { //nolint
 	m.runnerName = runnerName
 	m.liteEnginePath = env.LiteEngine.Path
 	m.tmate = types.Tmate(env.Tmate)
@@ -323,7 +324,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverNam
 		if pool.Driver.DriverName() != "nomad" {
 			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad")
 		}
-		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig)
+		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig, storageIdentifier)
 		return inst, err
 	}
 
@@ -346,7 +347,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverNam
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig, storageIdentifier)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -377,14 +378,14 @@ func (m *Manager) Provision(ctx context.Context, poolName, runnerName, serverNam
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", false, nil)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", false, nil, "")
 	}(m.globalCtx)
 
 	return inst, nil
 }
 
 // Destroy destroys an instance in a pool.
-func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) error {
+func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, storageCleanupType *storage.CleanupType) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("provision: pool name %q not found", poolName)
@@ -395,7 +396,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string) erro
 		return err
 	}
 
-	err = pool.Driver.Destroy(ctx, []*types.Instance{instance})
+	err = pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
@@ -538,7 +539,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", false, nil)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", false, nil, "")
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -564,7 +565,7 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsSe
 	return m.buildPool(ctx, pool, tlsServerName, query)
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID, resourceClass string, inuse bool, agentConfig *types.GitspaceAgentConfig) (*types.Instance, error) {
+func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID, resourceClass string, inuse bool, agentConfig *types.GitspaceAgentConfig, storageIdentifier string) (*types.Instance, error) {
 	var inst *types.Instance
 
 	// generate certs
@@ -580,6 +581,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
+	createOptions.StorageIdentifier = storageIdentifier
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	if agentConfig != nil {
 		createOptions.GitspaceOpts = types.GitspaceOpts{

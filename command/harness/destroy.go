@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
@@ -26,11 +27,12 @@ var (
 )
 
 type VMCleanupRequest struct {
-	PoolID         string  `json:"pool_id"`
-	StageRuntimeID string  `json:"stage_runtime_id"`
-	LogKey         string  `json:"log_key,omitempty"`
-	Distributed    bool    `json:"distributed,omitempty"`
-	Context        Context `json:"context,omitempty"`
+	PoolID             string              `json:"pool_id"`
+	StageRuntimeID     string              `json:"stage_runtime_id"`
+	LogKey             string              `json:"log_key,omitempty"`
+	Distributed        bool                `json:"distributed,omitempty"`
+	Context            Context             `json:"context,omitempty"`
+	StorageCleanupType storage.CleanupType `json:"storage_cleanup_type,omitempty"`
 }
 
 func HandleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager, metrics *metric.Metrics) error {
@@ -159,7 +161,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
-	if err = poolManager.Destroy(ctx, poolID, inst.ID); err != nil {
+	if err = poolManager.Destroy(ctx, poolID, inst.ID, &r.StorageCleanupType); err != nil {
 		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroyed instance")

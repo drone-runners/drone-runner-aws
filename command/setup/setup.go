@@ -155,7 +155,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("setup: unable to add pool")
 	}
 	// provision
-	instance, provisionErr := poolManager.Provision(ctx, testPoolName, runnerName, runnerName, "drone", "", &env, nil, nil)
+	instance, provisionErr := poolManager.Provision(ctx, testPoolName, runnerName, runnerName, "drone", "", &env, nil, nil, "")
 	if provisionErr != nil {
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
@@ -173,7 +173,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	// start the instance
 	_, startErr := poolManager.StartInstance(ctx, testPoolName, instance.ID)
 	if startErr != nil {
-		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
+		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID, nil)
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
 		logrus.WithError(startErr).
@@ -185,7 +185,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	// create an LE client so we can test the instance
 	leClient, leErr := lehelper.GetClient(instance, runnerName, instance.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
 	if leErr != nil {
-		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
+		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID, nil)
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
 		logrus.WithError(leErr).
@@ -201,7 +201,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 
 	healthResponse, healthErr := leClient.RetryHealth(ctx, healthCheckWait, performDNSLookup)
 	if healthErr != nil {
-		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
+		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID, nil)
 		logrus.WithError(err).Errorln("failed health check with instance")
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
@@ -215,7 +215,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	// print the pool file
 	poolfile.PrintPoolFile(configPool)
 	// finally clean the instance
-	destroyErr := poolManager.Destroy(ctx, testPoolName, instance.ID)
+	destroyErr := poolManager.Destroy(ctx, testPoolName, instance.ID, nil)
 	return destroyErr
 }
 

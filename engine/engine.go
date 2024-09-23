@@ -66,7 +66,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// lets see if there is anything in the pool
-	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, e.config.Runner.Name, "drone", "", e.config, nil, nil)
+	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, e.config.Runner.Name, "drone", "", e.config, nil, nil, "")
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
@@ -169,7 +169,7 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 
 	logr.Infof("destroying instance %s", instanceID)
 
-	if err := poolMngr.Destroy(ctx, poolName, instanceID); err != nil {
+	if err := poolMngr.Destroy(ctx, poolName, instanceID, nil); err != nil {
 		logr.WithError(err).Errorln("cannot destroy the instance")
 		return err
 	}

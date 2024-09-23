@@ -148,6 +148,7 @@ const instanceColumns = `
 ,is_hibernated
 ,instance_port
 ,instance_owner_id
+,instance_storage_identifier
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -184,6 +185,7 @@ INSERT INTO instances (
 ,instance_port
 ,instance_owner_id
 ,runner_name
+,instance_storage_identifier
 ) values (
  :instance_id
 ,:instance_node_id
@@ -212,6 +214,7 @@ INSERT INTO instances (
 ,:instance_port
 ,:instance_owner_id
 ,:runner_name
+,:instance_storage_identifier
 ) RETURNING instance_id
 `
 

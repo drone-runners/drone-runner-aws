@@ -1,9 +1,12 @@
 package nomad
 
 import (
+	_ "embed"
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
+	"text/template"
 	"time"
 
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
@@ -14,10 +17,20 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
+//go:embed gitspace/scripts/provision_ceph_storage.sh
+var provisionCephStorageScript string
+
 type LinuxVirtualizer struct{}
 
 func NewLinuxVirtualizer() *LinuxVirtualizer {
 	return &LinuxVirtualizer{}
+}
+
+var funcs = map[string]interface{}{
+	"base64": func(src string) string {
+		return base64.StdEncoding.EncodeToString([]byte(src))
+	},
+	"trim": strings.TrimSpace,
 }
 
 func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) { //nolint
@@ -31,11 +44,34 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	var runCmdFormat string
 	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
 	args := []interface{}{ignitePath, vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
+
+	// gitspace args
 	for vmPort, hostPort := range gitspacesPortMappings {
 		runCmdFormat += " --ports %d:%d"
 		args = append(args, hostPort, vmPort)
 	}
+
+	// gitspace storage args
+	var provisionCephStorageScriptPath string
+	var storageTask *api.Task
+	if opts.StorageIdentifier != "" {
+		runCmdFormat = "cat %s | base64 --decode | bash; " + runCmdFormat
+		storageIdentifierSplit := strings.Split(opts.StorageIdentifier, "/")
+		if len(storageIdentifierSplit) != 2 {
+			err := fmt.Errorf("failed to extract cephPoolIdentifier and rbdIdentifier")
+			panic(err)
+		}
+		cephPoolIdentifier := storageIdentifierSplit[0]
+		rbdIdentifier := storageIdentifierSplit[1]
+		runCmdFormat += " --volumes $(findmnt -no SOURCE /%s):/mnt/disks/mountdevcontainer"
+		args = append(args, rbdIdentifier)
+		provisionCephStorageScriptPath = fmt.Sprintf("/usr/local/bin/%s_provision_ceph_storage.sh", vm)
+		args = append([]interface{}{provisionCephStorageScriptPath}, args...)
+		storageTask = lv.getCephStorageTask(cephPoolIdentifier, rbdIdentifier, provisionCephStorageScriptPath, resource.DiskSize)
+	}
+
 	runCmd := fmt.Sprintf(runCmdFormat, args...)
+	cleanUpCmd := lv.getScriptCleanupCmd(opts, hostPath, provisionCephStorageScriptPath)
 	entrypoint := lv.GetEntryPoint()
 
 	job = &api.Job{
@@ -90,7 +126,6 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 							Hook:    "prestart",
 						},
 					},
-
 					{
 						Name:      "ignite_run",
 						Driver:    "raw_exec",
@@ -120,7 +155,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", fmt.Sprintf("rm %s", hostPath)},
+							"args":    []string{"-c", cleanUpCmd},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -131,7 +166,51 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 			},
 		},
 	}
+	if opts.StorageIdentifier != "" && storageTask != nil {
+		job.TaskGroups[0].Tasks = append([]*api.Task{storageTask}, job.TaskGroups[0].Tasks...)
+	}
 	return job, id, group
+}
+
+func (lv *LinuxVirtualizer) getCephStorageTask(
+	cephPoolIdentifier string,
+	rbdIdentifier string,
+	provisionCephStorageScriptPath string,
+	diskSize string,
+) *api.Task {
+	provisionCephStorageTemplate := template.Must(template.New("provision-ceph-storage").Funcs(funcs).Parse(provisionCephStorageScript))
+	sb := &strings.Builder{}
+	params := struct {
+		CephPoolIdentifier string
+		RBDIdentifier      string
+		Size               string
+	}{
+		CephPoolIdentifier: cephPoolIdentifier,
+		RBDIdentifier:      rbdIdentifier,
+		Size:               diskSize,
+	}
+	err := provisionCephStorageTemplate.Execute(sb, params)
+	if err != nil {
+		err = fmt.Errorf("failed to execute provision-ceph-storage template to get the script: %w", err)
+		panic(err)
+	}
+	provisionCephStorageScriptEncoded := base64.StdEncoding.EncodeToString([]byte(sb.String()))
+	return &api.Task{
+		Name:      "create_ceph_storage_script_on_host",
+		Driver:    "raw_exec",
+		Resources: minNomadResources(),
+		Config: map[string]interface{}{
+			"command": lv.GetEntryPoint(),
+			"args": []string{
+				"-c",
+				fmt.Sprintf(`echo %s >> %s`, provisionCephStorageScriptEncoded, provisionCephStorageScriptPath),
+			},
+		},
+		Lifecycle: &api.TaskLifecycle{
+			Sidecar: false,
+			Hook:    "prestart",
+		},
+	}
 }
 
 func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) string {
@@ -205,4 +284,14 @@ func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string) string {
 		fi
 	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)
 	}
+}
+
+func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, hostPath string, provisionCephStorageScriptPath string) string {
+	cleanUpCmdFormat := "rm %s"
+	cleanUpCmdArgs := []interface{}{hostPath}
+	if opts.StorageIdentifier != "" && provisionCephStorageScriptPath != "" {
+		cleanUpCmdFormat += " %s"
+		cleanUpCmdArgs = append(cleanUpCmdArgs, provisionCephStorageScriptPath)
+	}
+	return fmt.Sprintf(cleanUpCmdFormat, cleanUpCmdArgs...)
 }
