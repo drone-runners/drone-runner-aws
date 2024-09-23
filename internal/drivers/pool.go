@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
@@ -25,6 +26,7 @@ type Pool struct {
 type Driver interface {
 	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
 	Destroy(ctx context.Context, instances []*types.Instance) (err error)
+	DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error)
 	Hibernate(ctx context.Context, instanceID, poolName string) error
 	Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error)
 	SetTags(context.Context, *types.Instance, map[string]string) error

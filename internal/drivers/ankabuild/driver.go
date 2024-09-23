@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dchest/uniuri"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -190,6 +191,10 @@ func (c *config) FindVM(ctx context.Context, id string, retryInterval time.Durat
 }
 
 func (c *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+	return c.DestroyInstanceAndStorage(ctx, instances, nil)
+}
+
+func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
 	if len(instances) == 0 {
 		return
 	}

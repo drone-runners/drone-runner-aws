@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -18,8 +19,8 @@ type IManager interface {
 	AddTmate(env *config.EnvConfig) error
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration, purgerTime time.Duration) error
-	Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, agentConfig *types.GitspaceAgentConfig, isNestedVirtualizationEnabled bool) (*types.Instance, error) //nolint
-	Destroy(ctx context.Context, poolName, instanceID string) error
+	Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, agentConfig *types.GitspaceAgentConfig, storageIdentifier string, isNestedVirtualizationEnabled bool) (*types.Instance, error) //nolint
+	Destroy(ctx context.Context, poolName, instanceID string, storageCleanupType *storage.CleanupType) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error
 	StartInstance(ctx context.Context, poolName, instanceID string) (*types.Instance, error)

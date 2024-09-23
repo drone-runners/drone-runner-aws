@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/types"
-
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
@@ -24,10 +22,9 @@ type VMInitTask struct {
 }
 
 type VMInitRequest struct {
-	SetupVMRequest      harness.SetupVMRequest      `json:"setup_vm_request"`
-	Services            []*harness.ExecuteVMRequest `json:"services"`
-	Distributed         bool                        `json:"distributed,omitempty"`
-	GitspaceAgentConfig types.GitspaceAgentConfig   `json:"gitspace_agent_config"`
+	SetupVMRequest harness.SetupVMRequest      `json:"setup_vm_request"`
+	Services       []*harness.ExecuteVMRequest `json:"services"`
+	Distributed    bool                        `json:"distributed,omitempty"`
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -26,17 +26,18 @@ import (
 )
 
 type SetupVMRequest struct {
-	ID                         string            `json:"id"` // stage runtime ID
-	PoolID                     string            `json:"pool_id"`
-	FallbackPoolIDs            []string          `json:"fallback_pool_ids"`
-	Tags                       map[string]string `json:"tags"`
-	CorrelationID              string            `json:"correlation_id"`
-	LogKey                     string            `json:"log_key"`
-	Context                    Context           `json:"context,omitempty"`
-	ResourceClass              string            `json:"resource_class"`
-	api.SetupRequest           `json:"setup_request"`
-	GitspaceAgentConfig        types.GitspaceAgentConfig `json:"gitspace_agent_config"`
-	EnableNestedVirtualization bool                      `json:"enable_nested_virtualization"`
+	ID                  string            `json:"id"` // stage runtime ID
+	PoolID              string            `json:"pool_id"`
+	FallbackPoolIDs     []string          `json:"fallback_pool_ids"`
+	Tags                map[string]string `json:"tags"`
+	CorrelationID       string            `json:"correlation_id"`
+	LogKey              string            `json:"log_key"`
+	Context             Context           `json:"context,omitempty"`
+	ResourceClass       string            `json:"resource_class"`
+	api.SetupRequest    `json:"setup_request"`
+	GitspaceAgentConfig types.GitspaceAgentConfig `json:"gitspace_agent_config"`
+	StorageIdentifier   string                    `json:"storage_identifier"`
+	EnableNestedVirtualization bool               `json:"enable_nested_virtualization"`
 }
 
 type SetupVMResponse struct {
@@ -152,7 +153,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		_, findErr := s.Find(noContext, stageRuntimeID)
 		if findErr != nil {
 			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
-				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID); derr != nil {
+				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, nil); derr != nil {
 					logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 				}
 				return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
@@ -208,7 +209,7 @@ func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env
 			RunnerName: env.Runner.Name,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, &r.GitspaceAgentConfig, r.EnableNestedVirtualization)
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, &r.GitspaceAgentConfig, r.StorageIdentifier, r.EnableNestedVirtualization)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}
@@ -259,7 +260,7 @@ func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env
 				}
 			}
 		}
-		err = poolManager.Destroy(context.Background(), pool, instanceID)
+		err = poolManager.Destroy(context.Background(), pool, instanceID, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("failed to cleanup instance on setup failure")
 		}
