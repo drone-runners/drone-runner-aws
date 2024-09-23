@@ -14,6 +14,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -217,6 +218,14 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
+	var enableNestedVirtualization bool = false
+	if opts.Platform.OS == oshelp.OSLinux && opts.Platform.Arch == oshelp.ArchAMD64 {
+		enableNestedVirtualization = opts.EnableNestedVirtualization
+	}
+	var advancedMachineFeatures = &compute.AdvancedMachineFeatures{
+		EnableNestedVirtualization: enableNestedVirtualization,
+	}
+
 	in := &compute.Instance{
 		Name:           name,
 		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
@@ -244,7 +253,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				},
 			},
 		},
-		CanIpForward: false,
+		AdvancedMachineFeatures: advancedMachineFeatures,
+		CanIpForward:            false,
 		NetworkInterfaces: []*compute.NetworkInterface{
 			{
 				Network:       network,
