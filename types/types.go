@@ -85,19 +85,20 @@ type InstanceCreateOpts struct {
 	TLSCert        []byte
 	LiteEnginePath string
 	Platform
-	PoolName               string
-	RunnerName             string
-	Limit                  int
-	Pool                   int
-	HarnessTestBinaryURI   string
-	PluginBinaryURI        string
-	Tmate                  Tmate
-	AccountID              string
-	IsHosted               bool
-	ResourceClass          string
-	GitspaceOpts           GitspaceOpts
-	StorageIdentifier      string
-	AutoInjectionBinaryURI string
+	PoolName                   string
+	RunnerName                 string
+	Limit                      int
+	Pool                       int
+	HarnessTestBinaryURI       string
+	PluginBinaryURI            string
+	Tmate                      Tmate
+	AccountID                  string
+	IsHosted                   bool
+	ResourceClass              string
+	GitspaceOpts               GitspaceOpts
+	StorageIdentifier          string
+	AutoInjectionBinaryURI     string
+	EnableNestedVirtualization bool
 }
 
 // Platform defines the target platform.
