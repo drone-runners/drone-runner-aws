@@ -96,7 +96,7 @@ type InstanceCreateOpts struct {
 	IsHosted               bool
 	ResourceClass          string
 	GitspaceOpts           GitspaceOpts
-	StorageIdentifier      string
+	StorageOpts            StorageOpts
 	AutoInjectionBinaryURI string
 }
 
@@ -127,8 +127,20 @@ type GitspaceOpts struct {
 	Ports       []int
 }
 
+type StorageOpts struct {
+	CephPoolIdentifier string
+	Identifier         string
+	Size               string
+}
+
 type GitspaceAgentConfig struct {
 	Secret      string `json:"secret"`
 	AccessToken string `json:"access_token"`
 	Ports       []int  `json:"ports"`
+}
+
+type StorageConfig struct {
+	CephPoolIdentifier string `json:"ceph_pool_identifier"`
+	Identifier         string `json:"identifier"`
+	Size               string `json:"size"`
 }
