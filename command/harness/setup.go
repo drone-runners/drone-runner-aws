@@ -36,7 +36,7 @@ type SetupVMRequest struct {
 	ResourceClass              string            `json:"resource_class"`
 	api.SetupRequest           `json:"setup_request"`
 	GitspaceAgentConfig        types.GitspaceAgentConfig `json:"gitspace_agent_config"`
-	StorageIdentifier          string                    `json:"storage_identifier"`
+	StorageConfig              types.StorageConfig       `json:"storage_config"`
 	EnableNestedVirtualization bool                      `json:"enable_nested_virtualization"`
 }
 
@@ -209,7 +209,7 @@ func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env
 			RunnerName: env.Runner.Name,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, &r.GitspaceAgentConfig, r.StorageIdentifier, r.EnableNestedVirtualization)
+	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, &r.GitspaceAgentConfig, &r.StorageConfig, r.EnableNestedVirtualization)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}
@@ -221,11 +221,7 @@ func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env
 
 	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
 	if instance.Provider == types.Google {
-		var isHardwareAccelerationEnabled = "disabled"
-		if r.EnableNestedVirtualization {
-			isHardwareAccelerationEnabled = "enabled"
-		}
-		logr.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration %s", isHardwareAccelerationEnabled))
+		logr.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", r.EnableNestedVirtualization))
 	}
 
 	logr.Traceln("successfully provisioned VM in pool")

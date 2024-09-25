@@ -31,7 +31,7 @@ type Params struct {
 	Tmate                  types.Tmate
 	IsHosted               bool
 	GitspaceAgentConfig    types.GitspaceAgentConfig
-	StorageIdentifier      string
+	StorageConfig          types.StorageConfig
 	AutoInjectionBinaryURI string
 }
 
@@ -250,6 +250,17 @@ echo "done starting lite engine server"
 groupadd docker
 mkdir -p /opt/gitspaceagent
 
+echo "Updating docker root dir"
+systemctl stop docker
+mkdir -p /mnt/disks/mountdevcontainer/docker
+tee /etc/docker/daemon.json <<EOF
+{
+  "data-root": "/mnt/disks/mountdevcontainer/docker"
+}
+EOF
+systemctl start docker
+echo "Successfully updated docker root dir"
+
 echo "downloading gitspaces agent binary"
 echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
 export HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }}
@@ -258,6 +269,7 @@ chmod 755 /opt/gitspaceagent/agent
 echo "done downloading gitspace agent binary"
 
 echo "starting gitspaces agent"
+mkdir -p /mnt/disks/mountdevcontainer/gitspace
 export DOCKER_API_VERSION=1.41
 nohup /opt/gitspaceagent/agent > /dev/null 2>&1 &
 useradd -K MAIL_DIR=/dev/null gitspaceagent

@@ -19,7 +19,7 @@ type IManager interface {
 	AddTmate(env *config.EnvConfig) error
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration, purgerTime time.Duration) error
-	Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, agentConfig *types.GitspaceAgentConfig, storageIdentifier string, isNestedVirtualizationEnabled bool) (*types.Instance, error) //nolint
+	Provision(ctx context.Context, poolName, runnerName, serverName, ownerID, resourceClass string, env *config.EnvConfig, query *types.QueryParams, agentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, isNestedVirtualizationEnabled bool) (*types.Instance, error) //nolint
 	Destroy(ctx context.Context, poolName, instanceID string, storageCleanupType *storage.CleanupType) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error

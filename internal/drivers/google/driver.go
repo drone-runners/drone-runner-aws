@@ -219,11 +219,11 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	var enableNestedVirtualization bool = false
+	enableNestedVirtualization := false
 	if opts.Platform.OS == oshelp.OSLinux && opts.Platform.Arch == oshelp.ArchAMD64 {
 		enableNestedVirtualization = opts.EnableNestedVirtualization
 	}
-	var advancedMachineFeatures = &compute.AdvancedMachineFeatures{
+	advancedMachineFeatures := &compute.AdvancedMachineFeatures{
 		EnableNestedVirtualization: enableNestedVirtualization,
 	}
 

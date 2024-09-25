@@ -54,20 +54,13 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	// gitspace storage args
 	var provisionCephStorageScriptPath string
 	var storageTask *api.Task
-	if opts.StorageIdentifier != "" {
+	if opts.StorageOpts.Identifier != "" {
 		runCmdFormat = "cat %s | base64 --decode | bash; " + runCmdFormat
-		storageIdentifierSplit := strings.Split(opts.StorageIdentifier, "/")
-		if len(storageIdentifierSplit) != 2 {
-			err := fmt.Errorf("failed to extract cephPoolIdentifier and rbdIdentifier")
-			panic(err)
-		}
-		cephPoolIdentifier := storageIdentifierSplit[0]
-		rbdIdentifier := storageIdentifierSplit[1]
 		runCmdFormat += " --volumes $(findmnt -no SOURCE /%s):/mnt/disks/mountdevcontainer"
-		args = append(args, rbdIdentifier)
+		args = append(args, opts.StorageOpts.Identifier)
 		provisionCephStorageScriptPath = fmt.Sprintf("/usr/local/bin/%s_provision_ceph_storage.sh", vm)
 		args = append([]interface{}{provisionCephStorageScriptPath}, args...)
-		storageTask = lv.getCephStorageTask(cephPoolIdentifier, rbdIdentifier, provisionCephStorageScriptPath, resource.DiskSize)
+		storageTask = lv.getCephStorageTask(opts.StorageOpts.CephPoolIdentifier, opts.StorageOpts.Identifier, provisionCephStorageScriptPath, opts.StorageOpts.Size)
 	}
 
 	runCmd := fmt.Sprintf(runCmdFormat, args...)
@@ -166,7 +159,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 			},
 		},
 	}
-	if opts.StorageIdentifier != "" && storageTask != nil {
+	if opts.StorageOpts.Identifier != "" && storageTask != nil {
 		job.TaskGroups[0].Tasks = append([]*api.Task{storageTask}, job.TaskGroups[0].Tasks...)
 	}
 	return job, id, group
@@ -289,7 +282,7 @@ func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string) string {
 func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, hostPath string, provisionCephStorageScriptPath string) string {
 	cleanUpCmdFormat := "rm %s"
 	cleanUpCmdArgs := []interface{}{hostPath}
-	if opts.StorageIdentifier != "" && provisionCephStorageScriptPath != "" {
+	if opts.StorageOpts.Identifier != "" && provisionCephStorageScriptPath != "" {
 		cleanUpCmdFormat += " %s"
 		cleanUpCmdArgs = append(cleanUpCmdArgs, provisionCephStorageScriptPath)
 	}
