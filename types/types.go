@@ -67,6 +67,7 @@ type Instance struct {
 	RunnerName           string      `db:"runner_name" json:"runner_name"`
 	GitspacePortMappings map[int]int `json:"gitspaces_port_mappings"`
 	StorageIdentifier    string      `db:"instance_storage_identifier" json:"storage_identifier"`
+	Labels               []byte      `db:"instance_labels" json:"instance_labels"`
 }
 
 type Tmate struct {
@@ -98,6 +99,7 @@ type InstanceCreateOpts struct {
 	GitspaceOpts           GitspaceOpts
 	StorageOpts            StorageOpts
 	AutoInjectionBinaryURI string
+	Labels                 map[string]string
 }
 
 // Platform defines the target platform.
@@ -110,10 +112,11 @@ type Platform struct {
 }
 
 type QueryParams struct {
-	Status     InstanceState
-	Stage      string
-	Platform   *Platform
-	RunnerName string
+	Status      InstanceState
+	Stage       string
+	Platform    *Platform
+	RunnerName  string
+	MatchLabels map[string]string
 }
 
 type StageOwner struct {

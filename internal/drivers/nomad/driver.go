@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -234,6 +235,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		logr = logr.WithField("gitspaces_port_mapping", gitspacesPortMappingsString)
 	}
 
+	labelsBytes, marshalErr := json.Marshal(opts.Labels)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
+	}
 	instance := &types.Instance{
 		ID:                   vm,
 		NodeID:               id,
@@ -251,7 +256,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Port:                 int64(liteEngineHostPort),
 		GitspacePortMappings: gitspacesPortMappings,
 		Address:              ip,
-		StorageIdentifier:    opts.StorageOpts.CephPoolIdentifier + "/" + opts.StorageOpts.Identifier,
+		Labels:               labelsBytes,
+	}
+	if opts.StorageOpts.Identifier != "" {
+		instance.StorageIdentifier = opts.StorageOpts.CephPoolIdentifier + "/" + opts.StorageOpts.Identifier
 	}
 
 	logr.Debugln("scheduler: submitting VM creation job")

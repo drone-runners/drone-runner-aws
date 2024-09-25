@@ -33,7 +33,7 @@ func (d *DistributedManager) BuildPools(ctx context.Context) error {
 // This helps in cleaning the pools
 func (d *DistributedManager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	var returnError error
-	query := types.QueryParams{RunnerName: d.runnerName}
+	query := types.QueryParams{RunnerName: d.runnerName, MatchLabels: map[string]string{"retain": "false"}}
 	for _, pool := range d.poolMap {
 		err := d.cleanPool(ctx, pool, &query, destroyBusy, destroyFree)
 		if err != nil {
@@ -99,8 +99,9 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 				case <-d.cleanupTimer.C:
 					logrus.Traceln("distributed dlite: Launching instance purger")
 
+					queryParams := types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
 					for _, pool := range d.poolMap {
-						if err := d.startInstancePurger(ctx, pool, maxAgeBusy); err != nil {
+						if err := d.startInstancePurger(ctx, pool, maxAgeBusy, queryParams); err != nil {
 							logger.FromContext(ctx).WithError(err).
 								Errorln("distributed dlite: purger: Failed to purge stale instances")
 						}
@@ -113,7 +114,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 	return nil
 }
 
-func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy time.Duration) error {
+func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy time.Duration, queryParams types.QueryParams) error {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
@@ -129,6 +130,10 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
+		}
+		for key, value := range queryParams.MatchLabels {
+			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+			busyCondition = append(busyCondition, condition)
 		}
 		conditions = append(conditions, busyCondition)
 	}

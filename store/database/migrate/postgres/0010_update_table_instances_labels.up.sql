@@ -1,0 +1,1 @@
+ALTER TABLE instances ADD COLUMN instance_labels JSONB NOT NULL DEFAULT '{"retain":"false"}';
