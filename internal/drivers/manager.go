@@ -629,7 +629,6 @@ func (m *Manager) setupInstance(
 	}
 
 	inst.RunnerName = m.runnerName
-	inst.Labels = nil
 	if inst.Labels == nil {
 		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
 		if marshalErr != nil {
