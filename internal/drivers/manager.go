@@ -566,7 +566,16 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsSe
 	return m.buildPool(ctx, pool, tlsServerName, query)
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID, resourceClass string, inuse bool, agentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig) (*types.Instance, error) {
+func (m *Manager) setupInstance(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName,
+	ownerID,
+	resourceClass string,
+	inuse bool,
+	agentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
 

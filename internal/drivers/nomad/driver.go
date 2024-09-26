@@ -494,8 +494,9 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 		},
 	}
 	if storageIdentifier != "" {
-		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, p.getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephStorageScriptPath))
-		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, p.getCephStorageScriptCleanupTask(cephStorageScriptPath))
+		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks,
+			p.getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephStorageScriptPath),
+			p.getCephStorageScriptCleanupTask(cephStorageScriptPath))
 	}
 	return job, id
 }
@@ -510,6 +511,7 @@ func cleanupStorage(vm string, storageIdentifier string, storageCleanupType *sto
 
 	sb := &strings.Builder{}
 	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
+	//nolint:gomnd
 	if len(storageIdentifierSplit) != 2 {
 		return "", "", fmt.Errorf("scheduler: could not parse storage identifier %s", storageIdentifier)
 	}
@@ -681,7 +683,7 @@ func (p *config) getCephStorageScriptCleanupTask(deProvisionCephStorageScriptPat
 	}
 }
 
-func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded string, cephStorageScriptPath string) *api.Task {
+func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephStorageScriptPath string) *api.Task {
 	return &api.Task{
 		Name:      "create_ceph_storage_cleanup_script_on_host",
 		Driver:    "raw_exec",

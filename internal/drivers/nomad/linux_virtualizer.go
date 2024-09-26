@@ -287,7 +287,7 @@ func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string) string {
 	}
 }
 
-func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, hostPath string, provisionCephStorageScriptPath string) string {
+func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, hostPath, provisionCephStorageScriptPath string) string {
 	cleanUpCmdFormat := "rm %s"
 	cleanUpCmdArgs := []interface{}{hostPath}
 	if opts.StorageOpts.Identifier != "" && provisionCephStorageScriptPath != "" {
