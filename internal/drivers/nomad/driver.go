@@ -501,7 +501,7 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 	return job, id
 }
 
-func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.CleanupType, destroyCmd *string) (string, string, error) {
+func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.CleanupType, destroyCmd *string) (cephStorageScriptEncoded string, cephStorageScriptPath string, err error) {
 	var cephStorageCleanupScriptTemplate *template.Template
 	if *storageCleanupType == storage.Detach {
 		cephStorageCleanupScriptTemplate = template.Must(template.New("detach-ceph-storage").Funcs(funcs).Parse(detachCephStorageScript))
@@ -522,12 +522,12 @@ func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.Cl
 		CephPoolIdentifier: storageIdentifierSplit[0],
 		RBDIdentifier:      storageIdentifierSplit[1],
 	}
-	err := cephStorageCleanupScriptTemplate.Execute(sb, params)
+	err = cephStorageCleanupScriptTemplate.Execute(sb, params)
 	if err != nil {
 		return "", "", fmt.Errorf("scheduler: failed to execute de-provision-ceph-storage template to get the script: %w", err)
 	}
-	cephStorageScriptEncoded := base64.StdEncoding.EncodeToString([]byte(sb.String()))
-	cephStorageScriptPath := fmt.Sprintf("/usr/local/bin/%s_delete_ceph_storage.sh", vm)
+	cephStorageScriptEncoded = base64.StdEncoding.EncodeToString([]byte(sb.String()))
+	cephStorageScriptPath = fmt.Sprintf("/usr/local/bin/%s_delete_ceph_storage.sh", vm)
 	*destroyCmd += fmt.Sprintf("\ncat %s | base64 --decode | bash", cephStorageScriptPath)
 	return cephStorageScriptEncoded, cephStorageScriptPath, nil
 }
