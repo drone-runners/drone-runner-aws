@@ -2,6 +2,7 @@ package drivers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime/debug"
 	"sort"
@@ -628,6 +629,14 @@ func (m *Manager) setupInstance(
 	}
 
 	inst.RunnerName = m.runnerName
+	inst.Labels = nil
+	if inst.Labels == nil {
+		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
+		if marshalErr != nil {
+			return nil, fmt.Errorf("manager: could not marshal default labels, err: %w", marshalErr)
+		}
+		inst.Labels = labelsBytes
+	}
 
 	err = m.instanceStore.Create(ctx, inst)
 	if err != nil {
