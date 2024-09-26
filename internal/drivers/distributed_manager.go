@@ -100,6 +100,13 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 					logrus.Traceln("distributed dlite: Launching instance purger")
 
 					queryParams := types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
+					// All instances are labeled with retain: true/false
+					// If retain is true, instance is not cleaned up while we clean the pools or run the instance purger
+					// These instances are only cleaned up when there's a cleanup request from client explicitly.
+					// This is the case for VMs created for CDE
+					// If retain is false, the instance is cleaned up as earlier. This is the case for CI VMs
+					// MatchLabels in the query params are used in a generic manner to match it against the labels stored in the instance
+					// This is similar to how K8s matchLabels and labels work.
 					for _, pool := range d.poolMap {
 						if err := d.startInstancePurger(ctx, pool, maxAgeBusy, queryParams); err != nil {
 							logger.FromContext(ctx).WithError(err).
