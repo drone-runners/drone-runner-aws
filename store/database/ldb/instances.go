@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"encoding/json"
 	"sort"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -102,6 +104,7 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 }
 
 func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
+	log := logrus.New()
 	if pool == "" {
 		return true
 	}
@@ -119,6 +122,19 @@ func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.
 		if params.Status != "" {
 			if inst.State != params.Status {
 				return false
+			}
+		}
+		if len(params.MatchLabels) > 0 {
+			var instanceLabels map[string]string
+			err := json.Unmarshal(inst.Labels, &instanceLabels)
+			if err != nil {
+				log.Errorln("Error decoding instance labels json:", err)
+				return false
+			}
+			for key, value := range params.MatchLabels {
+				if instVal, ok := instanceLabels[key]; !ok || instVal != value {
+					return false
+				}
 			}
 		}
 	}

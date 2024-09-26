@@ -252,7 +252,8 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							pool.Lock()
 							defer pool.Unlock()
 
-							busy, free, hibernating, err := m.List(ctx, pool, nil)
+							queryParams := &types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
+							busy, free, hibernating, err := m.List(ctx, pool, queryParams)
 							if err != nil {
 								return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 							}
@@ -565,8 +566,18 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsSe
 	return m.buildPool(ctx, pool, tlsServerName, query)
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID, resourceClass string, inuse bool, agentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig) (*types.Instance, error) {
+func (m *Manager) setupInstance(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName,
+	ownerID,
+	resourceClass string,
+	inuse bool,
+	agentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+) (*types.Instance, error) {
 	var inst *types.Instance
+	retain := "false"
 
 	// generate certs
 	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
@@ -589,13 +600,15 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
-	if agentConfig != nil {
+	if agentConfig != nil && agentConfig.Secret != "" {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:      agentConfig.Secret,
 			AccessToken: agentConfig.AccessToken,
 			Ports:       agentConfig.Ports,
 		}
+		retain = "true"
 	}
+	createOptions.Labels = map[string]string{"retain": retain}
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")

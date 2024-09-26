@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -234,6 +235,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		logr = logr.WithField("gitspaces_port_mapping", gitspacesPortMappingsString)
 	}
 
+	labelsBytes, marshalErr := json.Marshal(opts.Labels)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
+	}
 	instance := &types.Instance{
 		ID:                   vm,
 		NodeID:               id,
@@ -251,7 +256,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		Port:                 int64(liteEngineHostPort),
 		GitspacePortMappings: gitspacesPortMappings,
 		Address:              ip,
-		StorageIdentifier:    opts.StorageOpts.CephPoolIdentifier + "/" + opts.StorageOpts.Identifier,
+		Labels:               labelsBytes,
+	}
+	if opts.StorageOpts.Identifier != "" {
+		instance.StorageIdentifier = opts.StorageOpts.CephPoolIdentifier + "/" + opts.StorageOpts.Identifier
 	}
 
 	logr.Debugln("scheduler: submitting VM creation job")
@@ -486,13 +494,14 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 		},
 	}
 	if storageIdentifier != "" {
-		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, p.getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephStorageScriptPath))
-		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks, p.getCephStorageScriptCleanupTask(cephStorageScriptPath))
+		job.TaskGroups[0].Tasks = append(job.TaskGroups[0].Tasks,
+			p.getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephStorageScriptPath),
+			p.getCephStorageScriptCleanupTask(cephStorageScriptPath))
 	}
 	return job, id
 }
 
-func cleanupStorage(vm string, storageIdentifier string, storageCleanupType *storage.CleanupType, destroyCmd *string) (string, string, error) {
+func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.CleanupType, destroyCmd *string) (cephStorageScriptEncoded, cephStorageScriptPath string, err error) {
 	var cephStorageCleanupScriptTemplate *template.Template
 	if *storageCleanupType == storage.Detach {
 		cephStorageCleanupScriptTemplate = template.Must(template.New("detach-ceph-storage").Funcs(funcs).Parse(detachCephStorageScript))
@@ -502,6 +511,7 @@ func cleanupStorage(vm string, storageIdentifier string, storageCleanupType *sto
 
 	sb := &strings.Builder{}
 	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
+	//nolint:gomnd
 	if len(storageIdentifierSplit) != 2 {
 		return "", "", fmt.Errorf("scheduler: could not parse storage identifier %s", storageIdentifier)
 	}
@@ -512,12 +522,12 @@ func cleanupStorage(vm string, storageIdentifier string, storageCleanupType *sto
 		CephPoolIdentifier: storageIdentifierSplit[0],
 		RBDIdentifier:      storageIdentifierSplit[1],
 	}
-	err := cephStorageCleanupScriptTemplate.Execute(sb, params)
+	err = cephStorageCleanupScriptTemplate.Execute(sb, params)
 	if err != nil {
 		return "", "", fmt.Errorf("scheduler: failed to execute de-provision-ceph-storage template to get the script: %w", err)
 	}
-	cephStorageScriptEncoded := base64.StdEncoding.EncodeToString([]byte(sb.String()))
-	cephStorageScriptPath := fmt.Sprintf("/usr/local/bin/%s_delete_ceph_storage.sh", vm)
+	cephStorageScriptEncoded = base64.StdEncoding.EncodeToString([]byte(sb.String()))
+	cephStorageScriptPath = fmt.Sprintf("/usr/local/bin/%s_delete_ceph_storage.sh", vm)
 	*destroyCmd += fmt.Sprintf("\ncat %s | base64 --decode | bash", cephStorageScriptPath)
 	return cephStorageScriptEncoded, cephStorageScriptPath, nil
 }
@@ -673,7 +683,7 @@ func (p *config) getCephStorageScriptCleanupTask(deProvisionCephStorageScriptPat
 	}
 }
 
-func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded string, cephStorageScriptPath string) *api.Task {
+func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephStorageScriptPath string) *api.Task {
 	return &api.Task{
 		Name:      "create_ceph_storage_cleanup_script_on_host",
 		Driver:    "raw_exec",

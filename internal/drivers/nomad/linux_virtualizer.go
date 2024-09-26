@@ -45,6 +45,14 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
 	args := []interface{}{ignitePath, vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
 
+	// add labels
+	if len(opts.Labels) > 0 {
+		runCmdFormat += " --label"
+		for key, value := range opts.Labels {
+			runCmdFormat += fmt.Sprintf(" %s=%s", key, value)
+		}
+	}
+
 	// gitspace args
 	for vmPort, hostPort := range gitspacesPortMappings {
 		runCmdFormat += " --ports %d:%d"
@@ -279,7 +287,7 @@ func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string) string {
 	}
 }
 
-func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, hostPath string, provisionCephStorageScriptPath string) string {
+func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, hostPath, provisionCephStorageScriptPath string) string {
 	cleanUpCmdFormat := "rm %s"
 	cleanUpCmdArgs := []interface{}{hostPath}
 	if opts.StorageOpts.Identifier != "" && provisionCephStorageScriptPath != "" {

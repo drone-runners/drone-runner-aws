@@ -51,6 +51,11 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 			stmt = stmt.Where(squirrel.Eq{"runner_name": params.RunnerName})
 			args = append(args, params.RunnerName)
 		}
+		for key, value := range params.MatchLabels {
+			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+			stmt = stmt.Where(condition)
+			args = append(args, key, value)
+		}
 	}
 	stmt = stmt.OrderBy("instance_started " + "ASC")
 	sql, _, _ := stmt.ToSql()
@@ -149,6 +154,7 @@ const instanceColumns = `
 ,instance_port
 ,instance_owner_id
 ,instance_storage_identifier
+,instance_labels
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -186,6 +192,7 @@ INSERT INTO instances (
 ,instance_owner_id
 ,runner_name
 ,instance_storage_identifier
+,instance_labels
 ) values (
  :instance_id
 ,:instance_node_id
@@ -215,6 +222,7 @@ INSERT INTO instances (
 ,:instance_owner_id
 ,:runner_name
 ,:instance_storage_identifier
+,:instance_labels
 ) RETURNING instance_id
 `
 
