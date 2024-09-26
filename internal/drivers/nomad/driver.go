@@ -501,7 +501,7 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 	return job, id
 }
 
-func cleanupStorage(vm string, storageIdentifier string, storageCleanupType *storage.CleanupType, destroyCmd *string) (string, string, error) {
+func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.CleanupType, destroyCmd *string) (string, string, error) {
 	var cephStorageCleanupScriptTemplate *template.Template
 	if *storageCleanupType == storage.Detach {
 		cephStorageCleanupScriptTemplate = template.Must(template.New("detach-ceph-storage").Funcs(funcs).Parse(detachCephStorageScript))
