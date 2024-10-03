@@ -155,6 +155,7 @@ const instanceColumns = `
 ,instance_owner_id
 ,instance_storage_identifier
 ,instance_labels
+,enable_nested_virtualization
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -193,6 +194,7 @@ INSERT INTO instances (
 ,runner_name
 ,instance_storage_identifier
 ,instance_labels
+,enable_nested_virtualization
 ) values (
  :instance_id
 ,:instance_node_id
@@ -223,6 +225,7 @@ INSERT INTO instances (
 ,:runner_name
 ,:instance_storage_identifier
 ,:instance_labels
+,:enable_nested_virtualization
 ) RETURNING instance_id
 `
 

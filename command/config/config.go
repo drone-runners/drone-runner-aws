@@ -190,23 +190,24 @@ type (
 
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
-		Account      GoogleAccount     `json:"account,omitempty"  yaml:"account"`
-		Image        string            `json:"image,omitempty" yaml:"image,omitempty"`
-		Name         string            `json:"name,omitempty" yaml:"name,omitempty"`
-		Tags         []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
-		Size         string            `json:"size,omitempty" yaml:"size,omitempty"`
-		MachineType  string            `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-		UserData     string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
-		UserDataKey  string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
-		Disk         disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
-		Network      string            `json:"network,omitempty" yaml:"network,omitempty"`
-		Subnetwork   string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
-		PrivateIP    bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
-		Zone         []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
-		Labels       map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
-		Scopes       []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
-		Hibernate    bool              `json:"hibernate,omitempty"`
+		Account                    GoogleAccount     `json:"account,omitempty"  yaml:"account"`
+		Image                      string            `json:"image,omitempty" yaml:"image,omitempty"`
+		Name                       string            `json:"name,omitempty" yaml:"name,omitempty"`
+		Tags                       []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Size                       string            `json:"size,omitempty" yaml:"size,omitempty"`
+		MachineType                string            `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+		UserData                   string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath               string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+		UserDataKey                string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
+		Disk                       disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
+		Network                    string            `json:"network,omitempty" yaml:"network,omitempty"`
+		Subnetwork                 string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
+		PrivateIP                  bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
+		Zone                       []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
+		Labels                     map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+		Scopes                     []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
+		Hibernate                  bool              `json:"hibernate,omitempty"`
+		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
 	}
 
 	GoogleAccount struct {
