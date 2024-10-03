@@ -50,6 +50,7 @@ type (
 		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
 		Hibernate     bool              `json:"hibernate,omitempty"`
 		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
+		IMDSv2        bool              `json:"require_imdsv2,omitempty" yaml:"require_imdsv2,omitempty" default:"false"`
 	}
 
 	AmazonAccount struct {
