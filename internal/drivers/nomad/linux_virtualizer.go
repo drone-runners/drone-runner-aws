@@ -227,8 +227,13 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		Tmate:                  opts.Tmate,
 		AutoInjectionBinaryURI: opts.AutoInjectionBinaryURI,
 	}
-	if opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "" {
-		params.GitspaceAgentConfig = types.GitspaceAgentConfig{Secret: opts.GitspaceOpts.Secret, AccessToken: opts.GitspaceOpts.AccessToken}
+	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
+		(opts.GitspaceOpts.VMInitScript != "") {
+		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
+			Secret:       opts.GitspaceOpts.Secret,
+			AccessToken:  opts.GitspaceOpts.AccessToken,
+			VMInitScript: opts.GitspaceOpts.VMInitScript,
+		}
 	}
 	return cloudinit.LinuxBash(params)
 }

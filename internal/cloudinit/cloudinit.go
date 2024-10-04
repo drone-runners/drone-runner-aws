@@ -247,20 +247,9 @@ echo "starting lite engine server"
 /usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 echo "done starting lite engine server"
 
-groupadd docker
-mkdir -p /opt/gitspaceagent
-
-echo "Updating docker root dir"
-systemctl stop docker
-mkdir -p /mnt/disks/mountdevcontainer/docker
-tee /etc/docker/daemon.json <<EOF
-{
-  "data-root": "/mnt/disks/mountdevcontainer/docker"
-}
-EOF
-systemctl start docker
-echo "Successfully updated docker root dir"
-
+{{ if .GitspaceAgentConfig.VMInitScript }}
+{{ .GitspaceAgentConfig.VMInitScript }}
+{{ else }}
 echo "downloading gitspaces agent binary"
 echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
 export HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }}
@@ -275,6 +264,7 @@ nohup /opt/gitspaceagent/agent > /dev/null 2>&1 &
 useradd -K MAIL_DIR=/dev/null gitspaceagent
 usermod -aG docker gitspaceagent
 echo "done starting gitspaces agent"
+{{ end }}
 `
 
 const macScript = `
@@ -395,7 +385,16 @@ func LinuxBash(params *Params) (payload string) {
 	}
 
 	var err error
-	if params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "" {
+	if (params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "") ||
+		(params.GitspaceAgentConfig.VMInitScript != "") {
+		if params.GitspaceAgentConfig.VMInitScript != "" {
+			decodedScript, err := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
+			if err != nil {
+				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
+				panic(err)
+			}
+			p.GitspaceAgentConfig.VMInitScript = string(decodedScript)
+		}
 		err = gitspacesLinuxTemplate.Execute(sb, p)
 	} else {
 		err = linuxBashTemplate.Execute(sb, p)

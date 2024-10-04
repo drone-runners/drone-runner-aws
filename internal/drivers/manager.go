@@ -601,11 +601,12 @@ func (m *Manager) setupInstance(
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
-	if agentConfig != nil && agentConfig.Secret != "" {
+	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
-			Secret:      agentConfig.Secret,
-			AccessToken: agentConfig.AccessToken,
-			Ports:       agentConfig.Ports,
+			Secret:       agentConfig.Secret,
+			AccessToken:  agentConfig.AccessToken,
+			Ports:        agentConfig.Ports,
+			VMInitScript: agentConfig.VMInitScript,
 		}
 		retain = "true"
 	}
