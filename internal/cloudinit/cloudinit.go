@@ -388,8 +388,8 @@ func LinuxBash(params *Params) (payload string) {
 	if (params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "") ||
 		(params.GitspaceAgentConfig.VMInitScript != "") {
 		if params.GitspaceAgentConfig.VMInitScript != "" {
-			decodedScript, err := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
-			if err != nil {
+			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
+			if decodeErr != nil {
 				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
 				panic(err)
 			}
