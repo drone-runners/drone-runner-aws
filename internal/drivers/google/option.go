@@ -222,3 +222,9 @@ func WithLabels(labels map[string]string) Option {
 		p.labels = labels
 	}
 }
+
+func WithIsNestedVirtualizationEnabled(enableNestedVirtualization bool) Option {
+	return func(p *config) {
+		p.enableNestedVirtualization = enableNestedVirtualization
+	}
+}

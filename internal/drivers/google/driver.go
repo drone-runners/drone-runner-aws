@@ -15,6 +15,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
+	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -60,23 +61,24 @@ type config struct {
 	rootDir string
 
 	// vm instance data
-	diskSize            int64
-	diskType            string
-	hibernate           bool
-	image               string
-	network             string
-	noServiceAccount    bool
-	subnetwork          string
-	privateIP           bool
-	scopes              []string
-	serviceAccountEmail string
-	size                string
-	tags                []string
-	zones               []string
-	userData            string
-	userDataKey         string
-	service             *compute.Service
-	labels              map[string]string
+	diskSize                   int64
+	diskType                   string
+	hibernate                  bool
+	image                      string
+	network                    string
+	noServiceAccount           bool
+	subnetwork                 string
+	privateIP                  bool
+	scopes                     []string
+	serviceAccountEmail        string
+	size                       string
+	tags                       []string
+	zones                      []string
+	userData                   string
+	userDataKey                string
+	service                    *compute.Service
+	labels                     map[string]string
+	enableNestedVirtualization bool
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -218,6 +220,14 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
+	enableNestedVirtualization := false
+	if opts.Platform.OS == oshelp.OSLinux && opts.Platform.Arch == oshelp.ArchAMD64 {
+		enableNestedVirtualization = p.enableNestedVirtualization
+	}
+	advancedMachineFeatures := &compute.AdvancedMachineFeatures{
+		EnableNestedVirtualization: enableNestedVirtualization,
+	}
+
 	in := &compute.Instance{
 		Name:           name,
 		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
@@ -245,7 +255,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				},
 			},
 		},
-		CanIpForward: false,
+		AdvancedMachineFeatures: advancedMachineFeatures,
+		CanIpForward:            false,
 		NetworkInterfaces: []*compute.NetworkInterface{
 			{
 				Network:       network,
@@ -299,7 +310,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
-	instanceMap := p.mapToInstance(vm, zone, opts)
+	instanceMap := p.mapToInstance(vm, zone, opts, enableNestedVirtualization)
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
@@ -493,7 +504,7 @@ func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID
 	})
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts) types.Instance {
+func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool) types.Instance {
 	network := vm.NetworkInterfaces[0]
 	instanceIP := ""
 	if p.privateIP {
@@ -504,24 +515,25 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
 	return types.Instance{
-		ID:           strconv.FormatUint(vm.Id, 10),
-		Name:         vm.Name,
-		Provider:     types.Google, // this is driver, though its the old legacy name of provider
-		State:        types.StateCreated,
-		Pool:         opts.PoolName,
-		Image:        p.image,
-		Zone:         zone,
-		Size:         p.size,
-		Platform:     opts.Platform,
-		Address:      instanceIP,
-		CACert:       opts.CACert,
-		CAKey:        opts.CAKey,
-		TLSCert:      opts.TLSCert,
-		TLSKey:       opts.TLSKey,
-		Started:      started.Unix(),
-		Updated:      time.Now().Unix(),
-		IsHibernated: false,
-		Port:         lehelper.LiteEnginePort,
+		ID:                         strconv.FormatUint(vm.Id, 10),
+		Name:                       vm.Name,
+		Provider:                   types.Google, // this is driver, though its the old legacy name of provider
+		State:                      types.StateCreated,
+		Pool:                       opts.PoolName,
+		Image:                      p.image,
+		Zone:                       zone,
+		Size:                       p.size,
+		Platform:                   opts.Platform,
+		Address:                    instanceIP,
+		CACert:                     opts.CACert,
+		CAKey:                      opts.CAKey,
+		TLSCert:                    opts.TLSCert,
+		TLSKey:                     opts.TLSKey,
+		Started:                    started.Unix(),
+		Updated:                    time.Now().Unix(),
+		IsHibernated:               false,
+		Port:                       lehelper.LiteEnginePort,
+		EnableNestedVirtualization: enableNestedVitualization,
 	}
 }
 

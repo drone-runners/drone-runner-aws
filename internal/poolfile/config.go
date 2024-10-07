@@ -180,6 +180,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, env *config.EnvCo
 				google.WithLabels(map[string]string{
 					instance.Name: instance.Name,
 				}),
+				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
 			)
 			if err != nil {
 				return nil, err

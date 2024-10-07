@@ -1,0 +1,1 @@
+ALTER TABLE instances ADD COLUMN IF NOT EXISTS enable_nested_virtualization BOOLEAN NOT NULL DEFAULT false;

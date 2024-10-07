@@ -218,6 +218,10 @@ func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name)
 
+	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
+	if instance.Provider == types.Google {
+		logr.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", instance.EnableNestedVirtualization))
+	}
 	logr.Traceln("successfully provisioned VM in pool")
 
 	instanceID := instance.ID
