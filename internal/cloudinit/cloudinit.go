@@ -247,6 +247,9 @@ echo "starting lite engine server"
 /usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
 echo "done starting lite engine server"
 
+{{ if .GitspaceAgentConfig.VMInitScript }}
+{{ .GitspaceAgentConfig.VMInitScript }}
+{{ else }}
 groupadd docker
 mkdir -p /opt/gitspaceagent
 
@@ -275,6 +278,7 @@ nohup /opt/gitspaceagent/agent > /dev/null 2>&1 &
 useradd -K MAIL_DIR=/dev/null gitspaceagent
 usermod -aG docker gitspaceagent
 echo "done starting gitspaces agent"
+{{ end }}
 `
 
 const macScript = `
@@ -395,7 +399,16 @@ func LinuxBash(params *Params) (payload string) {
 	}
 
 	var err error
-	if params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "" {
+	if (params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "") ||
+		(params.GitspaceAgentConfig.VMInitScript != "") {
+		if params.GitspaceAgentConfig.VMInitScript != "" {
+			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
+			if decodeErr != nil {
+				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
+				panic(err)
+			}
+			p.GitspaceAgentConfig.VMInitScript = string(decodedScript)
+		}
 		err = gitspacesLinuxTemplate.Execute(sb, p)
 	} else {
 		err = linuxBashTemplate.Execute(sb, p)
