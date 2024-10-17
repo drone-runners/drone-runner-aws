@@ -353,6 +353,7 @@ type EnvConfig struct {
 		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.83/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
+		HealthCheckTimeout  int    `envconfig:"DRONE_LITE_ENGINE_HEALTH_CHECK_TIMEOUT_SECS" default:"300"`
 	}
 
 	Server struct {
