@@ -8,14 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/metric"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/lehelper"
+	errors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	errors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/api"
@@ -54,7 +53,21 @@ var (
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
-func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore, env *config.EnvConfig, poolManager drivers.IManager, metrics *metric.Metrics) (*SetupVMResponse, string, error) {
+// Instead of passing in the env config, we pass in whatever is needed. This is because
+// this same code is being used in the new runner and we want to make sure nothing breaking
+// is added here which is not added in the new runner.
+func HandleSetup(
+	ctx context.Context,
+	r *SetupVMRequest,
+	s store.StageOwnerStore,
+	globalVolumes []string,
+	poolMapByAccount map[string]map[string]string,
+	runnerName string,
+	enableMock bool, // only used for scale testing
+	mockTimeout int, // only used for scale testing
+	poolManager drivers.IManager,
+	metrics *metric.Metrics,
+) (*SetupVMResponse, string, error) {
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
@@ -86,7 +99,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	}
 
 	// append global volumes to the setup request.
-	for _, pair := range env.Runner.Volumes {
+	for _, pair := range globalVolumes {
 		src, _, ro, err := resource.ParseVolume(pair)
 		if err != nil {
 			log.Warn(err)
@@ -119,7 +132,7 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 	var owner string
 
 	// TODO: Remove this once we start populating license information.
-	if strings.Contains(r.PoolID, freeAccount) || r.Tags[freeCI] == "true" {
+	if strings.Contains(r.PoolID, freeAccount) || getIsFreeAccount(&r.Context, r.Tags) {
 		owner = freeAccount
 	} else {
 		owner = GetAccountID(&r.Context, r.Tags)
@@ -130,9 +143,9 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 		if idx > 0 {
 			fallback = true
 		}
-		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, env.Dlite.PoolMapByAccount)
+		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
-		instance, poolErr = handleSetup(ctx, logr, r, env, poolManager, pool, owner)
+		instance, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
 			continue
@@ -193,7 +206,17 @@ func HandleSetup(ctx context.Context, r *SetupVMRequest, s store.StageOwnerStore
 // run a health check on the lite engine. It returns information about the setup
 // VM and an error if setup failed.
 // It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
-func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env *config.EnvConfig, poolManager drivers.IManager, pool, owner string) (*types.Instance, error) {
+func handleSetup(
+	ctx context.Context,
+	logr *logrus.Entry,
+	r *SetupVMRequest,
+	runnerName string,
+	enableMock bool,
+	mockTimeout int,
+	poolManager drivers.IManager,
+	pool,
+	owner string,
+) (*types.Instance, error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, fmt.Errorf("could not find pool: %s", pool)
@@ -205,10 +228,10 @@ func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env
 	var query *types.QueryParams
 	if poolManager.IsDistributed() {
 		query = &types.QueryParams{
-			RunnerName: env.Runner.Name,
+			RunnerName: runnerName,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, env.Runner.Name, poolManager.GetTLSServerName(), owner, r.ResourceClass, env, query, &r.GitspaceAgentConfig, &r.StorageConfig)
+	instance, err := poolManager.Provision(ctx, pool, poolManager.GetTLSServerName(), owner, r.ResourceClass, query, &r.GitspaceAgentConfig, &r.StorageConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}
@@ -283,7 +306,7 @@ func handleSetup(ctx context.Context, logr *logrus.Entry, r *SetupVMRequest, env
 	}
 
 	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port,
-		env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+		enableMock, mockTimeout)
 	if err != nil {
 		go cleanUpInstanceFn(false)
 		return nil, fmt.Errorf("failed to create LE client: %w", err)

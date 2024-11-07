@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/internal"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/envsubst"
@@ -125,7 +125,7 @@ func (c *execCommand) run(*kingpin.ParseContext) error { //nolint:gocyclo // its
 			Fatalln("exec: unable to load pool file, or use an in memory pool file")
 	}
 
-	pools, err := poolfile.ProcessPool(configPool, runnerName, &envConfig)
+	pools, err := poolfile.ProcessPool(configPool, runnerName, envConfig.Passwords())
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("exec: unable to process pool file")

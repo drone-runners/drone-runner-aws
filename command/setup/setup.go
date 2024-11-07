@@ -10,10 +10,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/lehelper"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/logger"
@@ -143,7 +143,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 	// process the pool file
-	pools, processErr := poolfile.ProcessPool(configPool, runnerName, &env)
+	pools, processErr := poolfile.ProcessPool(configPool, runnerName, env.Passwords())
 	if processErr != nil {
 		logrus.WithError(processErr).
 			Fatalln("setup: unable to process pool file")
@@ -155,7 +155,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("setup: unable to add pool")
 	}
 	// provision
-	instance, provisionErr := poolManager.Provision(ctx, testPoolName, runnerName, runnerName, "drone", "", &env, nil, nil, nil)
+	instance, provisionErr := poolManager.Provision(ctx, testPoolName, runnerName, "drone", "", nil, nil, nil)
 	if provisionErr != nil {
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)

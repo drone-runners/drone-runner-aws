@@ -6,13 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/lehelper"
+	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/lehelper"
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	ierrors "github.com/drone-runners/drone-runner-aws/internal/types"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -28,7 +27,6 @@ type ExecuteVMRequest struct {
 	StageRuntimeID       string `json:"stage_runtime_id"`
 	InstanceID           string `json:"instance_id"`
 	IPAddress            string `json:"ip_address"`
-	PoolID               string `json:"pool_id"`
 	CorrelationID        string `json:"correlation_id"`
 	TaskID               string `json:"task_id,omitempty"`
 	Distributed          bool   `json:"distributed,omitempty"`
@@ -42,7 +40,9 @@ var (
 func HandleStep(ctx context.Context,
 	r *ExecuteVMRequest,
 	s store.StageOwnerStore,
-	env *config.EnvConfig,
+	globalVolumes []string,
+	enableMock bool, // only used for scale testing
+	mockTimeoutSecs int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 	async bool) (*api.PollStepResponse, error) {
@@ -73,7 +73,7 @@ func HandleStep(ctx context.Context,
 
 	// add global volumes as mounts only if image is specified
 	if r.Image != "" {
-		for _, pair := range env.Runner.Volumes {
+		for _, pair := range globalVolumes {
 			src, dest, _, err := resource.ParseVolume(pair) //nolint:govet
 			if err != nil {
 				logr.Warn(err)
@@ -93,7 +93,7 @@ func HandleStep(ctx context.Context,
 
 	logr = logr.WithField("ip", inst.Address)
 
-	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, env.LiteEngine.EnableMock, env.LiteEngine.MockStepTimeoutSecs)
+	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, enableMock, mockTimeoutSecs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}

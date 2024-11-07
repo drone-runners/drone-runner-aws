@@ -27,3 +27,12 @@ func (pma *PoolMapperByAccount) Decode(value string) error {
 	*pma = PoolMapperByAccount(m)
 	return nil
 }
+
+// Iterates over all the entries and converts it to a simple type
+func (pma *PoolMapperByAccount) Convert() map[string]map[string]string {
+	m := map[string]map[string]string{}
+	for k, v := range *pma {
+		m[k] = map[string]string(v)
+	}
+	return m
+}

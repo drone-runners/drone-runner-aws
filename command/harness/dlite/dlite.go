@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -185,7 +185,17 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 		logrus.WithError(err).Fatalln("Unable to start the database")
 		return nil, err
 	}
-	c.distributedPoolManager = drivers.NewDistributedManager(drivers.NewManager(ctx, instanceStore, stageOwnerStore, &c.env))
+	c.distributedPoolManager = drivers.NewDistributedManager(
+		drivers.NewManager(
+			ctx,
+			instanceStore,
+			stageOwnerStore,
+			types.Tmate(c.env.Tmate),
+			c.env.Runner.Name,
+			c.env.LiteEngine.Path,
+			c.env.Settings.HarnessTestBinaryURI,
+			c.env.Settings.PluginBinaryURI,
+			c.env.Settings.AutoInjectionBinaryURI))
 	poolConfig, err := harness.SetupPool(ctx, &c.env, c.distributedPoolManager, c.poolFile)
 	if err != nil {
 		logrus.WithError(err).Error("could not setup distributed pool")

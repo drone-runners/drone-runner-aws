@@ -7,12 +7,13 @@ import (
 )
 
 type Context struct {
-	AccountID   string `json:"account_id,omitempty"`
-	OrgID       string `json:"org_id,omitempty"`
-	ProjectID   string `json:"project_id,omitempty"`
-	PipelineID  string `json:"pipeline_id,omitempty"`
-	RunSequence int    `json:"run_sequence,omitempty"`
-	TaskID      string `json:"task_id,omitempty"`
+	AccountID     string `json:"account_id,omitempty"`
+	OrgID         string `json:"org_id,omitempty"`
+	ProjectID     string `json:"project_id,omitempty"`
+	PipelineID    string `json:"pipeline_id,omitempty"`
+	RunSequence   int    `json:"run_sequence,omitempty"`
+	IsFreeAccount bool   `json:"is_free_account,omitempty"`
+	TaskID        string `json:"task_id,omitempty"`
 }
 
 func AddContext(logr *logrus.Entry, context *Context, tags map[string]string) *logrus.Entry {
@@ -30,6 +31,14 @@ func GetAccountID(context *Context, tags map[string]string) string {
 		return context.AccountID
 	}
 	return tags["accountID"]
+}
+
+func getIsFreeAccount(context *Context, tags map[string]string) bool {
+	// if freeCI is a key in tags, use it
+	if tags["freeCI"] == "true" {
+		return true
+	}
+	return context.IsFreeAccount
 }
 
 func getTaskID(context *Context, tags map[string]string) string {

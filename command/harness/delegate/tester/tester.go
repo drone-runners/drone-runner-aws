@@ -123,7 +123,6 @@ func (c *command) runPipeline(id string) error {
 	runIn := &harness.ExecuteVMRequest{
 		StageRuntimeID: id,
 		CorrelationID:  id,
-		PoolID:         c.pool,
 		StartStepRequest: api.StartStepRequest{
 			ID: uuid.NewString(),
 			Run: api.RunConfig{

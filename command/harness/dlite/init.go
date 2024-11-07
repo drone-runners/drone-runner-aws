@@ -60,7 +60,11 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Make the setup call
 	req.SetupVMRequest.CorrelationID = task.ID
 	poolManager := t.c.getPoolManager(req.Distributed)
-	setupResp, selectedPoolDriver, err := harness.HandleSetup(ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
+	setupResp, selectedPoolDriver, err := harness.HandleSetup(
+		ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(),
+		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
+		t.c.env.Runner.Name, t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs,
+		poolManager, t.c.metrics)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not setup VM")
@@ -76,7 +80,8 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Services[i].IPAddress = setupResp.IPAddress
 		req.Services[i].CorrelationID = task.ID
 		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
-		resp, err := harness.HandleStep(ctx, req.Services[i], poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics, false)
+		resp, err := harness.HandleStep(ctx, req.Services[i], poolManager.GetStageOwnerStore(), t.c.env.Runner.Volumes,
+			t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs, poolManager, t.c.metrics, false)
 		if err != nil {
 			status.Status = Error
 			status.ErrorMessage = err.Error()
