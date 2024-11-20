@@ -118,7 +118,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	var poolConfig *config.PoolFile
 
 	poolConfig, err = c.setupDistributedPool(ctx)
-	defer harness.Cleanup(&c.env, c.distributedPoolManager, false, true) //nolint: errcheck
+	defer harness.Cleanup(c.env.Settings.ReusePool, c.distributedPoolManager, false, true) //nolint: errcheck
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	g.Go(func() error {
 		<-ctx.Done()
 		// delete unused instances for distributed pool
-		return harness.Cleanup(&c.env, c.distributedPoolManager, false, true)
+		return harness.Cleanup(c.env.Settings.ReusePool, c.distributedPoolManager, false, true)
 	})
 
 	g.Go(func() error {
@@ -196,7 +196,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 			c.env.Settings.HarnessTestBinaryURI,
 			c.env.Settings.PluginBinaryURI,
 			c.env.Settings.AutoInjectionBinaryURI))
-	poolConfig, err := harness.SetupPool(ctx, &c.env, c.distributedPoolManager, c.poolFile)
+	poolConfig, err := harness.SetupPoolWithEnv(ctx, &c.env, c.distributedPoolManager, c.poolFile)
 	if err != nil {
 		logrus.WithError(err).Error("could not setup distributed pool")
 		return poolConfig, err
