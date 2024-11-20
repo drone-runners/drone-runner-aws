@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,7 +16,7 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.I
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 
-	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name, env)
+	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name, env.Passwords())
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err
@@ -32,13 +32,6 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.I
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("unable to ping driver")
-		return configPool, err
-	}
-
-	err = poolManager.AddTmate(env)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("unable to set tmate configuration")
 		return configPool, err
 	}
 

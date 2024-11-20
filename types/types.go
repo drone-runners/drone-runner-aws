@@ -71,6 +71,12 @@ type Instance struct {
 	EnableNestedVirtualization bool        `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
 }
 
+// Passwords holds sensitive data.
+type Passwords struct {
+	AnkaToken string
+	Tart      string
+}
+
 type Tmate struct {
 	Enabled bool
 	Image   string

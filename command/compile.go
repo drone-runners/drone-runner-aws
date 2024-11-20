@@ -11,13 +11,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/internal"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -88,8 +88,9 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 			Errorln("compile: unable to parse pool file")
 		return err
 	}
+
 	configEnv, _ := config.FromEnviron()
-	pools, err := poolfile.ProcessPool(poolFile, runnerName, &configEnv)
+	pools, err := poolfile.ProcessPool(poolFile, runnerName, configEnv.Passwords())
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("compile: unable to process pool file")

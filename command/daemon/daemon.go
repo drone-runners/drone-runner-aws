@@ -10,14 +10,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/match"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/compiler"
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/match"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone/runner-go/client"
 	"github.com/drone/runner-go/environ/provider"
@@ -111,7 +111,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 	}
 
 	logrus.Infoln(fmt.Sprintf("daemon: processing config for %s", env.Runner.Name))
-	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name, &env)
+	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name, env.Passwords())
 	if err != nil {
 		logrus.WithError(err).
 			Fatalln("daemon: unable to process pool file")

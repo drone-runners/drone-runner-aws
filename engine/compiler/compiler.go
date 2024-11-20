@@ -11,9 +11,9 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/encoder"
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/encoder"
+	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone/drone-go/drone"
 
 	"github.com/drone/runner-go/clone"

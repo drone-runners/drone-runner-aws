@@ -89,7 +89,8 @@ func (t *VMExecuteTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var stepResp *api.PollStepResponse
-	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics, distributed)
+	stepResp, err = harness.HandleStep(ctx, &req.ExecuteVMRequest, poolManager.GetStageOwnerStore(), t.c.env.Runner.Volumes,
+		t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs, poolManager, t.c.metrics, distributed)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(distributed)).Inc()
 		logr.WithError(err).

@@ -12,12 +12,13 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/internal/drivers"
-	"github.com/drone-runners/drone-runner-aws/internal/oshelp"
-	"github.com/drone-runners/drone-runner-aws/internal/poolfile"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/manifest"
@@ -184,7 +185,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, "runner", nil)
+	pools, err := poolfile.ProcessPool(poolFile, "runner", types.Passwords{})
 	if err != nil {
 		t.Errorf("unable to process pool file: %s", err)
 		return nil

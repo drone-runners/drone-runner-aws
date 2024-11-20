@@ -337,7 +337,6 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		DefaultDriver          string `envconfig:"DRONE_DEFAULT_DRIVER" default:"amazon"`
 		ReusePool              bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge             int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
 		FreeMaxAge             int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"720"`
@@ -402,6 +401,13 @@ type EnvConfig struct {
 		Port    string `envconfig:"DRONE_TMATE_PORT"`
 		RSA     string `envconfig:"DRONE_TMATE_FINGERPRINT_RSA"`
 		ED25519 string `envconfig:"DRONE_TMATE_FINGERPRINT_ED25519"`
+	}
+}
+
+func (c EnvConfig) Passwords() types.Passwords {
+	return types.Passwords{
+		AnkaToken: c.AnkaBuild.Token,
+		Tart:      c.TartBuild.Password,
 	}
 }
 
