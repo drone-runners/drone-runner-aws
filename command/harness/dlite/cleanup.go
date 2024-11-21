@@ -47,7 +47,8 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !req.Distributed {
 		harness.GetCtxState().Delete(req.StageRuntimeID)
 	}
-	err = harness.HandleDestroy(ctx, req, poolManager.GetStageOwnerStore(), &t.c.env, poolManager, t.c.metrics)
+	err = harness.HandleDestroy(ctx, req, poolManager.GetStageOwnerStore(),
+		t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs, poolManager, t.c.metrics)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not destroy VM")
