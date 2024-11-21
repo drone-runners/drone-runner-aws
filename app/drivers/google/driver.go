@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 
@@ -185,6 +185,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("size", p.size)
 
 	// create the instance
+
 	startTime := time.Now()
 
 	logr.Traceln("google: creating VM")

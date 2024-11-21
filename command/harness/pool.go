@@ -7,16 +7,23 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/sirupsen/logrus"
 )
 
-func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string) (*config.PoolFile, error) {
-	configPool, confErr := poolfile.ConfigPoolFile(poolFile, env)
-	if confErr != nil {
-		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
-	}
-
-	pools, err := poolfile.ProcessPool(configPool, env.Runner.Name, env.Passwords())
+// SetupPool sets up a pool of instances given a config pool.
+func SetupPool(
+	ctx context.Context,
+	configPool *config.PoolFile,
+	runnerName string,
+	passwords types.Passwords,
+	poolManager drivers.IManager,
+	busyMaxAge int64,
+	freeMaxAge int64,
+	purgerTime int64,
+	reusePool bool,
+) (*config.PoolFile, error) {
+	pools, err := poolfile.ProcessPool(configPool, runnerName, passwords)
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err
@@ -36,17 +43,17 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.I
 	}
 
 	// setup lifetimes of instances
-	busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
-	freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
-	purgerTime := time.Minute * time.Duration(env.Settings.PurgerTime)
-	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge, purgerTime)
+	busyMaxAgeDuration := time.Hour * time.Duration(busyMaxAge) // includes time required to setup an instance
+	freeMaxAgeDuration := time.Hour * time.Duration(freeMaxAge)
+	purgerDuration := time.Minute * time.Duration(purgerTime)
+	err = poolManager.StartInstancePurger(ctx, busyMaxAgeDuration, freeMaxAgeDuration, purgerDuration)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("failed to start instance purger")
 		return configPool, err
 	}
 	// lets remove any old instances.
-	if !env.Settings.ReusePool {
+	if !reusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
 			return configPool, cleanErr
@@ -64,8 +71,40 @@ func SetupPool(ctx context.Context, env *config.EnvConfig, poolManager drivers.I
 	return configPool, nil
 }
 
-func Cleanup(env *config.EnvConfig, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {
-	if env.Settings.ReusePool {
+func SetupPoolWithFile(
+	ctx context.Context,
+	poolFilePath string,
+	poolManager drivers.IManager,
+	passwords types.Passwords,
+	runnerName string,
+	busyAge,
+	freeAge,
+	purgerTime int64,
+	reusePool bool,
+) (*config.PoolFile, error) {
+	configPool, err := config.ParseFile(poolFilePath)
+	if err != nil {
+		logrus.WithError(err).
+			WithField("path", poolFilePath).
+			Errorln("exec: unable to parse pool file")
+		return nil, err
+	}
+
+	return SetupPool(ctx, configPool, runnerName, passwords, poolManager, busyAge, freeAge, purgerTime, reusePool)
+}
+
+func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string) (*config.PoolFile, error) {
+	configPool, confErr := poolfile.ConfigPoolFile(poolFile, env)
+	if confErr != nil {
+		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
+	}
+
+	return SetupPool(ctx, configPool, env.Runner.Name, env.Passwords(), poolManager, env.Settings.BusyMaxAge, env.Settings.FreeMaxAge, env.Settings.PurgerTime, env.Settings.ReusePool)
+
+}
+
+func Cleanup(reusePool bool, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {
+	if reusePool {
 		return nil
 	}
 
