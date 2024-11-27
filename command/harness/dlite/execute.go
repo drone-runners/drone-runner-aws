@@ -126,5 +126,8 @@ func convert(r *api.PollStepResponse) VMTaskExecutionResponse {
 	if r.Error == "" {
 		return VMTaskExecutionResponse{CommandExecutionStatus: Success, OutputVars: r.Outputs, Artifact: r.Artifact, Outputs: r.OutputV2, OptimizationState: r.OptimizationState}
 	}
+	if r.OutputV2 != nil && len(r.OutputV2) > 0 {
+		return VMTaskExecutionResponse{CommandExecutionStatus: Failure, OutputVars: r.Outputs, Outputs: r.OutputV2, ErrorMessage: r.Error, OptimizationState: r.OptimizationState}
+	}
 	return VMTaskExecutionResponse{CommandExecutionStatus: Failure, ErrorMessage: r.Error, OptimizationState: r.OptimizationState}
 }
