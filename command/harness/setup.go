@@ -45,10 +45,9 @@ type SetupVMResponse struct {
 }
 
 var (
-	healthCheckTimeout = 5 * time.Minute
-	freeAccount        = "free"
-	noContext          = context.Background()
-	freeCI             = "freeCI"
+	freeAccount = "free"
+	noContext   = context.Background()
+	freeCI      = "freeCI"
 )
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
@@ -316,7 +315,7 @@ func handleSetup(
 	logr.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
 
-	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
+	if _, err = client.RetryHealth(ctx, time.Duration(env.LiteEngine.HealthCheckTimeout)*time.Second, performDNSLookup); err != nil {
 		go cleanUpInstanceFn(true)
 		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
