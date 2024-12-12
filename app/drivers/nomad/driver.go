@@ -13,10 +13,10 @@ import (
 	"text/template"
 	"time"
 
-	cf "github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/nomad/api"
@@ -129,7 +129,7 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
-	vm := strings.ToLower(random(20)) //nolint:gomnd
+	vm := strings.ToLower(random(20))
 	class := ""
 	for k, v := range p.enablePinning {
 		if strings.Contains(v, opts.AccountID) {
@@ -464,7 +464,7 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 	}
 	job = &api.Job{
 		ID:   &id,
-		Name: stringToPtr(random(20)), //nolint:gomnd
+		Name: stringToPtr(random(20)),
 
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
@@ -511,7 +511,7 @@ func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.Cl
 
 	sb := &strings.Builder{}
 	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
-	//nolint:gomnd
+
 	if len(storageIdentifierSplit) != 2 {
 		return "", "", fmt.Errorf("scheduler: could not parse storage identifier %s", storageIdentifier)
 	}
