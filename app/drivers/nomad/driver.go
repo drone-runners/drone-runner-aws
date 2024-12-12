@@ -129,7 +129,7 @@ func (p *config) Ping(ctx context.Context) error {
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
-	vm := strings.ToLower(random(20))
+	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
 	for k, v := range p.enablePinning {
 		if strings.Contains(v, opts.AccountID) {
@@ -464,7 +464,7 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 	}
 	job = &api.Job{
 		ID:   &id,
-		Name: stringToPtr(random(20)),
+		Name: stringToPtr(random(20)), //nolint:gomnd
 
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
@@ -512,7 +512,7 @@ func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.Cl
 	sb := &strings.Builder{}
 	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
 
-	if len(storageIdentifierSplit) != 2 {
+	if len(storageIdentifierSplit) != 2 { //nolint:gomnd
 		return "", "", fmt.Errorf("scheduler: could not parse storage identifier %s", storageIdentifier)
 	}
 	params := struct {

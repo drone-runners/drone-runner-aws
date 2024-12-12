@@ -62,6 +62,7 @@ func New(
 	}
 }
 
+//nolint:gocritic
 func NewManager(
 	globalContext context.Context,
 	instanceStore store.InstanceStore,

@@ -9,10 +9,10 @@ import (
 	"text/template"
 	"time"
 
-	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/app/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/hashicorp/nomad/api"
 )
