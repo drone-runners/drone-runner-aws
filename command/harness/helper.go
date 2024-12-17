@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"github.com/harness/lite-engine/engine/spec"
 	"hash/fnv"
 	"path/filepath"
 	"strconv"
@@ -12,9 +13,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func getStreamLogger(cfg leapi.LogConfig, logKey, correlationID string) *lelivelog.Writer {
+func getStreamLogger(cfg leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, correlationID string) *lelivelog.Writer {
 	client := lestream.NewHTTPClient(cfg.URL, cfg.AccountID,
-		cfg.Token, cfg.IndirectUpload, false)
+		cfg.Token, cfg.IndirectUpload, false, mtlsConfig.ClientCert, mtlsConfig.ClientCertKey)
 	wc := lelivelog.New(client, logKey, correlationID, nil, true, cfg.TrimNewLineSuffix)
 	go func() {
 		if err := wc.Open(); err != nil {
