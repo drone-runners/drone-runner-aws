@@ -1,16 +1,18 @@
 package harness
 
 import (
-	"github.com/harness/lite-engine/engine/spec"
 	"hash/fnv"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/harness/lite-engine/engine/spec"
+
+	"github.com/sirupsen/logrus"
+
 	leapi "github.com/harness/lite-engine/api"
 	lelivelog "github.com/harness/lite-engine/livelog"
 	lestream "github.com/harness/lite-engine/logstream/remote"
-	"github.com/sirupsen/logrus"
 )
 
 func getStreamLogger(cfg leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, correlationID string) *lelivelog.Writer {
