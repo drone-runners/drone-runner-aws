@@ -264,6 +264,8 @@ github.com/harness/lite-engine v1.0.0-rc.137.0.20241212222651-962423f5df1a h1:Xg
 github.com/harness/lite-engine v1.0.0-rc.137.0.20241212222651-962423f5df1a/go.mod h1:apYUxCLi6V/t8yR++4i71e2IkG/MniUFKEXj9j2kMfo=
 github.com/harness/lite-engine v1.0.0-rc.137.0.20241217182911-16eb9e0934bc h1:X7N7JtyCLadDeSbQyhybyLW16HivJ5ctIB+PqextcVE=
 github.com/harness/lite-engine v1.0.0-rc.137.0.20241217182911-16eb9e0934bc/go.mod h1:5qo7qjA7vlQaq9jH/g+TVS20KGdqolknuRKfkFLwd4U=
+github.com/harness/lite-engine v1.0.0-rc.137.0.20241218015323-47a32e68251f h1:n/gM7Sq2mqpaKo/cbccH2W0xjY54H9kxy/80fkf1TFk=
+github.com/harness/lite-engine v1.0.0-rc.137.0.20241218015323-47a32e68251f/go.mod h1:5qo7qjA7vlQaq9jH/g+TVS20KGdqolknuRKfkFLwd4U=
 github.com/harness/ti-client v0.0.0-20240617230757-1e90e7e3ada2 h1:9QHzlirx9Lg77ohXYTOeC+3aDPG8ZeHTKI1iAN5+cIo=
 github.com/harness/ti-client v0.0.0-20240617230757-1e90e7e3ada2/go.mod h1:/ow4f34mPgr5KPkzKxmBUB4cC09OjzStcLX6R8+43TI=
 github.com/harness/ti-client v0.0.0-20241217064251-28422cd73076 h1:q/inKc/CCfioaV3jchvAECD9hTJHw0wAA8N0FLUasco=
