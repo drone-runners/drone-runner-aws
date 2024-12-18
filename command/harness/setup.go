@@ -80,6 +80,7 @@ func HandleSetup(
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
 	var logr *logrus.Entry
+	fmt.Printf("SetupRequest in VM Runner: %+v\n", r.SetupRequest)
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
