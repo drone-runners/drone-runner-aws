@@ -100,7 +100,6 @@ func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager dr
 	}
 
 	return SetupPool(ctx, configPool, env.Runner.Name, env.Passwords(), poolManager, env.Settings.BusyMaxAge, env.Settings.FreeMaxAge, env.Settings.PurgerTime, env.Settings.ReusePool)
-
 }
 
 func Cleanup(reusePool bool, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {

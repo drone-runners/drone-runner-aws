@@ -404,6 +404,7 @@ type EnvConfig struct {
 	}
 }
 
+//nolint:gocritic
 func (c EnvConfig) Passwords() types.Passwords {
 	return types.Passwords{
 		AnkaToken: c.AnkaBuild.Token,

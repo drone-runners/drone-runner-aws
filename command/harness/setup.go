@@ -48,7 +48,6 @@ var (
 	healthCheckTimeout = 5 * time.Minute
 	freeAccount        = "free"
 	noContext          = context.Background()
-	freeCI             = "freeCI"
 )
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
