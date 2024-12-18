@@ -13,10 +13,10 @@ import (
 	"text/template"
 	"time"
 
-	cf "github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/nomad/api"
@@ -511,8 +511,8 @@ func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.Cl
 
 	sb := &strings.Builder{}
 	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
-	//nolint:gomnd
-	if len(storageIdentifierSplit) != 2 {
+
+	if len(storageIdentifierSplit) != 2 { //nolint:gomnd
 		return "", "", fmt.Errorf("scheduler: could not parse storage identifier %s", storageIdentifier)
 	}
 	params := struct {

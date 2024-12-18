@@ -192,7 +192,19 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	resp, _, err := harness.HandleSetup(ctx, req, c.stageOwnerStore, c.env.Runner.Volumes, c.env.Dlite.PoolMapByAccount.Convert(), c.env.Runner.Name, c.env.LiteEngine.EnableMock, c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager, c.metrics)
+	resp, _, err := harness.HandleSetup(
+		ctx,
+		req,
+		c.stageOwnerStore,
+		c.env.Runner.Volumes,
+		c.env.Dlite.PoolMapByAccount.Convert(),
+		c.env.Runner.Name,
+		c.env.LiteEngine.EnableMock,
+		c.env.LiteEngine.MockStepTimeoutSecs,
+		c.poolManager,
+		c.metrics,
+	)
+
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not setup VM")
 		writeError(w, err)
