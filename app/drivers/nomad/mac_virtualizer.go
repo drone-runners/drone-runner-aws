@@ -144,13 +144,8 @@ ANCHOR_FILE="/etc/pf.anchors/tart"
 # Content to add to the anchor file
 ANCHOR_CONTENT="rdr pass log (all) on en0 inet proto tcp from any to any port %d -> $(/opt/homebrew/bin/tart ip %s) port 9079"
 
-# Check if the anchor file exists and delete it
-if [ -f "$ANCHOR_FILE" ]; then
-    rm "$ANCHOR_FILE"
-fi
-
 # Create the anchor file and add the content
-echo "$ANCHOR_CONTENT" > "$ANCHOR_FILE"
+echo "$ANCHOR_CONTENT" >> "$ANCHOR_FILE"
 
 # Reload packet filter
 sudo pfctl -Fa -f /etc/pf.conf
@@ -251,17 +246,21 @@ while true
 	}
 }
 
-func (mv *MacVirtualizer) GetDestroyScriptGenerator() func(string) string {
+func (mv *MacVirtualizer) GetDestroyScriptGenerator(port int64) func(string) string {
 	return func(vm string) string {
+
 		return fmt.Sprintf(`
-	    /opt/homebrew/bin/tart stop %s; /opt/homebrew/bin/tart delete %s
+		/opt/homebrew/bin/tart stop %s; /opt/homebrew/bin/tart delete %s
+		sudo sed -i '' \"/port %d/d\" /etc/pf.anchors/tart
+		sudo pfctl -Fa -f /etc/pf.conf
+		sleep 5
 		if [ $? -ne 0 ]; then
 		  tart_pid=$(ps -A | grep -m1 "tart run %s" | awk '{print $1}')
 		  if [ -n "$tart_pid" ]; then
 		  	kill $tart_pid || true
 		  fi
 		fi
-	`, vm, vm, vm)
+	`, vm, vm, port, vm)
 	}
 }
 

@@ -227,7 +227,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, id, liteEngineHostPort)
 	} else {
-		initJob, initJobID, initTaskGroup = p.virtualizer.GetInitJob(vm, id, p.vmImage, p.userData, p.username, p.password, liteEngineHostPort, resource, opts, gitspacesPortMappings)
+		initJob, initJobID, initTaskGroup = p.virtualizer.GetInitJob(vm, id, p.vmImage, p.userData, "anka", "admin", liteEngineHostPort, resource, opts, gitspacesPortMappings)
 	}
 
 	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteEngineHostPort)
@@ -545,7 +545,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		if p.noop {
 			job, jobID = p.destroyJobNoop(instance.ID, instance.NodeID)
 		} else {
-			job, jobID = p.destroyJob(ctx, instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator(), storageCleanupType)
+			job, jobID = p.destroyJob(ctx, instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator(instance.Port), storageCleanupType)
 		}
 
 		resourceJobID := resourceJobID(instance.ID)

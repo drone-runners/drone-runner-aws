@@ -281,7 +281,7 @@ while true
 	}
 }
 
-func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string) string {
+func (lv *LinuxVirtualizer) GetDestroyScriptGenerator(int64) func(string) string {
 	return func(vm string) string {
 		return fmt.Sprintf(`
 	    %s stop %s; %s rm %s

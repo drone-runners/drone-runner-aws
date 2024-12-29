@@ -21,7 +21,7 @@ type Virtualizer interface {
 	// by checking whether the lite engine port on the VM is open or not.
 	GetHealthCheckupGenerator() func(time.Duration, string, string) string
 	// Returns destroy script generator
-	GetDestroyScriptGenerator() func(vm string) string
+	GetDestroyScriptGenerator(int64) func(vm string) string
 	// Returns entrypoint
 	GetEntryPoint() string
 }
