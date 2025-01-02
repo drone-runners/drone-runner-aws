@@ -640,7 +640,7 @@ func Linux(params *Params) (payload string) {
 	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
 	certPath := filepath.Join(certsDir, "server-cert.pem")
 	keyPath := filepath.Join(certsDir, "server-key.pem")
-	p := struct {
+	templateData := struct {
 		Params
 		CaCertPath string
 		CertPath   string
@@ -653,7 +653,7 @@ func Linux(params *Params) (payload string) {
 	}
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		err := amazonLinuxTemplate.Execute(sb, p)
+		err := amazonLinuxTemplate.Execute(sb, templateData)
 		if err != nil {
 			panic(err)
 		}
@@ -661,15 +661,15 @@ func Linux(params *Params) (payload string) {
 		// Ubuntu
 		var err error
 		if params.GitspaceAgentConfig.VMInitScript == "" {
-			err = ubuntuTemplate.Execute(sb, p)
+			err = ubuntuTemplate.Execute(sb, templateData)
 		} else {
 			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
 			if decodeErr != nil {
 				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
 				panic(err)
 			}
-			p.GitspaceAgentConfig.VMInitScript = string(decodedScript)
-			err = gitspacesUbuntuTemplate.Execute(sb, p)
+			templateData.GitspaceAgentConfig.VMInitScript = string(decodedScript)
+			err = gitspacesUbuntuTemplate.Execute(sb, templateData)
 		}
 		if err != nil {
 			panic(err)

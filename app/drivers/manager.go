@@ -332,7 +332,7 @@ func (m *Manager) Provision(
 	}
 
 	if gitspaceAgentConfig != nil && len(gitspaceAgentConfig.Ports) > 0 {
-		if pool.Driver.DriverName() != "nomad" && pool.Driver.DriverName() != "google" {
+		if pool.Driver.DriverName() != string(types.Nomad) && pool.Driver.DriverName() != string(types.Google) {
 			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad/google")
 		}
 		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig, storageConfig)
