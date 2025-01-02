@@ -492,6 +492,84 @@ runcmd:
 
 var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(ubuntuScript))
 
+const gitspacesUbuntuScript = `
+#cloud-config
+{{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
+packages:
+  - wget
+{{ else }}
+apt:
+  sources:
+    docker.list:
+      source: deb [arch={{ .Platform.Arch }}] https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+packages:
+  - wget
+  - docker-ce
+{{ end }}
+write_files:
+- path: {{ .CaCertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .CACert | base64  }}
+- path: {{ .CertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSCert | base64 }}
+- path: {{ .KeyPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSKey | base64 }}
+runcmd:
+- 'set -x'
+- 'ufw allow 9079'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `'
+- 'chmod 777 /usr/bin/lite-engine'
+{{ if .HarnessTestBinaryURI }}
+- 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
+- 'chmod 777 /usr/bin/split_tests'
+{{ end }}
+{{ if .PluginBinaryURI }}
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + pluginUsrBinPath + `'
+- 'chmod 777 /usr/bin/plugin'
+{{ end }}
+{{ if .AutoInjectionBinaryURI }}
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + `'
+- 'chmod 777 /usr/bin/auto-injection'
+{{ end }}
+{{ if eq .Platform.Arch "amd64" }}
+- 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
+- 'chmod 777 /usr/bin/envman'
+{{ end }}
+- 'touch /root/.env'
+- '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
+{{ if .Tmate.Enabled }}
+- 'mkdir /addon'
+{{ if eq .Platform.Arch "amd64" }}
+- 'wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz' 
+- 'tar -xf /addon/tmate.xz -C /addon/'
+- 'chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate'
+- 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
+- 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
+{{ else if eq .Platform.Arch "arm64" }}
+- 'wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
+- 'tar -xf /addon/tmate.xz -C /addon/'
+- 'chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate'
+- 'mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate'
+- 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
+{{ end }}
+- 'rm -rf /addon/tmate.xz'
+{{ end }}
+
+{{ if .GitspaceAgentConfig.VMInitScript }}
+- | 
+{{ .GitspaceAgentConfig.VMInitScript }}
+{{ end }}
+`
+
+var gitspacesUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(gitspacesUbuntuScript))
+
 const amazonLinuxScript = `
 #cloud-config
 packages:
@@ -559,39 +637,40 @@ var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string) {
 	sb := &strings.Builder{}
-
 	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
 	certPath := filepath.Join(certsDir, "server-cert.pem")
 	keyPath := filepath.Join(certsDir, "server-key.pem")
+	p := struct {
+		Params
+		CaCertPath string
+		CertPath   string
+		KeyPath    string
+	}{
+		Params:     *params,
+		CaCertPath: caCertPath,
+		CertPath:   certPath,
+		KeyPath:    keyPath,
+	}
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		err := amazonLinuxTemplate.Execute(sb, struct {
-			Params
-			CaCertPath string
-			CertPath   string
-			KeyPath    string
-		}{
-			Params:     *params,
-			CaCertPath: caCertPath,
-			CertPath:   certPath,
-			KeyPath:    keyPath,
-		})
+		err := amazonLinuxTemplate.Execute(sb, p)
 		if err != nil {
 			panic(err)
 		}
 	default:
 		// Ubuntu
-		err := ubuntuTemplate.Execute(sb, struct {
-			Params
-			CaCertPath string
-			CertPath   string
-			KeyPath    string
-		}{
-			Params:     *params,
-			CaCertPath: caCertPath,
-			CertPath:   certPath,
-			KeyPath:    keyPath,
-		})
+		var err error
+		if params.GitspaceAgentConfig.VMInitScript == "" {
+			err = ubuntuTemplate.Execute(sb, p)
+		} else {
+			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
+			if decodeErr != nil {
+				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
+				panic(err)
+			}
+			p.GitspaceAgentConfig.VMInitScript = string(decodedScript)
+			err = gitspacesUbuntuTemplate.Execute(sb, p)
+		}
 		if err != nil {
 			panic(err)
 		}

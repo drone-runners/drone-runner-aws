@@ -29,6 +29,11 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 		IsHosted:               opts.IsHosted,
 		AutoInjectionBinaryURI: opts.AutoInjectionBinaryURI,
 	}
+	if opts.GitspaceOpts.VMInitScript != "" {
+		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
+			VMInitScript: opts.GitspaceOpts.VMInitScript,
+		}
+	}
 
 	if userdata == "" {
 		if opts.Platform.OS == oshelp.OSWindows {
