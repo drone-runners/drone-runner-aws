@@ -21,10 +21,10 @@ require (
 	github.com/drone/signal v1.0.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-chi/chi/v5 v5.0.8
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.3.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.85
+	github.com/harness/lite-engine v0.5.89
 	github.com/hashicorp/nomad/api v0.0.0-20230421025320-b4e6a70fe69b
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
@@ -36,10 +36,10 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rs/zerolog v1.29.1
-	github.com/sirupsen/logrus v1.9.0
-	github.com/stretchr/testify v1.8.4
+	github.com/sirupsen/logrus v1.9.3
+	github.com/stretchr/testify v1.9.0
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/wings-software/dlite v1.0.0-rc.11
+	github.com/wings-software/dlite v1.0.0-rc.13
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb
 	golang.org/x/oauth2 v0.7.0
 	golang.org/x/sync v0.3.0
