@@ -276,7 +276,6 @@ while true
 
 func (mv *MacVirtualizer) GetDestroyScriptGenerator() func(string) string {
 	return func(vm string) string {
-
 		command := fmt.Sprintf(`
 #!/usr/bin/env bash
 		
