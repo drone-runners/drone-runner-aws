@@ -83,7 +83,7 @@ func HandleSetup(
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
 	} else {
-		wc := getStreamLogger(r.SetupRequest.LogConfig, r.LogKey, r.CorrelationID)
+		wc := getStreamLogger(r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
 		defer func() {
 			if err := wc.Close(); err != nil {
 				log.WithError(err).Debugln("failed to close log stream")
