@@ -12,6 +12,30 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
+const lockFunction = `
+LOCK_DIR="/tmp/mydir.lock"
+MAX_RETRIES=10
+RETRY_DELAY=1
+counter=0
+
+while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+  counter=$((counter + 1))
+  if [ "$counter" -ge "$MAX_RETRIES" ]; then
+    echo "Maximum retries reached. Continuing..."
+	rm -rf "$LOCK_DIR"
+    break
+  fi
+  echo "Lock already exists. Retrying in $RETRY_DELAY seconds..."
+  sleep $RETRY_DELAY
+done`
+
+const UnlockFunction = `
+if [ "$counter" -lt "$MAX_RETRIES" ]; then
+  # Release lock
+  rm -rf "$LOCK_DIR"
+  echo "Lock released."
+fi`
+
 type MacVirtualizer struct{}
 
 func NewMacVirtualizer() *MacVirtualizer {
@@ -138,22 +162,21 @@ fi
 echo "Stopping tart VM with id $VM_ID"
 /opt/homebrew/bin/tart stop "$VM_ID"
 
-# Port forwarding
+# LOCK
+%s
+
+VM_IP=$(/opt/homebrew/bin/tart ip %s)
 ANCHOR_FILE="/etc/pf.anchors/tart"
+ANCHOR_CONTENT="rdr pass log (all) on en0 inet proto tcp from any to any port %d -> $VM_IP port 9079"
 
-# Content to add to the anchor file
-ANCHOR_CONTENT="rdr pass log (all) on en0 inet proto tcp from any to any port %d -> $(/opt/homebrew/bin/tart ip %s) port 9079"
+# Remove any existing entry with same IP if present
+sudo sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
 
-# Check if the anchor file exists and delete it
-if [ -f "$ANCHOR_FILE" ]; then
-    rm "$ANCHOR_FILE"
-fi
+echo "$ANCHOR_CONTENT" >> "$ANCHOR_FILE"
+sudo pfctl -a tart -f "$ANCHOR_FILE"
 
-# Create the anchor file and add the content
-echo "$ANCHOR_CONTENT" > "$ANCHOR_FILE"
-
-# Reload packet filter
-sudo pfctl -Fa -f /etc/pf.conf
+#UNLOCK
+%s
 
 # Sleep of 5s so that internet connectivity is not affected in VM after packer filter reload
 sleep 5
@@ -208,7 +231,7 @@ while true
 	done
 echo "Tart VM Started"
 
-`, vmImage, vmID, username, password, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, port, vmID)
+`, vmImage, vmID, username, password, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, lockFunction, vmID, port, UnlockFunction)
 }
 
 func (mv *MacVirtualizer) GetMachineFrequency() int {
@@ -253,15 +276,30 @@ while true
 
 func (mv *MacVirtualizer) GetDestroyScriptGenerator() func(string) string {
 	return func(vm string) string {
-		return fmt.Sprintf(`
-	    /opt/homebrew/bin/tart stop %s; /opt/homebrew/bin/tart delete %s
-		if [ $? -ne 0 ]; then
-		  tart_pid=$(ps -A | grep -m1 "tart run %s" | awk '{print $1}')
-		  if [ -n "$tart_pid" ]; then
-		  	kill $tart_pid || true
-		  fi
-		fi
-	`, vm, vm, vm)
+
+		command := fmt.Sprintf(`
+#!/usr/bin/env bash
+		
+VM_ID="%s"
+echo "$VM_ID"
+VM_IP=$(/opt/homebrew/bin/tart ip "$VM_ID")
+#LOCK
+%s
+
+echo "$VM_IP"
+ANCHOR_FILE="/etc/pf.anchors/tart"
+sudo sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
+/opt/homebrew/bin/tart stop "$VM_ID"; /opt/homebrew/bin/tart delete "$VM_ID"
+if [ $? -ne 0 ]; then
+  tart_pid=$(ps -A | grep -m1 "tart run "$VM_ID"" | awk '{print $1}')
+  if [ -n "$tart_pid" ]; then
+	kill $tart_pid || true
+  fi
+fi
+
+%s
+	`, vm, lockFunction, UnlockFunction)
+		return command
 	}
 }
 
