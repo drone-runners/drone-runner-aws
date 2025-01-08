@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
@@ -366,7 +367,7 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": p.virtualizer.GetEntryPoint(),
-							"args":    []string{"-c", healthCheckGenerator(sleepTime, vm, fmt.Sprintf("$NOMAD_PORT_%s", portLabel))},
+							"args":    []string{"-c", healthCheckGenerator(sleepTime, vm, string(lehelper.LiteEnginePort))},
 						},
 					},
 				},
