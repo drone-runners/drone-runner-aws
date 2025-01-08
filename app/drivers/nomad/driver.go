@@ -367,7 +367,7 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 						Driver: "raw_exec",
 						Config: map[string]interface{}{
 							"command": p.virtualizer.GetEntryPoint(),
-							"args":    []string{"-c", healthCheckGenerator(sleepTime, vm, string(lehelper.LiteEnginePort))},
+							"args":    []string{"-c", healthCheckGenerator(sleepTime, vm, fmt.Sprint(lehelper.LiteEnginePort))},
 						},
 					},
 				},
