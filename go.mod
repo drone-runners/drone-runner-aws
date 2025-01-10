@@ -4,6 +4,8 @@ go 1.19
 
 replace github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.20200309214505-aa6a9891b09c+incompatible
 
+replace github.com/harness/lite-engine => /Users/vcalasans/projects/lite-engine
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.2.2
@@ -24,7 +26,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.3.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.91
+	github.com/harness/lite-engine v0.5.85
 	github.com/hashicorp/nomad/api v0.0.0-20230421025320-b4e6a70fe69b
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
