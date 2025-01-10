@@ -525,18 +525,6 @@ runcmd:
 - 'ufw allow 9079'
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `'
 - 'chmod 777 /usr/bin/lite-engine'
-{{ if .HarnessTestBinaryURI }}
-- 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
-- 'chmod 777 /usr/bin/split_tests'
-{{ end }}
-{{ if .PluginBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + pluginUsrBinPath + `'
-- 'chmod 777 /usr/bin/plugin'
-{{ end }}
-{{ if .AutoInjectionBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + `'
-- 'chmod 777 /usr/bin/auto-injection'
-{{ end }}
 {{ if eq .Platform.Arch "amd64" }}
 - 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
 - 'chmod 777 /usr/bin/envman'
@@ -544,23 +532,6 @@ runcmd:
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
 - '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
-{{ if .Tmate.Enabled }}
-- 'mkdir /addon'
-{{ if eq .Platform.Arch "amd64" }}
-- 'wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz' 
-- 'tar -xf /addon/tmate.xz -C /addon/'
-- 'chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate'
-- 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
-- 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
-{{ else if eq .Platform.Arch "arm64" }}
-- 'wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz' 
-- 'tar -xf /addon/tmate.xz -C /addon/'
-- 'chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate'
-- 'mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate'
-- 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
-{{ end }}
-- 'rm -rf /addon/tmate.xz'
-{{ end }}
 
 {{ if .GitspaceAgentConfig.VMInitScript }}
 - | 
