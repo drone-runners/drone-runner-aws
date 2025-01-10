@@ -15,7 +15,7 @@ const (
 	LiteEnginePort = 9079
 )
 
-func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
+func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, error) {
 	var params = cloudinit.Params{
 		Platform:               opts.Platform,
 		CACert:                 string(opts.CACert),
@@ -35,18 +35,19 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) string {
 		}
 	}
 
+	var err error
 	if userdata == "" {
 		if opts.Platform.OS == oshelp.OSWindows {
 			userdata = cloudinit.Windows(&params)
 		} else if opts.Platform.OS == oshelp.OSMac {
 			userdata = cloudinit.Mac(&params)
 		} else {
-			userdata = cloudinit.Linux(&params)
+			userdata, err = cloudinit.Linux(&params)
 		}
 	} else {
-		userdata, _ = cloudinit.Custom(userdata, &params)
+		userdata, err = cloudinit.Custom(userdata, &params)
 	}
-	return userdata
+	return userdata, err
 }
 
 func GetClient(instance *types.Instance, serverName string, liteEnginePort int64, mock bool, mockTimeoutSecs int) (lehttp.Client, error) {

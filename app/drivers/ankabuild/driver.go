@@ -52,12 +52,19 @@ func New(opts ...Option) (drivers.Driver, error) {
 
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
-	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
 	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.AnkaBuild).
 		WithField("name", machineName).
 		WithField("pool", opts.PoolName)
+
+	userData, err := lehelper.GenerateUserdata(c.userData, opts)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("Anka Build: failed to generate user data")
+		return nil, err
+	}
+	uData := base64.StdEncoding.EncodeToString([]byte(userData))
 
 	logr.Info("starting Anka Build Setup")
 

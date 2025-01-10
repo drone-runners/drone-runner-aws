@@ -227,7 +227,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, id, liteEngineHostPort)
 	} else {
-		initJob, initJobID, initTaskGroup = p.virtualizer.GetInitJob(vm, id, p.vmImage, p.userData, p.username, p.password, liteEngineHostPort, resource, opts, gitspacesPortMappings)
+		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, p.vmImage, p.userData, p.username, p.password, liteEngineHostPort, resource, opts, gitspacesPortMappings)
+		if err != nil {
+			defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+			return nil, err
+		}
 	}
 
 	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteEngineHostPort)
@@ -237,6 +241,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	labelsBytes, marshalErr := json.Marshal(opts.Labels)
 	if marshalErr != nil {
+		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
 	}
 	instance := &types.Instance{

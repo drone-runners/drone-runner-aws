@@ -237,6 +237,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		}
 	}
 
+	userData, err := lehelper.GenerateUserdata(p.userData, opts)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("amazon: [provision] failed to generate user data")
+		return nil, err
+	}
+
 	in := &ec2.RunInstancesInput{
 		ImageId:            aws.String(p.image),
 		InstanceType:       aws.String(p.size),
@@ -246,7 +253,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		IamInstanceProfile: iamProfile,
 		UserData: aws.String(
 			base64.StdEncoding.EncodeToString(
-				[]byte(lehelper.GenerateUserdata(p.userData, opts)),
+				[]byte(userData),
 			),
 		),
 		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{

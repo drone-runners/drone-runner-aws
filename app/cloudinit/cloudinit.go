@@ -635,7 +635,7 @@ runcmd:
 var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(amazonLinuxScript))
 
 // Linux creates a userdata file for the Linux operating system.
-func Linux(params *Params) (payload string) {
+func Linux(params *Params) (payload string, err error) {
 	sb := &strings.Builder{}
 	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
 	certPath := filepath.Join(certsDir, "server-cert.pem")
@@ -653,30 +653,28 @@ func Linux(params *Params) (payload string) {
 	}
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		err := amazonLinuxTemplate.Execute(sb, templateData)
+		err = amazonLinuxTemplate.Execute(sb, templateData)
 		if err != nil {
-			panic(err)
+			return "", fmt.Errorf("error while executing amazon linux template: %s", err)
 		}
 	default:
 		// Ubuntu
-		var err error
 		if params.GitspaceAgentConfig.VMInitScript == "" {
 			err = ubuntuTemplate.Execute(sb, templateData)
 		} else {
 			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
 			if decodeErr != nil {
-				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
-				panic(err)
+				return "", fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
 			}
 			templateData.GitspaceAgentConfig.VMInitScript = string(decodedScript)
 			err = gitspacesUbuntuTemplate.Execute(sb, templateData)
 		}
 		if err != nil {
-			panic(err)
+			return "", fmt.Errorf("error while executing ubuntu template: %s", err)
 		}
 	}
 
-	return sb.String()
+	return sb.String(), nil
 }
 
 const windowsScript = `
