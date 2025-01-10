@@ -12,7 +12,7 @@ type Virtualizer interface {
 	// InitJob creates a job which is targeted to a specific node. The job does the following:
 	//  1. Starts a VM with the provided config
 	//  2. Runs a startup script inside the VM
-	GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) //nolint
+	GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) //nolint
 	// Returns Machine Frequency
 	GetMachineFrequency() int
 	// Returns GlobalAccountId

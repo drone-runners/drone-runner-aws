@@ -169,7 +169,13 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	// create the instance
 	startTime := time.Now()
 
-	uData := base64.StdEncoding.EncodeToString([]byte(lehelper.GenerateUserdata(c.userData, opts)))
+	userData, err := lehelper.GenerateUserdata(c.userData, opts)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("azure: failed to generate user data")
+		return nil, err
+	}
+	uData := base64.StdEncoding.EncodeToString([]byte(userData))
 
 	logr.Traceln("azure: creating VM")
 	var imageReference *armcompute.ImageReference

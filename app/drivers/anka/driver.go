@@ -68,13 +68,19 @@ func (p *config) CanHibernate() bool {
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
-	uData := lehelper.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Anka).
 		WithField("name", machineName).
 		WithField("pool", opts.PoolName)
+
+	uData, err := lehelper.GenerateUserdata(p.userData, opts)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("anka: Failed to generate user data")
+		return nil, err
+	}
 
 	var result []byte
 	cmdCloneVM := commandCloneVM(ctx, p.vmID, machineName)

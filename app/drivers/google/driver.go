@@ -229,6 +229,13 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		EnableNestedVirtualization: enableNestedVirtualization,
 	}
 
+	userData, err := lehelper.GenerateUserdata(p.userData, opts)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("google: failed to generate user data")
+		return nil, err
+	}
+
 	in := &compute.Instance{
 		Name:           name,
 		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
@@ -238,7 +245,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 			Items: []*compute.MetadataItems{
 				{
 					Key:   p.userDataKey,
-					Value: googleapi.String(lehelper.GenerateUserdata(p.userData, opts)),
+					Value: googleapi.String(userData),
 				},
 			},
 		},

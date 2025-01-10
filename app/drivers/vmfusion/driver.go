@@ -89,7 +89,6 @@ func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	uData := lehelper.GenerateUserdata(p.userData, opts)
 	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
 
 	p.MachineName = machineName
@@ -98,6 +97,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("cloud", types.VMFusion).
 		WithField("name", machineName).
 		WithField("pool", opts.PoolName)
+
+	uData, err := lehelper.GenerateUserdata(p.userData, opts)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("VMFusion: failed to generate user data")
+		return nil, err
+	}
 
 	if err = os.MkdirAll(p.ResolveStorePath("."), 0755); err != nil { //nolint
 		return nil, err

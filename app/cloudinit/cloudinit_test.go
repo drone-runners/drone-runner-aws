@@ -32,7 +32,7 @@ func TestLinux(t *testing.T) {
 		Platform:       platform,
 	}
 
-	s := cloudinit.Linux(params)
+	s, _ := cloudinit.Linux(params)
 	lePath := fmt.Sprintf(`"%s/lite-engine-%s-%s"`, params.LiteEnginePath, params.Platform.OS, params.Platform.Arch)
 	if !strings.Contains(s, lePath) {
 		t.Error("linux init script does not contain LE path")

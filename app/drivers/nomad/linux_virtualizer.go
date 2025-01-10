@@ -33,7 +33,7 @@ var funcs = map[string]interface{}{
 	"trim": strings.TrimSpace,
 }
 
-func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) { //nolint
+func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	uData := lv.generateUserData(opts)
@@ -170,7 +170,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	if opts.StorageOpts.Identifier != "" && storageTask != nil {
 		job.TaskGroups[0].Tasks = append([]*api.Task{storageTask}, job.TaskGroups[0].Tasks...)
 	}
-	return job, id, group
+	return job, id, group, err
 }
 
 func (lv *LinuxVirtualizer) getCephStorageTask(

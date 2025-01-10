@@ -74,6 +74,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	logr.Infof("digitalocean: creating instance %s", name)
 
+	userData, err := lehelper.GenerateUserdata(p.userData, opts)
+	if err != nil {
+		logr.WithError(err).
+			Errorln("digitalocean: failed to generate user data")
+		return nil, err
+	}
+
 	// create a new digitalocean request
 	req := &godo.DropletCreateRequest{
 		Name:     name,
@@ -81,7 +88,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Size:     p.size,
 		Tags:     p.tags,
 		IPv6:     false,
-		UserData: lehelper.GenerateUserdata(p.userData, opts),
+		UserData: userData,
 
 		Image: godo.DropletCreateImage{
 			Slug: p.image,

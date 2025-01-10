@@ -42,8 +42,12 @@ func NewMacVirtualizer() *MacVirtualizer {
 	return &MacVirtualizer{}
 }
 
-func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string) { //nolint
-	encodedUserData := base64.StdEncoding.EncodeToString([]byte(mv.generateUserData(userData, opts)))
+func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
+	uData, err := mv.generateUserData(userData, opts)
+	if err != nil {
+		return nil, "", "", err
+	}
+	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
 	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, vmImage, username, password, resource, port)))
 	vmStartupScriptPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	cloudInitScriptPath := fmt.Sprintf("/usr/local/bin/cloud_init_%s.sh", vm)
@@ -115,10 +119,10 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, pa
 			},
 		},
 	}
-	return tartJob, id, group
+	return tartJob, id, group, err
 }
 
-func (mv *MacVirtualizer) generateUserData(userData string, opts *types.InstanceCreateOpts) string {
+func (mv *MacVirtualizer) generateUserData(userData string, opts *types.InstanceCreateOpts) (string, error) {
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
