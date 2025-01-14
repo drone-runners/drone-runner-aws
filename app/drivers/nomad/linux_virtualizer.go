@@ -301,3 +301,7 @@ func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, 
 	}
 	return fmt.Sprintf(cleanUpCmdFormat, cleanUpCmdArgs...)
 }
+
+func (lv *LinuxVirtualizer) GetHealthCheckPort(portLabel string) string {
+	return fmt.Sprintf("$NOMAD_PORT_%s", portLabel)
+}
