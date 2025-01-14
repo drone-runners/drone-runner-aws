@@ -304,3 +304,7 @@ echo "Doing lite-engine healthcheck"
 nc -zv $(/opt/homebrew/bin/tart ip %s) 9079
 `, vmStartupScriptPath, cloudInitScriptPath, vmID)
 }
+
+func (mv *MacVirtualizer) GetHealthCheckPort(portLabel string) string {
+	return fmt.Sprint(lehelper.LiteEnginePort)
+}
