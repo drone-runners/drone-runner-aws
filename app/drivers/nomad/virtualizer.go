@@ -24,4 +24,6 @@ type Virtualizer interface {
 	GetDestroyScriptGenerator() func(vm string) string
 	// Returns entrypoint
 	GetEntryPoint() string
+	// Returns healthcheck port
+	GetHealthCheckPort(portLabel string) string
 }
