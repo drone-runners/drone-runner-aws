@@ -22,7 +22,8 @@ func AddContext(logr *logrus.Entry, context *Context, tags map[string]string) *l
 		WithField("project_id", getProjectID(context, tags)).
 		WithField("pipeline_id", getPipelineID(context, tags)).
 		WithField("build_id", getRunSequence(context, tags)).
-		WithField("task_id", getTaskID(context, tags))
+		WithField("task_id", getTaskID(context, tags)).
+		WithField("is_runner", getIsRunner(tags))
 }
 
 // These functions can be removed in the next release once we start populating context
@@ -39,6 +40,10 @@ func getIsFreeAccount(context *Context, tags map[string]string) bool {
 		return true
 	}
 	return context.IsFreeAccount
+}
+
+func getIsRunner(tags map[string]string) bool {
+	return tags["isRunner"] == "true"
 }
 
 func getTaskID(context *Context, tags map[string]string) string {
