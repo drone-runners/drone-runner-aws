@@ -344,7 +344,7 @@ type EnvConfig struct {
 		MaxPoolSize            int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool         bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		HarnessTestBinaryURI   string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI        string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v0.3.8-beta"`
+		PluginBinaryURI        string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.8.9-beta"`
 		PurgerTime             int64  `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
 		AutoInjectionBinaryURI string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI"`
 	}
