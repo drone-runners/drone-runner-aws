@@ -32,6 +32,7 @@ type VMCleanupRequest struct {
 	Distributed        bool                `json:"distributed,omitempty"`
 	Context            Context             `json:"context,omitempty"`
 	StorageCleanupType storage.CleanupType `json:"storage_cleanup_type,omitempty"`
+	InstanceInfo       InstanceInfo        `json:"instance_info,omitempty"`
 }
 
 func HandleDestroy(
@@ -99,23 +100,37 @@ func HandleDestroy(
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, enableMock bool, mockTimeout int,
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
-	entity, err := s.Find(ctx, r.StageRuntimeID)
-	if err != nil || entity == nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+	var poolID string
+	if r.InstanceInfo.PoolName == "" {
+		entity, err := s.Find(ctx, r.StageRuntimeID)
+		if err != nil || entity == nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+		}
+		poolID = entity.PoolName
+	} else {
+		poolID = r.InstanceInfo.PoolName
 	}
-	poolID := entity.PoolName
+
 	logr = logr.WithField("pool_id", poolID)
 
 	logr = AddContext(logr, &r.Context, map[string]string{})
 
 	logr.Infoln("starting the destroy process")
 
-	inst, err := poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
+	var inst *types.Instance
+	err := validateStruct(r.InstanceInfo)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
-	}
-	if inst == nil {
-		return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+		logr.Infoln("Instance information is not passed to the VM Cleanup Request, fetching it from the DB")
+		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
+		if err != nil {
+			return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
+		}
+		if inst == nil {
+			return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+		}
+	} else {
+		logr.Infoln("Using the instance information from the VM Cleanup Request")
+		inst = buildInstanceFromRequest(r.InstanceInfo)
 	}
 
 	logr = logr.
@@ -168,7 +183,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
-	if err = poolManager.Destroy(ctx, poolID, inst.ID, &r.StorageCleanupType); err != nil {
+	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
 		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroyed instance")

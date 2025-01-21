@@ -1,6 +1,9 @@
 package dlite
 
-import "github.com/harness/lite-engine/api"
+import (
+	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/harness/lite-engine/api"
+)
 
 type VMTaskExecutionResponse struct {
 	ErrorMessage           string                 `json:"error_message"`
@@ -14,6 +17,7 @@ type VMTaskExecutionResponse struct {
 	Outputs                []*api.OutputV2        `json:"outputs"`
 	OptimizationState      string                 `json:"optimization_state"`
 	GitspacesPortMappings  map[int]int            `json:"gitspaces_port_mappings"`
+	InstanceInfo           harness.InstanceInfo   `json:"instance_info"`
 }
 
 type DelegateMetaInfo struct {

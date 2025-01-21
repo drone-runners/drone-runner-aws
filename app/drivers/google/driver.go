@@ -173,7 +173,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 }
 
 func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
-	zone := p.RandomZone()
+	zone := opts.Zone
+	if zone == "" {
+		zone = p.RandomZone()
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -374,27 +377,26 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 }
 
 func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
-	var instanceIDs []string
-	for _, instance := range instances {
-		instanceIDs = append(instanceIDs, instance.ID)
-	}
-	if len(instanceIDs) == 0 {
-		return errors.New("no instance IDs provided")
+	if len(instances) == 0 {
+		return errors.New("no instances provided")
 	}
 
-	for _, instanceID := range instanceIDs {
+	for _, instance := range instances {
 		logr := logger.FromContext(ctx).
-			WithField("id", instanceID).
+			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
-		zone, err := p.findInstanceZone(ctx, instanceID)
-		if err != nil {
-			logr.WithError(err).Errorln("google: failed to find instance")
-			continue
+		zone := instance.Zone
+		if zone == "" {
+			zone, err = p.findInstanceZone(ctx, instance.ID)
+			if err != nil {
+				logr.WithError(err).Errorln("google: failed to find instance")
+				continue
+			}
 		}
 
 		requestID := uuid.New().String()
 
-		_, err = p.deleteInstance(ctx, p.projectID, zone, instanceID, requestID)
+		_, err = p.deleteInstance(ctx, p.projectID, zone, instance.ID, requestID)
 		if err != nil {
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 			if gerr, ok := err.(*googleapi.Error); ok &&
