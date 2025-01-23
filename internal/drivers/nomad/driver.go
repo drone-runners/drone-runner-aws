@@ -170,6 +170,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		}
 	}
 
+	if class == "" {
+		class = p.virtualizer.GetGlobalAccountID()
+	}
+
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
 	var resourceJob *api.Job
@@ -177,27 +181,27 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
 	} else {
-		if class != "" {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, p.virtualizer.GetHealthCheckupGenerator())
-		} else {
-			resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, p.virtualizer.GetGlobalAccountID(), p.virtualizer.GetHealthCheckupGenerator()) //nolint
-		}
+		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, p.virtualizer.GetHealthCheckupGenerator())
 	}
 
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("resource_job_id", resourceJobID)
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
 
 	logr.Infoln("scheduler: finding a node which has available resources ... ")
 
 	_, _, err = p.client.Jobs().Register(resourceJob, nil)
 	if err != nil {
+		defer p.getAllocationsForJob(logr, resourceJobID)
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `resourceJobTimeout`, we fail the step
 	job, err := p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
+		defer p.getAllocationsForJob(logr, resourceJobID)
 		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
 	}
+
 	if job == nil || isTerminal(job) {
+		defer p.getAllocationsForJob(logr, resourceJobID)
 		return nil, fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
@@ -265,12 +269,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Debugln("scheduler: submitting VM creation job")
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
+		defer p.getAllocationsForJob(logr, initJobID)
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Debugln("scheduler: successfully submitted job, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
+		defer p.getAllocationsForJob(logr, initJobID)
 		// Destroy the VM if it's in a partially created state
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
@@ -279,6 +285,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// Make sure all subtasks in the init job passed
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
 	if err != nil {
+		defer p.getAllocationsForJob(logr, initJobID)
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
@@ -286,9 +293,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
 	job, _, err = p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
 	if err != nil {
+		defer p.getAllocationsForJob(logr, resourceJobID)
 		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobID, initJobID, vm)
 	}
 	if job == nil || isTerminal(job) {
+		defer p.getAllocationsForJob(logr, resourceJobID)
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)
 	}
@@ -665,6 +674,36 @@ func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error 
 	}
 	logr.WithField("job_id", id).WithField("purge", purge).Infoln("scheduler: successfully deregistered job")
 	return nil
+}
+
+func (p *config) getAllocationsForJob(logr logger.Logger, id string) {
+	allocs, _, err := p.client.Jobs().Allocations(id, true, &api.QueryOptions{})
+	if err != nil || allocs == nil || len(allocs) == 0 || allocs[0] == nil {
+		logr.WithError(err).Errorln("scheduler: unable to get allocations")
+		return
+	}
+	alloc := allocs[0]
+	allocState := map[string][]api.TaskEvent{} // Use non-pointer slices
+
+	for taskName, taskState := range alloc.TaskStates {
+		var events []api.TaskEvent
+		if taskState != nil {
+			for _, event := range taskState.Events {
+				if event != nil {
+					events = append(events, *event) // Dereference the pointer
+				}
+			}
+			allocState[taskName] = events
+		}
+	}
+	// Marshal allocState to JSON
+	allocStateBytes, err := json.MarshalIndent(allocState, "", "  ")
+	if err == nil {
+		logr.WithField("allocState", string(allocStateBytes)).Infoln("scheduler: successfully fetched job allocations")
+	} else {
+		// fallback
+		logr.WithField("allocState", allocState).Infoln("scheduler: successfully fetched job allocations")
+	}
 }
 
 func (p *config) getCephStorageScriptCleanupTask(deProvisionCephStorageScriptPath string) *api.Task {
