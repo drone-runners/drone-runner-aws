@@ -42,8 +42,11 @@ func getIsFreeAccount(context *Context, tags map[string]string) bool {
 	return context.IsFreeAccount
 }
 
-func getIsRunner(tags map[string]string) bool {
-	return tags["isRunner"] == "true"
+func getIsRunner(tags map[string]string) string {
+	if tags["isRunner"] == "true" {
+		return "true"
+	}
+	return "false"
 }
 
 func getTaskID(context *Context, tags map[string]string) string {
