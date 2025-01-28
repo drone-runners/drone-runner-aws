@@ -595,11 +595,7 @@ func (p *config) resumeInstance(ctx context.Context, projectID, zone, name strin
 
 func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
 	return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
-		op, err := p.service.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
-		if err != nil {
-			return op, err
-		}
-		return op, err
+		return p.service.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
