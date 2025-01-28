@@ -321,6 +321,7 @@ func (m *Manager) Provision(
 	serverName,
 	ownerID,
 	resourceClass string,
+	imageName string,
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -335,7 +336,7 @@ func (m *Manager) Provision(
 		if pool.Driver.DriverName() != string(types.Nomad) && pool.Driver.DriverName() != string(types.Google) {
 			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad/google")
 		}
-		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig, storageConfig)
+		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig)
 		return inst, err
 	}
 
@@ -358,7 +359,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, true, gitspaceAgentConfig, storageConfig)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -389,7 +390,7 @@ func (m *Manager) Provision(
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", false, nil, nil)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", "", false, nil, nil)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -550,7 +551,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", false, nil, nil)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", "", false, nil, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -582,6 +583,7 @@ func (m *Manager) setupInstance(
 	tlsServerName,
 	ownerID,
 	resourceClass string,
+	imageName string,
 	inuse bool,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -602,6 +604,7 @@ func (m *Manager) setupInstance(
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
+	createOptions.ImageName = imageName
 	if storageConfig != nil {
 		createOptions.StorageOpts = types.StorageOpts{
 			CephPoolIdentifier: storageConfig.CephPoolIdentifier,

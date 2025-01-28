@@ -174,6 +174,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		class = p.virtualizer.GetGlobalAccountID()
 	}
 
+	image := opts.ImageName
+	if image == "" {
+		image = p.vmImage
+	}
+
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
 	var resourceJob *api.Job
