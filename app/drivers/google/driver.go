@@ -463,7 +463,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		}
 		logr.Info("google: sent delete instance request")
 
-		if *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
+		if storageCleanupType != nil && *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
 			logr.Info("google: waiting for instance deletion")
 			err = p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
 			if err != nil {
