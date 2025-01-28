@@ -295,13 +295,29 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	requestID := uuid.New().String()
-	op, err := p.insertInstance(ctx, p.projectID, zone, requestID, in)
+	if opts.StorageOpts.Identifier != "" {
+		operations, err := p.attachPersistentDisk(ctx, opts, in, zone)
+		if err != nil {
+			logr.WithError(err).Errorln("google: failed to attach persistent disk")
+			return nil, err
+		}
+		for _, operation := range operations {
+			if operation != nil {
+				// Disk not present, wait for creation
+				err = p.waitZoneOperation(ctx, operation.Name, zone)
+				if err != nil {
+					logr.WithError(err).Errorln("google: persistent disk creation operation failed")
+					return nil, err
+				}
+			}
+		}
+	}
+
+	op, err := p.insertInstance(ctx, p.projectID, zone, uuid.New().String(), in)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to provision VM")
 		return nil, err
 	}
-
 	err = p.waitZoneOperation(ctx, op.Name, zone)
 	if err != nil {
 		logr.WithError(err).Errorln("instance insert operation failed")
@@ -328,6 +344,46 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		Debugln("google: [provision] complete")
 
 	return &instanceMap, nil
+}
+
+func (p *config) attachPersistentDisk(
+	ctx context.Context,
+	opts *types.InstanceCreateOpts,
+	in *compute.Instance,
+	diskZone string,
+) ([]*compute.Operation, error) {
+	storageIdentifiers := strings.Split(opts.StorageOpts.Identifier, ",")
+	var operations []*compute.Operation
+	for i, diskName := range storageIdentifiers {
+		requestID := uuid.New().String()
+		diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, diskZone, "pd-balanced")
+		diskSize, err := strconv.ParseInt(opts.StorageOpts.Size, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("Error converting string to int64: %v\n", err)
+		}
+		persistentDisk := &compute.Disk{
+			Name:   diskName,
+			SizeGb: diskSize,
+			Type:   diskType,
+			Zone:   diskZone,
+		}
+		op, err := p.createPersistentDiskIfNotExists(ctx, p.projectID, diskZone, requestID, persistentDisk)
+		if err != nil {
+			return nil, err
+		}
+		operations = append(operations, op)
+
+		// attach to instance
+		attachedDisk := &compute.AttachedDisk{
+			DeviceName: fmt.Sprintf("disk-%d", i),
+			Boot:       false,
+			Type:       "PERSISTENT",
+			Source:     "projects/" + p.projectID + "/zones/" + diskZone + "/disks/" + diskName,
+			Mode:       "READ_WRITE",
+		}
+		in.Disks = append(in.Disks, attachedDisk)
+	}
+	return operations, nil
 }
 
 // Set the instance metadata (not network tags)
@@ -376,7 +432,8 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error {
+	var err error
 	if len(instances) == 0 {
 		return errors.New("no instances provided")
 	}
@@ -394,9 +451,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			}
 		}
 
-		requestID := uuid.New().String()
-
-		_, err = p.deleteInstance(ctx, p.projectID, zone, instance.ID, requestID)
+		instanceDeleteOperation, err := p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
 		if err != nil {
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 			if gerr, ok := err.(*googleapi.Error); ok &&
@@ -407,8 +462,41 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			}
 		}
 		logr.Info("google: sent delete instance request")
+
+		if *storageCleanupType == storage.Delete {
+			logr.Info("google: waiting for instance deletion")
+			err = p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
+			if err != nil {
+				logr.WithError(err).Errorln("google: could not delete instance. skipping disk deletion")
+				return err
+			}
+			logr.Info("google: deleting persistent disk")
+			storageIdentifiers := strings.Split(instance.StorageIdentifier, ",")
+			for _, storageIdentifier := range storageIdentifiers {
+				diskDeleteOperation, err := p.deletePersistentDisk(
+					ctx,
+					p.projectID,
+					zone,
+					storageIdentifier,
+					uuid.New().String(),
+				)
+				if err != nil {
+					var googleErr *googleapi.Error
+					if errors.As(err, &googleErr) &&
+						googleErr.Code == http.StatusNotFound {
+						logr.WithError(err).Errorln("google: persistent disk %s not found", storageIdentifier)
+					}
+				}
+				err = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
+				if err != nil {
+					logr.WithError(err).Errorln("google: could not delete persistent disk %s", storageIdentifier)
+					return err
+				}
+			}
+		}
+
 	}
-	return
+	return err
 }
 
 func (p *config) Hibernate(ctx context.Context, instanceID, _ string) error {
@@ -504,13 +592,43 @@ func (p *config) resumeInstance(ctx context.Context, projectID, zone, name strin
 
 func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
 	return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
-		return p.service.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
+		op, err := p.service.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
+		if err != nil {
+			return op, err
+		}
+		return op, err
 	})
 }
 
 func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID, requestID string) (*compute.Operation, error) {
 	return retry(ctx, deleteRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Instances.Delete(projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
+	})
+}
+
+func (p *config) createPersistentDiskIfNotExists(ctx context.Context, projectID, zone, requestID string, disk *compute.Disk) (*compute.Operation, error) {
+	// Check if the disk already exists
+	_, err := retry(ctx, getRetries, secSleep, func() (*compute.Disk, error) {
+		return p.service.Disks.Get(projectID, zone, disk.Name).Context(ctx).Do()
+	})
+
+	var getErr *googleapi.Error
+	if errors.As(err, &getErr) && getErr.Code == 404 {
+		// Disk doesn't exist, create it
+		return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
+			return p.service.Disks.Insert(projectID, zone, disk).RequestId(requestID).Context(ctx).Do()
+		})
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to check disk existence: %w", err)
+	}
+
+	// Disk already exists
+	return nil, nil
+}
+
+func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, diskName, requestID string) (*compute.Operation, error) {
+	return retry(ctx, deleteRetries, secSleep, func() (*compute.Operation, error) {
+		return p.service.Disks.Delete(projectID, zone, diskName).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
@@ -544,6 +662,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		IsHibernated:               false,
 		Port:                       lehelper.LiteEnginePort,
 		EnableNestedVirtualization: enableNestedVitualization,
+		StorageIdentifier:          opts.StorageOpts.Identifier,
 	}
 }
 

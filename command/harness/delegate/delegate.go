@@ -10,6 +10,7 @@ import (
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -165,21 +166,21 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	stageID := r.URL.Query().Get("stageId")
-	if stageID != "" {
-		entity, err := c.stageOwnerStore.Find(context.Background(), stageID)
-		if err != nil {
-			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Error("failed to find the stage in store")
-			httprender.OK(w, poolOwnerResponse{Owner: false})
-			return
-		}
-
-		if entity.PoolName != poolName {
-			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Errorf("found stage with different pool: %s", entity.PoolName)
-			httprender.OK(w, poolOwnerResponse{Owner: false})
-			return
-		}
-	}
+	//stageID := r.URL.Query().Get("stageId")
+	//if stageID != "" {
+	//	entity, err := c.stageOwnerStore.Find(context.Background(), stageID)
+	//	if err != nil {
+	//		logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Error("failed to find the stage in store")
+	//		httprender.OK(w, poolOwnerResponse{Owner: false})
+	//		return
+	//	}
+	//
+	//	if entity.PoolName != poolName {
+	//		logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Errorf("found stage with different pool: %s", entity.PoolName)
+	//		httprender.OK(w, poolOwnerResponse{Owner: false})
+	//		return
+	//	}
+	//}
 
 	httprender.OK(w, poolOwnerResponse{Owner: true})
 }
@@ -235,11 +236,12 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) {
 	// TODO: Change the java object to match VmCleanupRequest
 	rs := &struct {
-		ID            string               `json:"id"`
-		InstanceID    string               `json:"instance_id"`
-		PoolID        string               `json:"pool_id"`
-		CorrelationID string               `json:"correlation_id"`
-		InstanceInfo  harness.InstanceInfo `json:"instance_info"`
+		ID                 string               `json:"id"`
+		InstanceID         string               `json:"instance_id"`
+		PoolID             string               `json:"pool_id"`
+		CorrelationID      string               `json:"correlation_id"`
+		InstanceInfo       harness.InstanceInfo `json:"instance_info"`
+		StorageCleanupType storage.CleanupType  `json:"storage_cleanup_type"`
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(rs); err != nil {
 		logrus.WithError(err).Error("could not decode VM destroy request body")
@@ -248,7 +250,12 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	}
 	logrus.Infoln("Received destroy request with taskId " + rs.CorrelationID)
 
-	req := &harness.VMCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID, InstanceInfo: rs.InstanceInfo}
+	req := &harness.VMCleanupRequest{
+		PoolID:             rs.PoolID,
+		StageRuntimeID:     rs.ID,
+		InstanceInfo:       rs.InstanceInfo,
+		StorageCleanupType: rs.StorageCleanupType,
+	}
 	req.Context.TaskID = rs.CorrelationID
 
 	ctx := r.Context()

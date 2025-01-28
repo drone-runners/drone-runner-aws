@@ -192,15 +192,16 @@ func HandleSetup(
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner).Inc()
 	instanceInfo := InstanceInfo{
-		ID:        instance.ID,
-		Name:      instance.Name,
-		IPAddress: instance.Address,
-		Port:      instance.Port,
-		OS:        platform.OS,
-		Arch:      platform.Arch,
-		Provider:  string(instance.Provider),
-		PoolName:  selectedPool,
-		Zone:      instance.Zone,
+		ID:                instance.ID,
+		Name:              instance.Name,
+		IPAddress:         instance.Address,
+		Port:              instance.Port,
+		OS:                platform.OS,
+		Arch:              platform.Arch,
+		Provider:          string(instance.Provider),
+		PoolName:          selectedPool,
+		Zone:              instance.Zone,
+		StorageIdentifier: instance.StorageIdentifier,
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
