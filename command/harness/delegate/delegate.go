@@ -166,21 +166,21 @@ func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	//stageID := r.URL.Query().Get("stageId")
-	//if stageID != "" {
-	//	entity, err := c.stageOwnerStore.Find(context.Background(), stageID)
-	//	if err != nil {
-	//		logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Error("failed to find the stage in store")
-	//		httprender.OK(w, poolOwnerResponse{Owner: false})
-	//		return
-	//	}
-	//
-	//	if entity.PoolName != poolName {
-	//		logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Errorf("found stage with different pool: %s", entity.PoolName)
-	//		httprender.OK(w, poolOwnerResponse{Owner: false})
-	//		return
-	//	}
-	//}
+	stageID := r.URL.Query().Get("stageId")
+	if stageID != "" {
+		entity, err := c.stageOwnerStore.Find(context.Background(), stageID)
+		if err != nil {
+			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Error("failed to find the stage in store")
+			httprender.OK(w, poolOwnerResponse{Owner: false})
+			return
+		}
+
+		if entity.PoolName != poolName {
+			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Errorf("found stage with different pool: %s", entity.PoolName)
+			httprender.OK(w, poolOwnerResponse{Owner: false})
+			return
+		}
+	}
 
 	httprender.OK(w, poolOwnerResponse{Owner: true})
 }
