@@ -371,7 +371,10 @@ func (p *config) attachPersistentDisk(
 		if err != nil {
 			return nil, err
 		}
-		operations = append(operations, op)
+		if op != nil {
+			// this means we have submitted disk creation request(s)
+			operations = append(operations, op)
+		}
 
 		// attach to instance
 		attachedDisk := &compute.AttachedDisk{
