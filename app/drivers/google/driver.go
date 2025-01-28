@@ -2,6 +2,7 @@ package google
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -337,7 +338,11 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
-	instanceMap := p.mapToInstance(vm, zone, opts, enableNestedVirtualization)
+	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization)
+	if err != nil {
+		logr.WithError(err).Errorln("google: failed to map VM to instance")
+		return nil, err
+	}
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
@@ -631,13 +636,18 @@ func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, disk
 	})
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool) types.Instance {
+func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool) (types.Instance, error) {
 	network := vm.NetworkInterfaces[0]
 	instanceIP := ""
 	if p.privateIP {
 		instanceIP = network.NetworkIP
 	} else {
 		instanceIP = network.AccessConfigs[0].NatIP
+	}
+
+	labelsBytes, marshalErr := json.Marshal(opts.Labels)
+	if marshalErr != nil {
+		return types.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
 	}
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
@@ -662,7 +672,8 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		Port:                       lehelper.LiteEnginePort,
 		EnableNestedVirtualization: enableNestedVitualization,
 		StorageIdentifier:          opts.StorageOpts.Identifier,
-	}
+		Labels:                     labelsBytes,
+	}, nil
 }
 
 func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
