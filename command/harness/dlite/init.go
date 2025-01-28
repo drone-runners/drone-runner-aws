@@ -103,6 +103,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 		PoolDriverUsed:        selectedPoolDriver,
 		GitspacesPortMappings: setupResp.GitspacesPortMappings,
+		InstanceInfo:          setupResp.InstanceInfo,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }
