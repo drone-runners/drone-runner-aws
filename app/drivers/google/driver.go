@@ -356,7 +356,7 @@ func (p *config) attachPersistentDisk(
 	var operations []*compute.Operation
 	for i, diskName := range storageIdentifiers {
 		requestID := uuid.New().String()
-		diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, diskZone, "pd-balanced")
+		diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, diskZone, opts.StorageOpts.Type)
 		diskSize, err := strconv.ParseInt(opts.StorageOpts.Size, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("Error converting string to int64: %v\n", err)
