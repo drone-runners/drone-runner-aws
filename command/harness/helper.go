@@ -74,8 +74,9 @@ func buildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance {
 			OS:   instanceInfo.OS,
 			Arch: instanceInfo.Arch,
 		},
-		IsHibernated: false,
-		Port:         instanceInfo.Port,
-		Zone:         instanceInfo.Zone,
+		IsHibernated:      false,
+		Port:              instanceInfo.Port,
+		Zone:              instanceInfo.Zone,
+		StorageIdentifier: instanceInfo.StorageIdentifier,
 	}
 }
