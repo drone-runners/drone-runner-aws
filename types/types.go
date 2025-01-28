@@ -143,6 +143,7 @@ type StorageOpts struct {
 	CephPoolIdentifier string
 	Identifier         string
 	Size               string
+	Type               string
 }
 
 type GitspaceAgentConfig struct {
@@ -156,4 +157,5 @@ type StorageConfig struct {
 	CephPoolIdentifier string `json:"ceph_pool_identifier"`
 	Identifier         string `json:"identifier"`
 	Size               string `json:"size"`
+	Type               string `json:"type" default:"pd-balanced"`
 }
