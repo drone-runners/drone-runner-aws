@@ -360,7 +360,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-, zone		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig, zone)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig, zone)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
