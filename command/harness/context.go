@@ -16,6 +16,10 @@ type Context struct {
 	TaskID        string `json:"task_id,omitempty"`
 }
 
+const (
+	trueString = "true"
+)
+
 func AddContext(logr *logrus.Entry, context *Context, tags map[string]string) *logrus.Entry {
 	return logr.WithField("account_id", GetAccountID(context, tags)).
 		WithField("org_id", getOrgID(context, tags)).
@@ -36,15 +40,15 @@ func GetAccountID(context *Context, tags map[string]string) string {
 
 func getIsFreeAccount(context *Context, tags map[string]string) bool {
 	// if freeCI is a key in tags, use it
-	if tags["freeCI"] == "true" {
+	if tags["freeCI"] == trueString {
 		return true
 	}
 	return context.IsFreeAccount
 }
 
 func getIsRunner(tags map[string]string) string {
-	if tags["isRunner"] == "true" {
-		return "true"
+	if tags["isRunner"] == trueString {
+		return trueString
 	}
 	return "false"
 }
