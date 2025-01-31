@@ -37,12 +37,14 @@ type SetupVMRequest struct {
 	api.SetupRequest    `json:"setup_request"`
 	GitspaceAgentConfig types.GitspaceAgentConfig `json:"gitspace_agent_config"`
 	StorageConfig       types.StorageConfig       `json:"storage_config"`
+	Zone                string                    `json:"zone"`
 }
 
 type SetupVMResponse struct {
-	IPAddress             string      `json:"ip_address"`
-	InstanceID            string      `json:"instance_id"`
-	GitspacesPortMappings map[int]int `json:"gitspaces_port_mappings"`
+	IPAddress             string       `json:"ip_address"`
+	InstanceID            string       `json:"instance_id"`
+	GitspacesPortMappings map[int]int  `json:"gitspaces_port_mappings"`
+	InstanceInfo          InstanceInfo `json:"instance_info"`
 }
 
 var (
@@ -165,7 +167,7 @@ func HandleSetup(
 		_, findErr := s.Find(noContext, stageRuntimeID)
 		if findErr != nil {
 			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
-				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, nil); derr != nil {
+				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil); derr != nil {
 					logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 				}
 				return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
@@ -189,7 +191,18 @@ func HandleSetup(
 	}
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner).Inc()
-	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings}
+	instanceInfo := InstanceInfo{
+		ID:        instance.ID,
+		Name:      instance.Name,
+		IPAddress: instance.Address,
+		Port:      instance.Port,
+		OS:        platform.OS,
+		Arch:      platform.Arch,
+		Provider:  string(instance.Provider),
+		PoolName:  selectedPool,
+		Zone:      instance.Zone,
+	}
+	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
 	logr.WithField("selected_pool", selectedPool).
 		WithField("ip", instance.Address).
@@ -231,7 +244,7 @@ func handleSetup(
 			RunnerName: runnerName,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, poolManager.GetTLSServerName(), owner, r.ResourceClass, r.ImageName, query, &r.GitspaceAgentConfig, &r.StorageConfig)
+	instance, err := poolManager.Provision(ctx, pool, poolManager.GetTLSServerName(), owner, r.ResourceClass, r.ImageName, query, &r.GitspaceAgentConfig, &r.StorageConfig, r.Zone)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}
@@ -277,7 +290,7 @@ func handleSetup(
 				}
 			}
 		}
-		err = poolManager.Destroy(context.Background(), pool, instanceID, nil)
+		err = poolManager.Destroy(context.Background(), pool, instance.ID, instance, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("failed to cleanup instance on setup failure")
 		}

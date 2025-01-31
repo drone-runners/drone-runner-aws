@@ -108,6 +108,7 @@ type InstanceCreateOpts struct {
 	StorageOpts            StorageOpts
 	AutoInjectionBinaryURI string
 	Labels                 map[string]string
+	Zone                   string
 }
 
 // Platform defines the target platform.

@@ -235,10 +235,11 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) {
 	// TODO: Change the java object to match VmCleanupRequest
 	rs := &struct {
-		ID            string `json:"id"`
-		InstanceID    string `json:"instance_id"`
-		PoolID        string `json:"pool_id"`
-		CorrelationID string `json:"correlation_id"`
+		ID            string               `json:"id"`
+		InstanceID    string               `json:"instance_id"`
+		PoolID        string               `json:"pool_id"`
+		CorrelationID string               `json:"correlation_id"`
+		InstanceInfo  harness.InstanceInfo `json:"instance_info"`
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(rs); err != nil {
 		logrus.WithError(err).Error("could not decode VM destroy request body")
@@ -247,7 +248,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	}
 	logrus.Infoln("Received destroy request with taskId " + rs.CorrelationID)
 
-	req := &harness.VMCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID}
+	req := &harness.VMCleanupRequest{PoolID: rs.PoolID, StageRuntimeID: rs.ID, InstanceInfo: rs.InstanceInfo}
 	req.Context.TaskID = rs.CorrelationID
 
 	ctx := r.Context()

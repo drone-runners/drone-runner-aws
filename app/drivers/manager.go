@@ -325,6 +325,7 @@ func (m *Manager) Provision(
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
+	zone string,
 ) (*types.Instance, error) { //nolint
 
 	pool := m.poolMap[poolName]
@@ -336,7 +337,7 @@ func (m *Manager) Provision(
 		if pool.Driver.DriverName() != string(types.Nomad) && pool.Driver.DriverName() != string(types.Google) {
 			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad/google")
 		}
-		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig)
+		inst, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig, zone)
 		return inst, err
 	}
 
@@ -359,7 +360,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig)
+, zone		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig, zone)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -390,33 +391,36 @@ func (m *Manager) Provision(
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", "", false, nil, nil)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", "", false, nil, nil, zone)
 	}(m.globalCtx)
 
 	return inst, nil
 }
 
 // Destroy destroys an instance in a pool.
-func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, storageCleanupType *storage.CleanupType) error {
+func (m *Manager) Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
-	instance, err := m.Find(ctx, instanceID)
-	if err != nil {
-		return err
+	if instance == nil {
+		instanceFromStore, err := m.Find(ctx, instanceID)
+		if err != nil || instanceFromStore == nil {
+			return fmt.Errorf("provision: failed to find instance %q: %w", instanceID, err)
+		}
+		instance = instanceFromStore
 	}
 
-	err = pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
+	err := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
 
-	if derr := m.Delete(ctx, instanceID); derr != nil {
-		logrus.Warnf("failed to delete instance %s from store with err: %s", instanceID, derr)
+	if derr := m.Delete(ctx, instance.ID); derr != nil {
+		logrus.Warnf("failed to delete instance %s from store with err: %s", instance, derr)
 	}
-	logrus.WithField("instance", instanceID).Infof("instance destroyed")
+	logrus.WithField("instance", instance.ID).Infof("instance destroyed")
 	return nil
 }
 
@@ -551,7 +555,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", "", false, nil, nil)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", "", false, nil, nil, "")
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -587,6 +591,7 @@ func (m *Manager) setupInstance(
 	inuse bool,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
+	zone string,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
@@ -623,6 +628,7 @@ func (m *Manager) setupInstance(
 		retain = "true"
 	}
 	createOptions.Labels = map[string]string{"retain": retain}
+	createOptions.Zone = zone
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
