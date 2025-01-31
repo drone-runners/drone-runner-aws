@@ -397,7 +397,7 @@ func (m *Manager) Provision(
 }
 
 // Destroy destroys an instance in a pool.
-func (m *Manager) Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error {
+func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("provision: pool name %q not found", poolName)
@@ -417,7 +417,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName string, instanceID strin
 	}
 
 	if derr := m.Delete(ctx, instance.ID); derr != nil {
-		logrus.Warnf("failed to delete instance %s from store with err: %s", instance, derr)
+		logrus.Warnf("failed to delete instance %s from store with err: %s", instance.ID, derr)
 	}
 	logrus.WithField("instance", instance.ID).Infof("instance destroyed")
 	return nil

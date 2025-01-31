@@ -3,12 +3,13 @@ package harness
 import (
 	"errors"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"hash/fnv"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/harness/lite-engine/engine/spec"
 
@@ -63,7 +64,7 @@ func validateStruct(data interface{}) error {
 	return nil
 }
 
-func buildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance {
+func buildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance { //nolint:gocritic
 	return &types.Instance{
 		ID:       instanceInfo.ID,
 		Name:     instanceInfo.Name,
