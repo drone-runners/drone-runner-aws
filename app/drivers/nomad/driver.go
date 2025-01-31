@@ -174,6 +174,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		class = p.virtualizer.GetGlobalAccountID()
 	}
 
+	image := opts.ImageName
+	if image == "" {
+		image = p.vmImage
+	}
+
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
 	var resourceJob *api.Job
@@ -231,7 +236,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, id, liteEngineHostPort)
 	} else {
-		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, p.vmImage, p.userData, p.username, p.password, liteEngineHostPort, resource, opts, gitspacesPortMappings)
+		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, image, p.userData, p.username, p.password, liteEngineHostPort, resource, opts, gitspacesPortMappings)
 		if err != nil {
 			defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 			return nil, err

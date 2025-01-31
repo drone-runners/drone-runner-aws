@@ -103,6 +103,7 @@ type InstanceCreateOpts struct {
 	AccountID              string
 	IsHosted               bool
 	ResourceClass          string
+	ImageName              string
 	GitspaceOpts           GitspaceOpts
 	StorageOpts            StorageOpts
 	AutoInjectionBinaryURI string
