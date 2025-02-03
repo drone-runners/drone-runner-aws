@@ -615,6 +615,7 @@ func (m *Manager) setupInstance(
 			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
 			Identifier:         storageConfig.Identifier,
 			Size:               storageConfig.Size,
+			Type:               storageConfig.Type,
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
