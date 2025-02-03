@@ -297,8 +297,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	}
 
 	if opts.StorageOpts.Identifier != "" {
-		operations, err := p.attachPersistentDisk(ctx, opts, in, zone)
-		if err != nil {
+		operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
+		if attachDiskErr != nil {
 			logr.WithError(err).Errorln("google: failed to attach persistent disk")
 			return nil, err
 		}
@@ -364,7 +364,7 @@ func (p *config) attachPersistentDisk(
 		diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, diskZone, opts.StorageOpts.Type)
 		diskSize, err := strconv.ParseInt(opts.StorageOpts.Size, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("Error converting string to int64: %v\n", err)
+			return nil, fmt.Errorf("error converting string to int64: %v\n", err)
 		}
 		persistentDisk := &compute.Disk{
 			Name:   diskName,
@@ -459,14 +459,14 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			}
 		}
 
-		instanceDeleteOperation, err := p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
-		if err != nil {
+		instanceDeleteOperation, deleteInstanceErr := p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
+		if deleteInstanceErr != nil {
 			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
-			if gerr, ok := err.(*googleapi.Error); ok &&
+			if gerr, ok := deleteInstanceErr.(*googleapi.Error); ok &&
 				gerr.Code == http.StatusNotFound {
-				logr.WithError(err).Errorln("google: VM not found")
+				logr.WithError(deleteInstanceErr).Errorln("google: VM not found")
 			} else {
-				logr.WithError(err).Errorln("google: failed to delete the VM")
+				logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
 			}
 		}
 		logr.Info("google: sent delete instance request")
@@ -502,7 +502,6 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 				}
 			}
 		}
-
 	}
 	return err
 }
