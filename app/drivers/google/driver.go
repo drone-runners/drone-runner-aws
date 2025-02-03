@@ -299,8 +299,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if opts.StorageOpts.Identifier != "" {
 		operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
 		if attachDiskErr != nil {
-			logr.WithError(err).Errorln("google: failed to attach persistent disk")
-			return nil, err
+			logr.WithError(attachDiskErr).Errorln("google: failed to attach persistent disk")
+			return nil, attachDiskErr
 		}
 		for _, operation := range operations {
 			if operation != nil {
