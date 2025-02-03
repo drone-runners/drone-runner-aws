@@ -469,6 +469,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 				logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
 			}
 		}
+		err = deleteInstanceErr
 		logr.Info("google: sent delete instance request")
 
 		if storageCleanupType != nil && *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
