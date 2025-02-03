@@ -364,7 +364,7 @@ func (p *config) attachPersistentDisk(
 		diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, diskZone, opts.StorageOpts.Type)
 		diskSize, err := strconv.ParseInt(opts.StorageOpts.Size, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("error converting string to int64: %v\n", err)
+			return nil, fmt.Errorf("error converting string to int64: %v", err)
 		}
 		persistentDisk := &compute.Disk{
 			Name:   diskName,
@@ -481,18 +481,19 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			logr.Info("google: deleting persistent disk")
 			storageIdentifiers := strings.Split(instance.StorageIdentifier, ",")
 			for _, storageIdentifier := range storageIdentifiers {
-				diskDeleteOperation, err := p.deletePersistentDisk(
+				diskDeleteOperation, diskDeletionErr := p.deletePersistentDisk(
 					ctx,
 					p.projectID,
 					zone,
 					storageIdentifier,
 					uuid.New().String(),
 				)
-				if err != nil {
+				if diskDeletionErr != nil {
 					var googleErr *googleapi.Error
-					if errors.As(err, &googleErr) &&
+					if errors.As(diskDeletionErr, &googleErr) &&
 						googleErr.Code == http.StatusNotFound {
-						logr.WithError(err).Errorln("google: persistent disk %s not found", storageIdentifier)
+						logr.WithError(diskDeletionErr).
+							Errorln("google: persistent disk %s not found", storageIdentifier)
 					}
 				}
 				err = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
