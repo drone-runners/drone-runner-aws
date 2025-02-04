@@ -450,13 +450,16 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		logr := logger.FromContext(ctx).
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
-		zone := instance.Zone
-		if zone == "" {
-			zone, err = p.findInstanceZone(ctx, instance.ID)
-			if err != nil {
-				logr.WithError(err).Errorln("google: failed to find instance")
-				continue
-			}
+		zone, err := p.findInstanceZone(ctx, instance.ID)
+		if err != nil {
+			logr.WithError(err).Errorln("google: failed to find instance")
+			continue
+		}
+
+		// If instance info is passed with zone, use it
+		// The above findInstanceZone is still required as it checks whether instance itself is present in GCP or not
+		if instance.Zone != "" {
+			zone = instance.Zone
 		}
 
 		instanceDeleteOperation, deleteInstanceErr := p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
