@@ -450,9 +450,9 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		logr := logger.FromContext(ctx).
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
-		zone, err := p.findInstanceZone(ctx, instance.ID)
-		if err != nil {
-			logr.WithError(err).Errorln("google: failed to find instance")
+		zone, findInstanceZoneErr := p.findInstanceZone(ctx, instance.ID)
+		if findInstanceZoneErr != nil {
+			logr.WithError(findInstanceZoneErr).Errorln("google: failed to find instance")
 			continue
 		}
 
