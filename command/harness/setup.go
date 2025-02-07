@@ -330,7 +330,7 @@ func handleSetup(
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
-	if instance.OS == "windows" {
+	if instance.Platform.OS == "windows" {
 		healthCheckTimeout = healthCheckWindowsTimeout
 	}
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
