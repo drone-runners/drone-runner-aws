@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
@@ -19,7 +18,7 @@ import (
 )
 
 func vmrun(args ...string) (string, string, error) { //nolint
-	_ = syscall.Umask(022) //nolint
+	syscallUmask()
 	cmd := exec.Command(vmrunbin, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
