@@ -283,7 +283,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
-	logr.Infoln("scheduler: successfully submitted job, started polling for job status")
+	logr.Infoln("scheduler: successfully submitted init job, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		defer p.getAllocationsForJob(logr, initJobID)
@@ -291,7 +291,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
-	logr.Infoln("scheduler: Successfully submitted polled job")
 
 	// Make sure all subtasks in the init job passed
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
@@ -300,6 +299,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
+	logr.Infoln("scheduler: Successfully submitted polled job")
 
 	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
 	job, _, err = p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
