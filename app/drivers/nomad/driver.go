@@ -701,6 +701,10 @@ func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
 	alloc := allocs[0]
 	allocState := map[string][]api.TaskEvent{} // Use non-pointer slices
 
+	var (
+		allocation *api.Allocation
+	)
+
 	for taskName, taskState := range alloc.TaskStates {
 		var events []api.TaskEvent
 		if taskState != nil {
@@ -713,7 +717,12 @@ func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
 
 			// Check if the task has failed
 			if taskState.Failed {
-				p.streamStdErrLogs(alloc.ID, taskName, logr)
+				if allocation == nil {
+					if allocation, _, err = p.client.Allocations().Info(alloc.ID, &api.QueryOptions{}); err != nil {
+						continue
+					}
+				}
+				p.streamStdErrLogs(allocation, taskName, logr)
 			}
 		}
 	}
@@ -727,9 +736,8 @@ func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
 	}
 }
 
-func (p *config) streamStdErrLogs(allocID, taskName string, logr *logrus.Entry) {
-	allocation, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
-	if allocation == nil || err != nil {
+func (p *config) streamStdErrLogs(allocation *api.Allocation, taskName string, logr *logrus.Entry) {
+	if allocation == nil {
 		return
 	}
 	cancel := make(chan struct{})
