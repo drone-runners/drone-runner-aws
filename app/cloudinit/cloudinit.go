@@ -88,6 +88,7 @@ func Custom(templateText string, params *Params) (payload string, err error) {
 
 const linuxScript = `
 #!/usr/bin/bash
+set -e
 mkdir {{ .CertDir }}
 
 echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
@@ -309,6 +310,7 @@ chmod 777 /usr/bin/plugin
 
 const macArm64Script = `
 #!/usr/bin/env bash
+set -e
 mkdir /tmp/certs/
 
 echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
