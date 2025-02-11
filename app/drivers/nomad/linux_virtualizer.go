@@ -216,16 +216,18 @@ func (lv *LinuxVirtualizer) getCephStorageTask(
 
 func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) string {
 	params := &cloudinit.Params{
-		Platform:               opts.Platform,
-		CACert:                 string(opts.CACert),
-		LiteEngineLogsPath:     oshelp.GetLiteEngineLogsPath(opts.OS),
-		TLSCert:                string(opts.TLSCert),
-		TLSKey:                 string(opts.TLSKey),
-		LiteEnginePath:         opts.LiteEnginePath,
-		HarnessTestBinaryURI:   opts.HarnessTestBinaryURI,
-		PluginBinaryURI:        opts.PluginBinaryURI,
-		Tmate:                  opts.Tmate,
-		AutoInjectionBinaryURI: opts.AutoInjectionBinaryURI,
+		Platform:                opts.Platform,
+		CACert:                  string(opts.CACert),
+		LiteEngineLogsPath:      oshelp.GetLiteEngineLogsPath(opts.OS),
+		TLSCert:                 string(opts.TLSCert),
+		TLSKey:                  string(opts.TLSKey),
+		LiteEnginePath:          opts.LiteEnginePath,
+		HarnessTestBinaryURI:    opts.HarnessTestBinaryURI,
+		PluginBinaryURI:         opts.PluginBinaryURI,
+		Tmate:                   opts.Tmate,
+		AutoInjectionBinaryURI:  opts.AutoInjectionBinaryURI,
+		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
+		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
 	}
 	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
 		(opts.GitspaceOpts.VMInitScript != "") {
