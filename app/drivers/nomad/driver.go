@@ -729,10 +729,10 @@ func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
 	// Marshal allocState to JSON
 	allocStateBytes, err := json.MarshalIndent(allocState, "", "  ")
 	if err == nil {
-		logr.WithField("allocState", string(allocStateBytes)).Infoln("scheduler: successfully fetched job allocations")
+		logr.WithField("alloc_state", string(allocStateBytes)).Infoln("scheduler: successfully fetched job allocations")
 	} else {
 		// fallback
-		logr.WithField("allocState", allocState).Infoln("scheduler: successfully fetched job allocations")
+		logr.WithField("alloc_state", allocState).Infoln("scheduler: successfully fetched job allocations")
 	}
 }
 
@@ -756,9 +756,9 @@ func (p *config) streamStdErrLogs(allocation *api.Allocation, taskName string, l
 			if logLine == nil {
 				return
 			}
-			logr.WithField("taskName", taskName).WithField("stderr_data", string(logLine.Data)).Errorln("scheduler: successfully failed task stderr logs")
+			logr.WithField("task_name", taskName).WithField("stderr_data", string(logLine.Data)).Errorln("scheduler: successfully failed task stderr logs")
 		case <-timeout:
-			logr.WithField("taskName", taskName).Warnln("scheduler: log streaming timed out")
+			logr.WithField("task_name", taskName).Warnln("scheduler: log streaming timed out")
 			close(cancel)
 		}
 	}
