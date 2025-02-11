@@ -24,7 +24,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.3.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.94
+	github.com/harness/lite-engine v0.5.95
 	github.com/hashicorp/nomad/api v0.0.0-20230421025320-b4e6a70fe69b
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
@@ -65,7 +65,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/harness/godotenv/v3 v3.0.1 // indirect
-	github.com/harness/ti-client v0.0.0-20250104064648-cba197bedd61 // indirect
+	github.com/harness/ti-client v0.0.0-20250211085345-7c82b29d1b3c // indirect
 	github.com/hashicorp/cronexpr v1.1.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
