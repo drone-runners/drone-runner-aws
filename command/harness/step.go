@@ -31,6 +31,7 @@ type ExecuteVMRequest struct {
 	TaskID               string `json:"task_id,omitempty"`
 	Distributed          bool   `json:"distributed,omitempty"`
 	api.StartStepRequest `json:"start_step_request"`
+	InstanceInfo         InstanceInfo `json:"instance_info,omitempty"`
 }
 
 var (
@@ -50,19 +51,34 @@ func HandleStep(ctx context.Context,
 		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
 	}
 
-	entity, err := s.Find(ctx, r.StageRuntimeID)
-	if err != nil || entity == nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
-	}
-
-	poolID := entity.PoolName
 	logr := logrus.
 		WithField("api", "dlite:step").
 		WithField("stage_runtime_id", r.StageRuntimeID).
 		WithField("step_id", r.StartStepRequest.ID).
-		WithField("pool", poolID).
 		WithField("correlation_id", r.CorrelationID).
 		WithField("async", async)
+
+	var poolID string
+	var inst *types.Instance
+	err := validateStruct(r.InstanceInfo)
+	if err != nil {
+		logr.Infoln("Instance information is not passed to the VM Execute Request, fetching it from the DB")
+		entity, err := s.Find(ctx, r.StageRuntimeID)
+		if err != nil || entity == nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+		}
+		poolID = entity.PoolName
+		inst, err = getInstance(ctx, poolID, r.StageRuntimeID, r.InstanceID, poolManager)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		logr.Infoln("Using the instance information from the VM Execute Request")
+		inst = buildInstanceFromRequest(r.InstanceInfo)
+		poolID = r.InstanceInfo.PoolName
+	}
+
+	logr = logrus.WithField("pool", poolID)
 
 	ctx = logger.WithContext(ctx, logr)
 
@@ -85,10 +101,6 @@ func HandleStep(ctx context.Context,
 			}
 			r.Volumes = append(r.Volumes, mount)
 		}
-	}
-	inst, err := getInstance(ctx, poolID, r.StageRuntimeID, r.InstanceID, poolManager)
-	if err != nil {
-		return nil, err
 	}
 
 	logr = logr.WithField("ip", inst.Address)
