@@ -202,6 +202,10 @@ func HandleSetup(
 		PoolName:          selectedPool,
 		Zone:              instance.Zone,
 		StorageIdentifier: instance.StorageIdentifier,
+		CAKey:             instance.CAKey,
+		CACert:            instance.CACert,
+		TLSKey:            instance.TLSKey,
+		TLSCert:           instance.TLSCert,
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 

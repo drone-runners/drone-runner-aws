@@ -11,4 +11,8 @@ type InstanceInfo struct {
 	PoolName          string `json:"pool_name"`
 	Zone              string `json:"zone"`
 	StorageIdentifier string `json:"storage_identifier"`
+	CAKey             []byte `json:"ca_key"`
+	CACert            []byte `json:"ca_cert"`
+	TLSKey            []byte `json:"tls_key"`
+	TLSCert           []byte `json:"tls_cert"`
 }
