@@ -37,6 +37,7 @@ var (
 	resourceJobTimeout      = 2 * time.Minute
 	initTimeout             = 3 * time.Minute
 	destroyTimeout          = 3 * time.Minute
+	tenSecondsTimeout       = 10 * time.Second
 	globalAccount           = "GLOBAL_ACCOUNT_ID"
 	destroyRetryAttempts    = 1
 	minNomadCPUMhz          = 40
@@ -130,7 +131,7 @@ func (p *config) Ping(ctx context.Context) error {
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo,funlen
 	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
 	for k, v := range p.enablePinning {
@@ -193,9 +194,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	originalLogr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
 	// Create a new logger instance that doesn't share the original's internal state
-	logger := logrus.New()
-	logger.SetOutput(os.Stdout)
-	logr := logger.WithFields(originalLogr.Data)
+	logrusLogger := logrus.New()
+	logrusLogger.SetOutput(os.Stdout)
+	logr := logrusLogger.WithFields(originalLogr.Data)
 
 	logr.Infoln("scheduler: finding a node which has available resources ... ")
 
@@ -746,7 +747,7 @@ func (p *config) streamStdErrLogs(allocation *api.Allocation, taskName string, l
 	if logs == nil {
 		return
 	}
-	timeout := time.After(10 * time.Second) // Set the timeout duration
+	timeout := time.After(tenSecondsTimeout) // Set the timeout duration
 	// Handle logs in real-time with a timeout
 	for {
 		select {
