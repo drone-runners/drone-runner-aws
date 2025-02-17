@@ -79,6 +79,7 @@ func buildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance { //nol
 		Port:              instanceInfo.Port,
 		Zone:              instanceInfo.Zone,
 		StorageIdentifier: instanceInfo.StorageIdentifier,
+		CAKey:             instanceInfo.CAKey,
 		CACert:            instanceInfo.CACert,
 		TLSCert:           instanceInfo.TLSCert,
 		TLSKey:            instanceInfo.TLSKey,
