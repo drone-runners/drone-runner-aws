@@ -63,9 +63,12 @@ func HandleStep(ctx context.Context,
 	err := validateStruct(r.InstanceInfo)
 	if err != nil {
 		logr.Infoln("Instance information is not passed to the VM Execute Request, fetching it from the DB")
-		entity, err := s.Find(ctx, r.StageRuntimeID)
-		if err != nil || entity == nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+		entity, findStageOwnerErr := s.Find(ctx, r.StageRuntimeID)
+		if findStageOwnerErr != nil || entity == nil {
+			return nil, errors.Wrap(
+				findStageOwnerErr,
+				fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID),
+			)
 		}
 		poolID = entity.PoolName
 		inst, err = getInstance(ctx, poolID, r.StageRuntimeID, r.InstanceID, poolManager)
