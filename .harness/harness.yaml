@@ -1,0 +1,244 @@
+pipeline:
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: GitHub_Drone_Runners_Org
+        repoName: drone-runner-aws
+        build: <+input>
+        sparseCheckout: []
+  stages:
+    - stage:
+        name: Test
+        identifier: Test
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            paths: []
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Tests Build and Checks
+                  identifier: go_vet_and_unit_tests
+                  spec:
+                    connectorRef: Plugins_Docker_Hub_Connector
+                    image: golangci/golangci-lint:v1.51.2
+                    shell: Sh
+                    command: |-
+                      go vet ./...
+                      go test -cover ./...
+                      cp go.mod go.mod.bak
+                      go mod tidy
+                      diff go.mod go.mod.bak || (echo "go.mod is not up to date" && exit 1)
+                      # Extra build as lint depends on the build.
+                      CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
+                      golangci-lint run --verbose --timeout 900s
+                      ls release/linux/amd64/drone-runner-aws-linux-amd64
+                      release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_ubuntu.yml' test_files/compiler/drone_pool.yml
+                      release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
+                  when:
+                    stageStatus: Success
+    - parallel:
+        - stage:
+            name: Linux AMD64
+            identifier: Linux_AMD64
+            description: ""
+            type: CI
+            spec:
+              cloneCodebase: true
+              caching:
+                enabled: false
+                paths: []
+              platform:
+                os: Linux
+                arch: Amd64
+              runtime:
+                type: Cloud
+                spec: {}
+              execution:
+                steps:
+                  - step:
+                      type: Run
+                      name: Build
+                      identifier: Run_1
+                      spec:
+                        connectorRef: Plugins_Docker_Hub_Connector
+                        image: golang:1.19
+                        shell: Sh
+                        command: CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
+                  - step:
+                      type: Plugin
+                      name: Build and Push on Tag
+                      identifier: publish_to_docker
+                      spec:
+                        connectorRef: Plugins_Docker_Hub_Connector
+                        image: plugins/docker
+                        settings:
+                          username: drone
+                          password: <+secrets.getValue("Drone_Docker_Hub_PAT")>
+                          repo: drone/drone-runner-aws
+                          dockerfile: docker/Dockerfile.linux.amd64
+                          auto_tag: "true"
+                          auto_tag_suffix: linux-amd64
+                      when:
+                        stageStatus: Success
+                        condition: <+codebase.build.type> == "tag"
+                        imagePullPolicy: IfNotPresent
+                  - step:
+                      type: BuildAndPushDockerRegistry
+                      name: Build And Push on Branch
+                      identifier: BuildAndPushDockerRegistry_1
+                      spec:
+                        connectorRef: Plugins_Docker_Hub_Connector
+                        repo: drone/drone-runner-aws
+                        tags:
+                          - linux-amd64
+                        caching: false
+                        dockerfile: docker/Dockerfile.linux.amd64
+                      when:
+                        stageStatus: Success
+                        condition: |
+                          <+codebase.build.type> == "branch"
+        - stage:
+            name: Linux ARM64
+            identifier: Linux_ARM64
+            description: ""
+            type: CI
+            spec:
+              cloneCodebase: true
+              caching:
+                enabled: false
+                paths: []
+              platform:
+                os: Linux
+                arch: Arm64
+              runtime:
+                type: Cloud
+                spec: {}
+              execution:
+                steps:
+                  - step:
+                      type: Run
+                      name: build arm64 linux binary
+                      identifier: build_arm64_linux_binary
+                      spec:
+                        connectorRef: Plugins_Docker_Hub_Connector
+                        image: golang:1.19
+                        shell: Sh
+                        command: CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/arm64/drone-runner-aws-linux-arm64
+                  - step:
+                      type: Plugin
+                      name: Build and Push on Tag
+                      identifier: publish_to_docker
+                      spec:
+                        connectorRef: Plugins_Docker_Hub_Connector
+                        image: plugins/docker
+                        settings:
+                          username: drone
+                          password: <+secrets.getValue("Drone_Docker_Hub_PAT")>
+                          repo: drone/drone-runner-aws
+                          dockerfile: docker/Dockerfile.linux.arm64
+                          auto_tag: "true"
+                          auto_tag_suffix: linux-arm64
+                      when:
+                        stageStatus: Success
+                        condition: <+codebase.build.type> == "tag"
+                        imagePullPolicy: IfNotPresent
+                  - step:
+                      type: BuildAndPushDockerRegistry
+                      name: Build And Push On Branch
+                      identifier: BuildAndPushDockerRegistry_1
+                      spec:
+                        connectorRef: Plugins_Docker_Hub_Connector
+                        repo: drone/drone-runner-aws
+                        tags:
+                          - linux-arm64
+                        caching: false
+                        dockerfile: docker/Dockerfile.linux.arm64
+                      when:
+                        stageStatus: Success
+                        condition: <+codebase.build.type> == "branch"
+    - stage:
+        name: Manifest and Release
+        identifier: Manifest_and_Release
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            paths: []
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Plugin
+                  name: manifest
+                  identifier: manifest
+                  spec:
+                    connectorRef: Plugins_Docker_Hub_Connector
+                    image: plugins/manifest
+                    settings:
+                      username: drone
+                      password: <+secrets.getValue("Drone_Docker_Hub_PAT")>
+                      ignore_missing: "true"
+                      auto_tag: "true"
+                      spec: docker/manifest.tmpl
+                  when:
+                    stageStatus: Success
+                    condition: <+codebase.build.type> == "tag" || "branch"
+              - step:
+                  type: Run
+                  name: Builds for Release
+                  identifier: Run_1
+                  spec:
+                    connectorRef: Plugins_Docker_Hub_Connector
+                    image: golang:1.19
+                    shell: Sh
+                    command: |-
+                      CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
+                      CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/arm64/drone-runner-aws-linux-arm64
+                  when:
+                    stageStatus: Success
+                    condition: |
+                      <+codebase.build.type> == "tag"
+              - step:
+                  type: Plugin
+                  name: Release
+                  identifier: Release
+                  spec:
+                    connectorRef: Plugins_Docker_Hub_Connector
+                    image: plugins/github-release
+                    settings:
+                      title: <+trigger.tag>
+                      files: release/linux/amd64/drone-runner-aws-linux-amd64, release/linux/arm64/drone-runner-aws-linux-arm64
+                      api_key: <+secrets.getValue("ci_job_github_pat")>
+                  when:
+                    stageStatus: Success
+                    condition: <+codebase.build.type> == "tag"
+        variables:
+          - name: DRONE_REPO_OWNER
+            type: String
+            description: ""
+            required: false
+            value: drone-runners
+  projectIdentifier: Drone_Plugins
+  identifier: dronerunneraws
+  name: drone-runner-aws
+  allowStageExecutions: true
