@@ -762,14 +762,37 @@ $Object = [System.Convert]::FromBase64String($object2)
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
 
-Invoke-WebRequest -Uri "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile "C:\Program Files\lite-engine\plugin.exe"
+$primaryPluginUrl = "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$secondaryPluginUrl = "{{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$outputFile = "C:\Program Files\lite-engine\plugin.exe"
+
+try {
+    echo "[DRONE] Downloading plugin from primary URL"
+    Invoke-WebRequest -Uri $primaryPluginUrl -OutFile $outputFile
+} catch {
+    echo "[DRONE] Primary URL failed for plugin, attempting to download from secondary URL"
+    Invoke-WebRequest -Uri $secondaryPluginUrl -OutFile $outputFile
+}
+
 $env:Path = 'C:\Program Files\lite-engine;' + $env:Path
 
 # Refresh the PSEnviroment
 refreshenv
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
-Invoke-WebRequest -Uri "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile "C:\Program Files\lite-engine\lite-engine.exe"
+
+$primaryLiteEngineUrl = "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$secondaryLiteEngineUrl = "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$outputFile = "C:\Program Files\lite-engine\lite-engine.exe"
+
+try {
+    echo "[DRONE] Downloading lite engine from primary URL"
+    Invoke-WebRequest -Uri $primaryLiteEngineUrl -OutFile $outputFile
+} catch {
+    echo "[DRONE] Primary URL failed for lite engine, attempting to download from secondary URL"
+    Invoke-WebRequest -Uri $secondaryLiteEngineUrl -OutFile $outputFile
+}
+
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=` + "`" + `"C:\Program Files\lite-engine\.env` + "`" + `"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
