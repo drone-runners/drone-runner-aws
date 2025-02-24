@@ -38,6 +38,7 @@ type SetupVMRequest struct {
 	GitspaceAgentConfig types.GitspaceAgentConfig `json:"gitspace_agent_config"`
 	StorageConfig       types.StorageConfig       `json:"storage_config"`
 	Zone                string                    `json:"zone"`
+	MachineType         string                    `json:"machine_type"`
 }
 
 type SetupVMResponse struct {
@@ -250,7 +251,19 @@ func handleSetup(
 			RunnerName: runnerName,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, poolManager.GetTLSServerName(), owner, r.ResourceClass, r.ImageName, query, &r.GitspaceAgentConfig, &r.StorageConfig, r.Zone)
+	instance, err := poolManager.Provision(
+		ctx,
+		pool,
+		poolManager.GetTLSServerName(),
+		owner,
+		r.ResourceClass,
+		r.ImageName,
+		query,
+		&r.GitspaceAgentConfig,
+		&r.StorageConfig,
+		r.Zone,
+		r.MachineType,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}

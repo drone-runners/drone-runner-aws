@@ -178,6 +178,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if zone == "" {
 		zone = p.RandomZone()
 	}
+	if opts.MachineType != "" {
+		p.size = opts.MachineType
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
