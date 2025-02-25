@@ -809,7 +809,7 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 	if instance.Zone == "" {
 		zone, findInstanceZoneErr := p.findInstanceZone(ctx, instance.ID)
 		if findInstanceZoneErr != nil {
-			return fmt.Sprintf("google: failed to find instance in all zones"), findInstanceZoneErr
+			return "", fmt.Errorf("google: failed to find instance in all zones: %w", findInstanceZoneErr)
 		}
 		return zone, nil
 	}
@@ -817,7 +817,11 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 	// validate if instance is present
 	_, findInstanceErr := p.getInstance(ctx, p.projectID, instance.Zone, instance.ID)
 	if findInstanceErr != nil {
-		return fmt.Sprintf("google: failed to find instance in zone %s", instance.Zone), findInstanceErr
+		return "", fmt.Errorf(
+			"google: failed to find instance in zone %s, error: %w",
+			instance.Zone,
+			findInstanceErr,
+		)
 	}
 	return instance.Zone, nil
 }
