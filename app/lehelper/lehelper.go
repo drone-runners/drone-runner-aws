@@ -17,17 +17,19 @@ const (
 
 func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, error) {
 	var params = cloudinit.Params{
-		Platform:               opts.Platform,
-		CACert:                 string(opts.CACert),
-		TLSCert:                string(opts.TLSCert),
-		TLSKey:                 string(opts.TLSKey),
-		LiteEnginePath:         opts.LiteEnginePath,
-		LiteEngineLogsPath:     oshelp.GetLiteEngineLogsPath(opts.Platform.OS),
-		HarnessTestBinaryURI:   opts.HarnessTestBinaryURI,
-		PluginBinaryURI:        opts.PluginBinaryURI,
-		Tmate:                  opts.Tmate,
-		IsHosted:               opts.IsHosted,
-		AutoInjectionBinaryURI: opts.AutoInjectionBinaryURI,
+		Platform:                opts.Platform,
+		CACert:                  string(opts.CACert),
+		TLSCert:                 string(opts.TLSCert),
+		TLSKey:                  string(opts.TLSKey),
+		LiteEnginePath:          opts.LiteEnginePath,
+		LiteEngineLogsPath:      oshelp.GetLiteEngineLogsPath(opts.Platform.OS),
+		HarnessTestBinaryURI:    opts.HarnessTestBinaryURI,
+		PluginBinaryURI:         opts.PluginBinaryURI,
+		Tmate:                   opts.Tmate,
+		IsHosted:                opts.IsHosted,
+		AutoInjectionBinaryURI:  opts.AutoInjectionBinaryURI,
+		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
+		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
