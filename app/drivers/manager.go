@@ -25,18 +25,20 @@ import (
 
 type (
 	Manager struct {
-		globalCtx              context.Context
-		poolMap                map[string]*poolEntry
-		strategy               Strategy
-		cleanupTimer           *time.Ticker
-		runnerName             string
-		liteEnginePath         string
-		instanceStore          store.InstanceStore
-		stageOwnerStore        store.StageOwnerStore
-		harnessTestBinaryURI   string
-		pluginBinaryURI        string
-		tmate                  types.Tmate
-		autoInjectionBinaryURI string
+		globalCtx               context.Context
+		poolMap                 map[string]*poolEntry
+		strategy                Strategy
+		cleanupTimer            *time.Ticker
+		runnerName              string
+		liteEnginePath          string
+		instanceStore           store.InstanceStore
+		stageOwnerStore         store.StageOwnerStore
+		harnessTestBinaryURI    string
+		pluginBinaryURI         string
+		tmate                   types.Tmate
+		autoInjectionBinaryURI  string
+		liteEngineFallbackPath  string
+		pluginBinaryFallbackURI string
 	}
 
 	poolEntry struct {
@@ -51,14 +53,16 @@ func New(
 	env *config.EnvConfig,
 ) *Manager {
 	return &Manager{
-		globalCtx:              globalContext,
-		instanceStore:          instanceStore,
-		tmate:                  types.Tmate(env.Tmate),
-		runnerName:             env.Runner.Name,
-		liteEnginePath:         env.LiteEngine.Path,
-		harnessTestBinaryURI:   env.Settings.HarnessTestBinaryURI,
-		pluginBinaryURI:        env.Settings.PluginBinaryURI,
-		autoInjectionBinaryURI: env.Settings.AutoInjectionBinaryURI,
+		globalCtx:               globalContext,
+		instanceStore:           instanceStore,
+		tmate:                   types.Tmate(env.Tmate),
+		runnerName:              env.Runner.Name,
+		liteEnginePath:          env.LiteEngine.Path,
+		harnessTestBinaryURI:    env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:         env.Settings.PluginBinaryURI,
+		autoInjectionBinaryURI:  env.Settings.AutoInjectionBinaryURI,
+		liteEngineFallbackPath:  env.LiteEngine.FallbackPath,
+		pluginBinaryFallbackURI: env.Settings.PluginBinaryFallbackURI,
 	}
 }
 
@@ -72,18 +76,22 @@ func NewManager(
 	liteEnginePath,
 	harnessTestBinaryURI,
 	pluginBinaryURI,
-	autoInjectionBinaryURI string,
+	autoInjectionBinaryURI,
+	liteEngineFallbackPath,
+	pluginBinaryFallbackURI string,
 ) *Manager {
 	return &Manager{
-		globalCtx:              globalContext,
-		instanceStore:          instanceStore,
-		tmate:                  tmate,
-		stageOwnerStore:        stageOwnerStore,
-		runnerName:             runnerName,
-		liteEnginePath:         liteEnginePath,
-		harnessTestBinaryURI:   harnessTestBinaryURI,
-		pluginBinaryURI:        pluginBinaryURI,
-		autoInjectionBinaryURI: autoInjectionBinaryURI,
+		globalCtx:               globalContext,
+		instanceStore:           instanceStore,
+		tmate:                   tmate,
+		stageOwnerStore:         stageOwnerStore,
+		runnerName:              runnerName,
+		liteEnginePath:          liteEnginePath,
+		harnessTestBinaryURI:    harnessTestBinaryURI,
+		pluginBinaryURI:         pluginBinaryURI,
+		autoInjectionBinaryURI:  autoInjectionBinaryURI,
+		liteEngineFallbackPath:  liteEngineFallbackPath,
+		pluginBinaryFallbackURI: pluginBinaryFallbackURI,
 	}
 }
 
@@ -600,12 +608,14 @@ func (m *Manager) setupInstance(
 	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
 	createOptions.IsHosted = IsHosted(ctx)
 	createOptions.LiteEnginePath = m.liteEnginePath
+	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
 	createOptions.Platform = pool.Platform
 	createOptions.PoolName = pool.Name
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize
 	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
 	createOptions.PluginBinaryURI = m.pluginBinaryURI
+	createOptions.PluginBinaryFallbackURI = m.pluginBinaryFallbackURI
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
