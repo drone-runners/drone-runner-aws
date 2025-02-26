@@ -178,6 +178,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if zone == "" {
 		zone = p.RandomZone()
 	}
+	if opts.MachineType != "" {
+		p.size = opts.MachineType
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -450,16 +453,13 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		logr := logger.FromContext(ctx).
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
-		zone, findInstanceZoneErr := p.findInstanceZone(ctx, instance.ID)
-		if findInstanceZoneErr != nil {
-			logr.WithError(findInstanceZoneErr).Errorln("google: failed to find instance")
+		zone, getZoneErr := p.getZone(ctx, instance)
+		if getZoneErr != nil {
+			logr.WithError(getZoneErr).Errorln(
+				"google: failed to find instance zone",
+				instance.Zone,
+			)
 			continue
-		}
-
-		// If instance info is passed with zone, use it
-		// The above findInstanceZone is still required as it checks whether instance itself is present in GCP or not
-		if instance.Zone != "" {
-			zone = instance.Zone
 		}
 
 		instanceDeleteOperation, deleteInstanceErr := p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
@@ -803,6 +803,27 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+func (p *config) getZone(ctx context.Context, instance *types.Instance) (string, error) {
+	if instance.Zone == "" {
+		zone, findInstanceZoneErr := p.findInstanceZone(ctx, instance.ID)
+		if findInstanceZoneErr != nil {
+			return "", fmt.Errorf("google: failed to find instance in all zones: %w", findInstanceZoneErr)
+		}
+		return zone, nil
+	}
+
+	// validate if instance is present
+	_, findInstanceErr := p.getInstance(ctx, p.projectID, instance.Zone, instance.ID)
+	if findInstanceErr != nil {
+		return "", fmt.Errorf(
+			"google: failed to find instance in zone %s, error: %w",
+			instance.Zone,
+			findInstanceErr,
+		)
+	}
+	return instance.Zone, nil
 }
 
 // instance name must be 1-63 characters long and match the regular expression

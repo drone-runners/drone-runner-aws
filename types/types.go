@@ -109,6 +109,7 @@ type InstanceCreateOpts struct {
 	AutoInjectionBinaryURI  string
 	Labels                  map[string]string
 	Zone                    string
+	MachineType             string
 	LiteEngineFallbackPath  string
 	PluginBinaryFallbackURI string
 }
