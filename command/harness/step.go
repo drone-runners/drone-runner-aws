@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func HandleStep(ctx context.Context,
 	r *ExecuteVMRequest,
 	s store.StageOwnerStore,
 	globalVolumes []string,
-	enableMock bool, // only used for scale testing
+	enableMock bool,     // only used for scale testing
 	mockTimeoutSecs int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
@@ -58,9 +59,17 @@ func HandleStep(ctx context.Context,
 		WithField("correlation_id", r.CorrelationID).
 		WithField("async", async)
 
+	jsonData, err := json.Marshal(r)
+	if err != nil {
+		logr.Error(err, "Error marshaling request")
+		return nil, err
+	}
+
+	logr.Info("received step request", "request", string(jsonData))
+
 	var poolID string
 	var inst *types.Instance
-	err := validateStruct(r.InstanceInfo)
+	err = validateStruct(r.InstanceInfo)
 	if err != nil {
 		logr.Infoln("Instance information is not passed to the VM Execute Request, fetching it from the DB")
 		entity, findStageOwnerErr := s.Find(ctx, r.StageRuntimeID)
