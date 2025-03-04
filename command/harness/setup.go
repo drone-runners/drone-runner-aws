@@ -215,7 +215,6 @@ func HandleSetup(
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name).
-		WithField("response", fmt.Sprintf("%+v", resp)).
 		WithField("tried_pools", pools).
 		Traceln("VM setup is complete")
 
