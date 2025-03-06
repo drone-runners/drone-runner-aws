@@ -610,12 +610,11 @@ runcmd:
 {{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
-
 {{ if .GitspaceAgentConfig.VMInitScript }}
 - | 
 {{ .GitspaceAgentConfig.VMInitScript }}
 {{ end }}
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 `
 
 var gitspacesUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(gitspacesUbuntuScript))
