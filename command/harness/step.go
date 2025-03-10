@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ type ExecuteVMRequest struct {
 	CorrelationID        string `json:"correlation_id"`
 	TaskID               string `json:"task_id,omitempty"`
 	Distributed          bool   `json:"distributed,omitempty"`
+	IsRunner             bool   `json:"is_runner,omitempty"`
 	api.StartStepRequest `json:"start_step_request"`
 	InstanceInfo         InstanceInfo `json:"instance_info,omitempty"`
 }
@@ -56,7 +58,8 @@ func HandleStep(ctx context.Context,
 		WithField("stage_runtime_id", r.StageRuntimeID).
 		WithField("step_id", r.StartStepRequest.ID).
 		WithField("correlation_id", r.CorrelationID).
-		WithField("async", async)
+		WithField("async", async).
+		WithField("is_runner", strconv.FormatBool(r.IsRunner))
 
 	var poolID string
 	var inst *types.Instance
