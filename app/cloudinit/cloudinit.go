@@ -35,6 +35,7 @@ type Params struct {
 	AutoInjectionBinaryURI  string
 	LiteEngineFallbackPath  string
 	PluginBinaryFallbackURI string
+	ShouldUseGoogleDNS      bool
 }
 
 var funcs = map[string]interface{}{
@@ -529,6 +530,10 @@ write_files:
   content: {{ .TLSKey | base64 }}
 runcmd:
 - 'set -x'
+{{ if .ShouldUseGoogleDNS }}
+- 'echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1" | sudo tee -a /etc/systemd/resolved.conf'
+- 'systemctl restart systemd-resolved'
+{{ end }}
 - 'ufw allow 9079'
 - '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'

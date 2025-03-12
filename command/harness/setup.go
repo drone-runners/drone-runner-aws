@@ -246,7 +246,27 @@ func handleSetup(
 			RunnerName: runnerName,
 		}
 	}
-	instance, err := poolManager.Provision(ctx, pool, poolManager.GetTLSServerName(), owner, r.ResourceClass, r.ImageName, query, &r.GitspaceAgentConfig, &r.StorageConfig, r.Zone)
+
+	shouldUseGoogleDNS := false
+	if len(r.SetupRequest.Envs) != 0 {
+		if r.SetupRequest.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
+			shouldUseGoogleDNS = true
+		}
+	}
+
+	instance, err := poolManager.Provision(
+		ctx,
+		pool,
+		poolManager.GetTLSServerName(),
+		owner,
+		r.ResourceClass,
+		r.ImageName,
+		query,
+		&r.GitspaceAgentConfig,
+		&r.StorageConfig,
+		r.Zone,
+		shouldUseGoogleDNS,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
 	}
