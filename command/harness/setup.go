@@ -250,6 +250,14 @@ func handleSetup(
 			RunnerName: runnerName,
 		}
 	}
+
+	shouldUseGoogleDNS := false
+	if len(r.SetupRequest.Envs) != 0 {
+		if r.SetupRequest.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
+			shouldUseGoogleDNS = true
+		}
+	}
+
 	instance, err := poolManager.Provision(
 		ctx,
 		pool,
@@ -262,6 +270,7 @@ func handleSetup(
 		&r.StorageConfig,
 		r.Zone,
 		r.MachineType,
+		shouldUseGoogleDNS,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)

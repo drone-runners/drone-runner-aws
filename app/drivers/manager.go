@@ -335,6 +335,7 @@ func (m *Manager) Provision(
 	storageConfig *types.StorageConfig,
 	zone string,
 	machineType string,
+	shouldUseGoogleDNS bool,
 ) (*types.Instance, error) { //nolint
 
 	pool := m.poolMap[poolName]
@@ -358,6 +359,7 @@ func (m *Manager) Provision(
 			storageConfig,
 			zone,
 			machineType,
+			false,
 		)
 		return inst, err
 	}
@@ -381,7 +383,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig, zone, machineType)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -412,7 +414,7 @@ func (m *Manager) Provision(
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", "", false, nil, nil, zone, machineType)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", "", false, nil, nil, zone, machineType, false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -576,7 +578,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", "", false, nil, nil, "", "")
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", "", false, nil, nil, "", "", false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -610,6 +612,7 @@ func (m *Manager) setupInstance(
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
+	shouldUseGoogleDNS bool,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
@@ -630,6 +633,7 @@ func (m *Manager) setupInstance(
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
 	createOptions.ImageName = imageName
+	createOptions.ShouldUseGoogleDNS = shouldUseGoogleDNS
 	if storageConfig != nil {
 		createOptions.StorageOpts = types.StorageOpts{
 			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
