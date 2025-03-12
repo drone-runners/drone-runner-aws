@@ -30,6 +30,7 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		AutoInjectionBinaryURI:  opts.AutoInjectionBinaryURI,
 		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
 		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
+		ShouldUseGoogleDNS:      opts.ShouldUseGoogleDNS,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{

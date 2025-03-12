@@ -112,6 +112,7 @@ type InstanceCreateOpts struct {
 	MachineType             string
 	LiteEngineFallbackPath  string
 	PluginBinaryFallbackURI string
+	ShouldUseGoogleDNS      bool
 }
 
 // Platform defines the target platform.
