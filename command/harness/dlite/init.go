@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	initTimeoutSec = 30 * 60
+	initTimeoutSec        = 30 * 60
+	initTimeoutSecForBYOI = 60 * 60
 )
 
 type VMInitTask struct {
@@ -28,7 +29,13 @@ type VMInitRequest struct {
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), initTimeoutSec*time.Second) // TODO: Get this from the request
+	req := &VMInitRequest{}
+	timeout := initTimeoutSec
+	if val, ok := req.SetupVMRequest.SetupRequest.Envs["CI_ENABLE_BYOI_HOSTED"]; ok && val == "true" {
+		timeout = initTimeoutSecForBYOI
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	log := logrus.New()
@@ -47,7 +54,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
-	req := &VMInitRequest{}
+
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
 		logr.WithError(err).Errorln("could not unmarshal task request data")
