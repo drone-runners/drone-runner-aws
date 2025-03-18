@@ -42,15 +42,15 @@ func NewMacVirtualizer() *MacVirtualizer {
 	return &MacVirtualizer{}
 }
 
-func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
+func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
 	uData, err := mv.generateUserData(userData, opts)
 	if err != nil {
 		return nil, "", "", err
 	}
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
-	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, vmImage, username, password, resource, port)))
-	vmStartupScriptPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
-	cloudInitScriptPath := fmt.Sprintf("/usr/local/bin/cloud_init_%s.sh", vm)
+	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, vmImageConfig, resource, port)))
+	vmStartupScriptPath := fmt.Sprintf("/tmp/%s.sh", vm)
+	cloudInitScriptPath := fmt.Sprintf("/tmp/cloud_init_%s.sh", vm)
 	id = "tart_job_" + vm
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	entrypoint := mv.GetEntryPoint()
@@ -99,7 +99,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, pa
 						Resources: minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, username, password)},
+							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password)},
 						},
 					},
 					{
@@ -126,7 +126,7 @@ func (mv *MacVirtualizer) generateUserData(userData string, opts *types.Instance
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (mv *MacVirtualizer) generateStartupScript(vmID, vmImage, username, password string, resource cf.NomadResource, port int) string {
+func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string {
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
 	return fmt.Sprintf(`
@@ -138,6 +138,18 @@ VM_ID="%s"
 
 VM_USER="%s"
 VM_PASSWORD="%s"
+
+REGISTRY="%s"
+REGISTRY_USERNAME="%s"
+REGISTRY_PASSWORD="%s"
+MACHINE_PASSWORD="%s"
+
+if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+	security unlock-keychain -p "$MACHINE_PASSWORD" ~/Library/Keychains/login.keychain-db
+    echo "$REGISTRY_PASSWORD" | tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+else
+    echo "No registry details provided, skipping logging."
+fi
 
 echo "Cloning tart VM with id $VM_ID"
 # Install the VM
@@ -174,10 +186,9 @@ ANCHOR_FILE="/etc/pf.anchors/tart"
 ANCHOR_CONTENT="rdr pass log (all) on en0 inet proto tcp from any to any port %d -> $VM_IP port 9079"
 
 # Remove any existing entry with same IP if present
-sudo sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
-
-echo "$ANCHOR_CONTENT" >> "$ANCHOR_FILE"
-sudo pfctl -a tart -f "$ANCHOR_FILE"
+echo "$MACHINE_PASSWORD" | sudo -S sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
+echo "$MACHINE_PASSWORD" | sudo -S sh -c "echo '$ANCHOR_CONTENT' | tee -a '$ANCHOR_FILE'"
+echo "$MACHINE_PASSWORD" | sudo -S pfctl -a tart -f "$ANCHOR_FILE"
 
 #UNLOCK
 %s
@@ -234,8 +245,8 @@ while true
 		sleep 1
 	done
 echo "Tart VM Started"
-
-`, vmImage, vmID, username, password, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, lockFunction, vmID, port, UnlockFunction)
+`, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
+		vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password, machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, lockFunction, vmID, port, UnlockFunction)
 }
 
 func (mv *MacVirtualizer) GetMachineFrequency() int {
@@ -278,8 +289,8 @@ while true
 	}
 }
 
-func (mv *MacVirtualizer) GetDestroyScriptGenerator() func(string) string {
-	return func(vm string) string {
+func (mv *MacVirtualizer) GetDestroyScriptGenerator() func(string, string) string {
+	return func(vm, machinePassword string) string {
 		command := fmt.Sprintf(`
 #!/usr/bin/env bash
 		
@@ -291,7 +302,7 @@ VM_IP=$(/opt/homebrew/bin/tart ip "$VM_ID")
 
 echo "$VM_IP"
 ANCHOR_FILE="/etc/pf.anchors/tart"
-sudo sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
+echo "%s" | sudo -S sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
 /opt/homebrew/bin/tart stop "$VM_ID"; /opt/homebrew/bin/tart delete "$VM_ID"
 if [ $? -ne 0 ]; then
   tart_pid=$(ps -A | grep -m1 "tart run "$VM_ID"" | awk '{print $1}')
@@ -301,7 +312,7 @@ if [ $? -ne 0 ]; then
 fi
 
 %s
-	`, vm, lockFunction, UnlockFunction)
+	`, vm, machinePassword, lockFunction, UnlockFunction)
 		return command
 	}
 }
@@ -317,7 +328,7 @@ VM_IP=$(/opt/homebrew/bin/tart ip %s)
 
 # SCP command using expect
 expect <<- DONE
-    spawn scp -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "%s" "$VM_USER@$VM_IP:/Users/anka/cloud_init.sh"
+    spawn scp -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "%s" "$VM_USER@$VM_IP:/tmp/cloud_init.sh"
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
@@ -326,7 +337,7 @@ DONE
 
 # SSH command using expect
 expect <<- DONE
-    spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /Users/anka/cloud_init.sh"
+    spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}

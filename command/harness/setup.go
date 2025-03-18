@@ -33,7 +33,6 @@ type SetupVMRequest struct {
 	LogKey              string            `json:"log_key"`
 	Context             Context           `json:"context,omitempty"`
 	ResourceClass       string            `json:"resource_class"`
-	ImageName           string            `json:"image_name"`
 	api.SetupRequest    `json:"setup_request"`
 	GitspaceAgentConfig types.GitspaceAgentConfig `json:"gitspace_agent_config"`
 	StorageConfig       types.StorageConfig       `json:"storage_config"`
@@ -264,7 +263,7 @@ func handleSetup(
 		poolManager.GetTLSServerName(),
 		owner,
 		r.ResourceClass,
-		r.ImageName,
+		&r.VMImageConfig,
 		query,
 		&r.GitspaceAgentConfig,
 		&r.StorageConfig,
