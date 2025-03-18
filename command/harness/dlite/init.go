@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	initTimeoutSec = 30 * 60
+	initTimeoutSec        = 30 * 60
+	initTimeoutSecForBYOI = 60 * 60
 )
 
 type VMInitTask struct {
@@ -28,9 +29,6 @@ type VMInitRequest struct {
 }
 
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), initTimeoutSec*time.Second) // TODO: Get this from the request
-	defer cancel()
-
 	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
@@ -54,6 +52,12 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
+	timeout := initTimeoutSec
+	if val, ok := req.SetupVMRequest.SetupRequest.Envs["CI_ENABLE_BYOI_HOSTED"]; ok && val == "true" {
+		timeout = initTimeoutSecForBYOI
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
+	defer cancel()
 
 	accountID := harness.GetAccountID(&req.SetupVMRequest.Context, map[string]string{})
 
