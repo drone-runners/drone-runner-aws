@@ -3,6 +3,7 @@ package delegate
 import (
 	"context"
 	"encoding/json"
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
@@ -44,6 +45,7 @@ func (c *delegateCommand) delegateListener() http.Handler {
 	mux.Post("/setup", c.handleSetup)
 	mux.Post("/destroy", c.handleDestroy)
 	mux.Post("/step", c.handleStep)
+	mux.Post("/suspend", c.handleSuspend)
 
 	return mux
 }
@@ -233,15 +235,32 @@ func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
 	httprender.OK(w, resp)
 }
 
+func (c *delegateCommand) handleSuspend(writer http.ResponseWriter, request *http.Request) {
+	req := &harness.SuspendVMRequest{}
+	if err := json.NewDecoder(request.Body).Decode(req); err != nil {
+		logrus.WithError(err).Error("could not decode suspend request body")
+		httprender.BadRequest(writer, err.Error(), nil)
+		return
+	}
+	ctx := request.Context()
+	err := harness.HandleSuspend(ctx, req, c.env.LiteEngine.EnableMock, c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager)
+	if err != nil {
+		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Error("could not suspend VM")
+		writeError(writer, err)
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+}
+
 func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) {
 	// TODO: Change the java object to match VmCleanupRequest
 	rs := &struct {
-		ID                 string               `json:"id"`
-		InstanceID         string               `json:"instance_id"`
-		PoolID             string               `json:"pool_id"`
-		CorrelationID      string               `json:"correlation_id"`
-		InstanceInfo       harness.InstanceInfo `json:"instance_info"`
-		StorageCleanupType storage.CleanupType  `json:"storage_cleanup_type"`
+		ID                 string              `json:"id"`
+		InstanceID         string              `json:"instance_id"`
+		PoolID             string              `json:"pool_id"`
+		CorrelationID      string              `json:"correlation_id"`
+		InstanceInfo       common.InstanceInfo `json:"instance_info"`
+		StorageCleanupType storage.CleanupType `json:"storage_cleanup_type"`
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(rs); err != nil {
 		logrus.WithError(err).Error("could not decode VM destroy request body")

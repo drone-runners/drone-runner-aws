@@ -24,6 +24,8 @@ import (
 	"github.com/dchest/uniuri"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 // config is a struct that implements drivers.Pool interface
 type config struct {
 	spotInstance     bool
@@ -489,15 +491,15 @@ func isHibernateRetryable(origErr error) bool {
 	return false
 }
 
-func (p *config) Start(ctx context.Context, instanceID, poolName string) (string, error) {
+func (p *config) Start(ctx context.Context, instance *types.Instance, poolName string) (string, error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
 		WithField("pool", poolName).
-		WithField("instanceID", instanceID)
+		WithField("instanceID", instance)
 
-	amazonInstance, err := p.getInstance(ctx, instanceID)
+	amazonInstance, err := p.getInstance(ctx, instance.ID)
 	if err != nil {
 		logr.WithError(err).Errorln("aws: failed to find instance status")
 	}
@@ -507,14 +509,14 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 		return p.getIP(amazonInstance), nil
 	} else if state == ec2.InstanceStateNameStopping {
 		logr.Traceln("aws: waiting for instance to stop")
-		waitErr := client.WaitUntilInstanceStoppedWithContext(ctx, &ec2.DescribeInstancesInput{InstanceIds: []*string{aws.String(instanceID)}})
+		waitErr := client.WaitUntilInstanceStoppedWithContext(ctx, &ec2.DescribeInstancesInput{InstanceIds: []*string{aws.String(instance.ID)}})
 		if waitErr != nil {
 			logr.WithError(waitErr).Warnln("aws: instance failed to stop. Proceeding with starting the instance")
 		}
 	}
 
 	_, err = client.StartInstancesWithContext(ctx,
-		&ec2.StartInstancesInput{InstanceIds: []*string{aws.String(instanceID)}})
+		&ec2.StartInstancesInput{InstanceIds: []*string{aws.String(instance.ID)}})
 	if err != nil {
 		logr.WithError(err).
 			Errorln("aws: failed to start VMs")
@@ -522,7 +524,7 @@ func (p *config) Start(ctx context.Context, instanceID, poolName string) (string
 	}
 	logr.Traceln("amazon: VM started")
 
-	awsInstance, err := p.pollInstanceIPAddr(ctx, instanceID, logr)
+	awsInstance, err := p.pollInstanceIPAddr(ctx, instance.ID, logr)
 	if err != nil {
 		logr.WithError(err).
 			Errorln("aws: failed to retrieve IP address of the VM")

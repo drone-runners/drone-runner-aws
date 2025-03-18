@@ -3,7 +3,6 @@ package drivers
 import (
 	"context"
 	"errors"
-
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -28,7 +27,7 @@ type Driver interface {
 	Destroy(ctx context.Context, instances []*types.Instance) (err error)
 	DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error)
 	Hibernate(ctx context.Context, instanceID, poolName string) error
-	Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error)
+	Start(ctx context.Context, instance *types.Instance, poolName string) (ipAddress string, err error)
 	SetTags(context.Context, *types.Instance, map[string]string) error
 	Ping(ctx context.Context) error
 	// Logs returns the console logs for the instance.

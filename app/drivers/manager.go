@@ -13,6 +13,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/certs"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -23,6 +24,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 )
+
+var _ IManager = (*Manager)(nil)
 
 type (
 	Manager struct {
@@ -337,8 +340,8 @@ func (m *Manager) Provision(
 	zone string,
 	machineType string,
 	shouldUseGoogleDNS bool,
+	instanceInfo *common.InstanceInfo,
 ) (*types.Instance, error) { //nolint
-
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
@@ -348,7 +351,28 @@ func (m *Manager) Provision(
 		if pool.Driver.DriverName() != string(types.Nomad) && pool.Driver.DriverName() != string(types.Google) {
 			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad/google")
 		}
-		inst, err := m.setupInstance(
+		var inst *types.Instance
+		var err error
+		if pool.Driver.DriverName() == string(types.Google) {
+			if validateInstanceInfoErr := common.ValidateStruct(instanceInfo); validateInstanceInfoErr != nil {
+				logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
+			} else {
+				inst = common.BuildInstanceFromRequest(*instanceInfo)
+				ipAddress, startErr := pool.Driver.Start(ctx, inst, poolName)
+				if startErr != nil {
+					logrus.Warnf("failed to start the instance %s with err: %s", instanceInfo.ID, startErr)
+				} else {
+					inst.Address = ipAddress
+					inst.State = types.StateInUse
+					inst.OwnerID = ownerID
+					if err = m.instanceStore.Update(ctx, inst); err != nil {
+						logrus.Warnf("failed to tag an instance in %q pool with err: %s", poolName, err)
+					}
+					return inst, err
+				}
+			}
+		}
+		inst, err = m.setupInstance(
 			ctx,
 			pool,
 			serverName,
@@ -734,7 +758,7 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 	}
 
 	logrus.WithField("instanceID", instanceID).Infoln("Starting vm from hibernate state")
-	ipAddress, err := pool.Driver.Start(ctx, instanceID, poolName)
+	ipAddress, err := pool.Driver.Start(ctx, inst, poolName)
 	if err != nil {
 		return nil, fmt.Errorf("start_instance: failed to start the instance %s of %q pool: %w", instanceID, poolName, err)
 	}
@@ -929,4 +953,17 @@ func (m *Manager) GetTLSServerName() string {
 
 func (m *Manager) IsDistributed() bool {
 	return false
+}
+
+func (m *Manager) Suspend(ctx context.Context, id string) error {
+	poolName := ""
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return fmt.Errorf("suspend: pool name %q not found", poolName)
+	}
+
+	if err := pool.Driver.Hibernate(ctx, id, poolName); err != nil {
+		return fmt.Errorf("suspend: failed to suspend an instance %s of %q pool: %w", id, poolName, err)
+	}
+	return nil
 }

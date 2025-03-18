@@ -17,6 +17,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 type config struct {
 	username      string
 	password      string
@@ -227,7 +229,7 @@ func (c *config) Hibernate(_ context.Context, _, _ string) error {
 	return errors.New("unimplemented")
 }
 
-func (c *config) Start(_ context.Context, _, _ string) (ipAddress string, err error) {
+func (c *config) Start(_ context.Context, _ *types.Instance, _ string) (ipAddress string, err error) {
 	return "", errors.New("unimplemented")
 }
 

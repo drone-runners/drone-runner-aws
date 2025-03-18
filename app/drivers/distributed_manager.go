@@ -15,6 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var _ IManager = (*DistributedManager)(nil)
+
 type DistributedManager struct {
 	Manager
 }

@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"strings"
 	"time"
 
@@ -31,7 +32,7 @@ type ExecuteVMRequest struct {
 	TaskID               string `json:"task_id,omitempty"`
 	Distributed          bool   `json:"distributed,omitempty"`
 	api.StartStepRequest `json:"start_step_request"`
-	InstanceInfo         InstanceInfo `json:"instance_info,omitempty"`
+	InstanceInfo         common.InstanceInfo `json:"instance_info,omitempty"`
 }
 
 var (
@@ -60,7 +61,7 @@ func HandleStep(ctx context.Context,
 
 	var poolID string
 	var inst *types.Instance
-	err := validateStruct(r.InstanceInfo)
+	err := common.ValidateStruct(r.InstanceInfo)
 	if err != nil {
 		logr.Infof("Instance information is not passed to the VM Execute Request, fetching it from the DB: %v", err)
 		entity, findStageOwnerErr := s.Find(ctx, r.StageRuntimeID)
@@ -77,7 +78,7 @@ func HandleStep(ctx context.Context,
 		}
 	} else {
 		logr.Infoln("Using the instance information from the VM Execute Request")
-		inst = buildInstanceFromRequest(r.InstanceInfo)
+		inst = common.BuildInstanceFromRequest(r.InstanceInfo)
 		poolID = r.InstanceInfo.PoolName
 	}
 
