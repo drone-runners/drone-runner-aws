@@ -17,6 +17,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 // config is a struct that implements drivers.Pool interface
 type config struct {
 	pat        string
@@ -239,7 +241,7 @@ func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) err
 	return nil
 }
 
-func (p *config) Start(ctx context.Context, instanceID, poolName string) (string, error) {
+func (p *config) Start(_ context.Context, _ *types.Instance, _ string) (string, error) {
 	return "", nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -18,7 +19,7 @@ type IManager interface {
 	Update(ctx context.Context, instance *types.Instance) error
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration, purgerTime time.Duration) error
-	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool) (*types.Instance, error) //nolint
+	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, info *common.InstanceInfo) (*types.Instance, error) //nolint
 	Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error
@@ -30,4 +31,5 @@ type IManager interface {
 	GetStageOwnerStore() store.StageOwnerStore
 	GetTLSServerName() string
 	IsDistributed() bool
+	Suspend(ctx context.Context, id string) error
 }
