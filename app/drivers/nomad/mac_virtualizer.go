@@ -175,7 +175,7 @@ else
     echo 'Waited 30 seconds for VM to start, exiting...'
     exit "1"
 fi
-sleep 10
+sleep 5
 # Stop VM to apply port forwarding otherwise VMs loose internet connectivity
 echo "Stopping tart VM with id $VM_ID"
 /opt/homebrew/bin/tart stop "$VM_ID"
