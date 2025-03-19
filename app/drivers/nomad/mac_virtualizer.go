@@ -145,8 +145,10 @@ REGISTRY_PASSWORD="%s"
 MACHINE_PASSWORD="%s"
 
 if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+	mv ~/Library/Keychains/login.keychain-db ~/Library/Keychains/login.keychain-db.backup
+	security create-keychain -p "$MACHINE_PASSWORD" login.keychain-db
 	security unlock-keychain -p "$MACHINE_PASSWORD" ~/Library/Keychains/login.keychain-db
-    echo "$REGISTRY_PASSWORD" | tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+	echo "$REGISTRY_PASSWORD" | tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
 else
     echo "No registry details provided, skipping logging."
 fi
@@ -173,7 +175,7 @@ else
     echo 'Waited 30 seconds for VM to start, exiting...'
     exit "1"
 fi
-
+sleep 10
 # Stop VM to apply port forwarding otherwise VMs loose internet connectivity
 echo "Stopping tart VM with id $VM_ID"
 /opt/homebrew/bin/tart stop "$VM_ID"
