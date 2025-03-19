@@ -191,8 +191,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("image", p.image).
 		WithField("size", p.size).
 		WithField("google_dns", opts.ShouldUseGoogleDNS).
-		WithField("insecure", opts.Insecure).
-		WithField("book_disk_size", opts.BootDiskSize)
+		WithField("insecure", opts.Insecure)
 
 	// create the instance
 

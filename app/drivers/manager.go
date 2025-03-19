@@ -661,6 +661,7 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 		}
 		inst.Labels = labelsBytes
 	}
+	inst.Insecure = insecure
 
 	err = m.instanceStore.Create(ctx, inst)
 	if err != nil {
