@@ -145,6 +145,8 @@ REGISTRY_PASSWORD="%s"
 MACHINE_PASSWORD="%s"
 
 if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+	mv ~/Library/Keychains/login.keychain-db ~/Library/Keychains/login.keychain-db.backup
+	security create-keychain -p "$MACHINE_PASSWORD" login.keychain-db
 	security unlock-keychain -p "$MACHINE_PASSWORD" ~/Library/Keychains/login.keychain-db
     echo "$REGISTRY_PASSWORD" | tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
 else
@@ -176,7 +178,30 @@ fi
 
 # Stop VM to apply port forwarding otherwise VMs loose internet connectivity
 echo "Stopping tart VM with id $VM_ID"
-/opt/homebrew/bin/tart stop "$VM_ID"
+
+attempt=1
+max_attempts=3
+sleep_duration=5
+
+# Stop VM to apply port forwarding otherwise VMs lose internet connectivity
+echo "Stopping tart VM with id $VM_ID"
+while [ "$attempt" -le "$max_attempts" ]; do
+  /opt/homebrew/bin/tart stop "$VM_ID"
+  if [ $? -eq 0 ]; then
+    echo "VM stopped successfully."
+    break  # Exit the loop if successful
+  else
+    echo "Attempt $attempt failed. Retrying in $sleep_duration seconds..."
+    attempt=$((attempt + 1))
+    sleep "$sleep_duration"
+  fi
+done
+
+# If VM stop failed after all attempts, exit the script
+if [ "$attempt" -gt "$max_attempts" ]; then
+  echo "Failed to stop VM after $max_attempts attempts. Exiting."
+  exit 1
+fi
 
 # LOCK
 %s
@@ -297,12 +322,13 @@ func (mv *MacVirtualizer) GetDestroyScriptGenerator() func(string, string) strin
 VM_ID="%s"
 echo "$VM_ID"
 VM_IP=$(/opt/homebrew/bin/tart ip "$VM_ID")
+MACHINE_PASSWORD="%s"
 #LOCK
 %s
 
 echo "$VM_IP"
 ANCHOR_FILE="/etc/pf.anchors/tart"
-echo "%s" | sudo -S sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
+echo "$MACHINE_PASSWORD" | sudo -S sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
 /opt/homebrew/bin/tart stop "$VM_ID"; /opt/homebrew/bin/tart delete "$VM_ID"
 if [ $? -ne 0 ]; then
   tart_pid=$(ps -A | grep -m1 "tart run "$VM_ID"" | awk '{print $1}')
