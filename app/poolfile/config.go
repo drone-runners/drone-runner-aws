@@ -299,6 +299,10 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				nomadConfig.VM.Account.Password = passwords.Tart
 			}
 
+			if nomadConfig.VM.Account.MachinePassword == "" && passwords.TartMachine != "" {
+				nomadConfig.VM.Account.MachinePassword = passwords.TartMachine
+			}
+
 			platform := instance.Platform
 			virtualizerEngine := "ignite"
 			if platform.OS == oshelp.OSMac {
@@ -311,6 +315,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				nomad.WithInsecure(nomadConfig.Server.Insecure),
 				nomad.WithUsername(nomadConfig.VM.Account.Username),
 				nomad.WithPassword(nomadConfig.VM.Account.Password),
+				nomad.WithMachinePassword(nomadConfig.VM.Account.MachinePassword),
 				nomad.WithCpus(nomadConfig.VM.Cpus),
 				nomad.WithDiskSize(nomadConfig.VM.DiskSize),
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),

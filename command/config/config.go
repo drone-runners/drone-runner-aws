@@ -122,8 +122,9 @@ type (
 		Noop          bool                     `json:"noop" yaml:"noop"`
 		Resource      map[string]NomadResource `json:"resource" yaml:"resource"`
 		Account       struct {
-			Username string `json:"username,omitempty"  yaml:"username"`
-			Password string `json:"password,omitempty"  yaml:"password"`
+			Username        string `json:"username,omitempty"  yaml:"username"`
+			Password        string `json:"password,omitempty"  yaml:"password"`
+			MachinePassword string `json:"machine_password,omitempty"  yaml:"password"`
 		} `json:"account" yaml:"account"`
 		UserData     string `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath string `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
@@ -264,7 +265,8 @@ type EnvConfig struct {
 	}
 
 	TartBuild struct {
-		Password string `envconfig:"TART_VM_PASSWORD"`
+		Password        string `envconfig:"TART_VM_PASSWORD"`
+		MachinePassword string `envconfig:"TART_MACHINE_PASSWORD"`
 	}
 
 	AWS struct {
@@ -350,8 +352,8 @@ type EnvConfig struct {
 		AutoInjectionBinaryURI  string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI"`
 	}
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.95/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.95/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.99/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.99/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
@@ -409,8 +411,9 @@ type EnvConfig struct {
 //nolint:gocritic
 func (c EnvConfig) Passwords() types.Passwords {
 	return types.Passwords{
-		AnkaToken: c.AnkaBuild.Token,
-		Tart:      c.TartBuild.Password,
+		AnkaToken:   c.AnkaBuild.Token,
+		Tart:        c.TartBuild.Password,
+		TartMachine: c.TartBuild.MachinePassword,
 	}
 }
 
