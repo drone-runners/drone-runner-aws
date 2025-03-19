@@ -36,6 +36,7 @@ type Params struct {
 	LiteEngineFallbackPath  string
 	PluginBinaryFallbackURI string
 	ShouldUseGoogleDNS      bool
+	Insecure                bool
 }
 
 var funcs = map[string]interface{}{
@@ -592,18 +593,24 @@ packages:
   - docker-ce
 {{ end }}
 write_files:
+{{ if .CaCertPath }}
 - path: {{ .CaCertPath }}
   permissions: '0600'
   encoding: b64
   content: {{ .CACert | base64  }}
+{{ end }}
+{{ if .CertPath }}
 - path: {{ .CertPath }}
   permissions: '0600'
   encoding: b64
   content: {{ .TLSCert | base64 }}
+{{ end }}
+{{ if .KeyPath }}
 - path: {{ .KeyPath }}
   permissions: '0600'
   encoding: b64
   content: {{ .TLSKey | base64 }}
+{{ end }}
 runcmd:
 - 'set -x'
 - 'ufw allow 9079'
@@ -615,6 +622,9 @@ runcmd:
 {{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+{{ if .Insecure }}
+- echo "SERVER_INSECURE=true" >> /root/.env
+{{ end }}
 {{ if .GitspaceAgentConfig.VMInitScript }}
 - | 
 {{ .GitspaceAgentConfig.VMInitScript }}
@@ -691,19 +701,18 @@ var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string, err error) {
 	sb := &strings.Builder{}
-	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
-	certPath := filepath.Join(certsDir, "server-cert.pem")
-	keyPath := filepath.Join(certsDir, "server-key.pem")
 	templateData := struct {
 		Params
 		CaCertPath string
 		CertPath   string
 		KeyPath    string
 	}{
-		Params:     *params,
-		CaCertPath: caCertPath,
-		CertPath:   certPath,
-		KeyPath:    keyPath,
+		Params: *params,
+	}
+	if !params.Insecure {
+		templateData.CaCertPath = filepath.Join(certsDir, "ca-cert.pem")
+		templateData.CertPath = filepath.Join(certsDir, "server-cert.pem")
+		templateData.KeyPath = filepath.Join(certsDir, "server-key.pem")
 	}
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:

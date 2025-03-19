@@ -15,4 +15,5 @@ type InstanceInfo struct {
 	CACert            []byte `json:"ca_cert"`
 	TLSKey            []byte `json:"tls_key"`
 	TLSCert           []byte `json:"tls_cert"`
+	Insecure          bool   `json:"insecure"`
 }

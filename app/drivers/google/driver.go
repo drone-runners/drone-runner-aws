@@ -190,7 +190,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("zone", zone).
 		WithField("image", p.image).
 		WithField("size", p.size).
-		WithField("google_dns", opts.ShouldUseGoogleDNS)
+		WithField("google_dns", opts.ShouldUseGoogleDNS).
+		WithField("insecure", opts.Insecure).
+		WithField("book_disk_size", opts.BootDiskSize)
 
 	// create the instance
 
@@ -476,35 +478,38 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		err = deleteInstanceErr
 		logr.Info("google: sent delete instance request")
 
-		if storageCleanupType != nil && *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
+		if storageCleanupType != nil {
 			logr.Info("google: waiting for instance deletion")
 			err = p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
 			if err != nil {
 				logr.WithError(err).Errorln("google: could not delete instance. skipping disk deletion")
 				return err
 			}
-			logr.Info("google: deleting persistent disk")
-			storageIdentifiers := strings.Split(instance.StorageIdentifier, ",")
-			for _, storageIdentifier := range storageIdentifiers {
-				diskDeleteOperation, diskDeletionErr := p.deletePersistentDisk(
-					ctx,
-					p.projectID,
-					zone,
-					storageIdentifier,
-					uuid.New().String(),
-				)
-				if diskDeletionErr != nil {
-					var googleErr *googleapi.Error
-					if errors.As(diskDeletionErr, &googleErr) &&
-						googleErr.Code == http.StatusNotFound {
-						logr.WithError(diskDeletionErr).
-							Errorln("google: persistent disk %s not found", storageIdentifier)
+
+			if *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
+				logr.Info("google: deleting persistent disk")
+				storageIdentifiers := strings.Split(instance.StorageIdentifier, ",")
+				for _, storageIdentifier := range storageIdentifiers {
+					diskDeleteOperation, diskDeletionErr := p.deletePersistentDisk(
+						ctx,
+						p.projectID,
+						zone,
+						storageIdentifier,
+						uuid.New().String(),
+					)
+					if diskDeletionErr != nil {
+						var googleErr *googleapi.Error
+						if errors.As(diskDeletionErr, &googleErr) &&
+							googleErr.Code == http.StatusNotFound {
+							logr.WithError(diskDeletionErr).
+								Errorln("google: persistent disk %s not found", storageIdentifier)
+						}
 					}
-				}
-				err = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
-				if err != nil {
-					logr.WithError(err).Errorln("google: could not delete persistent disk %s", storageIdentifier)
-					return err
+					err = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
+					if err != nil {
+						logr.WithError(err).Errorln("google: could not delete persistent disk %s", storageIdentifier)
+						return err
+					}
 				}
 			}
 		}

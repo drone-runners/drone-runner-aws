@@ -31,6 +31,7 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
 		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
 		ShouldUseGoogleDNS:      opts.ShouldUseGoogleDNS,
+		Insecure:                opts.Insecure,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
@@ -54,9 +55,19 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 }
 
 func GetClient(instance *types.Instance, serverName string, liteEnginePort int64, mock bool, mockTimeoutSecs int) (lehttp.Client, error) {
-	leURL := fmt.Sprintf("https://%s:%d/", instance.Address, liteEnginePort)
+	protocol := "https"
+	if instance.Insecure {
+		protocol = "http"
+	}
+	leURL := fmt.Sprintf("%s://%s:%d/", protocol, instance.Address, liteEnginePort)
 	if mock {
 		return lehttp.NewNoopClient(&api.PollStepResponse{}, nil, time.Duration(mockTimeoutSecs)*time.Second, 0, 0), nil
+	}
+
+	if instance.Insecure {
+		return lehttp.NewHTTPClientWithTLSOption(leURL,
+			serverName, string(instance.CACert),
+			string(instance.TLSCert), string(instance.TLSKey), true)
 	}
 	return lehttp.NewHTTPClient(leURL,
 		serverName, string(instance.CACert),
