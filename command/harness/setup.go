@@ -39,6 +39,7 @@ type SetupVMRequest struct {
 	StorageConfig       types.StorageConfig       `json:"storage_config"`
 	Zone                string                    `json:"zone"`
 	MachineType         string                    `json:"machine_type"`
+	Insecure            bool                      `json:"insecure"`
 }
 
 type SetupVMResponse struct {
@@ -271,6 +272,7 @@ func handleSetup(
 		r.Zone,
 		r.MachineType,
 		shouldUseGoogleDNS,
+		r.Insecure,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
