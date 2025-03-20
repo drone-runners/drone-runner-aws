@@ -126,7 +126,7 @@ func (mv *MacVirtualizer) generateUserData(userData string, opts *types.Instance
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string {
+func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string { //nolint:gocritic
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
 	return fmt.Sprintf(`

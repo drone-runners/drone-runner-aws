@@ -474,7 +474,7 @@ func (p *config) fetchMachine(logr *logrus.Entry, id string) (ip, nodeID string,
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
-func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier string, destroyGenerator func(string, string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) {
+func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier string, destroyGenerator func(string, string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) { //nolint:lll
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("destroy_job_id", destroyJobID)
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
