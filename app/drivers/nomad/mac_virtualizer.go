@@ -48,7 +48,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 		return nil, "", "", err
 	}
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
-	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, defaultVMImage, vmImageConfig, resource, port))) //nolint:gocritic
+	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, defaultVMImage, vmImageConfig, resource, port)))
 	vmStartupScriptPath := fmt.Sprintf("/tmp/%s.sh", vm)
 	cloudInitScriptPath := fmt.Sprintf("/tmp/cloud_init_%s.sh", vm)
 	id = "tart_job_" + vm
@@ -126,7 +126,7 @@ func (mv *MacVirtualizer) generateUserData(userData string, opts *types.Instance
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string {
+func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string { //nolint:gocritic
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
 	return fmt.Sprintf(`
