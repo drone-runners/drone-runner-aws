@@ -42,13 +42,13 @@ func NewMacVirtualizer() *MacVirtualizer {
 	return &MacVirtualizer{}
 }
 
-func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
+func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
 	uData, err := mv.generateUserData(userData, opts)
 	if err != nil {
 		return nil, "", "", err
 	}
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
-	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, vmImageConfig, resource, port)))
+	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, defaultVMImage, vmImageConfig, resource, port)))
 	vmStartupScriptPath := fmt.Sprintf("/tmp/%s.sh", vm)
 	cloudInitScriptPath := fmt.Sprintf("/tmp/cloud_init_%s.sh", vm)
 	id = "tart_job_" + vm
@@ -126,13 +126,14 @@ func (mv *MacVirtualizer) generateUserData(userData string, opts *types.Instance
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string {
+func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string {
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 set -eo pipefail
 
+DEFAULT_VM_IMAGE="%s"
 VM_IMAGE="%s"
 VM_ID="%s"
 
@@ -144,13 +145,33 @@ REGISTRY_USERNAME="%s"
 REGISTRY_PASSWORD="%s"
 MACHINE_PASSWORD="%s"
 
-if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
-	mv ~/Library/Keychains/login.keychain-db ~/Library/Keychains/login.keychain-db.backup
-	security create-keychain -p "$MACHINE_PASSWORD" login.keychain-db
-	security unlock-keychain -p "$MACHINE_PASSWORD" ~/Library/Keychains/login.keychain-db
-    echo "$REGISTRY_PASSWORD" | tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+tart_list=$(tart list | awk 'NR>1 {print $2}')
+
+# Check if the image is already in the tart list
+if echo "$tart_list" | grep -q "$VM_IMAGE"; then
+  echo "Image '$VM_IMAGE' is already present. Nothing to do."
 else
-    echo "No registry details provided, skipping logging."
+  echo "Image '$VM_IMAGE' not found. Deleting all other images..."
+
+  # Loop through each image and delete it except the one specified
+  for image in $tart_list; do
+    if [ "$image" != "$DEFAULT_VM_IMAGE" ]; then
+      echo "Deleting image '$image'..."
+      tart delete "$image" || true
+    fi
+  done
+
+  echo "Done deleting other images."
+
+  if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+  	  echo "Logging into registry..."
+	  mv ~/Library/Keychains/login.keychain-db ~/Library/Keychains/login.keychain-db.backup
+	  security create-keychain -p "$MACHINE_PASSWORD" login.keychain-db
+	  security unlock-keychain -p "$MACHINE_PASSWORD" ~/Library/Keychains/login.keychain-db
+      echo "$REGISTRY_PASSWORD" | tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+  else
+	  echo "No registry details provided, skipping logging."
+  fi
 fi
 
 echo "Cloning tart VM with id $VM_ID"
@@ -176,9 +197,6 @@ else
     exit "1"
 fi
 
-# Stop VM to apply port forwarding otherwise VMs loose internet connectivity
-echo "Stopping tart VM with id $VM_ID"
-
 attempt=1
 max_attempts=3
 sleep_duration=5
@@ -186,8 +204,7 @@ sleep_duration=5
 # Stop VM to apply port forwarding otherwise VMs lose internet connectivity
 echo "Stopping tart VM with id $VM_ID"
 while [ "$attempt" -le "$max_attempts" ]; do
-  /opt/homebrew/bin/tart stop "$VM_ID"
-  if [ $? -eq 0 ]; then
+  if /opt/homebrew/bin/tart stop "$VM_ID"; then
     echo "VM stopped successfully."
     break  # Exit the loop if successful
   else
@@ -270,7 +287,7 @@ while true
 		sleep 1
 	done
 echo "Tart VM Started"
-`, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
+`, defaultVMImage, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
 		vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password, machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, lockFunction, vmID, port, UnlockFunction)
 }
 
