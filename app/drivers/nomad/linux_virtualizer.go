@@ -290,7 +290,11 @@ func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string, string) str
 		if [ $? -ne 0 ]; then
 		  %s stop -f %s; %s rm -f %s
 		fi
-	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)
+		vm_id=$(ignite ps | grep %s | awk '{print $1}')
+		if [ -n "$vm_id" ]; then
+		  rm -rf /var/lib/firecracker/vm/$vm_id || true
+		fi
+	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm, vm)
 	}
 }
 
