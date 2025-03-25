@@ -105,6 +105,12 @@ func WithPassword(s string) Option {
 	}
 }
 
+func WithMachinePassword(s string) Option {
+	return func(p *config) {
+		p.machinePassword = s
+	}
+}
+
 func WithUserData(text, path string) Option {
 	if text != "" {
 		return func(p *config) {

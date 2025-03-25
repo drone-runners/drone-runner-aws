@@ -33,7 +33,7 @@ var funcs = map[string]interface{}{
 	"trim": strings.TrimSpace,
 }
 
-func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, password string, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
+func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	uData := lv.generateUserData(opts)
@@ -43,7 +43,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, vmImage, userData, username, 
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 	var runCmdFormat string
 	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
-	args := []interface{}{ignitePath, vmImage, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
+	args := []interface{}{ignitePath, vmImageConfig.ImageName, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
 
 	// add labels
 	if len(opts.Labels) > 0 {
@@ -283,14 +283,18 @@ while true
 	}
 }
 
-func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string) string {
-	return func(vm string) string {
+func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string, string) string {
+	return func(vm, machinePassword string) string {
 		return fmt.Sprintf(`
 	    %s stop %s; %s rm %s
 		if [ $? -ne 0 ]; then
 		  %s stop -f %s; %s rm -f %s
 		fi
-	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)
+		vm_id=$(ignite ps | grep %s | awk '{print $1}')
+		if [ -n "$vm_id" ]; then
+		  rm -rf /var/lib/firecracker/vm/$vm_id || true
+		fi
+	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm, vm)
 	}
 }
 

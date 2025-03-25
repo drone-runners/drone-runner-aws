@@ -74,8 +74,9 @@ type Instance struct {
 
 // Passwords holds sensitive data.
 type Passwords struct {
-	AnkaToken string
-	Tart      string
+	AnkaToken   string
+	Tart        string
+	TartMachine string
 }
 
 type Tmate struct {
@@ -104,7 +105,6 @@ type InstanceCreateOpts struct {
 	AccountID               string
 	IsHosted                bool
 	ResourceClass           string
-	ImageName               string
 	GitspaceOpts            GitspaceOpts
 	StorageOpts             StorageOpts
 	AutoInjectionBinaryURI  string
@@ -114,8 +114,8 @@ type InstanceCreateOpts struct {
 	LiteEngineFallbackPath  string
 	PluginBinaryFallbackURI string
 	ShouldUseGoogleDNS      bool
+	VMImageConfig           VMImageConfig
 	Insecure                bool
-	BootDiskSize            string
 }
 
 // Platform defines the target platform.
@@ -166,4 +166,17 @@ type StorageConfig struct {
 	Identifier         string `json:"identifier"`
 	Size               string `json:"size"`
 	Type               string `json:"type" default:"pd-balanced"`
+}
+
+type VMImageConfig struct {
+	ImageName   string
+	Username    string
+	Password    string
+	VMImageAuth VMImageAuth
+}
+
+type VMImageAuth struct {
+	Registry string
+	Username string
+	Password string
 }

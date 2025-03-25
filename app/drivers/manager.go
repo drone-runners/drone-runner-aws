@@ -18,6 +18,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/harness/lite-engine/engine/spec"
 	"github.com/pkg/errors"
 
 	"github.com/sirupsen/logrus"
@@ -323,7 +324,21 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass, imageName string, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS, insecure bool) (*types.Instance, error) { //nolint
+func (m *Manager) Provision(
+	ctx context.Context,
+	poolName,
+	serverName,
+	ownerID,
+	resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	query *types.QueryParams,
+	gitspaceAgentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+	zone string,
+	machineType string,
+	shouldUseGoogleDNS bool,
+	insecure bool,
+) (*types.Instance, error) { //nolint
 
 	pool := m.poolMap[poolName]
 	if pool == nil {
@@ -340,7 +355,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID, 
 			serverName,
 			ownerID,
 			resourceClass,
-			imageName,
+			nil,
 			true,
 			gitspaceAgentConfig,
 			storageConfig,
@@ -371,7 +386,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID, 
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, imageName, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, insecure)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, insecure)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -402,7 +417,7 @@ func (m *Manager) Provision(ctx context.Context, poolName, serverName, ownerID, 
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", "", false, nil, nil, zone, machineType, false, false)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -566,7 +581,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", "", false, nil, nil, "", "", false, false)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -592,7 +607,18 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsSe
 	return m.buildPool(ctx, pool, tlsServerName, query)
 }
 
-func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerName, ownerID, resourceClass, imageName string, inuse bool, agentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS, insecure bool) (*types.Instance, error) {
+func (m *Manager) setupInstance(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName, ownerID, resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	inuse bool,
+	agentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+	zone, machineType string,
+	shouldUseGoogleDNS bool,
+	insecure bool,
+) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
 
@@ -611,7 +637,6 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
-	createOptions.ImageName = imageName
 	createOptions.ShouldUseGoogleDNS = shouldUseGoogleDNS
 	createOptions.Insecure = insecure
 	if storageConfig != nil {
@@ -640,6 +665,21 @@ func (m *Manager) setupInstance(ctx context.Context, pool *poolEntry, tlsServerN
 			Errorln("manager: failed to generate certificates")
 		return nil, err
 	}
+	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
+		createOptions.VMImageConfig = types.VMImageConfig{
+			ImageName: vmImageConfig.ImageName,
+			Username:  vmImageConfig.Username,
+			Password:  vmImageConfig.Password,
+		}
+		if vmImageConfig.Auth != nil {
+			createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
+				Registry: vmImageConfig.Auth.Address,
+				Username: vmImageConfig.Auth.Username,
+				Password: vmImageConfig.Auth.Password,
+			}
+		}
+	}
+
 	// create instance
 	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {

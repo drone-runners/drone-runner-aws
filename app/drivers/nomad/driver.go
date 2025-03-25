@@ -67,6 +67,7 @@ type config struct {
 	password          string
 	userData          string
 	virtualizerEngine string
+	machinePassword   string
 }
 
 // SetPlatformDefaults comes up with default values of the platform
@@ -177,11 +178,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		class = p.virtualizer.GetGlobalAccountID()
 	}
 
-	image := opts.ImageName
-	if image == "" {
-		image = p.vmImage
-	}
-
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
 	var resourceJob *api.Job
@@ -237,13 +233,22 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		gitspacesPortMappingsString += fmt.Sprintf("%d->%d;", gitspacesPorts[i], vmPort)
 	}
 
+	vmImageConfig := opts.VMImageConfig
+	if vmImageConfig.ImageName == "" {
+		vmImageConfig = types.VMImageConfig{
+			ImageName: p.vmImage,
+			Username:  p.username,
+			Password:  p.password,
+		}
+	}
+
 	// create a VM on the same machine where the resource job was allocated
 	var initJob *api.Job
 	var initJobID, initTaskGroup string
 	if p.noop {
 		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, id, liteEngineHostPort)
 	} else {
-		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, image, p.userData, p.username, p.password, liteEngineHostPort, resource, opts, gitspacesPortMappings)
+		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, p.userData, p.machinePassword, p.vmImage, vmImageConfig, liteEngineHostPort, resource, opts, gitspacesPortMappings)
 		if err != nil {
 			defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 			return nil, err
@@ -469,7 +474,7 @@ func (p *config) fetchMachine(logr *logrus.Entry, id string) (ip, nodeID string,
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
-func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier string, destroyGenerator func(string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) {
+func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier string, destroyGenerator func(string, string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) { //nolint:lll
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("destroy_job_id", destroyJobID)
 	id = destroyJobID(vm)
 	constraint := &api.Constraint{
@@ -477,7 +482,7 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 		RTarget: nodeID,
 		Operand: "=",
 	}
-	destroyCmd := destroyGenerator(vm)
+	destroyCmd := destroyGenerator(vm, p.machinePassword)
 
 	var cephStorageScriptEncoded string
 	var cephStorageScriptPath string
