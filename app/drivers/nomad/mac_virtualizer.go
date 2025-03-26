@@ -145,7 +145,7 @@ REGISTRY_USERNAME="%s"
 REGISTRY_PASSWORD="%s"
 MACHINE_PASSWORD="%s"
 
-tart_list=$(tart list | awk 'NR>1 {print $2}')
+tart_list=$(/opt/homebrew/bin/tart list | awk 'NR>1 {print $2}')
 
 # Check if the image is already in the tart list
 if echo "$tart_list" | grep -q "$VM_IMAGE"; then
@@ -157,7 +157,7 @@ else
   for image in $tart_list; do
     if [ "$image" != "$DEFAULT_VM_IMAGE" ]; then
       echo "Deleting image '$image'..."
-      tart delete "$image" || true
+      /opt/homebrew/bin/tart delete "$image" || true
     fi
   done
 
@@ -168,7 +168,7 @@ else
 	  mv ~/Library/Keychains/login.keychain-db ~/Library/Keychains/login.keychain-db.backup
 	  security create-keychain -p "$MACHINE_PASSWORD" login.keychain-db
 	  security unlock-keychain -p "$MACHINE_PASSWORD" ~/Library/Keychains/login.keychain-db
-      echo "$REGISTRY_PASSWORD" | tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+      echo "$REGISTRY_PASSWORD" | /opt/homebrew/bin/tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
   else
 	  echo "No registry details provided, skipping logging."
   fi
