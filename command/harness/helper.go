@@ -83,6 +83,5 @@ func buildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance { //nol
 		CACert:            instanceInfo.CACert,
 		TLSCert:           instanceInfo.TLSCert,
 		TLSKey:            instanceInfo.TLSKey,
-		Insecure:          instanceInfo.Insecure,
 	}
 }

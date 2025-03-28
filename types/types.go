@@ -69,7 +69,6 @@ type Instance struct {
 	StorageIdentifier          string      `db:"instance_storage_identifier" json:"storage_identifier"`
 	Labels                     []byte      `db:"instance_labels" json:"instance_labels"`
 	EnableNestedVirtualization bool        `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
-	Insecure                   bool        `db:"insecure" json:"insecure"`
 }
 
 // Passwords holds sensitive data.
@@ -115,7 +114,6 @@ type InstanceCreateOpts struct {
 	PluginBinaryFallbackURI string
 	ShouldUseGoogleDNS      bool
 	VMImageConfig           VMImageConfig
-	Insecure                bool
 }
 
 // Platform defines the target platform.
