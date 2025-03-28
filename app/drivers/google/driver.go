@@ -501,13 +501,18 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 						if errors.As(diskDeletionErr, &googleErr) &&
 							googleErr.Code == http.StatusNotFound {
 							logr.WithError(diskDeletionErr).
-								Errorln("google: persistent disk %s not found", storageIdentifier)
+								Warnln("google: persistent disk %s not found", storageIdentifier)
+						} else {
+							logr.WithError(diskDeletionErr).
+								Errorln("google: error finding persistent disk %", storageIdentifier)
+							return err
 						}
-					}
-					err = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
-					if err != nil {
-						logr.WithError(err).Errorln("google: could not delete persistent disk %s", storageIdentifier)
-						return err
+					} else {
+						err = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
+						if err != nil {
+							logr.WithError(err).Errorln("google: could not delete persistent disk %s", storageIdentifier)
+							return err
+						}
 					}
 				}
 			}
