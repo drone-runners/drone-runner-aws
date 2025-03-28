@@ -660,6 +660,10 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 	}
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
+	gitspacePortMappings := make(map[int]int)
+	for _, port := range opts.GitspaceOpts.Ports {
+		gitspacePortMappings[port] = port
+	}
 	return types.Instance{
 		ID:                         strconv.FormatUint(vm.Id, 10),
 		Name:                       vm.Name,
@@ -682,6 +686,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		EnableNestedVirtualization: enableNestedVitualization,
 		StorageIdentifier:          opts.StorageOpts.Identifier,
 		Labels:                     labelsBytes,
+		GitspacePortMappings:       gitspacePortMappings,
 	}, nil
 }
 
