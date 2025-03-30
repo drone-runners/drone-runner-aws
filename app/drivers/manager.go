@@ -491,8 +491,9 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	var returnError error
+	query := types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
 	for _, pool := range m.poolMap {
-		err := m.cleanPool(ctx, pool, nil, destroyBusy, destroyFree)
+		err := m.cleanPool(ctx, pool, &query, destroyBusy, destroyFree)
 		if err != nil {
 			returnError = err
 			logrus.Errorf("failed to clean pool %s with error: %s", pool.Name, err)
