@@ -297,6 +297,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	for _, blockDeviceMapping := range in.BlockDeviceMappings {
 		if p.kmsKeyID != "" {
+			logr.Infoln("Creating encrypted volume")
 			blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
 			blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyID)
 		}
