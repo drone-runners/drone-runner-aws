@@ -402,6 +402,21 @@ else
     fi
 fi
 chmod 777 /usr/local/bin/plugin
+
+{{ if .Tmate.Enabled }}
+mkdir /tmp/addon
+if wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-mac-arm64.tar.xz -O /tmp/addon/tmate.xz; then
+	echo "Successfully downloaded tmate binary from primary URL."
+else
+	echo "Primary URL failed for tmate. Trying fallback URL..."
+	wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-mac-arm64.tar.xz -O /tmp/addon/tmate.xz
+	echo "Successfully downloaded tmate binary from fallback URL."
+fi
+tar -xf /tmp/addon/tmate.xz -C /tmp/addon/
+chmod 777  /tmp/addon/tmate-1.0-static-mac-arm64/tmate
+mv  /tmp/addon/tmate-1.0-static-mac-arm64/tmate /tmp/addon/tmate
+{{ end }}
+
 {{ end }}
 
 if curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Darwin-arm64 > /usr/local/bin/envman; then
