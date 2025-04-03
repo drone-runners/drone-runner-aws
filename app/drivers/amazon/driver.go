@@ -288,10 +288,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if p.volumeType == "io1" {
 		for _, blockDeviceMapping := range in.BlockDeviceMappings {
 			blockDeviceMapping.Ebs.Iops = aws.Int64(p.volumeIops)
-			if p.kmsKeyID != "" {
-				blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
-				blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyID)
-			}
+		}
+	}
+
+	if p.kmsKeyID != "" {
+		for _, blockDeviceMapping := range in.BlockDeviceMappings {
+			blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
+			blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyID)
 		}
 	}
 
