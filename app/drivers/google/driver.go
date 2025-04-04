@@ -27,6 +27,8 @@ import (
 	"google.golang.org/api/option"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 const (
 	maxInstanceNameLen  = 63
 	randStrLen          = 5
@@ -544,17 +546,21 @@ func (p *config) Hibernate(ctx context.Context, instanceID, _ string) error {
 	return nil
 }
 
-func (p *config) Start(ctx context.Context, instanceID, _ string) (string, error) {
+func (p *config) Start(ctx context.Context, instance *types.Instance, _ string) (string, error) {
 	logr := logger.FromContext(ctx).
-		WithField("id", instanceID).
+		WithField("id", instance).
 		WithField("cloud", types.Google)
 
-	zone, err := p.findInstanceZone(ctx, instanceID)
-	if err != nil {
-		return "", err
+	zone := instance.Zone
+	var err error
+	if zone == "" {
+		zone, err = p.findInstanceZone(ctx, instance.ID)
+		if err != nil {
+			return "", err
+		}
 	}
 
-	vm, err := p.getInstance(ctx, p.projectID, zone, instanceID)
+	vm, err := p.getInstance(ctx, p.projectID, zone, instance.ID)
 	if err != nil {
 		return "", err
 	}
@@ -562,7 +568,7 @@ func (p *config) Start(ctx context.Context, instanceID, _ string) (string, error
 		return p.getInstanceIP(vm), nil
 	}
 
-	op, err := p.resumeInstance(ctx, p.projectID, zone, instanceID)
+	op, err := p.resumeInstance(ctx, p.projectID, zone, instance.ID)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to suspend VM")
 		return "", err
@@ -574,7 +580,7 @@ func (p *config) Start(ctx context.Context, instanceID, _ string) (string, error
 		return "", err
 	}
 
-	vm, err = p.getInstance(ctx, p.projectID, zone, instanceID)
+	vm, err = p.getInstance(ctx, p.projectID, zone, instance.ID)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to retrieve instance data")
 		return "", err

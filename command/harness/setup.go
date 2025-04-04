@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/metric"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
@@ -38,13 +39,14 @@ type SetupVMRequest struct {
 	StorageConfig       types.StorageConfig       `json:"storage_config"`
 	Zone                string                    `json:"zone"`
 	MachineType         string                    `json:"machine_type"`
+	InstanceInfo        common.InstanceInfo       `json:"instance_info"`
 }
 
 type SetupVMResponse struct {
-	IPAddress             string       `json:"ip_address"`
-	InstanceID            string       `json:"instance_id"`
-	GitspacesPortMappings map[int]int  `json:"gitspaces_port_mappings"`
-	InstanceInfo          InstanceInfo `json:"instance_info"`
+	IPAddress             string              `json:"ip_address"`
+	InstanceID            string              `json:"instance_id"`
+	GitspacesPortMappings map[int]int         `json:"gitspaces_port_mappings"`
+	InstanceInfo          common.InstanceInfo `json:"instance_info"`
 }
 
 var (
@@ -192,7 +194,7 @@ func HandleSetup(
 	}
 
 	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner, instance.Address).Inc()
-	instanceInfo := InstanceInfo{
+	instanceInfo := common.InstanceInfo{
 		ID:                instance.ID,
 		Name:              instance.Name,
 		IPAddress:         instance.Address,
@@ -270,6 +272,7 @@ func handleSetup(
 		r.Zone,
 		r.MachineType,
 		shouldUseGoogleDNS,
+		&r.InstanceInfo,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)
