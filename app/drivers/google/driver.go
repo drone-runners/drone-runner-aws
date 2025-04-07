@@ -548,7 +548,7 @@ func (p *config) Hibernate(ctx context.Context, instanceID, _ string) error {
 
 func (p *config) Start(ctx context.Context, instance *types.Instance, _ string) (string, error) {
 	logr := logger.FromContext(ctx).
-		WithField("id", instance).
+		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
 
 	zone := instance.Zone

@@ -341,7 +341,7 @@ func (m *Manager) Provision(
 	machineType string,
 	shouldUseGoogleDNS bool,
 	instanceInfo *common.InstanceInfo,
-) (*types.Instance, error) { //nolint
+) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
@@ -946,7 +946,7 @@ func (m *Manager) IsDistributed() bool {
 	return false
 }
 
-func (m *Manager) Suspend(ctx context.Context, poolName string, instanceID string) error {
+func (m *Manager) Suspend(ctx context.Context, poolName, instanceID string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("suspend: pool name %q not found", poolName)

@@ -497,7 +497,7 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, poolName s
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
 		WithField("pool", poolName).
-		WithField("instanceID", instance)
+		WithField("instanceID", instance.ID)
 
 	amazonInstance, err := p.getInstance(ctx, instance.ID)
 	if err != nil {

@@ -3,8 +3,9 @@ package common
 import (
 	"errors"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"reflect"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 type InstanceInfo struct {
