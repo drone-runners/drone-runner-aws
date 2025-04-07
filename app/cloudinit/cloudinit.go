@@ -531,7 +531,7 @@ write_files:
 runcmd:
 - 'set -x'
 {{ if .ShouldUseGoogleDNS }}
-- 'echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1" | sudo tee -a /etc/systemd/resolved.conf'
+- 'echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf'
 - 'systemctl restart systemd-resolved'
 {{ end }}
 - 'ufw allow 9079'
