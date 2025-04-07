@@ -352,27 +352,18 @@ func (m *Manager) Provision(
 			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad/google")
 		}
 		var inst *types.Instance
-		var err error
 		if pool.Driver.DriverName() == string(types.Google) {
-			if validateInstanceInfoErr := common.ValidateStruct(instanceInfo); validateInstanceInfoErr != nil {
-				logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
-			} else {
-				inst = common.BuildInstanceFromRequest(*instanceInfo)
-				ipAddress, startErr := pool.Driver.Start(ctx, inst, poolName)
-				if startErr != nil {
-					logrus.Warnf("failed to start the instance %s with err: %s", instanceInfo.ID, startErr)
+			if instanceInfo != nil && instanceInfo.ID != "" {
+				if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
+					logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
 				} else {
-					inst.Address = ipAddress
-					inst.State = types.StateInUse
-					inst.OwnerID = ownerID
-					if err = m.instanceStore.Update(ctx, inst); err != nil {
-						logrus.Warnf("failed to tag an instance in %q pool with err: %s", poolName, err)
-					}
-					return inst, err
+					inst = common.BuildInstanceFromRequest(*instanceInfo)
+					inst.IsHibernated = true
+					return inst, nil
 				}
 			}
 		}
-		inst, err = m.setupInstance(
+		inst, err := m.setupInstance(
 			ctx,
 			pool,
 			serverName,
@@ -955,15 +946,14 @@ func (m *Manager) IsDistributed() bool {
 	return false
 }
 
-func (m *Manager) Suspend(ctx context.Context, id string) error {
-	poolName := ""
+func (m *Manager) Suspend(ctx context.Context, poolName string, instanceID string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("suspend: pool name %q not found", poolName)
 	}
 
-	if err := pool.Driver.Hibernate(ctx, id, poolName); err != nil {
-		return fmt.Errorf("suspend: failed to suspend an instance %s of %q pool: %w", id, poolName, err)
+	if err := pool.Driver.Hibernate(ctx, instanceID, instanceID); err != nil {
+		return fmt.Errorf("suspend: failed to suspend an instance %s of %q pool: %w", instanceID, poolName, err)
 	}
 	return nil
 }
