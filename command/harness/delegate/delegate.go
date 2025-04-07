@@ -3,8 +3,9 @@ package delegate
 import (
 	"context"
 	"encoding/json"
-	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"net/http"
+
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/httprender"

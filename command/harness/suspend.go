@@ -3,6 +3,8 @@ package harness
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
@@ -11,7 +13,6 @@ import (
 	"github.com/harness/lite-engine/api"
 	"github.com/harness/lite-engine/logger"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 const suspendTimeout = 5 * time.Minute

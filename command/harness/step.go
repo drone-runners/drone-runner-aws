@@ -3,7 +3,6 @@ package harness
 import (
 	"context"
 	"fmt"
-	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/metric"
