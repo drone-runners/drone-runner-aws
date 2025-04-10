@@ -326,11 +326,13 @@ func handleSetup(
 	}
 
 	if instance.IsHibernated {
-		instance, err = poolManager.StartInstance(ctx, pool, instance.ID)
+		logr.Tracef("instance %s is hibernated", instance.ID)
+		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
 			go cleanUpInstanceFn(false)
 			return nil, fmt.Errorf("failed to start the instance up: %w", err)
 		}
+		logr.Tracef("instance %s is started", instance.ID)
 	}
 
 	instance.Stage = stageRuntimeID

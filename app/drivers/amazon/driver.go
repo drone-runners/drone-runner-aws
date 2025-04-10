@@ -451,7 +451,7 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return err
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
+func (p *config) Hibernate(ctx context.Context, instanceID, poolName, _ string) error {
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
 		WithField("pool", poolName).

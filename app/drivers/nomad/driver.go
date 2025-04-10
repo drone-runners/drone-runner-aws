@@ -620,7 +620,7 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
+func (p *config) Hibernate(_ context.Context, _, _, _ string) error {
 	return nil
 }
 

@@ -73,7 +73,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	if instance.IsHibernated {
-		instance, err = manager.StartInstance(ctx, poolName, instance.ID)
+		instance, err = manager.StartInstance(ctx, poolName, instance.ID, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("failed to start an instance")
 			return err

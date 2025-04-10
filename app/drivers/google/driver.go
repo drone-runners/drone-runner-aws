@@ -522,14 +522,17 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	return err
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, _ string) error {
+func (p *config) Hibernate(ctx context.Context, instanceID, _, zone string) error {
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
 		WithField("cloud", types.Google)
 
-	zone, err := p.findInstanceZone(ctx, instanceID)
-	if err != nil {
-		return err
+	var err error
+	if zone == "" {
+		zone, err = p.findInstanceZone(ctx, instanceID)
+		if err != nil {
+			return err
+		}
 	}
 
 	op, err := p.suspendInstance(ctx, p.projectID, zone, instanceID)

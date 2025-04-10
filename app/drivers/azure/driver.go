@@ -335,7 +335,7 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	return nil
 }
 
-func (c *config) Hibernate(_ context.Context, _, _ string) error {
+func (c *config) Hibernate(_ context.Context, _, _, _ string) error {
 	return errors.New("unimplemented")
 }
 

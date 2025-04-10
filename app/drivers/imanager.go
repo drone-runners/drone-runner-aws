@@ -23,7 +23,7 @@ type IManager interface {
 	Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error
-	StartInstance(ctx context.Context, poolName, instanceID string) (*types.Instance, error)
+	StartInstance(ctx context.Context, poolName, instanceID string, info *common.InstanceInfo) (*types.Instance, error)
 	InstanceLogs(ctx context.Context, poolName, instanceID string) (string, error)
 	SetInstanceTags(ctx context.Context, poolName string, instance *types.Instance, tags map[string]string) error
 	PingDriver(ctx context.Context) error
@@ -31,5 +31,5 @@ type IManager interface {
 	GetStageOwnerStore() store.StageOwnerStore
 	GetTLSServerName() string
 	IsDistributed() bool
-	Suspend(ctx context.Context, poolID string, instanceID string) error
+	Suspend(ctx context.Context, poolID string, instanceID string, zone string) error
 }

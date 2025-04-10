@@ -171,7 +171,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	}
 	logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)
 	// start the instance
-	_, startErr := poolManager.StartInstance(ctx, testPoolName, instance.ID)
+	_, startErr := poolManager.StartInstance(ctx, testPoolName, instance.ID, nil)
 	if startErr != nil {
 		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID, instance, nil)
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)

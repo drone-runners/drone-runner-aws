@@ -71,7 +71,7 @@ func (p *config) DestroyInstanceAndStorage(_ context.Context, _ []*types.Instanc
 	return nil
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
+func (p *config) Hibernate(_ context.Context, _, _, _ string) error {
 	time.Sleep(time.Duration(p.hibernateWaitSecs) * time.Second)
 	return nil
 }

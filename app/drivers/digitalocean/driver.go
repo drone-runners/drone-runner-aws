@@ -237,7 +237,7 @@ func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	return "no logs here", nil
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
+func (p *config) Hibernate(_ context.Context, _, _, _ string) error {
 	return nil
 }
 

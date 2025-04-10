@@ -357,12 +357,17 @@ func (m *Manager) Provision(
 				if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
 					logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
 				} else {
+					logrus.Tracef("instance is suspend, waking up the instance")
 					inst = common.BuildInstanceFromRequest(*instanceInfo)
 					inst.IsHibernated = true
+					inst.State = types.StateInUse
+					inst.OwnerID = ownerID
+					inst.Started = time.Now().Unix()
 					return inst, nil
 				}
 			}
 		}
+		logrus.Infof("instance info is not present, setting up a new instance")
 		inst, err := m.setupInstance(
 			ctx,
 			pool,
@@ -733,15 +738,30 @@ func (m *Manager) setupInstance(
 	return inst, nil
 }
 
-func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string) (*types.Instance, error) {
+func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string, instanceInfo *common.InstanceInfo) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("start_instance: pool name %q not found", poolName)
 	}
 
-	inst, err := m.Find(ctx, instanceID)
-	if err != nil {
-		return nil, fmt.Errorf("start_instance: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
+	var inst *types.Instance
+	var err error
+	if instanceInfo.ID != "" {
+		if err = common.ValidateStruct(*instanceInfo); err != nil {
+			logrus.Warnf("missing information in the instance info: %v", err)
+		} else {
+			inst = common.BuildInstanceFromRequest(*instanceInfo)
+			inst.IsHibernated = true
+			logrus.WithField("instanceID", instanceID).Traceln("found instance in request")
+		}
+	}
+
+	if inst == nil {
+		inst, err = m.Find(ctx, instanceID)
+		if err != nil {
+			return nil, fmt.Errorf("start_instance: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
+		}
+		logrus.WithField("instanceID", instanceID).Traceln("found instance in DB")
 	}
 
 	if !inst.IsHibernated {
@@ -835,7 +855,7 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 	pool.Unlock()
 
 	logrus.WithField("instanceID", instanceID).Infoln("Hibernating vm")
-	if err = pool.Driver.Hibernate(ctx, instanceID, poolName); err != nil {
+	if err = pool.Driver.Hibernate(ctx, instanceID, poolName, inst.Zone); err != nil {
 		if uerr := m.updateInstState(ctx, pool, instanceID, types.StateCreated); uerr != nil {
 			logrus.WithError(err).WithField("instanceID", instanceID).Errorln("failed to update state for failed hibernation")
 		}
@@ -946,13 +966,13 @@ func (m *Manager) IsDistributed() bool {
 	return false
 }
 
-func (m *Manager) Suspend(ctx context.Context, poolName, instanceID string) error {
+func (m *Manager) Suspend(ctx context.Context, poolName string, instanceID string, zone string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("suspend: pool name %q not found", poolName)
 	}
 
-	if err := pool.Driver.Hibernate(ctx, instanceID, instanceID); err != nil {
+	if err := pool.Driver.Hibernate(ctx, instanceID, poolName, zone); err != nil {
 		return fmt.Errorf("suspend: failed to suspend an instance %s of %q pool: %w", instanceID, poolName, err)
 	}
 	return nil
