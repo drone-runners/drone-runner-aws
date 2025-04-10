@@ -261,6 +261,8 @@ github.com/harness/godotenv/v3 v3.0.1 h1:7QPEOkpx6SLLrYRRzPBp50d6c0XIxq721iqoFxb
 github.com/harness/godotenv/v3 v3.0.1/go.mod h1:UIXXJtTM7NkSYMYknHYOO2d8BfDlAWMYZRuRsXcDDR0=
 github.com/harness/lite-engine v0.5.103 h1:6Qz2Yb5LCFoQR96zoMo+ug5volPZVzi0tX7kpkeVQjc=
 github.com/harness/lite-engine v0.5.103/go.mod h1:mqN+hx+S0/QwJxN4dRF6NmQW59A4lgWU/mOvGVNXSS8=
+github.com/harness/lite-engine v1.0.0-rc.137.0.20250407043243-5794fe017d1d h1:RlAoLZ65aLCEE7zCHcMEoo3f0CKNQhaKCSIMuLz9e0A=
+github.com/harness/lite-engine v1.0.0-rc.137.0.20250407043243-5794fe017d1d/go.mod h1:/6AqaF3+ibpBG/vcPIzO4qQI8QaGFX1951qh1KxYZCk=
 github.com/harness/ti-client v0.0.0-20250211085345-7c82b29d1b3c h1:fAVNZiSrO9i8lQUo1joeEiOxHyqYwRxtVQivjrMeHpE=
 github.com/harness/ti-client v0.0.0-20250211085345-7c82b29d1b3c/go.mod h1:/ow4f34mPgr5KPkzKxmBUB4cC09OjzStcLX6R8+43TI=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
