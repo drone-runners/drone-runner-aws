@@ -966,7 +966,7 @@ func (m *Manager) IsDistributed() bool {
 	return false
 }
 
-func (m *Manager) Suspend(ctx context.Context, poolName string, instanceID string, zone string) error {
+func (m *Manager) Suspend(ctx context.Context, poolName, instanceID, zone string) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("suspend: pool name %q not found", poolName)
