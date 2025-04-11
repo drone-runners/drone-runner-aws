@@ -139,10 +139,11 @@ type StageOwner struct {
 }
 
 type GitspaceOpts struct {
-	Secret       string // Deprecated: VMInitScript should be used to send the whole script
-	AccessToken  string // Deprecated: VMInitScript should be used to send the whole script
-	Ports        []int
-	VMInitScript string
+	GitspaceConfigIdentifier string
+	Secret                   string // Deprecated: VMInitScript should be used to send the whole script
+	AccessToken              string // Deprecated: VMInitScript should be used to send the whole script
+	Ports                    []int
+	VMInitScript             string
 }
 
 type StorageOpts struct {
@@ -153,10 +154,11 @@ type StorageOpts struct {
 }
 
 type GitspaceAgentConfig struct {
-	Secret       string `json:"secret"`       // Deprecated: VMInitScript should be used to send the whole script
-	AccessToken  string `json:"access_token"` // Deprecated: VMInitScript should be used to send the whole script
-	Ports        []int  `json:"ports"`
-	VMInitScript string `json:"vm_init_script"`
+	Secret                   string `json:"secret"`       // Deprecated: VMInitScript should be used to send the whole script
+	AccessToken              string `json:"access_token"` // Deprecated: VMInitScript should be used to send the whole script
+	Ports                    []int  `json:"ports"`
+	VMInitScript             string `json:"vm_init_script"`
+	GitspaceConfigIdentifier string `json:"gitspace_config_identifier"`
 }
 
 type StorageConfig struct {

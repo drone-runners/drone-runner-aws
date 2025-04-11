@@ -25,6 +25,8 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 //go:embed gitspace/scripts/delete_ceph_storage.sh
 var deleteCephStorageScript string
 
@@ -618,11 +620,11 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
+func (p *config) Hibernate(_ context.Context, _, _, _ string) error {
 	return nil
 }
 
-func (p *config) Start(ctx context.Context, instanceID, poolName string) (string, error) {
+func (p *config) Start(_ context.Context, _ *types.Instance, _ string) (string, error) {
 	return "", nil
 }
 

@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 type config struct {
 	rootDir           string
 	hibernate         bool
@@ -69,12 +71,12 @@ func (p *config) DestroyInstanceAndStorage(_ context.Context, _ []*types.Instanc
 	return nil
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName string) error {
+func (p *config) Hibernate(_ context.Context, _, _, _ string) error {
 	time.Sleep(time.Duration(p.hibernateWaitSecs) * time.Second)
 	return nil
 }
 
-func (p *config) Start(ctx context.Context, instanceID, poolName string) (ipAddress string, err error) {
+func (p *config) Start(_ context.Context, _ *types.Instance, _ string) (ipAddress string, err error) {
 	time.Sleep(time.Duration(p.startWaitSecs) * time.Second)
 	return "127.0.0.1", nil
 }

@@ -66,14 +66,14 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	}
 
 	// lets see if there is anything in the pool
-	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, "drone", "", nil, nil, nil, nil, "", "", false)
+	instance, err := manager.Provision(ctx, poolName, e.config.Runner.Name, "drone", "", nil, nil, nil, nil, "", "", false, nil)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to provision an instance")
 		return err
 	}
 
 	if instance.IsHibernated {
-		instance, err = manager.StartInstance(ctx, poolName, instance.ID)
+		instance, err = manager.StartInstance(ctx, poolName, instance.ID, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("failed to start an instance")
 			return err

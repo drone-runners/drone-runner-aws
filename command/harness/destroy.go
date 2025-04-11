@@ -10,6 +10,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -32,7 +33,7 @@ type VMCleanupRequest struct {
 	Distributed        bool                `json:"distributed,omitempty"`
 	Context            Context             `json:"context,omitempty"`
 	StorageCleanupType storage.CleanupType `json:"storage_cleanup_type,omitempty"`
-	InstanceInfo       InstanceInfo        `json:"instance_info,omitempty"`
+	InstanceInfo       common.InstanceInfo `json:"instance_info,omitempty"`
 }
 
 func HandleDestroy(
@@ -118,7 +119,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.Infoln("starting the destroy process")
 
 	var inst *types.Instance
-	err := validateStruct(r.InstanceInfo)
+	err := common.ValidateStruct(r.InstanceInfo)
 	if err != nil {
 		logr.Infof("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v", err)
 		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
@@ -130,7 +131,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		}
 	} else {
 		logr.Infoln("Using the instance information from the VM Cleanup Request")
-		inst = buildInstanceFromRequest(r.InstanceInfo)
+		inst = common.BuildInstanceFromRequest(r.InstanceInfo)
 	}
 
 	logr = logr.

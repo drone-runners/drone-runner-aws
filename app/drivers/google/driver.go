@@ -27,6 +27,8 @@ import (
 	"google.golang.org/api/option"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 const (
 	maxInstanceNameLen  = 63
 	randStrLen          = 5
@@ -164,7 +166,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		_ = p.setup(ctx)
 	})
 
-	var name = getInstanceName(opts.RunnerName, opts.PoolName)
+	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
 	inst, err := p.create(ctx, opts, name)
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}) //nolint:errcheck
@@ -520,14 +522,17 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	return err
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, _ string) error {
+func (p *config) Hibernate(ctx context.Context, instanceID, _, zone string) error {
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
 		WithField("cloud", types.Google)
 
-	zone, err := p.findInstanceZone(ctx, instanceID)
-	if err != nil {
-		return err
+	var err error
+	if zone == "" {
+		zone, err = p.findInstanceZone(ctx, instanceID)
+		if err != nil {
+			return err
+		}
 	}
 
 	op, err := p.suspendInstance(ctx, p.projectID, zone, instanceID)
@@ -544,17 +549,21 @@ func (p *config) Hibernate(ctx context.Context, instanceID, _ string) error {
 	return nil
 }
 
-func (p *config) Start(ctx context.Context, instanceID, _ string) (string, error) {
+func (p *config) Start(ctx context.Context, instance *types.Instance, _ string) (string, error) {
 	logr := logger.FromContext(ctx).
-		WithField("id", instanceID).
+		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
 
-	zone, err := p.findInstanceZone(ctx, instanceID)
-	if err != nil {
-		return "", err
+	zone := instance.Zone
+	var err error
+	if zone == "" {
+		zone, err = p.findInstanceZone(ctx, instance.ID)
+		if err != nil {
+			return "", err
+		}
 	}
 
-	vm, err := p.getInstance(ctx, p.projectID, zone, instanceID)
+	vm, err := p.getInstance(ctx, p.projectID, zone, instance.ID)
 	if err != nil {
 		return "", err
 	}
@@ -562,7 +571,7 @@ func (p *config) Start(ctx context.Context, instanceID, _ string) (string, error
 		return p.getInstanceIP(vm), nil
 	}
 
-	op, err := p.resumeInstance(ctx, p.projectID, zone, instanceID)
+	op, err := p.resumeInstance(ctx, p.projectID, zone, instance.ID)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to suspend VM")
 		return "", err
@@ -574,7 +583,7 @@ func (p *config) Start(ctx context.Context, instanceID, _ string) (string, error
 		return "", err
 	}
 
-	vm, err = p.getInstance(ctx, p.projectID, zone, instanceID)
+	vm, err = p.getInstance(ctx, p.projectID, zone, instance.ID)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to retrieve instance data")
 		return "", err
@@ -842,7 +851,10 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 
 // instance name must be 1-63 characters long and match the regular expression
 // [a-z]([-a-z0-9]*[a-z0-9])?
-func getInstanceName(runner, pool string) string {
+func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
+	if gitspaceConfigIdentifier != "" {
+		return gitspaceConfigIdentifier
+	}
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
 	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd
