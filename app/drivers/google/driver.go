@@ -166,7 +166,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		_ = p.setup(ctx)
 	})
 
-	var name = getInstanceName(opts.RunnerName, opts.PoolName)
+	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
 	inst, err := p.create(ctx, opts, name)
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}) //nolint:errcheck
@@ -851,7 +851,10 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 
 // instance name must be 1-63 characters long and match the regular expression
 // [a-z]([-a-z0-9]*[a-z0-9])?
-func getInstanceName(runner, pool string) string {
+func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
+	if gitspaceConfigIdentifier != "" {
+		return gitspaceConfigIdentifier
+	}
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
 	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd

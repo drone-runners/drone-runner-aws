@@ -667,10 +667,11 @@ func (m *Manager) setupInstance(
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
-			Secret:       agentConfig.Secret,
-			AccessToken:  agentConfig.AccessToken,
-			Ports:        agentConfig.Ports,
-			VMInitScript: agentConfig.VMInitScript,
+			Secret:                   agentConfig.Secret,
+			AccessToken:              agentConfig.AccessToken,
+			Ports:                    agentConfig.Ports,
+			VMInitScript:             agentConfig.VMInitScript,
+			GitspaceConfigIdentifier: agentConfig.GitspaceConfigIdentifier,
 		}
 		retain = "true"
 	}
