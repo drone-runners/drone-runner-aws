@@ -662,6 +662,8 @@ func (m *Manager) setupInstance(
 			Identifier:         storageConfig.Identifier,
 			Size:               storageConfig.Size,
 			Type:               storageConfig.Type,
+			BootDiskSize:       storageConfig.BootDiskSize,
+			BootDiskType:       storageConfig.BootDiskType,
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI

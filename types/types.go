@@ -151,6 +151,8 @@ type StorageOpts struct {
 	Identifier         string
 	Size               string
 	Type               string
+	BootDiskType       string
+	BootDiskSize       string
 }
 
 type GitspaceAgentConfig struct {
@@ -166,6 +168,8 @@ type StorageConfig struct {
 	Identifier         string `json:"identifier"`
 	Size               string `json:"size"`
 	Type               string `json:"type" default:"pd-balanced"`
+	BootDiskSize       string `json:"boot_disk_size"`
+	BootDiskType       string `json:"boot_disk_type"`
 }
 
 type VMImageConfig struct {

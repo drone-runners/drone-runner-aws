@@ -246,6 +246,21 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
+	bootDiskSize := p.diskSize
+	if opts.StorageOpts.BootDiskSize != "" {
+		diskSize, diskSizeErr := strconv.ParseInt(opts.StorageOpts.BootDiskSize, 10, 64)
+		if diskSizeErr != nil {
+			logr.WithError(err).
+				Errorln("google: failed to convert boot disk size string to int64")
+			return nil, err
+		}
+		bootDiskSize = diskSize
+	}
+	bootDiskType := p.diskType
+	if opts.StorageOpts.BootDiskType != "" {
+		bootDiskType = opts.StorageOpts.BootDiskType
+	}
+
 	in := &compute.Instance{
 		Name:           name,
 		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
@@ -268,8 +283,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				DeviceName: opts.PoolName,
 				InitializeParams: &compute.AttachedDiskInitializeParams{
 					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", p.image),
-					DiskType:    fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, p.diskType),
-					DiskSizeGb:  p.diskSize,
+					DiskType:    fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, bootDiskType),
+					DiskSizeGb:  bootDiskSize,
 				},
 			},
 		},
