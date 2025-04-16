@@ -139,10 +139,11 @@ type StageOwner struct {
 }
 
 type GitspaceOpts struct {
-	Secret       string // Deprecated: VMInitScript should be used to send the whole script
-	AccessToken  string // Deprecated: VMInitScript should be used to send the whole script
-	Ports        []int
-	VMInitScript string
+	GitspaceConfigIdentifier string
+	Secret                   string // Deprecated: VMInitScript should be used to send the whole script
+	AccessToken              string // Deprecated: VMInitScript should be used to send the whole script
+	Ports                    []int
+	VMInitScript             string
 }
 
 type StorageOpts struct {
@@ -150,13 +151,16 @@ type StorageOpts struct {
 	Identifier         string
 	Size               string
 	Type               string
+	BootDiskType       string
+	BootDiskSize       string
 }
 
 type GitspaceAgentConfig struct {
-	Secret       string `json:"secret"`       // Deprecated: VMInitScript should be used to send the whole script
-	AccessToken  string `json:"access_token"` // Deprecated: VMInitScript should be used to send the whole script
-	Ports        []int  `json:"ports"`
-	VMInitScript string `json:"vm_init_script"`
+	Secret                   string `json:"secret"`       // Deprecated: VMInitScript should be used to send the whole script
+	AccessToken              string `json:"access_token"` // Deprecated: VMInitScript should be used to send the whole script
+	Ports                    []int  `json:"ports"`
+	VMInitScript             string `json:"vm_init_script"`
+	GitspaceConfigIdentifier string `json:"gitspace_config_identifier"`
 }
 
 type StorageConfig struct {
@@ -164,6 +168,8 @@ type StorageConfig struct {
 	Identifier         string `json:"identifier"`
 	Size               string `json:"size"`
 	Type               string `json:"type" default:"pd-balanced"`
+	BootDiskSize       string `json:"boot_disk_size"`
+	BootDiskType       string `json:"boot_disk_type"`
 }
 
 type VMImageConfig struct {

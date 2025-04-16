@@ -19,6 +19,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var _ drivers.Driver = (*config)(nil)
+
 var (
 	vmrunbin    = setVmwareCmd("vmrun")
 	vdiskmanbin = setVmwareCmd("vmware-vdiskmanager")
@@ -250,11 +252,11 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	return
 }
 
-func (p *config) Hibernate(_ context.Context, _, _ string) error {
+func (p *config) Hibernate(_ context.Context, _, _, _ string) error {
 	return errors.New("unimplemented")
 }
 
-func (p *config) Start(_ context.Context, _, _ string) (string, error) {
+func (p *config) Start(_ context.Context, _ *types.Instance, _ string) (string, error) {
 	return "", errors.New("unimplemented")
 }
 
