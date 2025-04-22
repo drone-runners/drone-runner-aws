@@ -245,11 +245,8 @@ func handleSetup(
 	stageRuntimeID := r.ID
 
 	// try to provision an instance from the pool manager.
-	var query *types.QueryParams
-	if poolManager.IsDistributed() {
-		query = &types.QueryParams{
-			RunnerName: runnerName,
-		}
+	query := &types.QueryParams{
+		RunnerName: runnerName,
 	}
 
 	shouldUseGoogleDNS := false
