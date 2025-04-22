@@ -36,8 +36,8 @@ var detachCephStorageScript string
 var (
 	ignitePath              = "/usr/local/bin/ignite"
 	clientDisconnectTimeout = 4 * time.Minute
-	resourceJobTimeout      = 2 * time.Minute
-	initTimeout             = 3 * time.Minute
+	resourceJobTimeout      = 1 * time.Minute
+	initTimeout             = 1 * time.Minute
 	destroyTimeout          = 3 * time.Minute
 	tenSecondsTimeout       = 10 * time.Second
 	globalAccount           = "GLOBAL_ACCOUNT_ID"
