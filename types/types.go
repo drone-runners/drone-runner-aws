@@ -81,6 +81,7 @@ type Passwords struct {
 type RunnerConfig struct {
 	HealthCheckTimeout        int64
 	HealthCheckWindowsTimeout int64
+	HA                        bool
 }
 
 type Tmate struct {

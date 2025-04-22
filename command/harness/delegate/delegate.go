@@ -114,7 +114,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
 
 	_, err = harness.SetupPoolWithEnv(ctx, &c.env, c.poolManager, c.poolFile)
-	defer harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, true, true) //nolint: errcheck
+	defer harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, false, true) //nolint: errcheck
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		return harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, true, true)
+		return harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, false, true)
 	})
 
 	g.Go(func() error {
