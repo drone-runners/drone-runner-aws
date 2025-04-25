@@ -240,11 +240,20 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
+	// Add scaletest label if needed
+	labels := make(map[string]string)
+	for k, v := range p.labels {
+		labels[k] = v
+	}
+	if opts.AccountID == "eePXQ4FFQj6zWprgXPZ2yQ" {
+		labels["scaletest"] = "scaletest"
+	}
 	in := &compute.Instance{
 		Name:           name,
 		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
 		MinCpuPlatform: "Automatic",
 		MachineType:    fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.projectID, zone, p.size),
+		Labels:         labels,
 		Metadata: &compute.Metadata{
 			Items: []*compute.MetadataItems{
 				{
@@ -285,7 +294,6 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		Tags: &compute.Tags{
 			Items: p.tags,
 		},
-		Labels: p.labels,
 	}
 	if !p.noServiceAccount {
 		in.ServiceAccounts = []*compute.ServiceAccount{
