@@ -38,7 +38,7 @@ var (
 	initTimeout             = 3 * time.Minute
 	destroyTimeout          = 3 * time.Minute
 	tenSecondsTimeout       = 10 * time.Second
-	globalAccount           = "GLOBAL_ACCOUNT_ID"
+	globalAccount           = "PAID_POOL"
 	destroyRetryAttempts    = 1
 	minNomadCPUMhz          = 40
 	minNomadMemoryMb        = 20
