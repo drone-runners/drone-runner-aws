@@ -184,6 +184,7 @@ func HandleSetup(
 		}
 		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
 			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed()), owner).Observe(setupTime.Seconds())
+		logr.WithField("setupTime", setupTime).Traceln("init time for vm setup")
 	} else {
 		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
 		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "", owner, "").Inc()
