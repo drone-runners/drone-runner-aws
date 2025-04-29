@@ -185,7 +185,7 @@ func HandleSetup(
 		}
 		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
 			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed()), owner).Observe(setupTime.Seconds())
-		internalLogger.WithField("Os", instance.OS).WithField("Arch", instance.Arch).WithField("selected_pool", selectedPool).WithField("requested_pool", r.PoolID).WithField("instance_address", instance.Address).Infof("init time for vm setup is %.2fs", setupTime.Seconds())
+		internalLogger.WithField("os", instance.OS).WithField("arch", instance.Arch).WithField("selected_pool", selectedPool).WithField("requested_pool", r.PoolID).WithField("instance_address", instance.Address).Infof("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
 		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
 		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "", owner, "").Inc()
