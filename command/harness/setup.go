@@ -102,7 +102,6 @@ func HandleSetup(
 
 		ctx = logger.WithContext(ctx, logr)
 	}
-	internalLogger := logrus.New().WithFields(logr.Data)
 
 	// append global volumes to the setup request.
 	for _, pair := range globalVolumes {
@@ -123,6 +122,7 @@ func HandleSetup(
 	}
 
 	logr = AddContext(logr, &r.Context, r.Tags)
+	internalLogger := logrus.New().WithFields(logr.Data)
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
