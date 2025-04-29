@@ -102,6 +102,7 @@ func HandleSetup(
 
 		ctx = logger.WithContext(ctx, logr)
 	}
+	internalLogger := logrus.New().WithFields(logr.Data)
 
 	// append global volumes to the setup request.
 	for _, pair := range globalVolumes {
@@ -184,7 +185,7 @@ func HandleSetup(
 		}
 		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
 			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed()), owner).Observe(setupTime.Seconds())
-		logrus.Infof("init time for vm setup is %.2fs", setupTime.Seconds())
+		internalLogger.WithField("Os", instance.OS).WithField("Arch", instance.Arch).WithField("selected_pool", selectedPool).WithField("requested_pool", r.PoolID).WithField("instance_address", instance.Address).Infof("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
 		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
 		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "", owner, "").Inc()
