@@ -119,7 +119,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.Infoln("starting the destroy process")
 
 	var inst *types.Instance
-	err := common.ValidateStruct(r.InstanceInfo)
+	err := common.ValidateStructForKeys(r.InstanceInfo, []string{"id", "zone", "pool_name", "storage_identifier"})
 	if err != nil {
 		logr.Infof("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v", err)
 		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)

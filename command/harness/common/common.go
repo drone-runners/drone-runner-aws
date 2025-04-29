@@ -27,6 +27,12 @@ type InstanceInfo struct {
 
 // ValidateStruct checks if all fields of a struct are populated.
 func ValidateStruct(data interface{}) error {
+	return ValidateStructForKeys(data, []string{})
+}
+
+// ValidateStructForKeys checks if the specified fields of a struct are populated.
+// If keys are empty, it checks all fields.
+func ValidateStructForKeys(data interface{}, keys []string) error {
 	v := reflect.ValueOf(data)
 
 	// Ensure the input is a struct
@@ -34,18 +40,33 @@ func ValidateStruct(data interface{}) error {
 		return errors.New("input is not a struct")
 	}
 
+	checkAll := len(keys) == 0
+	keySet := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		keySet[key] = struct{}{}
+	}
+
 	// Iterate over the fields of the struct
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldType := v.Type().Field(i)
+		fieldName := fieldType.Name
 
-		// Check for zero values
-		if reflect.DeepEqual(field.Interface(), reflect.Zero(field.Type()).Interface()) {
-			return fmt.Errorf("field %q is not populated", fieldType.Name)
+		// Validate the field if we're checking all or it's in the keys list
+		if checkAll || containsKey(keySet, fieldName) {
+			if reflect.DeepEqual(field.Interface(), reflect.Zero(field.Type()).Interface()) {
+				return fmt.Errorf("field %q is not populated", fieldName)
+			}
 		}
 	}
 
 	return nil
+}
+
+// containsKey checks if a field name is in the key set.
+func containsKey(set map[string]struct{}, key string) bool {
+	_, exists := set[key]
+	return exists
 }
 
 func BuildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance { //nolint:gocritic
