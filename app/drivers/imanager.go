@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -30,6 +31,7 @@ type IManager interface {
 	GetInstanceStore() store.InstanceStore
 	GetStageOwnerStore() store.StageOwnerStore
 	GetTLSServerName() string
+	GetEnv() *config.EnvConfig
 	IsDistributed() bool
 	Suspend(ctx context.Context, poolID string, instanceID string, zone string) error
 }

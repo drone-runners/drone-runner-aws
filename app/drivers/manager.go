@@ -43,6 +43,7 @@ type (
 		autoInjectionBinaryURI  string
 		liteEngineFallbackPath  string
 		pluginBinaryFallbackURI string
+		env                     *config.EnvConfig
 	}
 
 	poolEntry struct {
@@ -67,6 +68,7 @@ func New(
 		autoInjectionBinaryURI:  env.Settings.AutoInjectionBinaryURI,
 		liteEngineFallbackPath:  env.LiteEngine.FallbackPath,
 		pluginBinaryFallbackURI: env.Settings.PluginBinaryFallbackURI,
+		env:                     env,
 	}
 }
 
@@ -83,6 +85,7 @@ func NewManager(
 	autoInjectionBinaryURI,
 	liteEngineFallbackPath,
 	pluginBinaryFallbackURI string,
+	env *config.EnvConfig,
 ) *Manager {
 	return &Manager{
 		globalCtx:               globalContext,
@@ -96,6 +99,7 @@ func NewManager(
 		autoInjectionBinaryURI:  autoInjectionBinaryURI,
 		liteEngineFallbackPath:  liteEngineFallbackPath,
 		pluginBinaryFallbackURI: pluginBinaryFallbackURI,
+		env:                     env,
 	}
 }
 
@@ -732,7 +736,7 @@ func (m *Manager) setupInstance(
 
 	if !inuse {
 		go func() {
-			herr := m.hibernateWithRetries(context.Background(), pool.Name, tlsServerName, inst.ID)
+			herr := m.hibernateWithRetries(context.Background(), pool.Name, tlsServerName, inst)
 			if herr != nil {
 				logrus.WithError(herr).Errorln("failed to hibernate the vm")
 			}
@@ -802,7 +806,7 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	return pool.Driver.Logs(ctx, instanceID)
 }
 
-func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, tlsServerName, instanceID string) error {
+func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, tlsServerName string, instance *types.Instance) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
@@ -812,14 +816,20 @@ func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, tlsServerN
 		return nil
 	}
 
-	m.waitForInstanceConnectivity(ctx, tlsServerName, instanceID)
+	shouldHibernate := m.waitForInstanceConnectivity(ctx, tlsServerName, instance.ID)
+	if !shouldHibernate {
+		if derr := m.Destroy(ctx, poolName, instance.ID, instance, nil); derr != nil {
+			logrus.WithError(derr).WithField("instanceID", instance.ID).Errorln("failed to cleanup instance after connectivity failure")
+		}
+		return fmt.Errorf("hibernate: connectivity check deadline exceeded")
+	}
 
 	retryCount := 1
 	const maxRetries = 3
 	for {
-		err := m.hibernate(ctx, instanceID, poolName, pool)
+		err := m.hibernate(ctx, instance.ID, poolName, pool)
 		if err == nil {
-			logrus.WithField("instanceID", instanceID).Infoln("hibernate complete")
+			logrus.WithField("instanceID", instance.ID).Infoln("hibernate complete")
 			return nil
 		}
 
@@ -911,22 +921,22 @@ func (m *Manager) forEach(ctx context.Context,
 	return nil
 }
 
-func (m *Manager) waitForInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) {
+func (m *Manager) waitForInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) bool {
 	bf := backoff.NewExponentialBackOff()
 	for {
 		duration := bf.NextBackOff()
 		if duration == bf.Stop {
-			return
+			return false
 		}
 
 		select {
 		case <-ctx.Done():
 			logrus.WithField("instanceID", instanceID).Warnln("hibernate: connectivity check deadline exceeded")
-			return
+			return false
 		case <-time.After(duration):
 			err := m.checkInstanceConnectivity(ctx, tlsServerName, instanceID)
 			if err == nil {
-				return
+				return true
 			}
 			logrus.WithError(err).WithField("instanceID", instanceID).Traceln("hibernate: instance connectivity check failed")
 		}
@@ -963,6 +973,10 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, 
 
 func (m *Manager) GetTLSServerName() string {
 	return m.runnerName
+}
+
+func (m *Manager) GetEnv() *config.EnvConfig {
+	return m.env
 }
 
 func (m *Manager) IsDistributed() bool {
