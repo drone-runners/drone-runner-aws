@@ -136,7 +136,25 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 							"args":    []string{"-c", runCmd},
 						},
 					},
-
+					{
+						Name:      "wait_for_ignite_ready",
+						Driver:    "raw_exec",
+						Resources: minNomadResources(),
+						Config: map[string]interface{}{
+							"command": entrypoint,
+							"args": []string{"-c", fmt.Sprintf(`
+								for i in {1..10}; do
+									if %s exec %s echo "hello" >/dev/null 2>&1; then
+										echo "ignite exec success for VM %s"
+										exit 0
+									fi
+									sleep 1
+								done
+								echo "ignite exec failed for VM %s" >&2
+								exit 1
+							`, ignitePath, vm, vm, vm)},
+						},
+					},
 					{
 						Name:      "ignite_exec",
 						Driver:    "raw_exec",
