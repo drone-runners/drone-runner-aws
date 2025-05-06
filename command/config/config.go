@@ -325,6 +325,7 @@ type EnvConfig struct {
 		Labels      map[string]string `envconfig:"DRONE_RUNNER_LABELS"`
 		NetworkOpts map[string]string `envconfig:"DRONE_RUNNER_NETWORK_OPTS"`
 		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
+		HA          bool              `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
 	Dlite struct {

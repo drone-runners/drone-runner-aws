@@ -43,6 +43,7 @@ type (
 		autoInjectionBinaryURI  string
 		liteEngineFallbackPath  string
 		pluginBinaryFallbackURI string
+		env                     *config.EnvConfig
 	}
 
 	poolEntry struct {
@@ -67,6 +68,7 @@ func New(
 		autoInjectionBinaryURI:  env.Settings.AutoInjectionBinaryURI,
 		liteEngineFallbackPath:  env.LiteEngine.FallbackPath,
 		pluginBinaryFallbackURI: env.Settings.PluginBinaryFallbackURI,
+		env:                     env,
 	}
 }
 
@@ -469,7 +471,8 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 }
 
 func (m *Manager) BuildPools(ctx context.Context) error {
-	return m.forEach(ctx, m.GetTLSServerName(), nil, m.buildPoolWithMutex)
+	query := types.QueryParams{RunnerName: m.runnerName}
+	return m.forEach(ctx, m.GetTLSServerName(), &query, m.buildPoolWithMutex)
 }
 
 func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.QueryParams, destroyBusy, destroyFree bool) error {
@@ -511,7 +514,7 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 
 func (m *Manager) CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error {
 	var returnError error
-	query := types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
+	query := types.QueryParams{RunnerName: m.runnerName, MatchLabels: map[string]string{"retain": "false"}}
 	for _, pool := range m.poolMap {
 		err := m.cleanPool(ctx, pool, &query, destroyBusy, destroyFree)
 		if err != nil {
@@ -962,6 +965,9 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, 
 }
 
 func (m *Manager) GetTLSServerName() string {
+	if m.env.Runner.HA {
+		return "drone-runner-ha"
+	}
 	return m.runnerName
 }
 
