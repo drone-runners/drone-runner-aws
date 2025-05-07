@@ -39,6 +39,7 @@ type (
 		stageOwnerStore         store.StageOwnerStore
 		harnessTestBinaryURI    string
 		pluginBinaryURI         string
+		pluginBinaryURIv2       string
 		tmate                   types.Tmate
 		autoInjectionBinaryURI  string
 		liteEngineFallbackPath  string
@@ -80,6 +81,7 @@ func NewManager(
 	liteEnginePath,
 	harnessTestBinaryURI,
 	pluginBinaryURI,
+	pluginBinaryURIv2,
 	autoInjectionBinaryURI,
 	liteEngineFallbackPath,
 	pluginBinaryFallbackURI string,
@@ -93,6 +95,7 @@ func NewManager(
 		liteEnginePath:          liteEnginePath,
 		harnessTestBinaryURI:    harnessTestBinaryURI,
 		pluginBinaryURI:         pluginBinaryURI,
+		pluginBinaryURIv2:       pluginBinaryURIv2,
 		autoInjectionBinaryURI:  autoInjectionBinaryURI,
 		liteEngineFallbackPath:  liteEngineFallbackPath,
 		pluginBinaryFallbackURI: pluginBinaryFallbackURI,
@@ -340,6 +343,7 @@ func (m *Manager) Provision(
 	zone string,
 	machineType string,
 	shouldUseGoogleDNS bool,
+	shouldUseV2Plugin bool,
 	instanceInfo *common.InstanceInfo,
 ) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
@@ -381,6 +385,7 @@ func (m *Manager) Provision(
 			zone,
 			machineType,
 			false,
+			false,
 		)
 		return inst, err
 	}
@@ -404,7 +409,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, shouldUseV2Plugin)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -435,7 +440,7 @@ func (m *Manager) Provision(
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, false)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -600,7 +605,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, false)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -636,6 +641,7 @@ func (m *Manager) setupInstance(
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
+	shouldUseV2Plugin bool,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
@@ -650,7 +656,13 @@ func (m *Manager) setupInstance(
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize
 	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
-	createOptions.PluginBinaryURI = m.pluginBinaryURI
+	if shouldUseV2Plugin {
+		createOptions.PluginBinaryURI = m.pluginBinaryURIv2
+		logrus.Infof("manager: shouldUseV2Plugin is true, using PluginBinaryURIv2: %s", m.pluginBinaryURIv2)
+	} else {
+		createOptions.PluginBinaryURI = m.pluginBinaryURI
+		logrus.Infof("manager: shouldUseV2Plugin is false, using default PluginBinaryURI: %s", m.pluginBinaryURI)
+	}
 	createOptions.PluginBinaryFallbackURI = m.pluginBinaryFallbackURI
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID

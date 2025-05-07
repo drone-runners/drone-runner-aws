@@ -261,9 +261,14 @@ func handleSetup(
 	}
 
 	shouldUseGoogleDNS := false
+	shouldUseV2Plugin := false
 	if len(r.SetupRequest.Envs) != 0 {
 		if r.SetupRequest.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
 			shouldUseGoogleDNS = true
+		}
+		if r.SetupRequest.Envs["USE_NEKTOS_ACT_NODE_20"] == "true" {
+			shouldUseV2Plugin = true
+			logrus.Infof("setup: USE_NEKTOS_ACT_NODE_20 is true, enabling v2 plugin")
 		}
 	}
 
@@ -280,6 +285,7 @@ func handleSetup(
 		r.Zone,
 		r.MachineType,
 		shouldUseGoogleDNS,
+		shouldUseV2Plugin,
 		&r.InstanceInfo,
 	)
 	if err != nil {
