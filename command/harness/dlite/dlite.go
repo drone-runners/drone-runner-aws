@@ -180,6 +180,9 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
 	logrus.Infoln("Starting postgres database")
+	// Log the plugin URIs for debugging
+	logrus.Infof("dlite: Creating manager with PluginBinaryURI: %s and PluginBinaryURIv2: %s",
+		c.env.Settings.PluginBinaryURI, c.env.Settings.PluginBinaryURIv2)
 	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
@@ -195,6 +198,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 			c.env.LiteEngine.Path,
 			c.env.Settings.HarnessTestBinaryURI,
 			c.env.Settings.PluginBinaryURI,
+			c.env.Settings.PluginBinaryURIv2,
 			c.env.Settings.AutoInjectionBinaryURI,
 			c.env.LiteEngine.FallbackPath,
 			c.env.Settings.PluginBinaryFallbackURI))

@@ -350,6 +350,8 @@ type EnvConfig struct {
 		PluginBinaryFallbackURI string `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.3-beta"`
 		PurgerTime              int64  `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
 		AutoInjectionBinaryURI  string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI"`
+		PluginBinaryURIv2       string `envconfig:"DRONE_PLUGIN_BINARY_URI_V2" default:"https://github.com/drone/plugin/releases/download/<TAG_FOR_V2>"`
+		UseV2Plugin             bool   `envconfig:"USE_NEKTOS_ACT_NODE_20" default:"false"`
 	}
 	LiteEngine struct {
 		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.106/"`
