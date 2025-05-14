@@ -78,6 +78,11 @@ type Passwords struct {
 	TartMachine string
 }
 
+type RunnerConfig struct {
+	HealthCheckTimeout        int64
+	HealthCheckWindowsTimeout int64
+}
+
 type Tmate struct {
 	Enabled bool
 	Image   string

@@ -50,10 +50,8 @@ type SetupVMResponse struct {
 }
 
 var (
-	healthCheckTimeout        = 3 * time.Minute
-	healthCheckWindowsTimeout = 5 * time.Minute
-	freeAccount               = "free"
-	noContext                 = context.Background()
+	freeAccount = "free"
+	noContext   = context.Background()
 )
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
@@ -367,8 +365,12 @@ func handleSetup(
 	// try the healthcheck api on the lite-engine until it responds ok
 	logr.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
+	runnerConfig := poolManager.GetRunnerConfig()
+
+	// override the health check timeouts
+	healthCheckTimeout := time.Duration(runnerConfig.HealthCheckTimeout) * time.Minute
 	if instance.Platform.OS == "windows" {
-		healthCheckTimeout = healthCheckWindowsTimeout
+		healthCheckTimeout = time.Duration(runnerConfig.HealthCheckWindowsTimeout) * time.Minute
 	}
 
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
