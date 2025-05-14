@@ -115,7 +115,7 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `; then
+if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=3 --waitretry=3 -nv --debug ` + liteEngineUsrBinPath + `; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
@@ -128,7 +128,7 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=3 --waitretry=3 ` + pluginUsrBinPath + `; then
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
@@ -212,7 +212,7 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `; then
+if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=3 --waitretry=3 -nv --debug ` + liteEngineUsrBinPath + `; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
@@ -225,7 +225,7 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=3 --waitretry=3 ` + pluginUsrBinPath + `; then
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
@@ -661,14 +661,14 @@ write_files:
 runcmd:
 - 'sudo service docker start'
 - 'sudo usermod -a -G docker ec2-user'
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + `'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + `'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .HarnessTestBinaryURI }}
 - 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
 {{ if .PluginBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if .AutoInjectionBinaryURI }}
