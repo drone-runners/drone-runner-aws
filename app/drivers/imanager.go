@@ -31,5 +31,6 @@ type IManager interface {
 	GetStageOwnerStore() store.StageOwnerStore
 	GetTLSServerName() string
 	IsDistributed() bool
+	GetRunnerConfig() types.RunnerConfig
 	Suspend(ctx context.Context, poolID string, instanceID string, zone string) error
 }

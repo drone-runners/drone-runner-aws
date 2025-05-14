@@ -43,6 +43,7 @@ type (
 		autoInjectionBinaryURI  string
 		liteEngineFallbackPath  string
 		pluginBinaryFallbackURI string
+		runnerConfig            types.RunnerConfig
 	}
 
 	poolEntry struct {
@@ -67,6 +68,7 @@ func New(
 		autoInjectionBinaryURI:  env.Settings.AutoInjectionBinaryURI,
 		liteEngineFallbackPath:  env.LiteEngine.FallbackPath,
 		pluginBinaryFallbackURI: env.Settings.PluginBinaryFallbackURI,
+		runnerConfig:            types.RunnerConfig(env.RunnerConfig),
 	}
 }
 
@@ -82,7 +84,7 @@ func NewManager(
 	pluginBinaryURI,
 	autoInjectionBinaryURI,
 	liteEngineFallbackPath,
-	pluginBinaryFallbackURI string,
+	pluginBinaryFallbackURI string, runnerConfig types.RunnerConfig,
 ) *Manager {
 	return &Manager{
 		globalCtx:               globalContext,
@@ -96,6 +98,7 @@ func NewManager(
 		autoInjectionBinaryURI:  autoInjectionBinaryURI,
 		liteEngineFallbackPath:  liteEngineFallbackPath,
 		pluginBinaryFallbackURI: pluginBinaryFallbackURI,
+		runnerConfig:            runnerConfig,
 	}
 }
 
@@ -969,6 +972,10 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, 
 
 func (m *Manager) GetTLSServerName() string {
 	return m.runnerName
+}
+
+func (m *Manager) GetRunnerConfig() types.RunnerConfig {
+	return m.runnerConfig
 }
 
 func (m *Manager) IsDistributed() bool {

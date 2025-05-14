@@ -327,6 +327,11 @@ type EnvConfig struct {
 		Volumes     []string          `envconfig:"DRONE_RUNNER_VOLUMES"`
 	}
 
+	RunnerConfig struct {
+		HealthCheckTimeout        int64 `envconfig:"HEALTH_CHECK_TIMEOUT" default:"3"`
+		HealthCheckWindowsTimeout int64 `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5"`
+	}
+
 	Dlite struct {
 		AccountID               string              `envconfig:"DLITE_ACCOUNT_ID"`
 		AccountSecret           string              `envconfig:"DLITE_ACCOUNT_SECRET"`
