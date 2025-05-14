@@ -370,6 +370,7 @@ func handleSetup(
 	if instance.Platform.OS == "windows" {
 		healthCheckTimeout = healthCheckWindowsTimeout
 	}
+
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
 		go cleanUpInstanceFn(true)
 		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
