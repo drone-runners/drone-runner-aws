@@ -330,6 +330,7 @@ type EnvConfig struct {
 	RunnerConfig struct {
 		HealthCheckTimeout        int64 `envconfig:"HEALTH_CHECK_TIMEOUT" default:"3"`
 		HealthCheckWindowsTimeout int64 `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5"`
+		HA                        bool  `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
 	Dlite struct {
