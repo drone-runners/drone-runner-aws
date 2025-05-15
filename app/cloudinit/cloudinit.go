@@ -115,11 +115,11 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `; then
+if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=2 --waitretry=2 -nv --debug ` + liteEngineUsrBinPath + `; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + liteEngineUsrBinFallbackPath + ` || /usr/bin/wget --retry-connrefused --tries=5 --waitretry=5 -nv --debug ` + liteEngineUsrBinFallbackPath + `
     echo "Successfully downloaded lite engine binary from fallback URL."
 fi
 chmod 777 /usr/bin/lite-engine
@@ -128,11 +128,11 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=2 --waitretry=2 ` + pluginUsrBinPath + `; then
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + ` || wget --retry-connrefused --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + `
     echo "Successfully downloaded plugin binary from fallback URL."
 fi
 chmod 777 /usr/bin/plugin
@@ -212,11 +212,11 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv --debug ` + liteEngineUsrBinPath + `; then
+if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=2 --waitretry=2 -nv --debug ` + liteEngineUsrBinPath + `; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + liteEngineUsrBinFallbackPath + ` || /usr/bin/wget --retry-connrefused --tries=5 --waitretry=5 -nv --debug ` + liteEngineUsrBinFallbackPath + `
     echo "Successfully downloaded lite engine binary from fallback URL."
 fi
 chmod 777 /usr/bin/lite-engine
@@ -225,11 +225,11 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=2 --waitretry=2 ` + pluginUsrBinPath + `; then
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + ` || wget --retry-connrefused --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + `
     echo "Successfully downloaded plugin binary from fallback URL."
 fi
 chmod 777 /usr/bin/plugin
