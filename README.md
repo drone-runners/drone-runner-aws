@@ -37,7 +37,7 @@ spec:
     spec:
       containers:
         - name: drone-runner
-          image: drone/drone-runner-aws:1.0.0-rc.to-be-added
+          image: drone/drone-runner-aws:1.0.0-rc.187
           args: ["delegate", "--pool", "/runner/gcp-pool.yml"]
           env:
             - name: DRONE_RUNNER_HA
