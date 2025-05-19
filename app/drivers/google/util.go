@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-const letters = "0123456789abcdefghijklmnopqrstuvwxyz"
+const (
+	letters       = "0123456789abcdefghijklmnopqrstuvwxyz"
+	maxSplitParts = 2
+)
 
 func randStringRunes(n int) (string, error) {
 	ret := make([]byte, n)
@@ -31,8 +34,8 @@ func substrSuffix(s string, maxLen int) string {
 
 	return s[len(s)-maxLen:]
 }
-func buildImagePathFromTag(imageTag, projectId string) string {
-	imagePath := fmt.Sprintf("projects/%s/global/images/", projectId)
+func buildImagePathFromTag(imageTag, projectID string) string {
+	imagePath := fmt.Sprintf("projects/%s/global/images/", projectID)
 	imageName := extractImageNameFromTag(imageTag)
 	return imagePath + imageName
 }
@@ -42,6 +45,6 @@ func extractImageNameFromTag(tag string) string {
 	if index == -1 {
 		return tag
 	}
-	parts := strings.SplitN(tag, ":", 2)
+	parts := strings.SplitN(tag, ":", maxSplitParts)
 	return parts[1]
 }
