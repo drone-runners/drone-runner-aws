@@ -2,7 +2,9 @@ package google
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
+	"strings"
 )
 
 const letters = "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -28,4 +30,18 @@ func substrSuffix(s string, maxLen int) string {
 	}
 
 	return s[len(s)-maxLen:]
+}
+func (p *config) buildImagePathFromTag(imageTag string) string {
+	imagePath := fmt.Sprintf("projects/%s/global/images/", p.projectID)
+	imageName := extractImageNameFromTag(imageTag)
+	return imagePath + imageName
+}
+
+func extractImageNameFromTag(tag string) string {
+	index := strings.Index(tag, ":")
+	if index == -1 {
+		return tag
+	}
+	parts := strings.SplitN(tag, ":", 2)
+	return parts[1]
 }

@@ -184,7 +184,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		p.size = opts.MachineType
 	}
 	if opts.VMImageConfig.ImageName != "" {
-		p.image = p.combineImagePaths(opts.VMImageConfig.ImageName)
+		p.image = p.buildImagePathFromTag(opts.VMImageConfig.ImageName)
 	}
 
 	logr := logger.FromContext(ctx).
@@ -912,19 +912,4 @@ func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, err
 		}
 	}
 	return result, err
-}
-
-func (p *config) combineImagePaths(image2 string) string {
-	imagePath := fmt.Sprintf("projects/%s/global/images/", p.projectID)
-	tag := trimString(image2, ":")
-	return imagePath + tag
-}
-
-func trimString(s, delimiter string) string {
-	index := strings.Index(s, delimiter)
-	if index == -1 {
-		return s
-	}
-	parts := strings.SplitN(s, ":", 2)
-	return parts[1]
 }
