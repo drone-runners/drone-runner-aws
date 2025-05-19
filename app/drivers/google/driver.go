@@ -184,7 +184,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		p.size = opts.MachineType
 	}
 	if opts.VMImageConfig.ImageName != "" {
-		p.image = combineImagePaths(p.image, opts.VMImageConfig.ImageName)
+		p.image = p.combineImagePaths(opts.VMImageConfig.ImageName)
 	}
 
 	logr := logger.FromContext(ctx).
@@ -914,26 +914,17 @@ func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, err
 	return result, err
 }
 
-func combineImagePaths(image1, image2 string) string {
-	lastSlashIndex := strings.LastIndex(image1, "/")
-	if lastSlashIndex == -1 {
-		return ""
-	}
-	basePath := image1[:lastSlashIndex+1]
-	delimiters := []string{":", "/"}
-	endIndex := len(image2)
-	for _, d := range delimiters {
-		if idx := strings.Index(image2, d); idx != -1 && idx < endIndex {
-			endIndex = idx
-		}
-	}
-	secondaryPrefix := image2[:endIndex]
+func (p *config) combineImagePaths(image2 string) string {
+	imagePath := fmt.Sprintf("projects/%s/global/images/", p.projectID)
+	tag := trimString(image2, ":")
+	return imagePath + tag
+}
 
-	remaining := strings.TrimPrefix(image2, secondaryPrefix)
-	remaining = strings.Trim(remaining, "/")
-
-	if remaining != "" {
-		return basePath + secondaryPrefix + "/" + remaining
+func trimString(s, delimiter string) string {
+	index := strings.Index(s, delimiter)
+	if index == -1 {
+		return s
 	}
-	return basePath + secondaryPrefix
+	parts := strings.SplitN(s, ":", 2)
+	return parts[1]
 }
