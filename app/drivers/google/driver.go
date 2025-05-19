@@ -183,6 +183,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if opts.MachineType != "" {
 		p.size = opts.MachineType
 	}
+	if opts.VMImageConfig.ImageName != "" {
+		p.image = combineImagePaths(p.image, opts.VMImageConfig.ImageName)
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -909,4 +912,28 @@ func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, err
 		}
 	}
 	return result, err
+}
+
+func combineImagePaths(image1, image2 string) string {
+	lastSlashIndex := strings.LastIndex(image1, "/")
+	if lastSlashIndex == -1 {
+		return ""
+	}
+	basePath := image1[:lastSlashIndex+1]
+	delimiters := []string{":", "/"}
+	endIndex := len(image2)
+	for _, d := range delimiters {
+		if idx := strings.Index(image2, d); idx != -1 && idx < endIndex {
+			endIndex = idx
+		}
+	}
+	secondaryPrefix := image2[:endIndex]
+
+	remaining := strings.TrimPrefix(image2, secondaryPrefix)
+	remaining = strings.Trim(remaining, "/")
+
+	if remaining != "" {
+		return basePath + secondaryPrefix + "/" + remaining
+	}
+	return basePath + secondaryPrefix
 }
