@@ -184,7 +184,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		p.size = opts.MachineType
 	}
 	if opts.VMImageConfig.ImageName != "" {
-		p.image = p.buildImagePathFromTag(opts.VMImageConfig.ImageName)
+		p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
 	}
 
 	logr := logger.FromContext(ctx).

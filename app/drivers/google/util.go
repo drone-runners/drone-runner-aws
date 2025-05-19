@@ -31,8 +31,8 @@ func substrSuffix(s string, maxLen int) string {
 
 	return s[len(s)-maxLen:]
 }
-func (p *config) buildImagePathFromTag(imageTag string) string {
-	imagePath := fmt.Sprintf("projects/%s/global/images/", p.projectID)
+func buildImagePathFromTag(imageTag, projectId string) string {
+	imagePath := fmt.Sprintf("projects/%s/global/images/", projectId)
 	imageName := extractImageNameFromTag(imageTag)
 	return imagePath + imageName
 }
