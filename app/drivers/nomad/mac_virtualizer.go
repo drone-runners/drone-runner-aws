@@ -36,10 +36,20 @@ if [ "$counter" -lt "$MAX_RETRIES" ]; then
   echo "Lock released."
 fi`
 
-type MacVirtualizer struct{}
+type MacVirtualizer struct {
+	nomadConfig types.NomadConfig
+}
 
 func NewMacVirtualizer() *MacVirtualizer {
-	return &MacVirtualizer{}
+	// Load default config
+	envConfig, err := cf.FromEnviron()
+	if err != nil {
+		// Use empty config if we can't load from environment
+		return &MacVirtualizer{}
+	}
+	return &MacVirtualizer{
+		nomadConfig: envConfig.NomadConfig(),
+	}
 }
 
 func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout int64) (job *api.Job, id, group string, err error) { //nolint
@@ -73,7 +83,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &mv.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -83,7 +93,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "create_and_start_vm_prepare_script",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: mv.minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s; echo %s | base64 --decode >> %s; cat %s | base64 --decode | bash", startupScript, vmStartupScriptPath, encodedUserData, cloudInitScriptPath, vmStartupScriptPath)}, //nolint
@@ -96,7 +106,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "run_cmd",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: mv.minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password)},
@@ -105,7 +115,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "cleanup_vm_script",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: mv.minNomadResources(),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", mv.getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vm)},
@@ -292,11 +302,11 @@ echo "Tart VM Started"
 }
 
 func (mv *MacVirtualizer) GetMachineFrequency() int {
-	return macMachineFrequencyMhz
+	return mv.nomadConfig.MacMachineFrequencyMhz
 }
 
 func (mv *MacVirtualizer) GetGlobalAccountID() string {
-	return globalAccountMac
+	return mv.nomadConfig.GlobalAccountMac
 }
 
 func (mv *MacVirtualizer) GetEntryPoint() string {
@@ -313,7 +323,7 @@ echo "done sleeping, port is: %s, tart ip is $(/opt/homebrew/bin/tart ip %s)"
 cntr=0
 while true
 	do
-		nc -vz $(/opt/homebrew/bin/tart ip %s) %s
+		nc -zv $(/opt/homebrew/bin/tart ip %s) %s
 		if [ $? -eq 1 ]; then
 		    echo "port check failed, incrementing counter:"
 			echo "cntr: "$cntr
@@ -403,4 +413,12 @@ nc -zv $(/opt/homebrew/bin/tart ip %s) 9079
 
 func (mv *MacVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprint(lehelper.LiteEnginePort)
+}
+
+// minNomadResources returns the minimum resources required for a Nomad job
+func (mv *MacVirtualizer) minNomadResources() *api.Resources {
+	return &api.Resources{
+		CPU:      intToPtr(mv.nomadConfig.MinNomadCPUMhz),
+		MemoryMB: intToPtr(mv.nomadConfig.MinNomadMemoryMb),
+	}
 }
