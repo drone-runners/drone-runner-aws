@@ -183,6 +183,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if opts.MachineType != "" {
 		p.size = opts.MachineType
 	}
+	if opts.VMImageConfig.ImageName != "" {
+		p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
