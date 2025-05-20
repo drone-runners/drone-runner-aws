@@ -351,8 +351,10 @@ func (m *Manager) Provision(
 	}
 
 	if gitspaceAgentConfig != nil && len(gitspaceAgentConfig.Ports) > 0 {
-		if pool.Driver.DriverName() != string(types.Nomad) && pool.Driver.DriverName() != string(types.Google) {
-			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad/google")
+		if pool.Driver.DriverName() != string(types.Nomad) &&
+			pool.Driver.DriverName() != string(types.Google) &&
+			pool.Driver.DriverName() != string(types.Amazon) {
+			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad, google, and amazon")
 		}
 		var inst *types.Instance
 		if pool.Driver.DriverName() == string(types.Google) {
