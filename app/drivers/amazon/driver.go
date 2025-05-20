@@ -51,6 +51,7 @@ type config struct {
 	allocPublicIP bool
 	volumeType    string
 	volumeSize    int64
+	volumeTags    map[string]string
 	volumeIops    int64
 	kmsKeyID      string
 	deviceName    string
@@ -205,9 +206,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	var tags = map[string]string{
 		"Name": name,
 	}
+	var volumeTags = map[string]string{}
 	// add user defined tags
 	for k, v := range p.tags {
 		tags[k] = v
+	}
+	// add volume tags
+	for k, v := range p.volumeTags {
+		volumeTags[k] = v
 	}
 	if p.vpc == "" {
 		logr.Traceln("amazon: using default vpc, checking security groups")
@@ -270,6 +276,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			{
 				ResourceType: aws.String("instance"),
 				Tags:         convertTags(tags),
+			},
+			{
+				ResourceType: aws.String("volume"),
+				Tags:         convertTags(volumeTags),
 			},
 		},
 		BlockDeviceMappings: []*ec2.BlockDeviceMapping{
