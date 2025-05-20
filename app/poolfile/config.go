@@ -98,6 +98,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				amazon.WithSubnet(a.Network.SubnetID),
 				amazon.WithUserData(a.UserData, a.UserDataPath),
 				amazon.WithVolumeSize(a.Disk.Size),
+				amazon.WithVolumeTags(a.Disk.Tags),
 				amazon.WithVolumeType(a.Disk.Type),
 				amazon.WithVolumeIops(a.Disk.Iops, a.Disk.Type),
 				amazon.WithKMSKeyID(a.Disk.KmsKeyID),
