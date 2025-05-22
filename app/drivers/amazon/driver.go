@@ -3,6 +3,7 @@ package amazon
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -343,26 +344,38 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	instanceIP := p.getIP(amazonInstance)
 	launchTime := p.getLaunchTime(amazonInstance)
 
+	labelsBytes, marshalErr := json.Marshal(opts.Labels)
+	if marshalErr != nil {
+		return &types.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
+	}
+	gitspacePortMappings := make(map[int]int)
+	for _, port := range opts.GitspaceOpts.Ports {
+		gitspacePortMappings[port] = port
+	}
+
 	instance = &types.Instance{
-		ID:           instanceID,
-		Name:         instanceID,
-		Provider:     types.Amazon, // this is driver, though its the old legacy name of provider
-		State:        types.StateCreated,
-		Pool:         opts.PoolName,
-		Image:        p.image,
-		Zone:         p.availabilityZone,
-		Region:       p.region,
-		Size:         p.size,
-		Platform:     opts.Platform,
-		Address:      instanceIP,
-		CACert:       opts.CACert,
-		CAKey:        opts.CAKey,
-		TLSCert:      opts.TLSCert,
-		TLSKey:       opts.TLSKey,
-		Started:      launchTime.Unix(),
-		Updated:      time.Now().Unix(),
-		IsHibernated: false,
-		Port:         lehelper.LiteEnginePort,
+		ID:                   instanceID,
+		Name:                 instanceID,
+		Provider:             types.Amazon, // this is driver, though its the old legacy name of provider
+		State:                types.StateCreated,
+		Pool:                 opts.PoolName,
+		Image:                p.image,
+		Zone:                 p.availabilityZone,
+		Region:               p.region,
+		Size:                 p.size,
+		Platform:             opts.Platform,
+		Address:              instanceIP,
+		CACert:               opts.CACert,
+		CAKey:                opts.CAKey,
+		TLSCert:              opts.TLSCert,
+		TLSKey:               opts.TLSKey,
+		Started:              launchTime.Unix(),
+		Updated:              time.Now().Unix(),
+		IsHibernated:         false,
+		Port:                 lehelper.LiteEnginePort,
+		StorageIdentifier:    opts.StorageOpts.Identifier,
+		Labels:               labelsBytes,
+		GitspacePortMappings: gitspacePortMappings,
 	}
 	logr.
 		WithField("ip", instanceIP).
