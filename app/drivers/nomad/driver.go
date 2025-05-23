@@ -659,6 +659,7 @@ L:
 				continue
 			}
 			if job == nil {
+				time.Sleep(15 * time.Second) //nolint
 				continue
 			}
 			waitIndex = qm.LastIndex
