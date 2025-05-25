@@ -640,6 +640,7 @@ func (p *config) pollForJob(ctx context.Context, id string, logr *logrus.Entry, 
 	var job *api.Job
 	var err error
 	var waitIndex uint64
+	waitIndex = 1
 L:
 	for {
 		select {
@@ -654,9 +655,11 @@ L:
 			job, qm, err = p.client.Jobs().Info(id, q)
 			if err != nil {
 				logr.WithError(err).WithField("job_id", id).Error("could not retrieve job information")
+				time.Sleep(15 * time.Second) //nolint
 				continue
 			}
 			if job == nil {
+				time.Sleep(15 * time.Second) //nolint
 				continue
 			}
 			waitIndex = qm.LastIndex
