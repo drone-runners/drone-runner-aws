@@ -14,8 +14,6 @@ import (
 )
 
 const (
-	initTimeoutSec        = 30 * 60
-	initTimeoutSecForBYOI = 60 * 60
 )
 
 type VMInitTask struct {
@@ -52,9 +50,9 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
-	timeout := initTimeoutSec
+	timeout := t.c.env.Settings.InitTimeoutSec
 	if val, ok := req.SetupVMRequest.SetupRequest.Envs["CI_ENABLE_BYOI_HOSTED"]; ok && val == "true" {
-		timeout = initTimeoutSecForBYOI
+		timeout = t.c.env.Settings.InitTimeoutSecForBYOI
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
 	defer cancel()
