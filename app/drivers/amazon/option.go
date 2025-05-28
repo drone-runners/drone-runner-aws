@@ -185,6 +185,11 @@ func WithVolumeSize(s int64) Option {
 		}
 	}
 }
+func WithVolumeTags(t map[string]string) Option {
+	return func(p *config) {
+		p.volumeTags = t
+	}
+}
 
 // WithVolumeType returns an option to set the volume type.
 func WithVolumeType(t string) Option {
