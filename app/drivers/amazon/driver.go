@@ -277,10 +277,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				ResourceType: aws.String("instance"),
 				Tags:         convertTags(tags),
 			},
-			{
-				ResourceType: aws.String("volume"),
-				Tags:         convertTags(volumeTags),
-			},
 		},
 		BlockDeviceMappings: []*ec2.BlockDeviceMapping{
 			{
@@ -292,6 +288,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 				},
 			},
 		},
+	}
+	if len(volumeTags) != 0 {
+		in.TagSpecifications = append(in.TagSpecifications, &ec2.TagSpecification{
+			ResourceType: aws.String("volume"),
+			Tags:         convertTags(volumeTags),
+		})
 	}
 	if p.keyPairName != "" {
 		in.KeyName = aws.String(p.keyPairName)
