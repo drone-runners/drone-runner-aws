@@ -71,6 +71,7 @@ func HandleSetup(
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 ) (*SetupVMResponse, string, error) {
+	r.LogConfig.IndirectUpload = true
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")

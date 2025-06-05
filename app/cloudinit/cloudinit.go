@@ -529,6 +529,7 @@ apt:
 packages:
   - wget
   - docker-ce
+  - golang-go
 {{ end }}
 write_files:
 - path: {{ .CaCertPath }}
@@ -545,6 +546,7 @@ write_files:
   content: {{ .TLSKey | base64 }}
 runcmd:
 - 'set -x'
+- go version
 {{ if .ShouldUseGoogleDNS }}
 - 'echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf'
 - 'systemctl restart systemd-resolved'
@@ -570,7 +572,6 @@ runcmd:
 {{ end }}
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
@@ -587,7 +588,48 @@ runcmd:
 - 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
 {{ end }}
 - 'rm -rf /addon/tmate.xz'
-{{ end }}`
+{{ end }}
+- | 
+  groupadd docker
+
+  DISK="/dev/disk/by-id/google-disk-0"
+  MOUNT_POINT="/mnt/disks/mountdevcontainer"
+
+  # Check if the disk is already formatted
+  if ! sudo blkid $DISK; then
+      echo "Disk is unformatted. Formatting..."
+      sudo mkfs.ext4 -m 0 -E lazy_itable_init=0,lazy_journal_init=0,discard $DISK
+  else
+      echo "Disk is already formatted. Skipping format."
+  fi
+  sudo mkdir -p $MOUNT_POINT
+  sudo mount -o discard,defaults $DISK $MOUNT_POINT
+  sudo chmod a+w $MOUNT_POINT
+
+  mkdir -p /mnt/disks/mountdevcontainer/gitspace
+  export DOCKER_API_VERSION=1.40
+
+  echo "Updating docker root dir"
+  systemctl stop docker
+  mkdir -p /mnt/disks/mountdevcontainer/docker
+  tee /etc/docker/daemon.json <<EOF
+  {
+    "data-root": "/mnt/disks/mountdevcontainer/docker"
+  }
+  EOF
+  systemctl start docker
+  echo "Successfully updated docker root dir"
+
+  echo "starting gitspaces agent"
+
+  echo "ya29.c.c0ASRK0GaO6xB2a9mD0E_Gd7QWAfqEBUOGVKgfPBoA-sL7gUZqdCCuCFRh4XXVLmUNQ88hG9w3D9tDt8h5x9KuT0J-zFNVWG9fuUMq0i6bWW16til48jKkxRhLX8JI2TQfuPV8m0CmTeYU8zDofhUEyYvYTblkI1WaDW8TjVp9vUTRgA5KJcuxUItkV4NP-ZDS9EEJkIpTV4HKJDbpPNtf917WlJEz7SEf2LVdVIlOTGk2LMKqec5KI9weSm3yf3op0-hV_yhCPJcB9uYzp6DvDIYi47piqh-drNbAkpP594hfUAHvBpDU8xksAvg5Rhv4uHyG87XJGoHPzjPHNC50ZXL9V8GDd__MCijd0qsI7_mLN4ob1zwp1CtjjRnDZ8J-Fcb6k89kdOFQysMNcO36GwtWmoE_oxyWWiHaR1LSz-aFQ_RWH1EqdEQu5Nkp0eQom63fUjY1p2t6wzOTlBiFhX5kysmpPwKG9bD5RHAphNhLSk5w82GmRpNA1-Wfqs-obkyjkq2lzp49ExThuVeh2EmlWK1Yi5KmZyc-oUp2jOOyvAz2srehSXcRGzzICJFZeAo70rARp9yW8SzL5s3hKVUGXstUIQbur2u_8zaTcwYBuldnB5C7Q5_gy25fXc4gDWwziOUlRgbgLrjQRKotKchnpzlRhvIfplrKsxwhnp0L2VA0ru8s2yHvKx0T708CjiyMuk6QrcYo9dOnFv02Ue-QfmF7iI09i_oMXp-itXhxQboRSe-Vw1vWOIrjrX5ev5XJ4agq07iwYO8ejmF4_FBYU18qjyQSxJ250aSMBZYv9rOu1dpWz6Wdp1dQI3dw-1t_5W4U4m2lWuk5VMpXzOjFmrO0x-Bbg67pjrq0u9f90kQiWr-xq79YbpXOb-UWUMxjmyntrZ8djwWXQsZyOBSvQbxehMgpj5f9iobmVfWY2ZF5zSQyFeo1QRzYthrhhqU61zB5sS2cM645q7_BVxUxfYoWJk1vJfSnageoSIot4It60mJ8Ju1" | docker login -u oauth2accesstoken --password-stdin us-west1-docker.pkg.dev
+  docker run -p 8083:8083 -v /var/run/docker.sock:/var/run/docker.sock -e DOCKER_API_VERSION=1.40 -e HARNESS_JWT_SECRET=IC04LYMBf1lDP5oeY4hupxd4HJhLmN6azUku3xEbeE3SUx5G3ZYzhbiwVtK4i7AmqyU9OZkwB4v8E9qM -d --name gitspace-agent us-west1-docker.pkg.dev/gar-setup/docker/gitspace-agent:1.22.1-vikyath.hack-ded69d
+  echo "Agent container started."
+
+  echo "done starting gitspaces agent"
+
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
+`
 
 var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(ubuntuScript))
 
