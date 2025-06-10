@@ -622,8 +622,8 @@ runcmd:
 
   echo "starting gitspaces agent"
 
-  echo "ya29.c.c0ASRK0GaO6xB2a9mD0E_Gd7QWAfqEBUOGVKgfPBoA-sL7gUZqdCCuCFRh4XXVLmUNQ88hG9w3D9tDt8h5x9KuT0J-zFNVWG9fuUMq0i6bWW16til48jKkxRhLX8JI2TQfuPV8m0CmTeYU8zDofhUEyYvYTblkI1WaDW8TjVp9vUTRgA5KJcuxUItkV4NP-ZDS9EEJkIpTV4HKJDbpPNtf917WlJEz7SEf2LVdVIlOTGk2LMKqec5KI9weSm3yf3op0-hV_yhCPJcB9uYzp6DvDIYi47piqh-drNbAkpP594hfUAHvBpDU8xksAvg5Rhv4uHyG87XJGoHPzjPHNC50ZXL9V8GDd__MCijd0qsI7_mLN4ob1zwp1CtjjRnDZ8J-Fcb6k89kdOFQysMNcO36GwtWmoE_oxyWWiHaR1LSz-aFQ_RWH1EqdEQu5Nkp0eQom63fUjY1p2t6wzOTlBiFhX5kysmpPwKG9bD5RHAphNhLSk5w82GmRpNA1-Wfqs-obkyjkq2lzp49ExThuVeh2EmlWK1Yi5KmZyc-oUp2jOOyvAz2srehSXcRGzzICJFZeAo70rARp9yW8SzL5s3hKVUGXstUIQbur2u_8zaTcwYBuldnB5C7Q5_gy25fXc4gDWwziOUlRgbgLrjQRKotKchnpzlRhvIfplrKsxwhnp0L2VA0ru8s2yHvKx0T708CjiyMuk6QrcYo9dOnFv02Ue-QfmF7iI09i_oMXp-itXhxQboRSe-Vw1vWOIrjrX5ev5XJ4agq07iwYO8ejmF4_FBYU18qjyQSxJ250aSMBZYv9rOu1dpWz6Wdp1dQI3dw-1t_5W4U4m2lWuk5VMpXzOjFmrO0x-Bbg67pjrq0u9f90kQiWr-xq79YbpXOb-UWUMxjmyntrZ8djwWXQsZyOBSvQbxehMgpj5f9iobmVfWY2ZF5zSQyFeo1QRzYthrhhqU61zB5sS2cM645q7_BVxUxfYoWJk1vJfSnageoSIot4It60mJ8Ju1" | docker login -u oauth2accesstoken --password-stdin us-west1-docker.pkg.dev
-  docker run -p 8083:8083 -v /var/run/docker.sock:/var/run/docker.sock -e DOCKER_API_VERSION=1.40 -e HARNESS_JWT_SECRET=IC04LYMBf1lDP5oeY4hupxd4HJhLmN6azUku3xEbeE3SUx5G3ZYzhbiwVtK4i7AmqyU9OZkwB4v8E9qM -d --name gitspace-agent us-west1-docker.pkg.dev/gar-setup/docker/gitspace-agent:1.22.1-vikyath.hack-ded69d
+  echo "<TOKEN>" | docker login -u oauth2accesstoken --password-stdin us-west1-docker.pkg.dev
+  docker run -p 8083:8083 -v /var/run/docker.sock:/var/run/docker.sock -e DOCKER_API_VERSION=1.40 -e HARNESS_JWT_SECRET=<SECRET> -d --name gitspace-agent us-west1-docker.pkg.dev/gar-setup/docker/gitspace-agent:1.22.1-vikyath.hack-ded69d
   echo "Agent container started."
 
   echo "done starting gitspaces agent"
