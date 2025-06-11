@@ -786,40 +786,36 @@ func Linux(params *Params) (payload string, err error) {
 		CertPath:   certPath,
 		KeyPath:    keyPath,
 	}
+
+	// Decode VMInitScript if provided
+	if params.GitspaceAgentConfig.VMInitScript != "" {
+		decoded, err := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
+		}
+		templateData.GitspaceAgentConfig.VMInitScript = string(decoded)
+	}
+
+	// Select template
+	var tmpl *template.Template
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		if params.GitspaceAgentConfig.VMInitScript == "" {
-			err = amazonLinuxTemplate.Execute(sb, templateData)
-			if err != nil {
-				return "", fmt.Errorf("error while executing amazon linux template: %s", err)
-			}
-		} else {
-			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
-			if decodeErr != nil {
-				return "", fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
-			}
-			templateData.GitspaceAgentConfig.VMInitScript = string(decodedScript)
-			err = amazonLinuxTemplate.Execute(sb, templateData)
-		}
+		tmpl = amazonLinuxTemplate
 	default:
-		// Ubuntu
-		if params.GitspaceAgentConfig.VMInitScript == "" {
-			err = ubuntuTemplate.Execute(sb, templateData)
-		} else {
-			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
-			if decodeErr != nil {
-				return "", fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
-			}
-			templateData.GitspaceAgentConfig.VMInitScript = string(decodedScript)
+		if params.GitspaceAgentConfig.VMInitScript != "" {
 			if params.DriverName == string(types.Amazon) {
-				err = gitspacesAWSUbuntuTemplate.Execute(sb, templateData)
+				tmpl = gitspacesAWSUbuntuTemplate
 			} else {
-				err = gitspacesUbuntuTemplate.Execute(sb, templateData)
+				tmpl = gitspacesUbuntuTemplate
 			}
+		} else {
+			tmpl = ubuntuTemplate
 		}
-		if err != nil {
-			return "", fmt.Errorf("error while executing ubuntu template: %s", err)
-		}
+	}
+
+	// Execute selected template
+	if err := tmpl.Execute(sb, templateData); err != nil {
+		return "", fmt.Errorf("error while executing template: %w", err)
 	}
 
 	return sb.String(), nil
