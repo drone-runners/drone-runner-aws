@@ -31,11 +31,13 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
 		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
 		ShouldUseGoogleDNS:      opts.ShouldUseGoogleDNS,
+		DriverName:              opts.DriverName,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
 			VMInitScript: opts.GitspaceOpts.VMInitScript,
 		}
+		params.CertsDirectory = "/harness/certs"
 	}
 
 	var err error

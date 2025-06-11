@@ -69,7 +69,7 @@ func HandleSuspend(
 	}
 	logr.Traceln("called lite engine suspend")
 
-	if err = poolManager.Suspend(ctx, r.PoolID, instance.ID, instance.Zone); err != nil {
+	if err = poolManager.Suspend(ctx, r.PoolID, instance); err != nil {
 		return fmt.Errorf("failed to suspend instance: %w", err)
 	}
 

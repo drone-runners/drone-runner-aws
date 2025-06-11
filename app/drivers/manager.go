@@ -351,11 +351,14 @@ func (m *Manager) Provision(
 	}
 
 	if gitspaceAgentConfig != nil && len(gitspaceAgentConfig.Ports) > 0 {
-		if pool.Driver.DriverName() != string(types.Nomad) && pool.Driver.DriverName() != string(types.Google) {
-			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad/google")
+		if pool.Driver.DriverName() != string(types.Nomad) &&
+			pool.Driver.DriverName() != string(types.Google) &&
+			pool.Driver.DriverName() != string(types.Amazon) {
+			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad, google, and amazon")
 		}
 		var inst *types.Instance
-		if pool.Driver.DriverName() == string(types.Google) {
+		if pool.Driver.DriverName() == string(types.Google) ||
+			pool.Driver.DriverName() == string(types.Amazon) {
 			if instanceInfo != nil && instanceInfo.ID != "" {
 				if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
 					logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
@@ -684,6 +687,7 @@ func (m *Manager) setupInstance(
 	createOptions.Labels = map[string]string{"retain": retain}
 	createOptions.Zone = zone
 	createOptions.MachineType = machineType
+	createOptions.DriverName = pool.Driver.DriverName()
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
@@ -806,13 +810,26 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	return pool.Driver.Logs(ctx, instanceID)
 }
 
-func (m *Manager) hibernateWithRetries(ctx context.Context, poolName, tlsServerName string, instance *types.Instance) error {
+func (m *Manager) hibernateWithRetries(
+	ctx context.Context,
+	poolName, tlsServerName string,
+	instance *types.Instance,
+) error {
+	return m.hibernateOrStopWithRetries(ctx, poolName, tlsServerName, instance, false)
+}
+
+func (m *Manager) hibernateOrStopWithRetries(
+	ctx context.Context,
+	poolName, tlsServerName string,
+	instance *types.Instance,
+	fallbackStop bool,
+) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if !pool.Driver.CanHibernate() {
+	if !pool.Driver.CanHibernate() && !fallbackStop {
 		return nil
 	}
 
@@ -986,14 +1003,60 @@ func (m *Manager) IsDistributed() bool {
 	return false
 }
 
-func (m *Manager) Suspend(ctx context.Context, poolName, instanceID, zone string) error {
+func (m *Manager) Suspend(ctx context.Context, poolName string, instance *types.Instance) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("suspend: pool name %q not found", poolName)
 	}
 
-	if err := pool.Driver.Hibernate(ctx, instanceID, poolName, zone); err != nil {
-		return fmt.Errorf("suspend: failed to suspend an instance %s of %q pool: %w", instanceID, poolName, err)
+	// hibernateOrStopWithRetries assumes that the instance is present in the store
+	// and works only if the state is not InUse.
+	var err error
+	instance, err = m.findOrCreateInstance(ctx, pool, instance)
+	if err != nil {
+		return fmt.Errorf("suspend failed to find or create instance: %w", err)
 	}
+
+	if err := m.hibernateOrStopWithRetries(
+		ctx,
+		poolName,
+		m.GetTLSServerName(),
+		instance,
+		true,
+	); err != nil {
+		return fmt.Errorf("suspend: failed to suspend an instance %s of %q pool: %w", instance.ID, poolName, err)
+	}
+
 	return nil
+}
+
+func (m *Manager) findOrCreateInstance(ctx context.Context, pool *poolEntry, instance *types.Instance) (*types.Instance, error) {
+	pool.Lock()
+	defer pool.Unlock()
+
+	if instance == nil {
+		return nil, fmt.Errorf("instance is nil")
+	}
+
+	instanceFromStore, err := m.Find(ctx, instance.ID)
+	if err != nil || instanceFromStore == nil {
+		logrus.WithField("instanceID", instance.ID).Infoln("Instance not found in db, creating a new entry")
+		if err := m.instanceStore.Create(ctx, instance); err != nil {
+			return nil, fmt.Errorf("failed to create instance in db %s: %w", instance.ID, err)
+		}
+	} else {
+		instance = instanceFromStore
+	}
+
+	instance.State = types.StateCreated
+	if err := m.instanceStore.Update(ctx, instance); err != nil {
+		return nil, fmt.Errorf(
+			"failed to update instance in db %s of %q pool: %w",
+			instance.ID,
+			pool.Name,
+			err,
+		)
+	}
+
+	return instance, nil
 }
