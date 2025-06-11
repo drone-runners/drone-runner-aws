@@ -120,6 +120,7 @@ type InstanceCreateOpts struct {
 	PluginBinaryFallbackURI string
 	ShouldUseGoogleDNS      bool
 	VMImageConfig           VMImageConfig
+	DriverName              string
 }
 
 // Platform defines the target platform.

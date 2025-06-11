@@ -36,6 +36,8 @@ type Params struct {
 	LiteEngineFallbackPath  string
 	PluginBinaryFallbackURI string
 	ShouldUseGoogleDNS      bool
+	DriverName              string
+	CertsDirectory          string
 }
 
 var funcs = map[string]interface{}{
@@ -591,6 +593,57 @@ runcmd:
 
 var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(ubuntuScript))
 
+const gitspacesAWSUbuntuScript = `
+#cloud-config
+cloud_final_modules:
+- [scripts-user, always]
+write_files:
+- path: {{ .CaCertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .CACert | base64  }}
+- path: {{ .CertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSCert | base64 }}
+- path: {{ .KeyPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSKey | base64 }}
+runcmd:
+- 'set -x'
+- 'ufw allow 9079'
+- 'mkdir -p /etc/docker'
+- 'mkdir -p /harness/certs'
+- 'touch /etc/docker/daemon.json'
+- 'echo "{}" > /etc/docker/daemon.json'
+- "export SERVER_CERT_FILE={{ .CertPath }}"
+- "export SERVER_KEY_FILE={{ .KeyPath }}"
+- "export CLIENT_CERT_FILE={{ .CaCertPath }}"
+- 'apt-get update'
+- 'apt-get install -y wget apt-transport-https ca-certificates curl gnupg lsb-release'
+- 'mkdir -p /etc/apt/keyrings'
+- 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg'
+- 'echo "deb [arch={{ .Platform.Arch }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list'
+- 'apt-get update'
+- 'apt-get install -y docker-ce docker-ce-cli containerd.io'
+- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
+- 'chmod 777 /usr/bin/lite-engine'
+{{ if eq .Platform.Arch "amd64" }}
+- '(curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
+- 'chmod 777 /usr/bin/envman'
+{{ end }}
+- 'touch /root/.env'
+- '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+{{ if .GitspaceAgentConfig.VMInitScript }}
+- | 
+{{ .GitspaceAgentConfig.VMInitScript }}
+{{ end }}
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
+`
+
+var gitspacesAWSUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(gitspacesAWSUbuntuScript))
+
 const gitspacesUbuntuScript = `
 #cloud-config
 {{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
@@ -621,6 +674,9 @@ write_files:
   content: {{ .TLSKey | base64 }}
 runcmd:
 - 'set -x'
+- "export SERVER_CERT_FILE={{ .CertPath }}"
+- "export SERVER_KEY_FILE={{ .KeyPath }}"
+- "export CLIENT_CERT_FILE={{ .CaCertPath }}"
 - 'ufw allow 9079'
 - '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
@@ -699,16 +755,26 @@ runcmd:
 - 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
 {{ end }}
 - 'rm -rf /addon/tmate.xz'
-{{ end }}`
+{{ end }}
+
+{{ if .GitspaceAgentConfig.VMInitScript }}
+- | 
+{{ .GitspaceAgentConfig.VMInitScript }}
+{{ end }}
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
+`
 
 var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(amazonLinuxScript))
 
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string, err error) {
+	if params.CertsDirectory == "" {
+		params.CertsDirectory = certsDir
+	}
 	sb := &strings.Builder{}
-	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
-	certPath := filepath.Join(certsDir, "server-cert.pem")
-	keyPath := filepath.Join(certsDir, "server-key.pem")
+	caCertPath := filepath.Join(params.CertsDirectory, "ca-cert.pem")
+	certPath := filepath.Join(params.CertsDirectory, "server-cert.pem")
+	keyPath := filepath.Join(params.CertsDirectory, "server-key.pem")
 	templateData := struct {
 		Params
 		CaCertPath string
@@ -722,9 +788,18 @@ func Linux(params *Params) (payload string, err error) {
 	}
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		err = amazonLinuxTemplate.Execute(sb, templateData)
-		if err != nil {
-			return "", fmt.Errorf("error while executing amazon linux template: %s", err)
+		if params.GitspaceAgentConfig.VMInitScript == "" {
+			err = amazonLinuxTemplate.Execute(sb, templateData)
+			if err != nil {
+				return "", fmt.Errorf("error while executing amazon linux template: %s", err)
+			}
+		} else {
+			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
+			if decodeErr != nil {
+				return "", fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
+			}
+			templateData.GitspaceAgentConfig.VMInitScript = string(decodedScript)
+			err = amazonLinuxTemplate.Execute(sb, templateData)
 		}
 	default:
 		// Ubuntu
@@ -736,7 +811,11 @@ func Linux(params *Params) (payload string, err error) {
 				return "", fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
 			}
 			templateData.GitspaceAgentConfig.VMInitScript = string(decodedScript)
-			err = gitspacesUbuntuTemplate.Execute(sb, templateData)
+			if params.DriverName == string(types.Amazon) {
+				err = gitspacesAWSUbuntuTemplate.Execute(sb, templateData)
+			} else {
+				err = gitspacesUbuntuTemplate.Execute(sb, templateData)
+			}
 		}
 		if err != nil {
 			return "", fmt.Errorf("error while executing ubuntu template: %s", err)

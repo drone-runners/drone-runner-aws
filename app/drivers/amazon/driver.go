@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
@@ -314,6 +316,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		}
 	}
 
+	// Create persistent disks first
+	volumes, err := p.createPersistentDisks(ctx, opts)
+	if err != nil {
+		logr.WithError(err).Errorln("amazon: failed to create persistent disks")
+		return nil, err
+	}
+
 	runResult, err := client.RunInstancesWithContext(ctx, in)
 	if err != nil {
 		logr.WithError(err).
@@ -338,6 +347,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	amazonInstance, err = p.pollInstanceIPAddr(ctx, *awsInstanceID, logr)
 	if err != nil {
 		return nil, err
+	}
+
+	// Now that instance is running, attach volumes if any
+	if len(volumes) > 0 {
+		logr.Debugln("amazon: [provision] attaching volumes to the instance")
+		if err = p.attachVolumes(ctx, awsInstanceID, volumes, logr); err != nil {
+			return nil, err
+		}
 	}
 
 	instanceID := *amazonInstance.InstanceId
@@ -390,7 +407,11 @@ func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err 
 }
 
 // DestroyInstanceAndStorage destroys the server AWS EC2 instances.
-func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
+func (p *config) DestroyInstanceAndStorage(
+	ctx context.Context,
+	instances []*types.Instance,
+	storageCleanupType *storage.CleanupType,
+) (err error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)
@@ -410,6 +431,15 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		awsIDs[i] = aws.String(instanceID)
 	}
 
+	var volumesToDelete []*string
+	if storageCleanupType != nil && *storageCleanupType == storage.Delete {
+		vols, findVolumesErr := p.findPersistentVolumes(ctx, instances, logr)
+		if findVolumesErr != nil {
+			return findVolumesErr
+		}
+		volumesToDelete = vols
+	}
+
 	_, err = client.TerminateInstances(&ec2.TerminateInstancesInput{InstanceIds: awsIDs})
 	if err != nil {
 		err = fmt.Errorf("failed to terminate instances: %v", err)
@@ -418,6 +448,11 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	}
 
 	logr.Traceln("amazon: VM terminated")
+
+	if storageCleanupType != nil {
+		return p.cleanupVolumes(ctx, awsIDs, *storageCleanupType, volumesToDelete)
+	}
+
 	return nil
 }
 
@@ -468,12 +503,13 @@ func (p *config) Hibernate(ctx context.Context, instanceID, poolName, _ string) 
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
 		WithField("pool", poolName).
-		WithField("instanceID", instanceID)
+		WithField("instanceID", instanceID).
+		WithField("hibernate", p.hibernate)
 
 	client := p.service
 	_, err := client.StopInstancesWithContext(ctx, &ec2.StopInstancesInput{
 		InstanceIds: []*string{aws.String(instanceID)},
-		Hibernate:   aws.Bool(true),
+		Hibernate:   aws.Bool(p.hibernate),
 	})
 	if err != nil {
 		logr.WithError(err).
@@ -651,4 +687,268 @@ func (p *config) getInstance(ctx context.Context, instanceID string) (*ec2.Insta
 	}
 
 	return response.Reservations[0].Instances[0], nil
+}
+
+// getNextDeviceName returns the next available device name starting from /dev/sde.
+// We start from 'e' because:
+// This ensures we avoid conflicts with built-in device names.
+func (p *config) getNextDeviceName(index int) string {
+	// For HVM instances, AWS recommends /dev/sd[b-z] for EBS data volumes
+	deviceLetter := rune('e' + index)
+	if deviceLetter > 'z' {
+		// If we somehow exceed 'z', wrap around
+		deviceLetter = 'e'
+	}
+	return fmt.Sprintf("/dev/sd%c", deviceLetter)
+}
+
+func (p *config) waitForVolumeAvailable(ctx context.Context, volumeID *string) error {
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = 5 * time.Minute
+
+	return backoff.Retry(func() error {
+		desc, err := p.service.DescribeVolumesWithContext(ctx, &ec2.DescribeVolumesInput{
+			VolumeIds: []*string{volumeID},
+		})
+		if err != nil {
+			return err
+		}
+		if len(desc.Volumes) == 0 {
+			return fmt.Errorf("volume not found")
+		}
+		if *desc.Volumes[0].State != "available" {
+			return fmt.Errorf("volume not available yet")
+		}
+		return nil
+	}, b)
+}
+
+// cleanupVolumes waits for instances to terminate and handles volume cleanup based on cleanup type
+func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, cleanupType storage.CleanupType, volumeIDs []*string) error {
+	logr := logger.FromContext(ctx)
+
+	// Wait for instances to terminate
+	logr.Infoln("aws: waiting for instance termination")
+	if err := p.service.WaitUntilInstanceTerminatedWithContext(ctx, &ec2.DescribeInstancesInput{
+		InstanceIds: instanceIDs,
+	}); err != nil {
+		logr.WithError(err).Errorln("aws: failed waiting for instance termination")
+		return err
+	}
+
+	if cleanupType != storage.Delete || len(volumeIDs) == 0 {
+		return nil
+	}
+
+	// Delete the persistent volumes
+	logr.Infoln("aws: deleting persistent volumes")
+	for _, volumeID := range volumeIDs {
+		_, err := p.service.DeleteVolumeWithContext(ctx, &ec2.DeleteVolumeInput{
+			VolumeId: volumeID,
+		})
+		if err != nil {
+			var awsErr awserr.Error
+			if errors.As(err, &awsErr) && awsErr.Code() == "InvalidVolume.NotFound" {
+				logr.WithError(err).Warnf("aws: volume %s not found", aws.StringValue(volumeID))
+				continue
+			}
+			logr.WithError(err).Errorf("aws: failed to delete volume %s", aws.StringValue(volumeID))
+			return err
+		}
+	}
+
+	return nil
+}
+
+// findPersistentVolumes finds all EBS volumes attached to the given instances that have DeleteOnTermination=false
+func (p *config) findPersistentVolumes(ctx context.Context, instances []*types.Instance, logr logger.Logger) ([]*string, error) {
+	// Get all volumes with Name tag matching any of the storage identifiers and DeleteOnTermination=false
+	var filters []*ec2.Filter
+	// Add filter for non-delete-on-termination volumes
+	filters = append(filters, &ec2.Filter{
+		Name:   aws.String("attachment.delete-on-termination"),
+		Values: []*string{aws.String("false")},
+	})
+
+	// Add filters for volume names
+	for _, instance := range instances {
+		if instance.StorageIdentifier != "" {
+			for _, diskName := range strings.Split(instance.StorageIdentifier, ",") {
+				diskName = strings.TrimSpace(diskName)
+				filters = append(filters, &ec2.Filter{
+					Name:   aws.String("tag:Name"),
+					Values: []*string{aws.String(diskName)},
+				})
+			}
+		}
+	}
+
+	if len(filters) == 0 {
+		return nil, nil
+	}
+
+	describe, err := p.service.DescribeVolumesWithContext(ctx, &ec2.DescribeVolumesInput{
+		Filters: filters,
+	})
+	if err != nil {
+		logr.WithError(err).Errorln("aws: failed to describe volumes")
+		return nil, err
+	}
+
+	var volumeIDs []*string
+	for _, volume := range describe.Volumes {
+		volumeIDs = append(volumeIDs, volume.VolumeId)
+	}
+
+	return volumeIDs, nil
+}
+
+func (p *config) attachVolumes(ctx context.Context, instanceID *string, volumes []*ec2.Volume, logr logger.Logger) error {
+	// Attach volumes with retry
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = 2 * time.Second // First retry after 2s
+	b.Multiplier = 2                    // Next retry after 4s (total 6s)
+	b.MaxElapsedTime = 5 * time.Minute
+
+	for i, volume := range volumes {
+		retryCount := 0
+		err := backoff.Retry(func() error {
+			retryCount++
+			logr.Debugf("amazon: attempting to attach volume %s (attempt %d)", *volume.VolumeId, retryCount)
+			// Check if instance is running
+			desc, err := p.service.DescribeInstancesWithContext(ctx, &ec2.DescribeInstancesInput{
+				InstanceIds: []*string{instanceID},
+			})
+			if err != nil {
+				logr.Debugf("amazon: failed to describe instance on attempt %d: %v", retryCount, err)
+				return err
+			}
+			if len(desc.Reservations) == 0 || len(desc.Reservations[0].Instances) == 0 {
+				logr.Debugf("amazon: instance not found on attempt %d", retryCount)
+				return fmt.Errorf("instance not found")
+			}
+
+			state := aws.StringValue(desc.Reservations[0].Instances[0].State.Name)
+			if state != "running" {
+				logr.Debugf("amazon: instance state is %s on attempt %d", state, retryCount)
+				return fmt.Errorf("instance not running yet")
+			}
+
+			// Try to attach volume
+			deviceName := p.getNextDeviceName(i)
+			logr.Debugf("amazon: attempting to attach volume %s to device %s on attempt %d", *volume.VolumeId, deviceName, retryCount)
+
+			_, err = p.service.AttachVolumeWithContext(ctx, &ec2.AttachVolumeInput{
+				Device:     aws.String(deviceName),
+				InstanceId: instanceID,
+				VolumeId:   volume.VolumeId,
+			})
+			if err != nil {
+				logr.Debugf("amazon: failed to attach volume on attempt %d: %v", retryCount, err)
+			}
+			return err
+		}, b)
+
+		if err != nil {
+			logr.WithError(err).Errorln("amazon: failed to attach volume")
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *config) createPersistentDisks(
+	ctx context.Context,
+	opts *types.InstanceCreateOpts,
+) ([]*ec2.Volume, error) {
+	if opts.StorageOpts.Identifier == "" {
+		return nil, nil
+	}
+
+	storageIdentifiers := strings.Split(opts.StorageOpts.Identifier, ",")
+
+	var volumeSize int64
+	if opts.StorageOpts.Size != "" {
+		size, err := strconv.ParseInt(opts.StorageOpts.Size, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse volume size: %w", err)
+		}
+		volumeSize = size
+	}
+
+	var volumes []*ec2.Volume
+	for _, diskName := range storageIdentifiers {
+		diskName = strings.TrimSpace(diskName)
+
+		// Create volume
+		createVolumeInput := &ec2.CreateVolumeInput{
+			AvailabilityZone: aws.String(p.availabilityZone),
+			VolumeType:       aws.String(opts.StorageOpts.Type),
+			Size:             aws.Int64(volumeSize),
+			Encrypted:        aws.Bool(true),
+			TagSpecifications: []*ec2.TagSpecification{
+				{
+					ResourceType: aws.String("volume"),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("Name"),
+							Value: aws.String(diskName),
+						},
+					},
+				},
+			},
+		}
+
+		// Create the volume
+		volume, err := p.service.CreateVolumeWithContext(ctx, createVolumeInput)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create volume: %w", err)
+		}
+
+		// Wait for volume to be available
+		if err := p.waitForVolumeAvailable(ctx, volume.VolumeId); err != nil {
+			return nil, fmt.Errorf("error waiting for volume to become available: %w", err)
+		}
+
+		volumes = append(volumes, volume)
+	}
+
+	return volumes, nil
+}
+
+func (p *config) attachPersistentDisks(
+	ctx context.Context,
+	instanceID string,
+	volumes []*ec2.Volume,
+) error {
+	for i, volume := range volumes {
+		_, err := p.service.AttachVolumeWithContext(ctx, &ec2.AttachVolumeInput{
+			Device:     aws.String(p.getNextDeviceName(i)),
+			InstanceId: aws.String(instanceID),
+			VolumeId:   volume.VolumeId,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to attach volume: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (p *config) attachPersistentDiskIfRequired(
+	ctx context.Context,
+	opts *types.InstanceCreateOpts,
+	instanceID string,
+) error {
+	volumes, err := p.createPersistentDisks(ctx, opts)
+	if err != nil {
+		return err
+	}
+
+	if len(volumes) > 0 {
+		return p.attachPersistentDisks(ctx, instanceID, volumes)
+	}
+
+	return nil
 }

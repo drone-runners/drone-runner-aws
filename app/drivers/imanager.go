@@ -32,5 +32,5 @@ type IManager interface {
 	GetTLSServerName() string
 	IsDistributed() bool
 	GetRunnerConfig() types.RunnerConfig
-	Suspend(ctx context.Context, poolID string, instanceID string, zone string) error
+	Suspend(ctx context.Context, poolID string, instance *types.Instance) error
 }
