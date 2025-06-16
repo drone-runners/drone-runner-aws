@@ -196,6 +196,14 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
 	startTime := time.Now()
+
+	if opts.Zone != "" {
+		p.availabilityZone = opts.Zone
+	}
+	if opts.MachineType != "" {
+		p.size = opts.MachineType
+	}
+
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
 		WithField("ami", p.InstanceType()).
@@ -203,6 +211,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("region", p.region).
 		WithField("image", p.image).
 		WithField("size", p.size).
+		WithField("zone", p.availabilityZone).
 		WithField("hibernate", p.CanHibernate())
 	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
 	var tags = map[string]string{
@@ -247,6 +256,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		logr.WithError(err).
 			Errorln("amazon: [provision] failed to generate user data")
 		return nil, err
+	}
+
+	if opts.StorageOpts.BootDiskSize != "" {
+		diskSize, diskSizeErr := strconv.ParseInt(opts.StorageOpts.BootDiskSize, 10, 64)
+		if diskSizeErr != nil {
+			return nil, fmt.Errorf("failed to parse volume size: %w", diskSizeErr)
+		}
+		p.volumeSize = diskSize
+	}
+	if opts.StorageOpts.BootDiskType != "" {
+		p.volumeType = opts.StorageOpts.BootDiskType
 	}
 
 	in := &ec2.RunInstancesInput{
