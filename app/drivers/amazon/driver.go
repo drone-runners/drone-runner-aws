@@ -13,6 +13,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -61,6 +62,7 @@ type config struct {
 	iamProfileArn string
 	tags          map[string]string // user defined tags
 	hibernate     bool
+	zoneDetails   []cf.ZoneInfo
 
 	service *ec2.EC2
 }
@@ -199,12 +201,8 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
 	startTime := time.Now()
-
-	if opts.Zone != "" {
-		p.availabilityZone = opts.Zone
-	}
-	if opts.MachineType != "" {
-		p.size = opts.MachineType
+	if err = p.configureDynamicFields(opts); err != nil {
+		return nil, fmt.Errorf("failed to configure dynamic fields: %s", err)
 	}
 
 	logr := logger.FromContext(ctx).
@@ -264,17 +262,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		logr.WithError(err).
 			Errorln("amazon: [provision] failed to generate user data")
 		return nil, err
-	}
-
-	if opts.StorageOpts.BootDiskSize != "" {
-		diskSize, diskSizeErr := strconv.ParseInt(opts.StorageOpts.BootDiskSize, 10, 64)
-		if diskSizeErr != nil {
-			return nil, fmt.Errorf("failed to parse volume size: %w", diskSizeErr)
-		}
-		p.volumeSize = diskSize
-	}
-	if opts.StorageOpts.BootDiskType != "" {
-		p.volumeType = opts.StorageOpts.BootDiskType
 	}
 
 	in := &ec2.RunInstancesInput{
@@ -614,6 +601,31 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, poolName s
 		return "", err
 	}
 	return p.getIP(awsInstance), nil
+}
+
+func (p *config) configureDynamicFields(opts *types.InstanceCreateOpts) error {
+	if opts.Zone != "" {
+		p.availabilityZone = opts.Zone
+		for _, zoneDetail := range p.zoneDetails {
+			if zoneDetail.AvailabilityZone == opts.Zone {
+				p.subnet = zoneDetail.SubnetID
+			}
+		}
+	}
+	if opts.MachineType != "" {
+		p.size = opts.MachineType
+	}
+	if opts.StorageOpts.BootDiskSize != "" {
+		diskSize, diskSizeErr := strconv.ParseInt(opts.StorageOpts.BootDiskSize, 10, 64)
+		if diskSizeErr != nil {
+			return fmt.Errorf("failed to parse volume size: %w", diskSizeErr)
+		}
+		p.volumeSize = diskSize
+	}
+	if opts.StorageOpts.BootDiskType != "" {
+		p.volumeType = opts.StorageOpts.BootDiskType
+	}
+	return nil
 }
 
 func (p *config) getIP(amazonInstance *ec2.Instance) string {
