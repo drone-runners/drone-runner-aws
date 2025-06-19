@@ -2,6 +2,7 @@ package types
 
 import (
 	"database/sql/driver"
+	"time"
 )
 
 type InstanceState string
@@ -82,6 +83,23 @@ type RunnerConfig struct {
 	HealthCheckTimeout        int64
 	HealthCheckWindowsTimeout int64
 	HA                        bool
+}
+
+type NomadConfig struct {
+	IgnitePath              string
+	ClientDisconnectTimeout time.Duration
+	ResourceJobTimeout      time.Duration
+	InitTimeout             time.Duration
+	DestroyTimeout          time.Duration
+	TenSecondsTimeout       time.Duration
+	GlobalAccount           string
+	DestroyRetryAttempts    int
+	MinNomadCPUMhz          int
+	MinNomadMemoryMb        int
+	MachineFrequencyMhz     int
+	LargeBaremetalClass     string
+	GlobalAccountMac        string
+	MacMachineFrequencyMhz  int
 }
 
 type Tmate struct {
