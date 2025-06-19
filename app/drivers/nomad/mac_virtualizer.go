@@ -380,6 +380,7 @@ DONE
 
 # SSH command using expect
 expect <<- DONE
+	set timeout 90
     spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
