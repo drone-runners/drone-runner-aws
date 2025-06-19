@@ -194,6 +194,8 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
+//
+//nolint:gocyclo
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
 	startTime := time.Now()
@@ -384,7 +386,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	// Now that instance is running, attach volumes if any
 	if len(volumes) > 0 {
 		logr.Debugln("amazon: [provision] attaching volumes to the instance")
-		if err = p.attachVolumes(ctx, awsInstanceID, volumes, logr); err != nil {
+		if attachVolumesErr := p.attachVolumes(ctx, awsInstanceID, volumes, logr); attachVolumesErr != nil {
 			return nil, err
 		}
 	}
@@ -947,40 +949,4 @@ func (p *config) createPersistentDisks(
 	}
 
 	return volumes, nil
-}
-
-func (p *config) attachPersistentDisks(
-	ctx context.Context,
-	instanceID string,
-	volumes []*ec2.Volume,
-) error {
-	for i, volume := range volumes {
-		_, err := p.service.AttachVolumeWithContext(ctx, &ec2.AttachVolumeInput{
-			Device:     aws.String(p.getNextDeviceName(i)),
-			InstanceId: aws.String(instanceID),
-			VolumeId:   volume.VolumeId,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to attach volume: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (p *config) attachPersistentDiskIfRequired(
-	ctx context.Context,
-	opts *types.InstanceCreateOpts,
-	instanceID string,
-) error {
-	volumes, err := p.createPersistentDisks(ctx, opts)
-	if err != nil {
-		return err
-	}
-
-	if len(volumes) > 0 {
-		return p.attachPersistentDisks(ctx, instanceID, volumes)
-	}
-
-	return nil
 }
