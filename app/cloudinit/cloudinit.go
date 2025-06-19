@@ -48,7 +48,7 @@ var funcs = map[string]interface{}{
 }
 
 const certsDir = "/tmp/certs/"
-const liteEngineUsrBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine`
+const liteEngineUsrBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}?sleep=15000" -O /usr/bin/lite-engine`
 const liteEngineUsrBinFallbackPath = `"{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine`
 const pluginUsrBinPath = `{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin`
 const pluginUsrBinFallbackPath = `{{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin`
@@ -56,7 +56,7 @@ const pluginUsrLocalBinPath = `{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-
 const pluginUsrLocalBinFallbackPath = `{{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin`
 const splitTestsUsrBinPath = `{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/bin/split_tests`
 const liteEngineUsrLocalBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine`
-const liteEngineHomebrewBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine`
+const liteEngineHomebrewBinPath = `"{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}?sleep=15000" -O /opt/homebrew/bin/lite-engine`
 const liteEngineHomebrewBinFallbackPath = `"{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /opt/homebrew/bin/lite-engine`
 const AutoInjectionUsrBinPath = `"{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection`
 
@@ -117,7 +117,7 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=2 --waitretry=2 -nv --debug ` + liteEngineUsrBinPath + `; then
+if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 --timeout=5 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=2 --waitretry=2 --timeout=5 -nv --debug ` + liteEngineUsrBinPath + `; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
@@ -130,7 +130,7 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=2 --waitretry=2 ` + pluginUsrBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 --timeout=5 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=2 --waitretry=2 --timeout=5 ` + pluginUsrBinPath + `; then
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
@@ -214,7 +214,7 @@ swapon /swapfile
 echo "done setting up swap space"
 
 echo "downloading lite engine binary"
-if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=2 --waitretry=2 -nv --debug ` + liteEngineUsrBinPath + `; then
+if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 --timeout=5 ` + liteEngineUsrBinPath + ` || /usr/bin/wget --retry-connrefused --tries=2 --waitretry=2 --timeout=5 -nv --debug ` + liteEngineUsrBinPath + `; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
@@ -227,7 +227,7 @@ cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
 
 {{ if .PluginBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=2 --waitretry=2 ` + pluginUsrBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 --timeout=5 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=2 --waitretry=2 --timeout=5 ` + pluginUsrBinPath + `; then
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
@@ -376,7 +376,7 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineHomebrewBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineHomebrewBinPath + `; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
@@ -392,7 +392,7 @@ touch $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> .env;
 
 {{ if .PluginBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + pluginUsrLocalBinPath + `; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + pluginUsrLocalBinPath + `; then
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
@@ -552,14 +552,14 @@ runcmd:
 - 'systemctl restart systemd-resolved'
 {{ end }}
 - 'ufw allow 9079'
-- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
+- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .HarnessTestBinaryURI }}
 - 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
 {{ if .PluginBinaryURI }}
-- '(wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + pluginUsrBinPath + ` && echo "Successfully downloaded plugin binary from primary URL.") || (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinFallbackPath + ` && echo "Successfully downloaded plugin binary from fallback URL.")'
+- '(wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + pluginUsrBinPath + ` && echo "Successfully downloaded plugin binary from primary URL.") || (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinFallbackPath + ` && echo "Successfully downloaded plugin binary from fallback URL.")'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if .AutoInjectionBinaryURI }}
@@ -627,7 +627,7 @@ runcmd:
 - 'echo "deb [arch={{ .Platform.Arch }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list'
 - 'apt-get update'
 - 'apt-get install -y docker-ce docker-ce-cli containerd.io'
-- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
+- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if eq .Platform.Arch "amd64" }}
 - '(curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
@@ -678,7 +678,7 @@ runcmd:
 - "export SERVER_KEY_FILE={{ .KeyPath }}"
 - "export CLIENT_CERT_FILE={{ .CaCertPath }}"
 - 'ufw allow 9079'
-- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
+- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if eq .Platform.Arch "amd64" }}
 - '(curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
