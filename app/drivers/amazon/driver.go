@@ -194,10 +194,9 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (
-	instance *types.Instance,
-	err error,
-) { //nolint:gocyclo
+//
+//nolint:gocyclo
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
 	startTime := time.Now()
 
