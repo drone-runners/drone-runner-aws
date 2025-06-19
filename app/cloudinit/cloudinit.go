@@ -121,7 +121,7 @@ if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + liteEngineUsrBinFallbackPath + ` || /usr/bin/wget --retry-connrefused --tries=5 --waitretry=5 -nv --debug ` + liteEngineUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 --timeout=10 ` + liteEngineUsrBinFallbackPath + ` || /usr/bin/wget --retry-connrefused --tries=5 --waitretry=5 --timeout=10 -nv --debug ` + liteEngineUsrBinFallbackPath + `
     echo "Successfully downloaded lite engine binary from fallback URL."
 fi
 chmod 777 /usr/bin/lite-engine
@@ -134,7 +134,7 @@ if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + ` || wget --retry-connrefused --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 --timeout=10 ` + pluginUsrBinFallbackPath + ` || wget --retry-connrefused --tries=5 --waitretry=5 --timeout=10 ` + pluginUsrBinFallbackPath + `
     echo "Successfully downloaded plugin binary from fallback URL."
 fi
 chmod 777 /usr/bin/plugin
@@ -180,7 +180,7 @@ if wget -nv --tries=3 --waitretry=3 --timeout=5 https://github.com/harness/tmate
 	echo "Successfully downloaded tmate binary from primary URL."
 else
 	echo "Primary URL failed for tmate. Trying fallback URL..."
-	wget -nv --tries=3 --waitretry=3 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz
+	wget -nv --tries=3 --waitretry=3 --timeout=10 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz
 	echo "Successfully downloaded tmate binary from fallback URL."
 fi
 tar -xf /addon/tmate.xz -C /addon/
@@ -218,7 +218,7 @@ if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + liteEngineUsrBinFallbackPath + ` || /usr/bin/wget --retry-connrefused --tries=5 --waitretry=5 -nv --debug ` + liteEngineUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 --timeout=10 ` + liteEngineUsrBinFallbackPath + ` || /usr/bin/wget --retry-connrefused --tries=5 --waitretry=5 --timeout=10 -nv --debug ` + liteEngineUsrBinFallbackPath + `
     echo "Successfully downloaded lite engine binary from fallback URL."
 fi
 chmod 777 /usr/bin/lite-engine
@@ -231,7 +231,7 @@ if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
-    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + ` || wget --retry-connrefused --tries=5 --waitretry=5 ` + pluginUsrBinFallbackPath + `
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 --timeout=10 ` + pluginUsrBinFallbackPath + ` || wget --retry-connrefused --tries=5 --waitretry=5 --timeout=10 ` + pluginUsrBinFallbackPath + `
     echo "Successfully downloaded plugin binary from fallback URL."
 fi
 chmod 777 /usr/bin/plugin
@@ -278,7 +278,7 @@ if wget -nv --tries=3 --waitretry=3 --timeout=5 https://github.com/harness/tmate
 	echo "Successfully downloaded tmate binary from primary URL."
 else
 	echo "Primary URL failed for tmate. Trying fallback URL..."
-	wget -nv --tries=3 --waitretry=3 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz
+	wget -nv --tries=3 --waitretry=3 --timeout=10 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz
 	echo "Successfully downloaded tmate binary from fallback URL."
 fi
 tar -xf /addon/tmate.xz -C /addon/
@@ -380,7 +380,7 @@ if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,
     echo "Successfully downloaded lite engine binary from primary URL."
 else
     echo "Primary URL failed for lite-engine. Trying fallback URL..."
-	if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=3 ` + liteEngineHomebrewBinFallbackPath + `; then
+	if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=3 --timeout=10 ` + liteEngineHomebrewBinFallbackPath + `; then
         echo "Successfully downloaded lite engine binary from fallback URL."
     else
         echo "Failed to download lite-engine from both URLs."
@@ -396,7 +396,7 @@ if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,
     echo "Successfully downloaded plugin binary from primary URL."
 else
     echo "Primary URL failed for plugin. Trying fallback URL..."
-	if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrLocalBinFallbackPath + `; then
+	if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 --timeout=10 ` + pluginUsrLocalBinFallbackPath + `; then
         echo "Successfully downloaded plugin binary from fallback URL."
     else
         echo "Failed to download plugin binary from both URLs."
@@ -411,7 +411,7 @@ if wget -nv --tries=3 --waitretry=3 --timeout=5 https://github.com/harness/tmate
 	echo "Successfully downloaded tmate binary from primary URL."
 else
 	echo "Primary URL failed for tmate. Trying fallback URL..."
-	wget -nv --tries=3 --waitretry=3  https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-mac-arm64.tar.xz -O /tmp/addon/tmate.xz
+	wget -nv --tries=3 --waitretry=3 --timeout=10 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-mac-arm64.tar.xz -O /tmp/addon/tmate.xz
 	echo "Successfully downloaded tmate binary from fallback URL."
 fi
 tar -xf /tmp/addon/tmate.xz -C /tmp/addon/
@@ -552,14 +552,14 @@ runcmd:
 - 'systemctl restart systemd-resolved'
 {{ end }}
 - 'ufw allow 9079'
-- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
+- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 --timeout=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .HarnessTestBinaryURI }}
 - 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
 {{ if .PluginBinaryURI }}
-- '(wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + pluginUsrBinPath + ` && echo "Successfully downloaded plugin binary from primary URL.") || (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinFallbackPath + ` && echo "Successfully downloaded plugin binary from fallback URL.")'
+- '(wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + pluginUsrBinPath + ` && echo "Successfully downloaded plugin binary from primary URL.") || (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 --timeout=10 ` + pluginUsrBinFallbackPath + ` && echo "Successfully downloaded plugin binary from fallback URL.")'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if .AutoInjectionBinaryURI }}
@@ -576,13 +576,13 @@ runcmd:
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
-- '(wget -nv --tries=3 --waitretry=3 --timeout=5 https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv --tries=3 --waitretry=3 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")' 
+- '(wget -nv --tries=3 --waitretry=3 --timeout=5 https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv --tries=3 --waitretry=3 --timeout=10 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")' 
 - 'tar -xf /addon/tmate.xz -C /addon/'
 - 'chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate'
 - 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
 - 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
 {{ else if eq .Platform.Arch "arm64" }}
-- '(wget -nv --tries=3 --waitretry=3 --timeout=5 https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv --tries=3 --waitretry=3 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")' 
+- '(wget -nv --tries=3 --waitretry=3 --timeout=5 https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv --tries=3 --waitretry=3 --timeout=10 https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")' 
 - 'tar -xf /addon/tmate.xz -C /addon/'
 - 'chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate'
 - 'mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate'
@@ -678,7 +678,7 @@ runcmd:
 - "export SERVER_KEY_FILE={{ .KeyPath }}"
 - "export CLIENT_CERT_FILE={{ .CaCertPath }}"
 - 'ufw allow 9079'
-- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
+- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 --timeout=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if eq .Platform.Arch "amd64" }}
 - '(curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl --retry 3 --retry-delay 2 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
