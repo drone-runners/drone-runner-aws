@@ -862,7 +862,7 @@ $outputFile = "C:\Program Files\lite-engine\plugin.exe"
 
 try {
     echo "[DRONE] Downloading plugin from primary URL"
-    Invoke-WebRequest -Uri $primaryPluginUrl -OutFile $outputFile
+    Invoke-WebRequest -Uri $primaryPluginUrl -OutFile $outputFile -TimeoutSec 10
 } catch {
     echo "[DRONE] Primary URL failed for plugin, attempting to download from secondary URL"
     Invoke-WebRequest -Uri $secondaryPluginUrl -OutFile $outputFile
@@ -881,7 +881,7 @@ $outputFile = "C:\Program Files\lite-engine\lite-engine.exe"
 
 try {
     echo "[DRONE] Downloading lite engine from primary URL"
-    Invoke-WebRequest -Uri $primaryLiteEngineUrl -OutFile $outputFile
+    Invoke-WebRequest -Uri $primaryLiteEngineUrl -OutFile $outputFile -TimeoutSec 10
 } catch {
     echo "[DRONE] Primary URL failed for lite engine, attempting to download from secondary URL"
     Invoke-WebRequest -Uri $secondaryLiteEngineUrl -OutFile $outputFile
