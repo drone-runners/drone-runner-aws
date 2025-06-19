@@ -155,7 +155,7 @@ if curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io
 	echo "Successfully downloaded envman binary from primary URL."
 else
 	echo "Primary URL failed for envman. Trying fallback URL..."
-	curl --retry 3 --retry-delay 2 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
+	curl --retry 3 --retry-delay 2 --max-time 10 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
 	echo "Successfully downloaded envman binary from fallback URL."
 fi
 chmod 777 /usr/bin/envman
@@ -252,7 +252,7 @@ if curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io
 	echo "Successfully downloaded envman binary from primary URL."
 else
 	echo "Primary URL failed for envman. Trying fallback URL..."
-	curl --retry 3 --retry-delay 2 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
+	curl --retry 3 --retry-delay 2 --max-time 10 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
 	echo "Successfully downloaded envman binary from fallback URL."
 fi
 chmod 777 /usr/bin/envman
@@ -425,7 +425,7 @@ if curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io
 	echo "Successfully downloaded envman binary from primary URL."
 else
 	echo "Primary URL failed for envman. Trying fallback URL..."
-	curl --retry 3 --retry-delay 2 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Darwin-arm64 > /usr/local/bin/envman
+	curl --retry 3 --retry-delay 2 --max-time 10 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Darwin-arm64 > /usr/local/bin/envman
 	echo "Successfully downloaded envman binary from fallback URL."
 fi
 chmod 777 /usr/local/bin/envman
@@ -567,7 +567,7 @@ runcmd:
 - 'chmod 777 /usr/bin/auto-injection'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
-- '(curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl --retry 3 --retry-delay 2 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
+- '(curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl --retry 3 --retry-delay 2 --max-time 10 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
 - 'chmod 777 /usr/bin/envman'
 {{ end }}
 - 'touch /root/.env'
@@ -630,7 +630,7 @@ runcmd:
 - '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if eq .Platform.Arch "amd64" }}
-- '(curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl --retry 3 --retry-delay 2 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
+- '(curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl --retry 3 --retry-delay 2 --max-time 10 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
 - 'chmod 777 /usr/bin/envman'
 {{ end }}
 - 'touch /root/.env'
@@ -681,7 +681,7 @@ runcmd:
 - '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 --timeout=5 ` + liteEngineUsrBinPath + ` && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 --timeout=10 ` + liteEngineUsrBinFallbackPath + ` && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if eq .Platform.Arch "amd64" }}
-- '(curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl --retry 3 --retry-delay 2 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
+- '(curl --retry 3 --retry-delay 2 --max-time 5 -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl --retry 3 --retry-delay 2 --max-time 10 -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
 - 'chmod 777 /usr/bin/envman'
 {{ end }}
 - 'touch /root/.env'
