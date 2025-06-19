@@ -111,6 +111,7 @@ type (
 		CaCertPath     string `json:"ca_cert_path,omitempty" yaml:"ca_cert_path"`
 		ClientKeyPath  string `json:"client_key_path,omitempty" yaml:"client_key_path"`
 		ClientCertPath string `json:"client_cert_path,omitempty" yaml:"client_cert_path"`
+		NomadToken     string `json:"nomad_token,omitempty" yaml:"nomad_token"`
 	}
 
 	NomadVM struct {
