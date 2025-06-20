@@ -483,18 +483,22 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			continue
 		}
 
-		instanceDeleteOperation, deleteInstanceErr := p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
-		if deleteInstanceErr != nil {
-			// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
-			if gerr, ok := deleteInstanceErr.(*googleapi.Error); ok &&
-				gerr.Code == http.StatusNotFound {
-				logr.WithError(deleteInstanceErr).Errorln("google: VM not found")
-			} else {
-				logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
+		var instanceDeleteOperation *compute.Operation
+		if zone != "" {
+			var deleteInstanceErr error
+			instanceDeleteOperation, deleteInstanceErr = p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
+			if deleteInstanceErr != nil {
+				// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
+				if gerr, ok := deleteInstanceErr.(*googleapi.Error); ok &&
+					gerr.Code == http.StatusNotFound {
+					logr.WithError(deleteInstanceErr).Errorln("google: VM not found")
+				} else {
+					logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
+				}
 			}
+			err = deleteInstanceErr
+			logr.Info("google: sent delete instance request")
 		}
-		err = deleteInstanceErr
-		logr.Info("google: sent delete instance request")
 
 		if storageCleanupType != nil && *storageCleanupType != "" {
 			logr.Info("google: waiting for instance deletion")
@@ -858,6 +862,10 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 	// validate if instance is present
 	_, findInstanceErr := p.getInstance(ctx, p.projectID, instance.Zone, instance.ID)
 	if findInstanceErr != nil {
+		var googleErr *googleapi.Error
+		if errors.As(findInstanceErr, &googleErr) && googleErr.Code == http.StatusNotFound {
+			return "", nil
+		}
 		return "", fmt.Errorf(
 			"google: failed to find instance in zone %s, error: %w",
 			instance.Zone,

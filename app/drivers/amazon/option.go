@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/sirupsen/logrus"
@@ -279,5 +280,12 @@ func WithUser(user, platform string) Option {
 				p.user = "root"
 			}
 		}
+	}
+}
+
+// WithZoneDetails returns an option to set the zone details.
+func WithZoneDetails(zoneDetails []cf.ZoneInfo) Option {
+	return func(p *config) {
+		p.zoneDetails = zoneDetails
 	}
 }
