@@ -214,7 +214,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("size", p.size).
 		WithField("zone", p.availabilityZone).
 		WithField("hibernate", p.CanHibernate())
-	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
+	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
 	var tags = map[string]string{
 		"Name": name,
 	}
@@ -961,4 +961,11 @@ func (p *config) createPersistentDisks(
 	}
 
 	return volumes, nil
+}
+
+func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
+	if gitspaceConfigIdentifier != "" {
+		return gitspaceConfigIdentifier
+	}
+	return fmt.Sprintf("%s-%s-%s", runner, pool, uniuri.NewLen(8)) //nolint:gomnd
 }
