@@ -2,7 +2,7 @@ package nomad
 
 import "github.com/hashicorp/nomad/api"
 
-func NewClient(address string, insecure bool, caCertPath, clientCertPath, clientKeyPath string, nomadToken string) (*api.Client, error) {
+func NewClient(address string, insecure bool, caCertPath, clientCertPath, clientKeyPath, nomadToken string) (*api.Client, error) {
 	tlsConfig := &api.TLSConfig{
 		CACert:     caCertPath,
 		ClientKey:  clientKeyPath,
