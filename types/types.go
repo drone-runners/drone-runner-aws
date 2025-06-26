@@ -76,6 +76,7 @@ type Passwords struct {
 	AnkaToken   string
 	Tart        string
 	TartMachine string
+	NomadToken  string
 }
 
 type RunnerConfig struct {

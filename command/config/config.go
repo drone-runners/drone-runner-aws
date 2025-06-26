@@ -111,7 +111,6 @@ type (
 		CaCertPath     string `json:"ca_cert_path,omitempty" yaml:"ca_cert_path"`
 		ClientKeyPath  string `json:"client_key_path,omitempty" yaml:"client_key_path"`
 		ClientCertPath string `json:"client_cert_path,omitempty" yaml:"client_cert_path"`
-		NomadToken     string `json:"nomad_token,omitempty" yaml:"nomad_token"`
 	}
 
 	NomadVM struct {
@@ -255,6 +254,10 @@ type (
 type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
+
+	Nomad struct {
+		NomadToken string `envconfig:"NOMAD_TOKEN"`
+	}
 
 	Anka struct {
 		VMName string `envconfig:"ANKA_VM_NAME"`
@@ -422,6 +425,7 @@ func (c EnvConfig) Passwords() types.Passwords {
 		AnkaToken:   c.AnkaBuild.Token,
 		Tart:        c.TartBuild.Password,
 		TartMachine: c.TartBuild.MachinePassword,
+		NomadToken:  c.Nomad.NomadToken,
 	}
 }
 
