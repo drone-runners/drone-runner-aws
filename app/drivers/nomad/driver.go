@@ -257,7 +257,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		}
 	}
 
-	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteEngineHostPort)
+	logr = logr.WithField("init_job_id", initJobID).WithField("node_ip", ip).WithField("node_port", liteEngineHostPort).WithField("vm_image", vmImageConfig.ImageName)
 	if gitspacesPortMappingsString != "" {
 		logr = logr.WithField("gitspaces_port_mapping", gitspacesPortMappingsString)
 	}
