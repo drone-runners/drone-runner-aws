@@ -74,7 +74,7 @@ func BuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_total",
 			Help: "Total number of completed pipeline executions (failed + successful)",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "address"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "address", "image_version", "image_name"},
 	)
 }
 
@@ -85,7 +85,7 @@ func FailedBuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_errors_total",
 			Help: "Total number of pipeline executions which failed due to system errors",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id", "image_version", "image_name"},
 	)
 }
 
@@ -157,7 +157,7 @@ func PoolFallbackCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_pool_fallbacks",
 			Help: "Total number of fallbacks triggered on the pool",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id"}, // success is true/false depending on whether fallback happened successfully
+		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id", "image_version", "image_name"}, // success is true/false depending on whether fallback happened successfully
 	)
 }
 
@@ -193,7 +193,7 @@ func WaitDurationCount() *prometheus.HistogramVec {
 			Help:    "Waiting time needed to successfully allocate a machine",
 			Buckets: []float64{5, 15, 30, 60, 300, 600},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id"},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name"},
 	)
 }
 

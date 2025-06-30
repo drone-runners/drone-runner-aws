@@ -179,27 +179,87 @@ func HandleSetup(
 			// fallback metric records the first pool ID which was tried and the associated driver.
 			// We don't record final pool which was used as this metric is only used to get data about
 			// which drivers and pools are causing fallbacks.
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(
+				r.PoolID,
+				instance.OS,
+				instance.Arch,
+				driver,
+				metric.True,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+				r.VMImageConfig.ImageVersion,
+				r.VMImageConfig.ImageName,
+			).Inc()
 		}
-		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
-			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed()), owner).Observe(setupTime.Seconds())
-		internalLogger.
-			WithField("os", instance.OS).
+		metrics.WaitDurationCount.WithLabelValues(
+			r.PoolID,
+			instance.OS,
+			instance.Arch,
+			driver,
+			metric.ConvertBool(fallback),
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+			r.VMImageConfig.ImageVersion,
+			r.VMImageConfig.ImageName,
+		).Observe(setupTime.Seconds())
+		internalLogger.WithField("os", instance.OS).
 			WithField("arch", instance.Arch).
 			WithField("selected_pool", selectedPool).
 			WithField("requested_pool", r.PoolID).
 			WithField("instance_address", instance.Address).
 			Infof("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
-		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
-		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "", owner, "").Inc()
+		metrics.FailedCount.WithLabelValues(
+			r.PoolID,
+			platform.OS,
+			platform.Arch,
+			driver,
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+			r.VMImageConfig.ImageVersion,
+			r.VMImageConfig.ImageName,
+		).Inc()
+		metrics.BuildCount.WithLabelValues(
+			r.PoolID,
+			platform.OS,
+			platform.Arch,
+			driver,
+			strconv.FormatBool(poolManager.IsDistributed()),
+			"",
+			owner,
+			"",
+			r.VMImageConfig.ImageVersion,
+			r.VMImageConfig.ImageName,
+		).Inc()
 		if fallback {
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(
+				r.PoolID,
+				platform.OS,
+				platform.Arch,
+				driver,
+				metric.False,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+				r.VMImageConfig.ImageVersion,
+				r.VMImageConfig.ImageName,
+			).Inc()
 		}
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
-	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner, instance.Address).Inc()
+	metrics.BuildCount.WithLabelValues(
+		selectedPool,
+		instance.OS,
+		instance.Arch,
+		string(instance.Provider),
+		strconv.FormatBool(poolManager.IsDistributed()),
+		instance.Zone,
+		owner,
+		instance.Address,
+		r.VMImageConfig.ImageVersion,
+		r.VMImageConfig.ImageName,
+	).Inc()
+
 	instanceInfo := common.InstanceInfo{
 		ID:                instance.ID,
 		Name:              instance.Name,
