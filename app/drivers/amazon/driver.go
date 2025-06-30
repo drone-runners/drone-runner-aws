@@ -207,12 +207,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		p.size = opts.MachineType
 	}
 
+	imageName := p.image
+	if opts.VMImageConfig.ImageName != "" {
+		imageName = opts.VMImageConfig.ImageName
+	}
+
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
 		WithField("ami", p.InstanceType()).
 		WithField("pool", opts.PoolName).
 		WithField("region", p.region).
-		WithField("image", p.image).
+		WithField("image", imageName).
 		WithField("size", p.size).
 		WithField("zone", p.availabilityZone).
 		WithField("hibernate", p.CanHibernate())
@@ -278,7 +283,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	in := &ec2.RunInstancesInput{
-		ImageId:            aws.String(p.image),
+		ImageId:            aws.String(imageName),
 		InstanceType:       aws.String(p.size),
 		Placement:          &ec2.Placement{AvailabilityZone: aws.String(p.availabilityZone)},
 		MinCount:           aws.Int64(1),
@@ -410,7 +415,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Provider:             types.Amazon, // this is driver, though its the old legacy name of provider
 		State:                types.StateCreated,
 		Pool:                 opts.PoolName,
-		Image:                p.image,
+		Image:                imageName,
 		Zone:                 p.availabilityZone,
 		Region:               p.region,
 		Size:                 p.size,
