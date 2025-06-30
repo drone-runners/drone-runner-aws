@@ -181,10 +181,11 @@ type StorageConfig struct {
 }
 
 type VMImageConfig struct {
-	ImageName   string
-	Username    string
-	Password    string
-	VMImageAuth VMImageAuth
+	ImageVersion string
+	ImageName    string
+	Username     string
+	Password     string
+	VMImageAuth  VMImageAuth
 }
 
 type VMImageAuth struct {
