@@ -120,7 +120,7 @@ func HandleSetup(
 	}
 
 	logr = AddContext(logr, &r.Context, r.Tags)
-	internalLogger := logrus.New().WithFields(logr.Data)
+	internalLogger := logrus.WithFields(logr.Data)
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
@@ -179,10 +179,10 @@ func HandleSetup(
 			// fallback metric records the first pool ID which was tried and the associated driver.
 			// We don't record final pool which was used as this metric is only used to get data about
 			// which drivers and pools are causing fallbacks.
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch, driver, metric.True, strconv.FormatBool(poolManager.IsDistributed()), owner, r.VMImageConfig.ImageVersion, r.VMImageConfig.ImageName).Inc()
 		}
 		metrics.WaitDurationCount.WithLabelValues(r.PoolID, instance.OS, instance.Arch,
-			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed()), owner).Observe(setupTime.Seconds())
+			driver, metric.ConvertBool(fallback), strconv.FormatBool(poolManager.IsDistributed()), owner, r.VMImageConfig.ImageVersion, r.VMImageConfig.ImageName).Observe(setupTime.Seconds())
 		internalLogger.
 			WithField("os", instance.OS).
 			WithField("arch", instance.Arch).
@@ -191,15 +191,15 @@ func HandleSetup(
 			WithField("instance_address", instance.Address).
 			Infof("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
-		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
-		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "", owner, "").Inc()
+		metrics.FailedCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), owner, r.VMImageConfig.ImageVersion, r.VMImageConfig.ImageName).Inc()
+		metrics.BuildCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, strconv.FormatBool(poolManager.IsDistributed()), "", owner, "", r.VMImageConfig.ImageVersion, r.VMImageConfig.ImageName).Inc()
 		if fallback {
-			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False, strconv.FormatBool(poolManager.IsDistributed()), owner).Inc()
+			metrics.PoolFallbackCount.WithLabelValues(r.PoolID, platform.OS, platform.Arch, driver, metric.False, strconv.FormatBool(poolManager.IsDistributed()), owner, r.VMImageConfig.ImageVersion, r.VMImageConfig.ImageName).Inc()
 		}
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
-	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner, instance.Address).Inc()
+	metrics.BuildCount.WithLabelValues(selectedPool, instance.OS, instance.Arch, string(instance.Provider), strconv.FormatBool(poolManager.IsDistributed()), instance.Zone, owner, instance.Address, r.VMImageConfig.ImageVersion, r.VMImageConfig.ImageName).Inc()
 	instanceInfo := common.InstanceInfo{
 		ID:                instance.ID,
 		Name:              instance.Name,
@@ -284,7 +284,7 @@ func handleSetup(
 	logr = logr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
-		WithField("instance_name", instance.Name).WithField("image_name", r.VMImageConfig.ImageName).WithField("image_version", r.VMImageConfig.ImageVersion)
+		WithField("instance_name", instance.Name)
 
 	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
 	if instance.Provider == types.Google {
