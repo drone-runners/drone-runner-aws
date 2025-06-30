@@ -54,12 +54,6 @@ func WithImage(s string) Option {
 	}
 }
 
-func WithImageVersion(s string) Option {
-	return func(p *config) {
-		p.vmImageVersion = s
-	}
-}
-
 func WithNoop(b bool) Option {
 	return func(p *config) {
 		p.noop = b

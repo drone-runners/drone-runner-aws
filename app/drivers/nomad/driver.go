@@ -53,7 +53,6 @@ var (
 type config struct {
 	address           string
 	vmImage           string
-	vmImageVersion    string
 	vmMemoryGB        string
 	vmCpus            string
 	vmDiskSize        string
@@ -239,10 +238,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	vmImageConfig := opts.VMImageConfig
 	if vmImageConfig.ImageName == "" {
 		vmImageConfig = types.VMImageConfig{
-			ImageName:    p.vmImage,
-			Username:     p.username,
-			Password:     p.password,
-			ImageVersion: p.vmImageVersion,
+			ImageName: p.vmImage,
+			Username:  p.username,
+			Password:  p.password,
 		}
 	}
 
