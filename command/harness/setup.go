@@ -120,7 +120,7 @@ func HandleSetup(
 	}
 
 	logr = AddContext(logr, &r.Context, r.Tags)
-	internalLogger := logrus.WithFields(logr.Data)
+	internalLogger := logrus.New().WithFields(logr.Data)
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
@@ -284,7 +284,7 @@ func handleSetup(
 	logr = logr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
-		WithField("instance_name", instance.Name)
+		WithField("instance_name", instance.Name).WithField("image_name", r.VMImageConfig.ImageName).WithField("image_version", r.VMImageConfig.ImageVersion)
 
 	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
 	if instance.Provider == types.Google {
