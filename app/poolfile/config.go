@@ -326,7 +326,8 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				nomad.WithNoop(nomadConfig.VM.Noop),
 				nomad.WithResource(nomadConfig.VM.Resource),
 				nomad.WithUserData(nomadConfig.VM.UserData, nomadConfig.VM.UserDataPath),
-				nomad.WithVirtualizerEngine(virtualizerEngine))
+				nomad.WithVirtualizerEngine(virtualizerEngine),
+				nomad.WithNomadToken(passwords.NomadToken))
 			if err != nil {
 				// TODO: We should return error here once bare metal has been tested on production
 				// Ignoring errors here for now to not cause production outages in case of nomad connectivity issues

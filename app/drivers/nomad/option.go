@@ -111,6 +111,12 @@ func WithMachinePassword(s string) Option {
 	}
 }
 
+func WithNomadToken(s string) Option {
+	return func(p *config) {
+		p.nomadToken = s
+	}
+}
+
 func WithUserData(text, path string) Option {
 	if text != "" {
 		return func(p *config) {

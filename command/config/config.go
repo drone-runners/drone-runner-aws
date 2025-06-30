@@ -261,6 +261,10 @@ type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
 
+	Nomad struct {
+		NomadToken string `envconfig:"NOMAD_TOKEN"`
+	}
+
 	Anka struct {
 		VMName string `envconfig:"ANKA_VM_NAME"`
 	}
@@ -427,6 +431,7 @@ func (c EnvConfig) Passwords() types.Passwords {
 		AnkaToken:   c.AnkaBuild.Token,
 		Tart:        c.TartBuild.Password,
 		TartMachine: c.TartBuild.MachinePassword,
+		NomadToken:  c.Nomad.NomadToken,
 	}
 }
 

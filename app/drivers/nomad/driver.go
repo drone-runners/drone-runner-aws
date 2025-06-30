@@ -70,6 +70,7 @@ type config struct {
 	userData          string
 	virtualizerEngine string
 	machinePassword   string
+	nomadToken        string
 }
 
 // SetPlatformDefaults comes up with default values of the platform
@@ -98,7 +99,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 		opt(p)
 	}
 	if p.client == nil {
-		client, err := NewClient(p.address, p.insecure, p.caCertPath, p.clientCertPath, p.clientKeyPath)
+		client, err := NewClient(p.address, p.insecure, p.caCertPath, p.clientCertPath, p.clientKeyPath, p.nomadToken)
 		if err != nil {
 			return nil, err
 		}
