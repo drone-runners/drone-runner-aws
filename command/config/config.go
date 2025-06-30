@@ -50,6 +50,12 @@ type (
 		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
 		Hibernate     bool              `json:"hibernate,omitempty"`
 		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
+		ZoneDetails   []ZoneInfo        `json:"zone_details,omitempty" yaml:"zone_details,omitempty"`
+	}
+
+	ZoneInfo struct {
+		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"`
+		SubnetID         string `json:"subnet_id,omitempty" yaml:"subnet_id,omitempty"`
 	}
 
 	AmazonAccount struct {
