@@ -695,10 +695,12 @@ func (m *Manager) setupInstance(
 	}
 	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
 		createOptions.VMImageConfig = types.VMImageConfig{
-			ImageName: vmImageConfig.ImageName,
-			Username:  vmImageConfig.Username,
-			Password:  vmImageConfig.Password,
+			ImageName:    vmImageConfig.ImageName,
+			Username:     vmImageConfig.Username,
+			Password:     vmImageConfig.Password,
+			ImageVersion: vmImageConfig.ImageVersion,
 		}
+
 		if vmImageConfig.Auth != nil {
 			createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
 				Registry: vmImageConfig.Auth.Address,

@@ -322,6 +322,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				nomad.WithMemory(nomadConfig.VM.MemoryGB),
 				nomad.WithEnablePinning(nomadConfig.VM.EnablePinning),
 				nomad.WithImage(nomadConfig.VM.Image),
+				nomad.WithImageVersion(nomadConfig.VM.ImageVersion),
 				nomad.WithNoop(nomadConfig.VM.Noop),
 				nomad.WithResource(nomadConfig.VM.Resource),
 				nomad.WithUserData(nomadConfig.VM.UserData, nomadConfig.VM.UserDataPath),

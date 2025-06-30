@@ -115,6 +115,7 @@ type (
 
 	NomadVM struct {
 		Image         string                   `json:"image" yaml:"image"`
+		ImageVersion  string                   `json:"image_version" yaml:"image_version"`
 		MemoryGB      string                   `json:"mem_gb" yaml:"mem_gb"`
 		Cpus          string                   `json:"cpus" yaml:"cpus"`
 		DiskSize      string                   `json:"disk_size" yaml:"disk_size"`
