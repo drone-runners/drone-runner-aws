@@ -1,0 +1,140 @@
+#!/usr/bin/bash
+mkdir {{ .CertDir }}
+
+echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
+chmod 0600 {{ .CaCertPath }}
+
+echo {{ .TLSCert | base64 }} | base64 -d  >> {{ .CertPath }}
+chmod 0600 {{ .CertPath }}
+
+echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
+chmod 0600 {{ .KeyPath }}
+
+echo "setting up swap space"
+fallocate -l 30G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo "done setting up swap space"
+
+echo "downloading lite engine binary"
+if /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine || /usr/bin/wget --retry-connrefused --tries=2 --waitretry=2 -nv --debug "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine; then
+    echo "Successfully downloaded lite engine binary from primary URL."
+else
+    echo "Primary URL failed for lite-engine. Trying fallback URL..."
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine || /usr/bin/wget --retry-connrefused --tries=5 --waitretry=5 -nv --debug "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine
+    echo "Successfully downloaded lite engine binary from fallback URL."
+fi
+chmod 777 /usr/bin/lite-engine
+touch $HOME/.env
+cp "/etc/environment" $HOME/.env
+echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
+
+{{ if .PluginBinaryURI }}
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin || wget --retry-connrefused --tries=2 --waitretry=2 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin; then
+    echo "Successfully downloaded plugin binary from primary URL."
+else
+    echo "Primary URL failed for plugin. Trying fallback URL..."
+    /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin || wget --retry-connrefused --tries=5 --waitretry=5 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+    echo "Successfully downloaded plugin binary from fallback URL."
+fi
+chmod 777 /usr/bin/plugin
+{{ end }}
+
+{{ if .HarnessTestBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/bin/split_tests || wget --retry-connrefused --tries=10 --waitretry=10 {{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/bin/split_tests
+chmod 777 /usr/bin/split_tests
+{{ end }}
+
+{{ if .AutoInjectionBinaryURI }}
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || wget --retry-connrefused --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection
+chmod 777 /usr/bin/auto-injection
+{{ end }}
+
+{{ if eq .Platform.Arch "amd64" }}
+if curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman; then
+	echo "Successfully downloaded envman binary from primary URL."
+else
+	echo "Primary URL failed for envman. Trying fallback URL..."
+	curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman
+	echo "Successfully downloaded envman binary from fallback URL."
+fi
+chmod 777 /usr/bin/envman
+{{ end }}
+
+systemctl disable docker.service
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+echo "restarting docker"
+service docker start
+echo "docker service restarted"
+
+cp /etc/resolv.conf /etc/resolv_orig.conf
+rm /etc/resolv.conf
+echo "nameserver 127.0.0.53" > /etc/resolv.conf 
+cat /etc/resolv_orig.conf >> /etc/resolv.conf
+echo "options edns0 trust-ad
+search ." >> /etc/resolv.conf
+
+{{ if .Tmate.Enabled }}
+mkdir /addon
+{{ if eq .Platform.Arch "amd64" }}
+if wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz; then
+	echo "Successfully downloaded tmate binary from primary URL."
+else
+	echo "Primary URL failed for tmate. Trying fallback URL..."
+	wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz
+	echo "Successfully downloaded tmate binary from fallback URL."
+fi
+tar -xf /addon/tmate.xz -C /addon/
+chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate
+mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
+{{ else if eq .Platform.Arch "arm64" }}
+if wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz; then
+	echo "Successfully downloaded tmate binary from primary URL."
+else
+	echo "Primary URL failed for tmate. Trying fallback URL..."
+	wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz
+	echo "Successfully downloaded tmate binary from fallback URL."
+fi
+tar -xf /addon/tmate.xz -C /addon/
+chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate
+mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
+{{ end }}
+{{ end }}
+unlink /snap/bin/google-cloud-cli.gcloud
+echo "starting lite engine server"
+/usr/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
+echo "done starting lite engine server"
+
+{{ if .GitspaceAgentConfig.VMInitScript }}
+{{ .GitspaceAgentConfig.VMInitScript }}
+{{ else }}
+groupadd docker
+mkdir -p /opt/gitspaceagent
+
+echo "Updating docker root dir"
+systemctl stop docker
+mkdir -p /mnt/disks/mountdevcontainer/docker
+tee /etc/docker/daemon.json <<EOF
+{
+  "data-root": "/mnt/disks/mountdevcontainer/docker"
+}
+EOF
+systemctl start docker
+echo "Successfully updated docker root dir"
+
+echo "downloading gitspaces agent binary"
+echo HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }} >> /etc/profile
+export HARNESS_JWT_SECRET={{ .GitspaceAgentConfig.Secret }}
+curl -X GET -H "Authorization: Bearer {{ .GitspaceAgentConfig.AccessToken }} " -o "/opt/gitspaceagent/agent" "https://storage.googleapis.com/storage/v1/b/gitspace-agent/o/agent-bare-metal?alt=media"
+chmod 755 /opt/gitspaceagent/agent
+echo "done downloading gitspace agent binary"
+
+echo "starting gitspaces agent"
+mkdir -p /mnt/disks/mountdevcontainer/gitspace
+export DOCKER_API_VERSION=1.41
+nohup /opt/gitspaceagent/agent > /dev/null 2>&1 &
+useradd -K MAIL_DIR=/dev/null gitspaceagent
+usermod -aG docker gitspaceagent
+echo "done starting gitspaces agent"
+{{ end }}
