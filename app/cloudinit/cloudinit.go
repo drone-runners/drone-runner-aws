@@ -95,6 +95,7 @@ var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Par
 var gitspacesUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/gitspaces_ubuntu")))
 var gitspacesAWSUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/amazon_gitspaces_ubuntu")))
 var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/amazon_linux")))
+var gitspacesAmazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/gitspaces_amazon_linux")))
 var windowsTemplate = template.Must(template.New(oshelp.OSWindows).Funcs(funcs).Parse(readFromFile("/user_data/windows")))
 
 func readFromFile(filename string) string {
@@ -225,7 +226,11 @@ func Linux(params *Params) (payload string, err error) {
 	var tmpl *template.Template
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		tmpl = amazonLinuxTemplate
+		if params.GitspaceAgentConfig.VMInitScript != "" {
+			tmpl = gitspacesAmazonLinuxTemplate
+		} else {
+			tmpl = amazonLinuxTemplate
+		}
 	default:
 		if params.GitspaceAgentConfig.VMInitScript != "" {
 			if params.DriverName == string(types.Amazon) {
