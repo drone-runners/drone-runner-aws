@@ -27,18 +27,18 @@ runcmd:
 - "export CLIENT_CERT_FILE={{ .CaCertPath }}"
 - 'sudo service docker start'
 - 'sudo usermod -a -G docker ec2-user'
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + liteEngineUsrBinPath + `'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine || wget --retry-connrefused --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .HarnessTestBinaryURI }}
 - 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
 - 'chmod 777 /usr/bin/split_tests'
 {{ end }}
 {{ if .PluginBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 ` + pluginUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 ` + pluginUsrBinPath + `'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin || wget --retry-connrefused --tries=10 --waitretry=10 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin'
 - 'chmod 777 /usr/bin/plugin'
 {{ end }}
 {{ if .AutoInjectionBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + ` || wget --retry-connrefused --tries=10 --waitretry=10 -nv ` + AutoInjectionUsrBinPath + `'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection'
 - 'chmod 777 /usr/bin/auto-injection'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
@@ -48,7 +48,6 @@ runcmd:
 - 'touch /root/.env'
 - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
 - '[ -f "/root/.env" ] && ! grep -q "^HOME=" /root/.env && echo "HOME=/root" >> /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
@@ -65,4 +64,9 @@ runcmd:
 - 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
 {{ end }}
 - 'rm -rf /addon/tmate.xz'
+{{ if .GitspaceAgentConfig.VMInitScript }}
+- |
+{{ .GitspaceAgentConfig.VMInitScript }}
+{{ end }}
+- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
 {{ end }}

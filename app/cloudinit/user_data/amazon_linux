@@ -58,9 +58,3 @@ runcmd:
 {{ end }}
 - 'rm -rf /addon/tmate.xz'
 {{ end }}
-
-{{ if .GitspaceAgentConfig.VMInitScript }}
-- | 
-{{ .GitspaceAgentConfig.VMInitScript }}
-{{ end }}
-- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
