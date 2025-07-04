@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+mkdir /tmp/certs/
+
+echo {{ .CACert | base64 }} | base64 -d >> {{ .CaCertPath }}
+chmod 0600 {{ .CaCertPath }}
+
+echo {{ .TLSCert | base64 }} | base64 -d  >> {{ .CertPath }}
+chmod 0600 {{ .CertPath }}
+
+echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
+chmod 0600 {{ .KeyPath }}
+
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/lite-engine
+chmod 777 /usr/local/bin/lite-engine
+touch $HOME/.env
+echo "SKIP_PREPARE_SERVER=true" >> .env;
+
+{{ if .PluginBinaryURI }}
+wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin
+chmod 777 /usr/bin/plugin
+{{ end }}
+
+/usr/local/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
