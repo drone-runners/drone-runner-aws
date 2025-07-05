@@ -491,18 +491,20 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 				// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
 				if gerr, ok := deleteInstanceErr.(*googleapi.Error); ok &&
 					gerr.Code == http.StatusNotFound {
-					logr.WithError(deleteInstanceErr).Errorln("google: VM not found")
+					logr.WithError(deleteInstanceErr).Warnln("google: VM not found")
 				} else {
 					logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
+					err = deleteInstanceErr
 				}
 			}
-			err = deleteInstanceErr
 			logr.Info("google: sent delete instance request")
 		}
 
 		if storageCleanupType != nil && *storageCleanupType != "" {
-			logr.Info("google: waiting for instance deletion")
-			err = p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
+			if instanceDeleteOperation != nil {
+				logr.Info("google: waiting for instance deletion")
+				err = p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
+			}
 			if err != nil {
 				logr.WithError(err).Errorln("google: could not delete instance. skipping disk deletion")
 				return err
@@ -527,7 +529,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 								Warnln("google: persistent disk %s not found", storageIdentifier)
 						} else {
 							logr.WithError(diskDeletionErr).
-								Errorln("google: error finding persistent disk %", storageIdentifier)
+								Errorln("google: error finding persistent disk %s", storageIdentifier)
 							return err
 						}
 					} else {
