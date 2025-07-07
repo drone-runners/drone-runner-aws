@@ -122,6 +122,7 @@ type InstanceCreateOpts struct {
 	ShouldUseGoogleDNS      bool
 	VMImageConfig           VMImageConfig
 	DriverName              string
+	Timeout                 string
 }
 
 // Platform defines the target platform.
