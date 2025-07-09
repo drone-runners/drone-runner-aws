@@ -7,11 +7,10 @@
 package cloudinit
 
 import (
+	_ "embed"
 	"encoding/base64"
 	"fmt"
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"text/template"
 
@@ -87,31 +86,45 @@ func Custom(templateText string, params *Params) (payload string, err error) {
 	return payload, nil
 }
 
-var macTemplate = template.Must(template.New("mac").Funcs(funcs).Parse(readFromFile("/user_data/mac")))
-var macArm64Template = template.Must(template.New("mac-arm64").Funcs(funcs).Parse(readFromFile("/user_data/mac_arm64")))
-var linuxBashTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(readFromFile("/user_data/nomad_linux")))
-var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(readFromFile("/user_data/gitspaces_linux")))
-var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/gcp_linux")))
-var gitspacesUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/gitspaces_ubuntu")))
-var gitspacesAWSUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/amazon_gitspaces_ubuntu")))
-var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/amazon_linux")))
-var gitspacesAmazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(readFromFile("/user_data/gitspaces_amazon_linux")))
-var windowsTemplate = template.Must(template.New(oshelp.OSWindows).Funcs(funcs).Parse(readFromFile("/user_data/windows")))
+//go:embed user_data/mac
+var userDataMac string
+var macTemplate = template.Must(template.New("mac").Funcs(funcs).Parse(userDataMac))
 
-func readFromFile(filename string) string {
-	_, caller, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("unable to get caller info")
-	}
-	baseDir := filepath.Dir(caller)
-	filePath := baseDir + filename
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		err = fmt.Errorf("failed to read cloudinit from file %s error: %w", filename, err)
-		panic(err)
-	}
-	return string(data)
-}
+//go:embed user_data/mac_arm64
+var userDataMacArm64 string
+var macArm64Template = template.Must(template.New("mac-arm64").Funcs(funcs).Parse(userDataMacArm64))
+
+//go:embed user_data/nomad_linux
+var userDataNomadLinux string
+var linuxBashTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(userDataNomadLinux))
+
+//go:embed user_data/gitspaces_linux
+var userDataGitspacesLinux string
+var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(userDataGitspacesLinux))
+
+//go:embed user_data/gcp_linux
+var userDataGcpLinux string
+var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataGcpLinux))
+
+//go:embed user_data/gitspaces_ubuntu
+var userDataGitspacesUbuntu string
+var gitspacesUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataGitspacesUbuntu))
+
+//go:embed user_data/amazon_gitspaces_ubuntu
+var userDataAmazonGitspacesUbuntu string
+var gitspacesAWSUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataAmazonGitspacesUbuntu))
+
+//go:embed user_data/amazon_linux
+var userDataAmazonLinux string
+var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataAmazonLinux))
+
+//go:embed user_data/gitspaces_amazon_linux
+var userDataGitspacesAmazonLinux string
+var gitspacesAmazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataGitspacesAmazonLinux))
+
+//go:embed user_data/windows
+var userDataWindows string
+var windowsTemplate = template.Must(template.New(oshelp.OSWindows).Funcs(funcs).Parse(userDataWindows))
 
 func Mac(params *Params) (payload string) {
 	sb := &strings.Builder{}
