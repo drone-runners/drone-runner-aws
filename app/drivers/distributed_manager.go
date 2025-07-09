@@ -101,7 +101,8 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 				case <-d.cleanupTimer.C:
 					logrus.Traceln("distributed dlite: Launching instance purger")
 
-					queryParams := types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
+					queryParams := types.QueryParams{MatchLabels: map[string]string{"retain": "false"}
+				}
 					// All instances are labeled with retain: true/false
 					// If retain is true, instance is not cleaned up while we clean the pools or run the instance purger
 					// These instances are only cleaned up when there's a cleanup request from client explicitly.
@@ -134,11 +135,13 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	conditions := squirrel.Or{}
 	currentTime := time.Now()
 
+	// First condition: instances without 'ttl' key using default max age
 	if maxAgeBusy != 0 {
 		busyCondition := squirrel.And{
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
+			squirrel.Expr("NOT (instance_labels ? 'ttl')"),
 		}
 		for key, value := range queryParams.MatchLabels {
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
@@ -146,6 +149,20 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		}
 		conditions = append(conditions, busyCondition)
 	}
+
+	// Second condition: instances with 'ttl' key using extended max age
+	extendedMaxBusy := 7 * 24 * time.Hour
+	extendedBusyCondition := squirrel.And{
+		squirrel.Eq{"instance_pool": pool.Name},
+		squirrel.Eq{"instance_state": types.StateInUse},
+		squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
+		squirrel.Expr("instance_labels ? 'ttl'"),
+	}
+	for key, value := range queryParams.MatchLabels {
+		condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+		extendedBusyCondition = append(extendedBusyCondition, condition)
+	}
+	conditions = append(conditions, extendedBusyCondition)
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_name, instance_node_id").ToSql()
