@@ -40,6 +40,7 @@ type SetupVMRequest struct {
 	Zone                string                    `json:"zone"`
 	MachineType         string                    `json:"machine_type"`
 	InstanceInfo        common.InstanceInfo       `json:"instance_info"`
+	Timeout             string                    `json:"timeout,omitempty"`
 }
 
 type SetupVMResponse struct {
@@ -336,6 +337,7 @@ func handleSetup(
 		r.MachineType,
 		shouldUseGoogleDNS,
 		&r.InstanceInfo,
+		r.Timeout,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)

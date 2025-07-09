@@ -344,6 +344,7 @@ func (m *Manager) Provision(
 	machineType string,
 	shouldUseGoogleDNS bool,
 	instanceInfo *common.InstanceInfo,
+	timeout string,
 ) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
@@ -387,6 +388,7 @@ func (m *Manager) Provision(
 			zone,
 			machineType,
 			false,
+			timeout,
 		)
 		return inst, err
 	}
@@ -410,7 +412,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -441,7 +443,7 @@ func (m *Manager) Provision(
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, timeout)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -607,7 +609,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, "")
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -643,6 +645,7 @@ func (m *Manager) setupInstance(
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
+	timeout string,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
@@ -688,6 +691,7 @@ func (m *Manager) setupInstance(
 	createOptions.Zone = zone
 	createOptions.MachineType = machineType
 	createOptions.DriverName = pool.Driver.DriverName()
+	createOptions.Timeout = timeout
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
