@@ -120,7 +120,7 @@ func HandleSetup(
 	}
 
 	logr = AddContext(logr, &r.Context, r.Tags)
-	internalLogger := logrus.New().WithFields(logr.Data)
+	internalLogger := logrus.WithFields(logr.Data)
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
