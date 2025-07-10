@@ -380,7 +380,7 @@ func (m *Manager) Provision(
 			serverName,
 			ownerID,
 			resourceClass,
-			nil,
+			vmImageConfig,
 			true,
 			gitspaceAgentConfig,
 			storageConfig,
