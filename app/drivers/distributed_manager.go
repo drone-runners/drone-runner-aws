@@ -128,8 +128,11 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
 
-	pool.Lock()
-	defer pool.Unlock()
+	// Only lock pool if it has min size
+	if pool.MinSize > 0 {
+		pool.Lock()
+		defer pool.Unlock()
+	}
 
 	conditions := squirrel.Or{}
 	currentTime := time.Now()
