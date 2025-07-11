@@ -183,8 +183,19 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if opts.MachineType != "" {
 		p.size = opts.MachineType
 	}
+
 	if opts.VMImageConfig.ImageName != "" {
-		p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
+		// opts.VMImageConfig.ImageName can be of different formats.
+		// we can receive image in following 2 formats:
+		// Format #1: harness/vmimage: hosted-vm-ubuntu-2204-jammy-v20250508
+		// Format #2: projects/debian-cloud/global/images/debian-11-bullseye-v2025070
+		// isFullImagePath() method checks if given image in opts.VMImageConfig.ImageName is of Format #2 which can be
+		// directly used, else we convert Format #1 to Format #2 in buildImagePathFromTag() method.
+		if isFullImagePath(opts.VMImageConfig.ImageName) {
+			p.image = opts.VMImageConfig.ImageName
+		} else {
+			p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
+		}
 	}
 
 	logr := logger.FromContext(ctx).
