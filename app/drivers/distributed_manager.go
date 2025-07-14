@@ -102,7 +102,6 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 					logrus.Traceln("distributed dlite: Launching instance purger")
 
 					queryParams := types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
-				}
 					// All instances are labeled with retain: true/false
 					// If retain is true, instance is not cleaned up while we clean the pools or run the instance purger
 					// These instances are only cleaned up when there's a cleanup request from client explicitly.
