@@ -867,7 +867,7 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 	return instance.Zone, nil
 }
 
-// setImage checks Image name in opts and it an image is sent in the request, it sets the image in config
+// setImage set image sent in the request to p.config . setImage() will not set image if imageName is empty
 func (p *config) setImage(opts *types.InstanceCreateOpts) {
 	if opts.VMImageConfig.ImageName == "" {
 		return
