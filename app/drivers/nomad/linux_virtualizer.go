@@ -33,7 +33,7 @@ var funcs = map[string]interface{}{
 	"trim": strings.TrimSpace,
 }
 
-func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout string) (job *api.Job, id, group string, err error) { //nolint
+func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout int64) (job *api.Job, id, group string, err error) { //nolint
 	id = initJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	uData := lv.generateUserData(opts)
@@ -53,7 +53,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 		}
 	}
 
-	if timeout != "" {
+	if timeout > 0 {
 		runCmdFormat += fmt.Sprintf(" --label ttl=%s", timeout)
 	}
 

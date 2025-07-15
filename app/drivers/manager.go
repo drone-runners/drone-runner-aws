@@ -344,7 +344,7 @@ func (m *Manager) Provision(
 	machineType string,
 	shouldUseGoogleDNS bool,
 	instanceInfo *common.InstanceInfo,
-	timeout string,
+	timeout int64,
 ) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
@@ -609,7 +609,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, "")
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, 0)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -645,7 +645,7 @@ func (m *Manager) setupInstance(
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
-	timeout string,
+	timeout int64,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"

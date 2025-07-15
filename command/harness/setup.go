@@ -40,7 +40,7 @@ type SetupVMRequest struct {
 	Zone                string                    `json:"zone"`
 	MachineType         string                    `json:"machine_type"`
 	InstanceInfo        common.InstanceInfo       `json:"instance_info"`
-	Timeout             string                    `json:"timeout,omitempty"`
+	Timeout             int64                     `json:"timeout,omitempty"`
 }
 
 type SetupVMResponse struct {
