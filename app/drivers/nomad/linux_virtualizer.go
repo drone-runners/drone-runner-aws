@@ -54,7 +54,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 	}
 
 	if timeout > 0 {
-		runCmdFormat += fmt.Sprintf(" --label ttl=%s", timeout)
+		runCmdFormat += fmt.Sprintf(" --label ttl=%d", timeout)
 	}
 
 	// gitspace args
