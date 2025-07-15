@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	letters       = "0123456789abcdefghijklmnopqrstuvwxyz"
-	maxSplitParts = 2
+	letters            = "0123456789abcdefghijklmnopqrstuvwxyz"
+	maxSplitParts      = 2
+	minImagePathSplits = 5
 )
 
 func randStringRunes(n int) (string, error) {
@@ -44,7 +45,7 @@ func buildImagePathFromTag(imageTag, projectID string) string {
 // projects/<project-name>/global/images/<image-tag>
 func isFullImagePath(imageName string) bool {
 	imageList := strings.Split(imageName, "/")
-	if len(imageList) < 5 {
+	if len(imageList) < minImagePathSplits {
 		return false
 	}
 
