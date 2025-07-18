@@ -134,8 +134,9 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	conditions := squirrel.Or{}
 	currentTime := time.Now()
 
-	// First condition: instances without 'ttl' key using default max age
 	if maxAgeBusy != 0 {
+		extendedMaxBusy := 7 * 24 * time.Hour
+		// First condition: instances without 'ttl' key using default max age
 		busyCondition := squirrel.And{
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
@@ -147,21 +148,20 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			busyCondition = append(busyCondition, condition)
 		}
 		conditions = append(conditions, busyCondition)
-	}
 
-	// Second condition: instances with 'ttl' key using extended max age
-	extendedMaxBusy := 7 * 24 * time.Hour
-	extendedBusyCondition := squirrel.And{
-		squirrel.Eq{"instance_pool": pool.Name},
-		squirrel.Eq{"instance_state": types.StateInUse},
-		squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
-		squirrel.Expr("instance_labels ? 'ttl'"),
+		// Second condition: instances with 'ttl' key using extended max age
+		extendedBusyCondition := squirrel.And{
+			squirrel.Eq{"instance_pool": pool.Name},
+			squirrel.Eq{"instance_state": types.StateInUse},
+			squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
+			squirrel.Expr("instance_labels ? 'ttl'"),
+		}
+		for key, value := range queryParams.MatchLabels {
+			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+			extendedBusyCondition = append(extendedBusyCondition, condition)
+		}
+		conditions = append(conditions, extendedBusyCondition)
 	}
-	for key, value := range queryParams.MatchLabels {
-		condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
-		extendedBusyCondition = append(extendedBusyCondition, condition)
-	}
-	conditions = append(conditions, extendedBusyCondition)
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_name, instance_node_id").ToSql()
