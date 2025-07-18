@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	letters       = "0123456789abcdefghijklmnopqrstuvwxyz"
-	maxSplitParts = 2
+	letters            = "0123456789abcdefghijklmnopqrstuvwxyz"
+	maxSplitParts      = 2
+	minImagePathSplits = 5
 )
 
 func randStringRunes(n int) (string, error) {
@@ -38,6 +39,25 @@ func buildImagePathFromTag(imageTag, projectID string) string {
 	imagePath := fmt.Sprintf("projects/%s/global/images/", projectID)
 	imageName := extractImageNameFromTag(imageTag)
 	return imagePath + imageName
+}
+
+// isFullImagePath returns true if the image name contains full path ie. it is of the format:
+// projects/<project-name>/global/images/<image-tag>
+func isFullImagePath(imageName string) bool {
+	imageList := strings.Split(imageName, "/")
+	if len(imageList) < minImagePathSplits {
+		return false
+	}
+
+	if imageList[0] != "projects" && imageList[2] != "global" && imageList[3] != "images" {
+		return false
+	}
+
+	if imageList[1] == "" || imageList[4] == "" {
+		return false
+	}
+
+	return true
 }
 
 func extractImageNameFromTag(tag string) string {

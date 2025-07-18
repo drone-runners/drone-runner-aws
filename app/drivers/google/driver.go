@@ -183,9 +183,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if opts.MachineType != "" {
 		p.size = opts.MachineType
 	}
-	if opts.VMImageConfig.ImageName != "" {
-		p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
-	}
+
+	// setImage checks Image name in opts and it an image is sent in the request, it sets the image in p.config
+	p.setImage(opts)
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -875,6 +875,26 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 		)
 	}
 	return instance.Zone, nil
+}
+
+// setImage set image sent in the request to p.config . setImage() will not set image if imageName is empty
+func (p *config) setImage(opts *types.InstanceCreateOpts) {
+	if opts.VMImageConfig.ImageName == "" {
+		return
+	}
+
+	// opts.VMImageConfig.ImageName can be of different formats.
+	// we can receive image in following 2 formats:
+	// Format #1: harness/vmimage: hosted-vm-ubuntu-2204-jammy-v20250508
+	// Format #2: projects/debian-cloud/global/images/debian-11-bullseye-v2025070
+	// isFullImagePath() method checks if given image in opts.VMImageConfig.ImageName is of Format #2 which can be
+	// directly used, else we convert Format #1 to Format #2 in buildImagePathFromTag() method.
+	if isFullImagePath(opts.VMImageConfig.ImageName) {
+		p.image = opts.VMImageConfig.ImageName
+		return
+	}
+
+	p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
 }
 
 // instance name must be 1-63 characters long and match the regular expression
