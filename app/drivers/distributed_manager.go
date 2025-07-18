@@ -138,16 +138,32 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	currentTime := time.Now()
 
 	if maxAgeBusy != 0 {
+		extendedMaxBusy := 7 * 24 * time.Hour
+		// First condition: instances without 'ttl' key using default max age
 		busyCondition := squirrel.And{
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
+			squirrel.Expr("NOT (instance_labels ? 'ttl')"),
 		}
 		for key, value := range queryParams.MatchLabels {
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
 			busyCondition = append(busyCondition, condition)
 		}
 		conditions = append(conditions, busyCondition)
+
+		// Second condition: instances with 'ttl' key using extended max age
+		extendedBusyCondition := squirrel.And{
+			squirrel.Eq{"instance_pool": pool.Name},
+			squirrel.Eq{"instance_state": types.StateInUse},
+			squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
+			squirrel.Expr("instance_labels ? 'ttl'"),
+		}
+		for key, value := range queryParams.MatchLabels {
+			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+			extendedBusyCondition = append(extendedBusyCondition, condition)
+		}
+		conditions = append(conditions, extendedBusyCondition)
 	}
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
