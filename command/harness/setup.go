@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -247,6 +248,9 @@ func handleSetup(
 	if !poolManager.Exists(pool) {
 		return nil, fmt.Errorf("could not find pool: %s", pool)
 	}
+
+	b, _ := json.MarshalIndent(r, "", "  ")
+	fmt.Print("Full PoolYaml JSON: %s", string(b))
 
 	stageRuntimeID := r.ID
 
