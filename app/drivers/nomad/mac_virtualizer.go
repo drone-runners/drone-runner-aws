@@ -408,5 +408,3 @@ nc -zv $(/opt/homebrew/bin/tart ip %s) 9079
 func (mv *MacVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprint(lehelper.LiteEnginePort)
 }
-
-
