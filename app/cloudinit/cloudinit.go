@@ -38,7 +38,7 @@ type Params struct {
         ShouldUseGoogleDNS      bool
         DriverName              string
         CertsDirectory          string
-        IsC4DLSSDEnabled        bool
+        EnableC4D               bool
 }
 
 var funcs = map[string]interface{}{

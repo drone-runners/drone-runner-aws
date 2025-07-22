@@ -15,7 +15,7 @@ packages:
   - docker-ce
 {{ end }}
 
-{{ if .IsC4DLSSDEnabled }}
+{{ if .EnableC4D }}
 # Early boot commands to detect NVMe disk
 bootcmd:
   - mkdir -p /var/log
@@ -75,7 +75,7 @@ runcmd:
   # Open healthcheck port
   - ufw allow 9079
   
-  {{ if .IsC4DLSSDEnabled }}
+  {{ if .EnableC4D }}
   # NVMe disk setup
   - |
     echo "Starting NVME disk setup at $(date)" | tee -a /var/log/nvme-setup.log
