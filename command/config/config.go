@@ -450,8 +450,8 @@ func (c EnvConfig) Passwords() types.Passwords {
 }
 
 // NomadConfig returns a types.NomadConfig with values from the environment configuration
-func (c EnvConfig) NomadConfig() types.NomadConfig {
-	return types.NomadConfig{
+func (c EnvConfig) NomadConfig() *types.NomadConfig {
+	return &types.NomadConfig{
 		ClientDisconnectTimeout: c.Nomad.ClientDisconnectTimeout,
 		ResourceJobTimeout:      c.Nomad.ResourceJobTimeout,
 		InitTimeout:             c.Nomad.InitTimeout,

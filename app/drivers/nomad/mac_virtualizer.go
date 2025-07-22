@@ -37,10 +37,10 @@ if [ "$counter" -lt "$MAX_RETRIES" ]; then
 fi`
 
 type MacVirtualizer struct {
-	nomadConfig types.NomadConfig
+	nomadConfig *types.NomadConfig
 }
 
-func NewMacVirtualizer(nomadConfig types.NomadConfig) *MacVirtualizer {
+func NewMacVirtualizer(nomadConfig *types.NomadConfig) *MacVirtualizer {
 	return &MacVirtualizer{
 		nomadConfig: nomadConfig,
 	}

@@ -25,10 +25,10 @@ const (
 var provisionCephStorageScript string
 
 type LinuxVirtualizer struct {
-	nomadConfig types.NomadConfig
+	nomadConfig *types.NomadConfig
 }
 
-func NewLinuxVirtualizer(nomadConfig types.NomadConfig) *LinuxVirtualizer {
+func NewLinuxVirtualizer(nomadConfig *types.NomadConfig) *LinuxVirtualizer {
 	return &LinuxVirtualizer{
 		nomadConfig: nomadConfig,
 	}

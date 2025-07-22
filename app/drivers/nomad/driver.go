@@ -54,7 +54,7 @@ type config struct {
 	virtualizerEngine string
 	machinePassword   string
 	nomadToken        string
-	nomadConfig       types.NomadConfig
+	nomadConfig       *types.NomadConfig
 }
 
 // SetPlatformDefaults comes up with default values of the platform
