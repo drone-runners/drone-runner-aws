@@ -1,4 +1,6 @@
 #cloud-config
+
+# Package installation
 {{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
 packages:
   - wget
@@ -12,11 +14,44 @@ packages:
   - wget
   - docker-ce
 {{ end }}
+
+{{ if .EnableC4D }}
+# Early boot commands to detect NVMe disk
+bootcmd:
+  - mkdir -p /var/log
+  - touch /var/log/nvme-setup.log
+  - echo "Starting NVME disk detection at $(date)" >> /var/log/nvme-setup.log
+  - lsblk -d >> /var/log/nvme-setup.log 2>&1
+  - echo "Looking for NVME disks with size around 375G..." >> /var/log/nvme-setup.log
+  - |
+    NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme.*3[0-9]{2}G" | head -n1 | awk '{print $1}')
+    if [ -z "$NVME_DEV" ]; then
+      echo "No NVME disk with size ~375G found, trying any NVME disk..." >> /var/log/nvme-setup.log
+      NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme" | head -n1 | awk '{print $1}')
+    fi
+    if [ -n "$NVME_DEV" ]; then
+      echo "/dev/$NVME_DEV" > /etc/nvme_device_path
+      echo "Found NVMe disk: /dev/$NVME_DEV" >> /var/log/nvme-setup.log
+      ls -la /dev/$NVME_DEV >> /var/log/nvme-setup.log 2>&1
+    else
+      echo "No NVME disk found at all" >> /var/log/nvme-setup.log
+      echo "Available disks:" >> /var/log/nvme-setup.log
+      lsblk >> /var/log/nvme-setup.log 2>&1
+    fi
+{{ else }}
+# NVME setup is disabled
+bootcmd:
+  - mkdir -p /var/log
+  - touch /var/log/nvme-setup.log
+  - echo "NVME setup is disabled. Skipping NVME disk detection." >> /var/log/nvme-setup.log
+{{ end }}
+
+# Certificate files
 write_files:
 - path: {{ .CaCertPath }}
   permissions: '0600'
   encoding: b64
-  content: {{ .CACert | base64  }}
+  content: {{ .CACert | base64 }}
 - path: {{ .CertPath }}
   permissions: '0600'
   encoding: b64
@@ -25,48 +60,224 @@ write_files:
   permissions: '0600'
   encoding: b64
   content: {{ .TLSKey | base64 }}
+
+# Main runtime commands
 runcmd:
-- 'set -x'
-{{ if .ShouldUseGoogleDNS }}
-- 'echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf'
-- 'systemctl restart systemd-resolved'
-{{ end }}
-- 'ufw allow 9079'
-- '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from fallback URL.")'
-- 'chmod 777 /usr/bin/lite-engine'
-{{ if .HarnessTestBinaryURI }}
-- 'wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests'
-- 'chmod 777 /usr/bin/split_tests'
-{{ end }}
-{{ if .PluginBinaryURI }}
-- '(wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from primary URL.") || (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from fallback URL.")'
-- 'chmod 777 /usr/bin/plugin'
-{{ end }}
-{{ if .AutoInjectionBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection'
-- 'chmod 777 /usr/bin/auto-injection'
-{{ end }}
-{{ if eq .Platform.Arch "amd64" }}
-- '(curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
-- 'chmod 777 /usr/bin/envman'
-{{ end }}
-- 'touch /root/.env'
-- '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
-- '/usr/bin/lite-engine server --env-file /root/.env > {{ .LiteEngineLogsPath }} 2>&1 &'
-{{ if .Tmate.Enabled }}
-- 'mkdir /addon'
-{{ if eq .Platform.Arch "amd64" }}
-- '(wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")' 
-- 'tar -xf /addon/tmate.xz -C /addon/'
-- 'chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate'
-- 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
-- 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
-{{ else if eq .Platform.Arch "arm64" }}
-- '(wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")' 
-- 'tar -xf /addon/tmate.xz -C /addon/'
-- 'chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate'
-- 'mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate'
-- 'rm -rf /addon/tmate-1.0-static-linux-arm64v8/'
-{{ end }}
-- 'rm -rf /addon/tmate.xz'
-{{ end }}
+  # Enable command tracing
+  - set -x
+  
+  # Configure DNS if needed
+  {{ if .ShouldUseGoogleDNS }}
+  - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
+  - systemctl restart systemd-resolved
+  {{ end }}
+  
+  # Open healthcheck port
+  - ufw allow 9079
+  
+  {{ if .EnableC4D }}
+  # NVMe disk setup
+  - |
+    echo "Starting NVME disk setup at $(date)" | tee -a /var/log/nvme-setup.log
+    lsblk | tee -a /var/log/nvme-setup.log
+    
+    # Check if device path file exists
+    if [ ! -f /etc/nvme_device_path ]; then
+      echo "NVMe device path file not found. Trying to detect NVME disk directly..." | tee -a /var/log/nvme-setup.log
+      
+      # Try to detect NVME disk directly
+      NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme.*3[0-9]{2}G" | head -n1 | awk '{print $1}')
+      if [ -z "$NVME_DEV" ]; then
+        echo "No NVME disk with size ~375G found, trying any NVME disk..." | tee -a /var/log/nvme-setup.log
+        NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme" | head -n1 | awk '{print $1}')
+      fi
+      
+      if [ -n "$NVME_DEV" ]; then
+        DEV_PATH="/dev/$NVME_DEV"
+        echo "Found NVME disk directly: $DEV_PATH" | tee -a /var/log/nvme-setup.log
+      else
+        echo "No NVME disk found. Skipping NVME setup." | tee -a /var/log/nvme-setup.log
+        exit 0
+      fi
+    else
+      DEV_PATH=$(cat /etc/nvme_device_path)
+      echo "Read device path from file: $DEV_PATH" | tee -a /var/log/nvme-setup.log
+      
+      # Check if device path is empty
+      if [ -z "$DEV_PATH" ]; then
+        echo "NVMe device path is empty. Skipping NVMe setup." | tee -a /var/log/nvme-setup.log
+        exit 0
+      fi
+      
+      # Check if device exists
+      if [ ! -b "$DEV_PATH" ]; then
+        echo "NVMe device $DEV_PATH does not exist. Skipping NVMe setup." | tee -a /var/log/nvme-setup.log
+        exit 0
+      fi
+    fi
+    
+    # At this point we have a valid DEV_PATH
+    MOUNT_POINT="/mnt/ephemeral"
+    echo "Using device: $DEV_PATH" | tee -a /var/log/nvme-setup.log
+    echo "Using mount point: $MOUNT_POINT" | tee -a /var/log/nvme-setup.log
+    
+    # Format the disk
+    echo "Formatting $DEV_PATH as ext4..." | tee -a /var/log/nvme-setup.log
+    mkfs.ext4 -F "$DEV_PATH" | tee -a /var/log/nvme-setup.log
+    if [ $? -ne 0 ]; then
+      echo "Failed to format $DEV_PATH. Skipping NVME setup." | tee -a /var/log/nvme-setup.log
+      exit 1
+    fi
+    
+    # Mount the disk
+    echo "Mounting $DEV_PATH to $MOUNT_POINT..." | tee -a /var/log/nvme-setup.log
+    mkdir -p "$MOUNT_POINT"
+    mount "$DEV_PATH" "$MOUNT_POINT" | tee -a /var/log/nvme-setup.log
+    if [ $? -ne 0 ]; then
+      echo "Failed to mount $DEV_PATH to $MOUNT_POINT. Skipping NVME setup." | tee -a /var/log/nvme-setup.log
+      exit 1
+    fi
+    
+    # Bind mount directories
+    echo "Setting up bind mounts..." | tee -a /var/log/nvme-setup.log
+    for dir in /tmp /var/lib/docker /home; do
+      name=$(basename "$dir")
+      target="$MOUNT_POINT/$name"
+      
+      echo "Processing directory: $dir" | tee -a /var/log/nvme-setup.log
+      echo "Target directory: $target" | tee -a /var/log/nvme-setup.log
+      
+      # Create target directory
+      echo "Creating target directory..." | tee -a /var/log/nvme-setup.log
+      mkdir -p "$target"
+      
+      # Copy existing content
+      echo "Copying content from $dir to $target..." | tee -a /var/log/nvme-setup.log
+      if [ -d "$dir" ] && [ "$(ls -A $dir 2>/dev/null)" ]; then
+        cp -a "$dir/"* "$target/" 2>/dev/null || echo "Warning: Some files could not be copied" | tee -a /var/log/nvme-setup.log
+      else
+        echo "Source directory is empty or doesn't exist" | tee -a /var/log/nvme-setup.log
+      fi
+      
+      # Bind mount
+      echo "Binding $target to $dir..." | tee -a /var/log/nvme-setup.log
+      mount --bind "$target" "$dir" | tee -a /var/log/nvme-setup.log
+      if [ $? -ne 0 ]; then
+        echo "Failed to bind mount $target to $dir" | tee -a /var/log/nvme-setup.log
+      else
+        echo "Successfully bind mounted $target to $dir" | tee -a /var/log/nvme-setup.log
+      fi
+    done
+    
+    # Verify mounts and log completion
+    mount | grep -E "$DEV_PATH|$MOUNT_POINT" | tee -a /var/log/nvme-setup.log
+    echo "NVME setup complete at $(date)" | tee -a /var/log/nvme-setup.log
+  {{ else }}
+  # NVME setup is disabled
+  - echo "NVME setup is disabled in configuration. Skipping NVME disk setup." | tee -a /var/log/nvme-setup.log
+  {{ end }}
+  
+  # Download and install lite-engine
+  - |
+    (/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from primary URL.") || \
+    (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from fallback URL.")
+  - chmod 777 /usr/bin/lite-engine
+  
+  # Download and install split_tests if needed
+  {{ if .HarnessTestBinaryURI }}
+  - wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests
+  - chmod 777 /usr/bin/split_tests
+  {{ end }}
+  
+  # Download and install plugin if needed
+  {{ if .PluginBinaryURI }}
+  - |
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from primary URL.") || \
+    (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from fallback URL.")
+  - chmod 777 /usr/bin/plugin
+  {{ end }}
+  
+  # Download and install auto-injection if needed
+  {{ if .AutoInjectionBinaryURI }}
+  - |
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || \
+    wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection
+  - chmod 777 /usr/bin/auto-injection
+  {{ end }}
+  
+  # Download and install envman for amd64 architecture
+  {{ if eq .Platform.Arch "amd64" }}
+  - |
+    (curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || \
+    (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
+  - chmod 777 /usr/bin/envman
+  {{ end }}
+  
+  # Setup environment and start lite-engine
+  - touch /root/.env
+  - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+  - /usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &
+  
+  # Download and install lite-engine
+  - |
+    (/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from primary URL.") || \
+    (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from fallback URL.")
+  - chmod 777 /usr/bin/lite-engine
+  
+  # Download and install split_tests if needed
+  {{ if .HarnessTestBinaryURI }}
+  - wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests
+  - chmod 777 /usr/bin/split_tests
+  {{ end }}
+  
+  # Download and install plugin if needed
+  {{ if .PluginBinaryURI }}
+  - |
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from primary URL.") || \
+    (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from fallback URL.")
+  - chmod 777 /usr/bin/plugin
+  {{ end }}
+  
+  # Download and install auto-injection if needed
+  {{ if .AutoInjectionBinaryURI }}
+  - |
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || \
+    wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection
+  - chmod 777 /usr/bin/auto-injection
+  {{ end }}
+  
+  # Download and install envman for amd64 architecture
+  {{ if eq .Platform.Arch "amd64" }}
+  - |
+    (curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || \
+    (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
+  - chmod 777 /usr/bin/envman
+  {{ end }}
+  
+  # Setup environment and start lite-engine
+  - touch /root/.env
+  - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+  - /usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &
+  
+  # Setup tmate if enabled
+  {{ if .Tmate.Enabled }}
+  - mkdir /addon
+  {{ if eq .Platform.Arch "amd64" }}
+  - |
+    (wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
+    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
+  - tar -xf /addon/tmate.xz -C /addon/
+  - chmod 777 /addon/tmate-1.0-static-linux-amd64/tmate
+  - mv /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
+  - rm -rf /addon/tmate-1.0-static-linux-amd64/
+  {{ else if eq .Platform.Arch "arm64" }}
+  - |
+    (wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
+    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
+  - tar -xf /addon/tmate.xz -C /addon/
+  - chmod 777 /addon/tmate-1.0-static-linux-arm64v8/tmate
+  - mv /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
+  - rm -rf /addon/tmate-1.0-static-linux-arm64v8/
+  {{ end }}
+  - rm -rf /addon/tmate.xz
+  {{ end }}

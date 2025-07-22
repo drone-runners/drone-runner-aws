@@ -185,6 +185,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 					instance.Name: instance.Name,
 				}),
 				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
+				google.WithEnableC4D(g.EnableC4D),
 			)
 			if err != nil {
 				return nil, err

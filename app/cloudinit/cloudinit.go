@@ -38,6 +38,7 @@ type Params struct {
 	ShouldUseGoogleDNS      bool
 	DriverName              string
 	CertsDirectory          string
+	EnableC4D               bool
 }
 
 var funcs = map[string]interface{}{
@@ -255,7 +256,6 @@ func Linux(params *Params) (payload string, err error) {
 			tmpl = ubuntuTemplate
 		}
 	}
-
 	// Execute selected template
 	if err := tmpl.Execute(sb, templateData); err != nil {
 		return "", fmt.Errorf("error while executing template: %w", err)

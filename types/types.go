@@ -123,6 +123,7 @@ type InstanceCreateOpts struct {
 	VMImageConfig           VMImageConfig
 	DriverName              string
 	Timeout                 int64
+	EnableC4D               bool
 }
 
 // Platform defines the target platform.
