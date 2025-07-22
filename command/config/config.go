@@ -215,6 +215,7 @@ type (
 		Scopes                     []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
 		Hibernate                  bool              `json:"hibernate,omitempty"`
 		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+		IsC4DLSSDEnabled           bool              `json:"is_c4d_lssd_enabled,omitempty" yaml:"is_c4d_lssd_enabled,omitempty"`
 	}
 
 	GoogleAccount struct {

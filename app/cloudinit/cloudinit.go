@@ -38,6 +38,7 @@ type Params struct {
 	ShouldUseGoogleDNS      bool
 	DriverName              string
 	CertsDirectory          string
+	IsC4DLSSDEnabled        bool
 }
 
 var funcs = map[string]interface{}{
@@ -165,6 +166,10 @@ func Mac(params *Params) (payload string) {
 func LinuxBash(params *Params) (payload string) {
 	sb := &strings.Builder{}
 
+	// Log which driver and platform is being used
+	fmt.Printf("Generating LinuxBash cloud-init for driver: %s, platform: %s-%s\n", 
+		params.DriverName, params.Platform.OS, params.Platform.Arch)
+
 	caCertPath := filepath.Join(certsDir, "ca-cert.pem")
 	certPath := filepath.Join(certsDir, "server-cert.pem")
 	keyPath := filepath.Join(certsDir, "server-key.pem")
@@ -187,6 +192,7 @@ func LinuxBash(params *Params) (payload string) {
 	if (params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "") ||
 		(params.GitspaceAgentConfig.VMInitScript != "") {
 		if params.GitspaceAgentConfig.VMInitScript != "" {
+			fmt.Printf("Executing gitspaces VM init script for Linux VM\n")
 			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
 			if decodeErr != nil {
 				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
@@ -194,8 +200,10 @@ func LinuxBash(params *Params) (payload string) {
 			}
 			p.GitspaceAgentConfig.VMInitScript = string(decodedScript)
 		}
+		fmt.Printf("Using gitspacesLinuxTemplate for cloud-init\n")
 		err = gitspacesLinuxTemplate.Execute(sb, p)
 	} else {
+		fmt.Printf("Using linuxBashTemplate for cloud-init\n")
 		err = linuxBashTemplate.Execute(sb, p)
 	}
 	if err != nil {
@@ -207,6 +215,8 @@ func LinuxBash(params *Params) (payload string) {
 
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string, err error) {
+	// Skip verbose logging
+
 	if params.CertsDirectory == "" {
 		params.CertsDirectory = certsDir
 	}
@@ -255,13 +265,13 @@ func Linux(params *Params) (payload string, err error) {
 			tmpl = ubuntuTemplate
 		}
 	}
-
 	// Execute selected template
 	if err := tmpl.Execute(sb, templateData); err != nil {
 		return "", fmt.Errorf("error while executing template: %w", err)
 	}
 
-	return sb.String(), nil
+	script := sb.String()
+	return script, nil
 }
 
 // Windows creates a userdata file for the Windows operating system.

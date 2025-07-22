@@ -228,3 +228,10 @@ func WithIsNestedVirtualizationEnabled(enableNestedVirtualization bool) Option {
 		p.enableNestedVirtualization = enableNestedVirtualization
 	}
 }
+
+// WithIsC4DLSSDEnabled returns an option to enable C4D LSSD support.
+func WithIsC4DLSSDEnabled(isC4DLSSDEnabled bool) Option {
+	return func(p *config) {
+		p.isC4DLSSDEnabled = isC4DLSSDEnabled
+	}
+}

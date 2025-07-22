@@ -82,6 +82,7 @@ type config struct {
 	service                    *compute.Service
 	labels                     map[string]string
 	enableNestedVirtualization bool
+	isC4DLSSDEnabled           bool
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -241,6 +242,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	advancedMachineFeatures := &compute.AdvancedMachineFeatures{
 		EnableNestedVirtualization: enableNestedVirtualization,
 	}
+
+	opts.IsC4DLSSDEnabled = p.isC4DLSSDEnabled
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {
