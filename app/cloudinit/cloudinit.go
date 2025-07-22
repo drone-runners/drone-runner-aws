@@ -208,7 +208,6 @@ func LinuxBash(params *Params) (payload string) {
 
 // Linux creates a userdata file for the Linux operating system.
 func Linux(params *Params) (payload string, err error) {
-
         if params.CertsDirectory == "" {
                 params.CertsDirectory = certsDir
         }
