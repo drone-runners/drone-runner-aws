@@ -19,6 +19,14 @@ func intToPtr(i int) *int {
 	return &i
 }
 
+// minNomadResources returns the minimum resources required for a Nomad job
+func minNomadResources(cpuMhz, memoryMb int) *api.Resources {
+	return &api.Resources{
+		CPU:      intToPtr(cpuMhz),
+		MemoryMB: intToPtr(memoryMb),
+	}
+}
+
 // boolToPtr returns a pointer to a bool
 func boolToPtr(b bool) *bool {
 	return &b

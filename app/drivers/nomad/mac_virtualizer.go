@@ -40,15 +40,9 @@ type MacVirtualizer struct {
 	nomadConfig types.NomadConfig
 }
 
-func NewMacVirtualizer() *MacVirtualizer {
-	// Load default config
-	envConfig, err := cf.FromEnviron()
-	if err != nil {
-		// Use empty config if we can't load from environment
-		return &MacVirtualizer{}
-	}
+func NewMacVirtualizer(nomadConfig types.NomadConfig) *MacVirtualizer {
 	return &MacVirtualizer{
-		nomadConfig: envConfig.NomadConfig(),
+		nomadConfig: nomadConfig,
 	}
 }
 
@@ -93,7 +87,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "create_and_start_vm_prepare_script",
 						Driver:    "raw_exec",
-						Resources: mv.minNomadResources(),
+						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s; echo %s | base64 --decode >> %s; cat %s | base64 --decode | bash", startupScript, vmStartupScriptPath, encodedUserData, cloudInitScriptPath, vmStartupScriptPath)}, //nolint
@@ -106,7 +100,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "run_cmd",
 						Driver:    "raw_exec",
-						Resources: mv.minNomadResources(),
+						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password)},
@@ -115,7 +109,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "cleanup_vm_script",
 						Driver:    "raw_exec",
-						Resources: mv.minNomadResources(),
+						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", mv.getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vm)},
@@ -415,10 +409,4 @@ func (mv *MacVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprint(lehelper.LiteEnginePort)
 }
 
-// minNomadResources returns the minimum resources required for a Nomad job
-func (mv *MacVirtualizer) minNomadResources() *api.Resources {
-	return &api.Resources{
-		CPU:      intToPtr(mv.nomadConfig.MinNomadCPUMhz),
-		MemoryMB: intToPtr(mv.nomadConfig.MinNomadMemoryMb),
-	}
-}
+

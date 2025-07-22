@@ -87,7 +87,6 @@ type RunnerConfig struct {
 }
 
 type NomadConfig struct {
-	IgnitePath              string
 	ClientDisconnectTimeout time.Duration
 	ResourceJobTimeout      time.Duration
 	InitTimeout             time.Duration

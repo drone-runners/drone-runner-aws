@@ -262,10 +262,6 @@ type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
 
-	Nomad struct {
-		NomadToken string `envconfig:"NOMAD_TOKEN"`
-	}
-
 	Anka struct {
 		VMName string `envconfig:"ANKA_VM_NAME"`
 	}
@@ -346,7 +342,7 @@ type EnvConfig struct {
 	}
 
 	Nomad struct {
-		IgnitePath              string        `envconfig:"NOMAD_IGNITE_PATH" default:"/usr/local/bin/ignite"`
+		NomadToken string `envconfig:"NOMAD_TOKEN"`
 		ClientDisconnectTimeout time.Duration `envconfig:"NOMAD_CLIENT_DISCONNECT_TIMEOUT" default:"4m"`
 		ResourceJobTimeout      time.Duration `envconfig:"NOMAD_RESOURCE_JOB_TIMEOUT" default:"2m"`
 		InitTimeout             time.Duration `envconfig:"NOMAD_INIT_TIMEOUT" default:"3m"`
@@ -456,7 +452,6 @@ func (c EnvConfig) Passwords() types.Passwords {
 // NomadConfig returns a types.NomadConfig with values from the environment configuration
 func (c EnvConfig) NomadConfig() types.NomadConfig {
 	return types.NomadConfig{
-		IgnitePath:              c.Nomad.IgnitePath,
 		ClientDisconnectTimeout: c.Nomad.ClientDisconnectTimeout,
 		ResourceJobTimeout:      c.Nomad.ResourceJobTimeout,
 		InitTimeout:             c.Nomad.InitTimeout,

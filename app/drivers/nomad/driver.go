@@ -100,9 +100,9 @@ func New(opts ...Option) (drivers.Driver, error) {
 		p.client = client
 	}
 	if p.virtualizerEngine == "tart" {
-		p.virtualizer = NewMacVirtualizer()
+		p.virtualizer = NewMacVirtualizer(p.nomadConfig)
 	} else {
-		p.virtualizer = NewLinuxVirtualizer()
+		p.virtualizer = NewLinuxVirtualizer(p.nomadConfig)
 	}
 	return p, nil
 }
@@ -841,10 +841,7 @@ func constraints(accountID string) []*api.Constraint {
 
 // minNomadResources returns the minimum resources required for a Nomad job
 func (p *config) minNomadResources() *api.Resources {
-	return &api.Resources{
-		CPU:      intToPtr(p.nomadConfig.MinNomadCPUMhz),
-		MemoryMB: intToPtr(p.nomadConfig.MinNomadMemoryMb),
-	}
+	return minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb)
 }
 
 // Request Nomad to assign available ports dynamically.

@@ -17,6 +17,10 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
+const (
+	ignitePath = "/usr/local/bin/ignite"
+)
+
 //go:embed gitspace/scripts/provision_ceph_storage.sh
 var provisionCephStorageScript string
 
@@ -24,15 +28,9 @@ type LinuxVirtualizer struct {
 	nomadConfig types.NomadConfig
 }
 
-func NewLinuxVirtualizer() *LinuxVirtualizer {
-	// Load default config
-	envConfig, err := cf.FromEnviron()
-	if err != nil {
-		// Use empty config if we can't load from environment
-		return &LinuxVirtualizer{}
-	}
+func NewLinuxVirtualizer(nomadConfig types.NomadConfig) *LinuxVirtualizer {
 	return &LinuxVirtualizer{
-		nomadConfig: envConfig.NomadConfig(),
+		nomadConfig: nomadConfig,
 	}
 }
 
@@ -53,7 +51,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 	var runCmdFormat string
 	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
-	args := []interface{}{lv.nomadConfig.IgnitePath, vmImageConfig.ImageName, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
+	args := []interface{}{ignitePath, vmImageConfig.ImageName, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
 
 	// add labels
 	if len(opts.Labels) > 0 {
@@ -117,7 +115,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "create_startup_script_on_host",
 						Driver:    "raw_exec",
-						Resources: lv.minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedUserData, hostPath)},
@@ -131,7 +129,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "enable_port_forwarding",
 						Driver:    "raw_exec",
-						Resources: lv.minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", "iptables -P FORWARD ACCEPT"},
@@ -144,7 +142,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "ignite_run",
 						Driver:    "raw_exec",
-						Resources: lv.minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", runCmd},
@@ -153,7 +151,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "wait_for_ignite_ready",
 						Driver:    "raw_exec",
-						Resources: lv.minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args": []string{"-c", fmt.Sprintf(`
@@ -166,16 +164,16 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 								done
 								echo "ignite exec failed for VM %s" >&2
 								exit 1
-							`, lv.nomadConfig.IgnitePath, vm, vm, vm)},
+							`, ignitePath, vm, vm, vm)},
 						},
 					},
 					{
 						Name:      "ignite_exec",
 						Driver:    "raw_exec",
-						Resources: lv.minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", fmt.Sprintf("%s exec %s 'cat %s | base64 --decode | bash'", lv.nomadConfig.IgnitePath, vm, vmPath)},
+							"args":    []string{"-c", fmt.Sprintf("%s exec %s 'cat %s | base64 --decode | bash'", ignitePath, vm, vmPath)},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -185,7 +183,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "cleanup_startup_script_from_host",
 						Driver:    "raw_exec",
-						Resources: lv.minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", cleanUpCmd},
@@ -231,7 +229,7 @@ func (lv *LinuxVirtualizer) getCephStorageTask(
 	return &api.Task{
 		Name:      "create_ceph_storage_script_on_host",
 		Driver:    "raw_exec",
-		Resources: lv.minNomadResources(),
+		Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 		Config: map[string]interface{}{
 			"command": lv.GetEntryPoint(),
 			"args": []string{
@@ -322,7 +320,7 @@ func (lv *LinuxVirtualizer) GetDestroyScriptGenerator() func(string, string) str
 		if [ $? -ne 0 ]; then
 		  %s stop -f %s; %s rm -f %s
 		fi
-	`, lv.nomadConfig.IgnitePath, vm, lv.nomadConfig.IgnitePath, vm, lv.nomadConfig.IgnitePath, vm, lv.nomadConfig.IgnitePath, vm)
+	`, ignitePath, vm, ignitePath, vm, ignitePath, vm, ignitePath, vm)
 	}
 }
 
@@ -340,10 +338,3 @@ func (lv *LinuxVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprintf("$NOMAD_PORT_%s", portLabel)
 }
 
-// minNomadResources returns the minimum resources required for a Nomad job
-func (lv *LinuxVirtualizer) minNomadResources() *api.Resources {
-	return &api.Resources{
-		CPU:      intToPtr(lv.nomadConfig.MinNomadCPUMhz),
-		MemoryMB: intToPtr(lv.nomadConfig.MinNomadMemoryMb),
-	}
-}
