@@ -87,7 +87,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 	}
 
 	// Set NomadConfig from environment
-	p.nomadConfig = envConfig.NomadConfig()
+	p.nomadConfig = (&envConfig).NomadConfig()
 
 	for _, opt := range opts {
 		opt(p)
