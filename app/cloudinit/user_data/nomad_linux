@@ -66,6 +66,8 @@ chmod 777 /usr/bin/envman
 systemctl disable docker.service
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 echo "restarting docker"
+
+sudo systemctl reset-failed docker.service
 service docker start
 echo "docker service restarted"
 
