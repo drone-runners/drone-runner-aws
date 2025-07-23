@@ -757,7 +757,7 @@ func (p *config) streamStdErrLogs(allocation *api.Allocation, taskName string, l
 	if logs == nil {
 		return
 	}
-	timeout := time.After(p.nomadConfig.TenSecondsTimeout) // Set the timeout duration
+	timeout := time.After(tenSecondsTimeout) // Set the timeout duration
 	// Handle logs in real-time with a timeout
 	for {
 		select {

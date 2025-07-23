@@ -1,12 +1,16 @@
 package nomad
 
 import (
+	"time"
+
 	"github.com/dchest/uniuri"
 	"github.com/hashicorp/nomad/api"
 )
 
 const (
-	gigsToMegs = 1024
+	gigsToMegs        = 1024
+	ignitePath        = "/usr/local/bin/ignite"
+	tenSecondsTimeout = 10 * time.Second
 )
 
 // stringToPtr returns a pointer to a string

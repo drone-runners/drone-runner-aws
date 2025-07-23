@@ -91,7 +91,6 @@ type NomadConfig struct {
 	ResourceJobTimeout      time.Duration
 	InitTimeout             time.Duration
 	DestroyTimeout          time.Duration
-	TenSecondsTimeout       time.Duration
 	GlobalAccount           string
 	DestroyRetryAttempts    int
 	MinNomadCPUMhz          int

@@ -17,10 +17,6 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
-const (
-	ignitePath = "/usr/local/bin/ignite"
-)
-
 //go:embed gitspace/scripts/provision_ceph_storage.sh
 var provisionCephStorageScript string
 
