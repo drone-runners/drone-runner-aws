@@ -516,7 +516,7 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 				Tasks: []*api.Task{
 					{
 						Name:      "ignite_stop_and_rm",
-						Resources: p.minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": p.virtualizer.GetEntryPoint(),
@@ -780,7 +780,7 @@ func (p *config) getCephStorageScriptCleanupTask(deProvisionCephStorageScriptPat
 	return &api.Task{
 		Name:      "cleanup_ceph_storage_script_from_host",
 		Driver:    "raw_exec",
-		Resources: p.minNomadResources(),
+		Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 		Config: map[string]interface{}{
 			"command": p.virtualizer.GetEntryPoint(),
 			"args":    []string{"-c", fmt.Sprintf("rm %s", deProvisionCephStorageScriptPath)},
@@ -796,7 +796,7 @@ func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephSt
 	return &api.Task{
 		Name:      "create_ceph_storage_cleanup_script_on_host",
 		Driver:    "raw_exec",
-		Resources: p.minNomadResources(),
+		Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 		Config: map[string]interface{}{
 			"command": p.virtualizer.GetEntryPoint(),
 			"args": []string{
@@ -837,11 +837,6 @@ func constraints(accountID string) []*api.Constraint {
 
 	constraintList = append(constraintList, constraint)
 	return constraintList
-}
-
-// minNomadResources returns the minimum resources required for a Nomad job
-func (p *config) minNomadResources() *api.Resources {
-	return minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb)
 }
 
 // Request Nomad to assign available ports dynamically.

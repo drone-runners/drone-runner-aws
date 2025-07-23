@@ -43,7 +43,7 @@ func (p *config) initJobNoop(vm, nodeID string, liteEngineHostPort int) (initJob
 					{
 						Name:      "sleep",
 						Driver:    "raw_exec",
-						Resources: p.minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", "sleep 7"},
@@ -86,7 +86,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount 
 					{
 
 						Name:      "sleep_and_ping",
-						Resources: p.minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
@@ -128,7 +128,7 @@ func (p *config) destroyJobNoop(vm, nodeID string) (job *api.Job, id string) {
 				Tasks: []*api.Task{
 					{
 						Name:      "ignite_stop_and_rm",
-						Resources: p.minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
