@@ -20,10 +20,14 @@ import (
 //go:embed gitspace/scripts/provision_ceph_storage.sh
 var provisionCephStorageScript string
 
-type LinuxVirtualizer struct{}
+type LinuxVirtualizer struct {
+	nomadConfig *types.NomadConfig
+}
 
-func NewLinuxVirtualizer() *LinuxVirtualizer {
-	return &LinuxVirtualizer{}
+func NewLinuxVirtualizer(nomadConfig *types.NomadConfig) *LinuxVirtualizer {
+	return &LinuxVirtualizer{
+		nomadConfig: nomadConfig,
+	}
 }
 
 var funcs = map[string]interface{}{
@@ -97,7 +101,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &lv.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -107,7 +111,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "create_startup_script_on_host",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s", encodedUserData, hostPath)},
@@ -121,7 +125,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "enable_port_forwarding",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", "iptables -P FORWARD ACCEPT"},
@@ -134,7 +138,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "ignite_run",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", runCmd},
@@ -143,7 +147,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "wait_for_ignite_ready",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args": []string{"-c", fmt.Sprintf(`
@@ -162,7 +166,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "ignite_exec",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", fmt.Sprintf("%s exec %s 'cat %s | base64 --decode | bash'", ignitePath, vm, vmPath)},
@@ -175,7 +179,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 					{
 						Name:      "cleanup_startup_script_from_host",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", cleanUpCmd},
@@ -221,7 +225,7 @@ func (lv *LinuxVirtualizer) getCephStorageTask(
 	return &api.Task{
 		Name:      "create_ceph_storage_script_on_host",
 		Driver:    "raw_exec",
-		Resources: minNomadResources(),
+		Resources: minNomadResources(lv.nomadConfig.MinNomadCPUMhz, lv.nomadConfig.MinNomadMemoryMb),
 		Config: map[string]interface{}{
 			"command": lv.GetEntryPoint(),
 			"args": []string{
@@ -263,11 +267,11 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 }
 
 func (lv *LinuxVirtualizer) GetMachineFrequency() int {
-	return machineFrequencyMhz
+	return lv.nomadConfig.MachineFrequencyMhz
 }
 
 func (lv *LinuxVirtualizer) GetGlobalAccountID() string {
-	return globalAccount
+	return lv.nomadConfig.GlobalAccount
 }
 
 func (lv *LinuxVirtualizer) GetEntryPoint() string {

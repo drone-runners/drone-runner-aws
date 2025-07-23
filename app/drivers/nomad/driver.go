@@ -33,23 +33,6 @@ var deleteCephStorageScript string
 //go:embed gitspace/scripts/detach_ceph_storage.sh
 var detachCephStorageScript string
 
-var (
-	ignitePath              = "/usr/local/bin/ignite"
-	clientDisconnectTimeout = 4 * time.Minute
-	resourceJobTimeout      = 2 * time.Minute
-	initTimeout             = 3 * time.Minute
-	destroyTimeout          = 3 * time.Minute
-	tenSecondsTimeout       = 10 * time.Second
-	globalAccount           = "PAID_POOL"
-	destroyRetryAttempts    = 1
-	minNomadCPUMhz          = 40
-	minNomadMemoryMb        = 20
-	machineFrequencyMhz     = 3500 // TODO: Find a way to extract this from the node directly
-	largebaremetalclass     = "largebaremetal"
-	globalAccountMac        = "GLOBAL_ACCOUNT_ID_MAC"
-	macMachineFrequencyMhz  = 3200
-)
-
 type config struct {
 	address           string
 	vmImage           string
@@ -71,6 +54,7 @@ type config struct {
 	virtualizerEngine string
 	machinePassword   string
 	nomadToken        string
+	nomadConfig       *types.NomadConfig
 }
 
 // SetPlatformDefaults comes up with default values of the platform
@@ -95,6 +79,16 @@ func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 
 func New(opts ...Option) (drivers.Driver, error) {
 	p := new(config)
+
+	// Load configuration from environment
+	envConfig, err := cf.FromEnviron()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load environment config: %w", err)
+	}
+
+	// Set NomadConfig from environment
+	p.nomadConfig = (&envConfig).NomadConfig()
+
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -106,9 +100,9 @@ func New(opts ...Option) (drivers.Driver, error) {
 		p.client = client
 	}
 	if p.virtualizerEngine == "tart" {
-		p.virtualizer = NewMacVirtualizer()
+		p.virtualizer = NewMacVirtualizer(p.nomadConfig)
 	} else {
-		p.virtualizer = NewLinuxVirtualizer()
+		p.virtualizer = NewLinuxVirtualizer(p.nomadConfig)
 	}
 	return p, nil
 }
@@ -172,7 +166,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 			if opts.ResourceClass == "large" || opts.ResourceClass == "xlarge" {
 				// use largebaremetal class if resource class is large or xlarge
-				class = largebaremetalclass
+				class = p.nomadConfig.LargeBaremetalClass
 			}
 		}
 	}
@@ -204,8 +198,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer p.getAllocationsForJob(logr, resourceJobID)
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
-	// If resources don't become available in `resourceJobTimeout`, we fail the step
-	job, err := p.pollForJob(ctx, resourceJobID, logr, resourceJobTimeout, true, []JobStatus{Running, Dead})
+	// If resources don't become available in `p.nomadConfig.ResourceJobTimeout`, we fail the step
+	job, err := p.pollForJob(ctx, resourceJobID, logr, p.nomadConfig.ResourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
 		defer p.getAllocationsForJob(logr, resourceJobID)
 		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
@@ -304,7 +298,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Infoln("scheduler: successfully submitted init job, started polling for job status")
-	_, err = p.pollForJob(ctx, initJobID, logr, initTimeout, true, []JobStatus{Dead})
+	_, err = p.pollForJob(ctx, initJobID, logr, p.nomadConfig.InitTimeout, true, []JobStatus{Dead})
 	if err != nil {
 		defer p.getAllocationsForJob(logr, initJobID)
 		// Destroy the VM if it's in a partially created state
@@ -362,7 +356,7 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 	id = resourceJobID(vm)
 	portLabel := vm
 
-	sleepTime := resourceJobTimeout + initTimeout + 2*time.Minute // add 2 minutes for a buffer
+	sleepTime := p.nomadConfig.ResourceJobTimeout + p.nomadConfig.InitTimeout + 2*time.Minute // add 2 minutes for a buffer
 
 	// TODO: Check if this logic can be made better, although we are bounded by some limitations of Nomad scheduling
 	// We want to keep some buffer for other tasks to come in (which require minimum cpu and memory)
@@ -389,7 +383,7 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 		TaskGroups: []*api.TaskGroup{
 			{
 				Networks:                  getNetworkResources(portLabel, gitspacesPortCount),
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &p.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -513,16 +507,16 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &p.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
-					Attempts: intToPtr(destroyRetryAttempts),
+					Attempts: intToPtr(p.nomadConfig.DestroyRetryAttempts),
 				},
 				Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", vm)),
 				Count: intToPtr(1),
 				Tasks: []*api.Task{
 					{
 						Name:      "ignite_stop_and_rm",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": p.virtualizer.GetEntryPoint(),
@@ -608,7 +602,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			return err
 		}
 		logr.Debugln("scheduler: started polling for destroy job")
-		_, err = p.pollForJob(ctx, jobID, logr, destroyTimeout, false, []JobStatus{Dead})
+		_, err = p.pollForJob(ctx, jobID, logr, p.nomadConfig.DestroyTimeout, false, []JobStatus{Dead})
 		if err != nil {
 			logr.WithError(err).Errorln("scheduler: could not complete destroy job")
 			return err
@@ -786,7 +780,7 @@ func (p *config) getCephStorageScriptCleanupTask(deProvisionCephStorageScriptPat
 	return &api.Task{
 		Name:      "cleanup_ceph_storage_script_from_host",
 		Driver:    "raw_exec",
-		Resources: minNomadResources(),
+		Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 		Config: map[string]interface{}{
 			"command": p.virtualizer.GetEntryPoint(),
 			"args":    []string{"-c", fmt.Sprintf("rm %s", deProvisionCephStorageScriptPath)},
@@ -802,7 +796,7 @@ func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephSt
 	return &api.Task{
 		Name:      "create_ceph_storage_cleanup_script_on_host",
 		Driver:    "raw_exec",
-		Resources: minNomadResources(),
+		Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 		Config: map[string]interface{}{
 			"command": p.virtualizer.GetEntryPoint(),
 			"args": []string{
@@ -843,13 +837,6 @@ func constraints(accountID string) []*api.Constraint {
 
 	constraintList = append(constraintList, constraint)
 	return constraintList
-}
-
-func minNomadResources() *api.Resources {
-	return &api.Resources{
-		CPU:      intToPtr(minNomadCPUMhz),
-		MemoryMB: intToPtr(minNomadMemoryMb),
-	}
 }
 
 // Request Nomad to assign available ports dynamically.

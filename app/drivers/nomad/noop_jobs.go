@@ -33,7 +33,7 @@ func (p *config) initJobNoop(vm, nodeID string, liteEngineHostPort int) (initJob
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &p.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -43,7 +43,7 @@ func (p *config) initJobNoop(vm, nodeID string, liteEngineHostPort int) (initJob
 					{
 						Name:      "sleep",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
 							"args":    []string{"-c", "sleep 7"},
@@ -76,7 +76,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount 
 		TaskGroups: []*api.TaskGroup{
 			{
 				Networks:                  getNetworkResources(portLabel, gitspacesPortCount),
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &p.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -86,7 +86,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount 
 					{
 
 						Name:      "sleep_and_ping",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",
@@ -119,16 +119,16 @@ func (p *config) destroyJobNoop(vm, nodeID string) (job *api.Job, id string) {
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &p.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
-					Attempts: intToPtr(destroyRetryAttempts),
+					Attempts: intToPtr(p.nomadConfig.DestroyRetryAttempts),
 				},
 				Name:  stringToPtr(fmt.Sprintf("delete_task_group_%s", vm)),
 				Count: intToPtr(1),
 				Tasks: []*api.Task{
 					{
 						Name:      "ignite_stop_and_rm",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(p.nomadConfig.MinNomadCPUMhz, p.nomadConfig.MinNomadMemoryMb),
 						Driver:    "raw_exec",
 						Config: map[string]interface{}{
 							"command": "/usr/bin/su",

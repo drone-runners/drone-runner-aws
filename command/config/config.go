@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 	"unicode"
 	utf8 "unicode/utf8"
 
@@ -262,10 +263,6 @@ type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
 
-	Nomad struct {
-		NomadToken string `envconfig:"NOMAD_TOKEN"`
-	}
-
 	Anka struct {
 		VMName string `envconfig:"ANKA_VM_NAME"`
 	}
@@ -343,6 +340,22 @@ type EnvConfig struct {
 		HealthCheckTimeout        int64 `envconfig:"HEALTH_CHECK_TIMEOUT" default:"3"`
 		HealthCheckWindowsTimeout int64 `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5"`
 		HA                        bool  `envconfig:"DRONE_RUNNER_HA" default:"false"`
+	}
+
+	Nomad struct {
+		NomadToken              string        `envconfig:"NOMAD_TOKEN"`
+		ClientDisconnectTimeout time.Duration `envconfig:"NOMAD_CLIENT_DISCONNECT_TIMEOUT" default:"4m"`
+		ResourceJobTimeout      time.Duration `envconfig:"NOMAD_RESOURCE_JOB_TIMEOUT" default:"2m"`
+		InitTimeout             time.Duration `envconfig:"NOMAD_INIT_TIMEOUT" default:"3m"`
+		DestroyTimeout          time.Duration `envconfig:"NOMAD_DESTROY_TIMEOUT" default:"3m"`
+		GlobalAccount           string        `envconfig:"NOMAD_GLOBAL_ACCOUNT" default:"PAID_POOL"`
+		DestroyRetryAttempts    int           `envconfig:"NOMAD_DESTROY_RETRY_ATTEMPTS" default:"1"`
+		MinNomadCPUMhz          int           `envconfig:"NOMAD_MIN_CPU_MHZ" default:"40"`
+		MinNomadMemoryMb        int           `envconfig:"NOMAD_MIN_MEMORY_MB" default:"20"`
+		MachineFrequencyMhz     int           `envconfig:"NOMAD_MACHINE_FREQUENCY_MHZ" default:"3500"`
+		LargeBaremetalClass     string        `envconfig:"NOMAD_LARGE_BAREMETAL_CLASS" default:"largebaremetal"`
+		GlobalAccountMac        string        `envconfig:"NOMAD_GLOBAL_ACCOUNT_MAC" default:"GLOBAL_ACCOUNT_ID_MAC"`
+		MacMachineFrequencyMhz  int           `envconfig:"NOMAD_MAC_MACHINE_FREQUENCY_MHZ" default:"3200"`
 	}
 
 	Dlite struct {
@@ -433,6 +446,24 @@ func (c EnvConfig) Passwords() types.Passwords {
 		Tart:        c.TartBuild.Password,
 		TartMachine: c.TartBuild.MachinePassword,
 		NomadToken:  c.Nomad.NomadToken,
+	}
+}
+
+// NomadConfig returns a types.NomadConfig with values from the environment configuration
+func (c *EnvConfig) NomadConfig() *types.NomadConfig {
+	return &types.NomadConfig{
+		ClientDisconnectTimeout: c.Nomad.ClientDisconnectTimeout,
+		ResourceJobTimeout:      c.Nomad.ResourceJobTimeout,
+		InitTimeout:             c.Nomad.InitTimeout,
+		DestroyTimeout:          c.Nomad.DestroyTimeout,
+		GlobalAccount:           c.Nomad.GlobalAccount,
+		DestroyRetryAttempts:    c.Nomad.DestroyRetryAttempts,
+		MinNomadCPUMhz:          c.Nomad.MinNomadCPUMhz,
+		MinNomadMemoryMb:        c.Nomad.MinNomadMemoryMb,
+		MachineFrequencyMhz:     c.Nomad.MachineFrequencyMhz,
+		LargeBaremetalClass:     c.Nomad.LargeBaremetalClass,
+		GlobalAccountMac:        c.Nomad.GlobalAccountMac,
+		MacMachineFrequencyMhz:  c.Nomad.MacMachineFrequencyMhz,
 	}
 }
 
