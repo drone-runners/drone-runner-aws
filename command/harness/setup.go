@@ -2,7 +2,6 @@ package harness
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -249,9 +248,6 @@ func handleSetup(
 		return nil, fmt.Errorf("could not find pool: %s", pool)
 	}
 
-	b, _ := json.MarshalIndent(r, "", "  ")
-	fmt.Print("Full PoolYaml JSON: %s", string(b))
-
 	stageRuntimeID := r.ID
 
 	// try to provision an instance from the pool manager.
@@ -385,6 +381,13 @@ func handleSetup(
 	if instance.Platform.OS == oshelp.OSMac {
 		b := false
 		r.SetupRequest.MountDockerSocket = &b
+	}
+
+	if r.Envs["DRONE_PERSIST_CREDS"] == "true" {
+		r.SetupRequest.Files = append(
+			r.SetupRequest.Files,
+			oshelp.GetNetrcFile(instance.Platform.OS, r.Envs),
+		)
 	}
 
 	_, err = client.Setup(ctx, &r.SetupRequest)

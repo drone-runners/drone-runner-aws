@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dchest/uniuri"
+	"github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone/runner-go/shell/bash"
 	"github.com/drone/runner-go/shell/powershell"
@@ -64,6 +65,30 @@ func GetNetrc(os string) string {
 	default:
 		return ".netrc"
 	}
+}
+
+// GetNetrcPath helper function returns the netrc file based on the target platform.
+func GetNetrcFile(os string, env map[string]string) *spec.File {
+	netrcName := GetNetrc(os)
+
+	var path string
+	switch os {
+	case OSLinux:
+		path = fmt.Sprintf("/home/ubuntu/%s", netrcName)
+	default:
+		path = fmt.Sprintf("/root/%s", netrcName)
+	}
+
+	// Build netrc file data
+	data := fmt.Sprintf("machine %s\nlogin %s\npassword %s\n", env["DRONE_NETRC_MACHINE"], env["DRONE_NETRC_USERNAME"], env["DRONE_NETRC_PASSWORD"])
+
+	return &spec.File{
+		Path:  path,
+		Mode:  777,
+		IsDir: false,
+		Data:  data,
+	}
+
 }
 
 // GenScript helper function generates and returns a shell script to
