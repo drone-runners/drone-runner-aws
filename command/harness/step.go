@@ -63,16 +63,6 @@ func HandleStep(ctx context.Context,
 	var poolID string
 	var inst *types.Instance
 	err := common.ValidateStruct(r.InstanceInfo)
-	// files := []*spec.File{
-	// 	{
-	// 		Path:  "/shared/.netrc",
-	// 		Mode:  0600,
-	// 		IsDir: false,
-	// 	},
-	// }
-	// r.Files = files
-	b, _ := json.MarshalIndent(r, "", "  ")
-	fmt.Print("Full PoolYaml step JSON : %s", string(b))
 	if err != nil {
 		logr.Infof("Instance information is not passed to the VM Execute Request, fetching it from the DB: %v", err)
 		entity, findStageOwnerErr := s.Find(ctx, r.StageRuntimeID)
