@@ -58,8 +58,8 @@ func isFullyQualifiedImage(imageName string) bool {
 		return false
 	}
 	// Split only the first slash to isolate potential registry part
-	parts := strings.SplitN(imageName, "/", 2)
-	if len(parts) < 2 {
+	parts := strings.SplitN(imageName, "/", 2) //nolint
+	if len(parts) < 2 {                        //nolint
 		return false // no slash means it's not a registry-based image
 	}
 

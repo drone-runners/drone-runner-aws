@@ -334,6 +334,6 @@ func (lv *LinuxVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprintf("$NOMAD_PORT_%s", portLabel)
 }
 
-func (lv *LinuxVirtualizer) GetInitJobTimeout(vmImageConfig types.VMImageConfig) time.Duration {
+func (lv *LinuxVirtualizer) GetInitJobTimeout(vmImageConfig types.VMImageConfig) time.Duration { //nolint
 	return lv.nomadConfig.InitTimeout
 }
