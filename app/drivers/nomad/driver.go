@@ -175,6 +175,15 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		class = p.virtualizer.GetGlobalAccountID()
 	}
 
+	vmImageConfig := opts.VMImageConfig
+	if vmImageConfig.ImageName == "" {
+		vmImageConfig = types.VMImageConfig{
+			ImageName: p.vmImage,
+			Username:  p.username,
+			Password:  p.password,
+		}
+	}
+
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
 	var resourceJob *api.Job
@@ -182,7 +191,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
 	} else {
-		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, p.virtualizer.GetHealthCheckupGenerator())
+		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, vmImageConfig, p.virtualizer.GetHealthCheckupGenerator())
 	}
 
 	originalLogr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
@@ -228,15 +237,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	for i, vmPort := range opts.GitspaceOpts.Ports {
 		gitspacesPortMappings[vmPort] = gitspacesPorts[i]
 		gitspacesPortMappingsString += fmt.Sprintf("%d->%d;", gitspacesPorts[i], vmPort)
-	}
-
-	vmImageConfig := opts.VMImageConfig
-	if vmImageConfig.ImageName == "" {
-		vmImageConfig = types.VMImageConfig{
-			ImageName: p.vmImage,
-			Username:  p.username,
-			Password:  p.password,
-		}
 	}
 
 	// create a VM on the same machine where the resource job was allocated
@@ -298,7 +298,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Infoln("scheduler: successfully submitted init job, started polling for job status")
-	_, err = p.pollForJob(ctx, initJobID, logr, p.nomadConfig.InitTimeout, true, []JobStatus{Dead})
+	_, err = p.pollForJob(ctx, initJobID, logr, p.virtualizer.GetInitJobTimeout(vmImageConfig), true, []JobStatus{Dead})
 	if err != nil {
 		defer p.getAllocationsForJob(logr, initJobID)
 		// Destroy the VM if it's in a partially created state
@@ -352,11 +352,11 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) { //nolint
+func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, vmImageConfig types.VMImageConfig, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) { //nolint	id = resourceJobID(vm)
 	id = resourceJobID(vm)
 	portLabel := vm
 
-	sleepTime := p.nomadConfig.ResourceJobTimeout + p.nomadConfig.InitTimeout + 2*time.Minute // add 2 minutes for a buffer
+	sleepTime := p.nomadConfig.ResourceJobTimeout + p.virtualizer.GetInitJobTimeout(vmImageConfig) + 2*time.Minute // add 2 minutes for a buffer
 
 	// TODO: Check if this logic can be made better, although we are bounded by some limitations of Nomad scheduling
 	// We want to keep some buffer for other tasks to come in (which require minimum cpu and memory)

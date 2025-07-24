@@ -347,6 +347,7 @@ type EnvConfig struct {
 		ClientDisconnectTimeout time.Duration `envconfig:"NOMAD_CLIENT_DISCONNECT_TIMEOUT" default:"4m"`
 		ResourceJobTimeout      time.Duration `envconfig:"NOMAD_RESOURCE_JOB_TIMEOUT" default:"2m"`
 		InitTimeout             time.Duration `envconfig:"NOMAD_INIT_TIMEOUT" default:"3m"`
+		BYOIInitTimeout         time.Duration `envconfig:"NOMAD_BYOI_INIT_TIMEOUT" default:"15m"`
 		DestroyTimeout          time.Duration `envconfig:"NOMAD_DESTROY_TIMEOUT" default:"3m"`
 		GlobalAccount           string        `envconfig:"NOMAD_GLOBAL_ACCOUNT" default:"PAID_POOL"`
 		DestroyRetryAttempts    int           `envconfig:"NOMAD_DESTROY_RETRY_ATTEMPTS" default:"1"`
@@ -455,6 +456,7 @@ func (c *EnvConfig) NomadConfig() *types.NomadConfig {
 		ClientDisconnectTimeout: c.Nomad.ClientDisconnectTimeout,
 		ResourceJobTimeout:      c.Nomad.ResourceJobTimeout,
 		InitTimeout:             c.Nomad.InitTimeout,
+		ByoiInitTimeout:         c.Nomad.BYOIInitTimeout,
 		DestroyTimeout:          c.Nomad.DestroyTimeout,
 		GlobalAccount:           c.Nomad.GlobalAccount,
 		DestroyRetryAttempts:    c.Nomad.DestroyRetryAttempts,

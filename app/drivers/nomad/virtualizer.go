@@ -26,4 +26,6 @@ type Virtualizer interface {
 	GetEntryPoint() string
 	// Returns healthcheck port
 	GetHealthCheckPort(portLabel string) string
+	// Returns init job timeout
+	GetInitJobTimeout(vmImageConfig types.VMImageConfig) time.Duration
 }

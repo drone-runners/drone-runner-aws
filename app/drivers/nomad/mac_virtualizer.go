@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
@@ -35,6 +36,8 @@ if [ "$counter" -lt "$MAX_RETRIES" ]; then
   rm -rf "$LOCK_DIR"
   echo "Lock released."
 fi`
+
+const harnessImageName = "harness"
 
 type MacVirtualizer struct {
 	nomadConfig *types.NomadConfig
@@ -407,4 +410,12 @@ nc -zv $(/opt/homebrew/bin/tart ip %s) 9079
 
 func (mv *MacVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprint(lehelper.LiteEnginePort)
+}
+
+func (mv *MacVirtualizer) GetInitJobTimeout(vmImageConfig types.VMImageConfig) time.Duration {
+	// This makes sure that only customer specific images have a higher init timeout
+	if strings.HasPrefix(vmImageConfig.ImageName, harnessImageName) {
+		return mv.nomadConfig.InitTimeout
+	}
+	return mv.nomadConfig.ByoiInitTimeout
 }

@@ -90,6 +90,7 @@ type NomadConfig struct {
 	ClientDisconnectTimeout time.Duration
 	ResourceJobTimeout      time.Duration
 	InitTimeout             time.Duration
+	ByoiInitTimeout         time.Duration
 	DestroyTimeout          time.Duration
 	GlobalAccount           string
 	DestroyRetryAttempts    int
