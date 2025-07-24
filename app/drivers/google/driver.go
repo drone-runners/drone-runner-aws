@@ -883,6 +883,7 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 // setImage set image sent in the request to p.config . setImage() will not set image if imageName is empty
 func (p *config) setImage(opts *types.InstanceCreateOpts) {
 	if opts.VMImageConfig.ImageName == "" {
+		p.image = ""
 		return
 	}
 
