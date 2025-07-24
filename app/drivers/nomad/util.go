@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"strings"
 	"time"
 
 	"github.com/dchest/uniuri"
@@ -49,4 +50,21 @@ func convertGigsToMegs(p int) int {
 // check if job is completed
 func isTerminal(job *api.Job) bool {
 	return Status(*job.Status) == Dead
+}
+
+// check if image is fully qualified
+func isFullyQualifiedImage(imageName string) bool {
+	if imageName == "" {
+		return false
+	}
+	// Split only the first slash to isolate potential registry part
+	parts := strings.SplitN(imageName, "/", 2)
+	if len(parts) < 2 {
+		return false // no slash means it's not a registry-based image
+	}
+
+	registryPart := parts[0]
+
+	// Heuristic: if the registry part contains a dot or a colon, it's likely a registry (e.g., docker.io, localhost:5000)
+	return strings.Contains(registryPart, ".") || strings.Contains(registryPart, ":")
 }

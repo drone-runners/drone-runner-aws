@@ -408,3 +408,11 @@ nc -zv $(/opt/homebrew/bin/tart ip %s) 9079
 func (mv *MacVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprint(lehelper.LiteEnginePort)
 }
+
+func (mv *MacVirtualizer) GetInitJobTimeout(vmImageConfig types.VMImageConfig) time.Duration {
+	imageName := vmImageConfig.ImageName
+	if isFullyQualifiedImage(imageName) {
+		return mv.nomadConfig.ByoiInitTimeout // remote image from registry
+	}
+	return mv.nomadConfig.InitTimeout // local or shorthand image
+}
