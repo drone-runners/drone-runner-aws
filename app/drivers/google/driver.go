@@ -185,8 +185,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		p.size = opts.MachineType
 	}
 
-	// setImage checks Image name in opts and it an image is sent in the request, it sets the image in p.config
-	p.setImage(opts)
+	// getImage returns the image to use for this instance creation
+	image := p.getImage(opts)
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -194,7 +194,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("image", p.InstanceType()).
 		WithField("pool", opts.PoolName).
 		WithField("zone", zone).
-		WithField("image", p.image).
+		WithField("image", image).
 		WithField("size", p.size).
 		WithField("google_dns", opts.ShouldUseGoogleDNS)
 
@@ -288,7 +288,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				AutoDelete: true,
 				DeviceName: opts.PoolName,
 				InitializeParams: &compute.AttachedDiskInitializeParams{
-					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", p.image),
+					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", image),
 					DiskType:    fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, bootDiskType),
 					DiskSizeGb:  bootDiskSize,
 				},
@@ -880,10 +880,12 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 	return instance.Zone, nil
 }
 
-// setImage set image sent in the request to p.config . setImage() will not set image if imageName is empty
-func (p *config) setImage(opts *types.InstanceCreateOpts) {
+// getImage returns the appropriate image path based on the provided options
+// If no image is specified in the options, it returns the default image from p.image
+func (p *config) getImage(opts *types.InstanceCreateOpts) string {
+	// If no image is provided in the options, return the default image
 	if opts.VMImageConfig.ImageName == "" {
-		return
+		return p.image
 	}
 
 	// opts.VMImageConfig.ImageName can be of different formats.
@@ -893,11 +895,10 @@ func (p *config) setImage(opts *types.InstanceCreateOpts) {
 	// isFullImagePath() method checks if given image in opts.VMImageConfig.ImageName is of Format #2 which can be
 	// directly used, else we convert Format #1 to Format #2 in buildImagePathFromTag() method.
 	if isFullImagePath(opts.VMImageConfig.ImageName) {
-		p.image = opts.VMImageConfig.ImageName
-		return
+		return opts.VMImageConfig.ImageName
 	}
 
-	p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
+	return buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
 }
 
 // instance name must be 1-63 characters long and match the regular expression
