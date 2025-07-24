@@ -333,3 +333,7 @@ func (lv *LinuxVirtualizer) getScriptCleanupCmd(opts *types.InstanceCreateOpts, 
 func (lv *LinuxVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprintf("$NOMAD_PORT_%s", portLabel)
 }
+
+func (lv *LinuxVirtualizer) GetInitJobTimeout(vmImageConfig types.VMImageConfig) time.Duration {
+	return lv.nomadConfig.InitTimeout
+}
