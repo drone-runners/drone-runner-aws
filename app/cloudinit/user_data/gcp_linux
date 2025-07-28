@@ -117,32 +117,42 @@ runcmd:
     fi
     
     # At this point we have a valid DEV_PATH
-    MOUNT_POINT="/mnt/ephemeral"
+    MOUNT_POINT="/harness"
     echo "Using device: $DEV_PATH" | tee -a /var/log/nvme-setup.log
     echo "Using mount point: $MOUNT_POINT" | tee -a /var/log/nvme-setup.log
     
-    # Format the disk
+    # Create mount point if it doesn't exist
+    mkdir -p "$MOUNT_POINT"
+    
+    # Format the device
     echo "Formatting $DEV_PATH as ext4..." | tee -a /var/log/nvme-setup.log
     mkfs.ext4 -F "$DEV_PATH" | tee -a /var/log/nvme-setup.log
-    if [ $? -ne 0 ]; then
-      echo "Failed to format $DEV_PATH. Skipping NVME setup." | tee -a /var/log/nvme-setup.log
-      exit 1
-    fi
     
-    # Mount the disk
+    # Mount the device
     echo "Mounting $DEV_PATH to $MOUNT_POINT..." | tee -a /var/log/nvme-setup.log
-    mkdir -p "$MOUNT_POINT"
     mount "$DEV_PATH" "$MOUNT_POINT" | tee -a /var/log/nvme-setup.log
     if [ $? -ne 0 ]; then
       echo "Failed to mount $DEV_PATH to $MOUNT_POINT. Skipping NVME setup." | tee -a /var/log/nvme-setup.log
       exit 1
     fi
     
+    # Create necessary subdirectories in /harness
+    echo "Creating necessary subdirectories in $MOUNT_POINT..." | tee -a /var/log/nvme-setup.log
+    mkdir -p "$MOUNT_POINT/tmp" "$MOUNT_POINT/docker" "$MOUNT_POINT/home"
+    
+    # Verify mount and log completion
+    mount | grep "$DEV_PATH" | tee -a /var/log/nvme-setup.log
+    echo "NVME setup complete at $(date)" | tee -a /var/log/nvme-setup.log
+    
     # Bind mount directories
     echo "Setting up bind mounts..." | tee -a /var/log/nvme-setup.log
     for dir in /tmp /var/lib/docker /home; do
       name=$(basename "$dir")
-      target="$MOUNT_POINT/$name"
+      if [ "$name" = "docker" ]; then
+        target="$MOUNT_POINT/docker"
+      else
+        target="$MOUNT_POINT/$name"
+      fi
       
       echo "Processing directory: $dir" | tee -a /var/log/nvme-setup.log
       echo "Target directory: $target" | tee -a /var/log/nvme-setup.log
@@ -168,10 +178,6 @@ runcmd:
         echo "Successfully bind mounted $target to $dir" | tee -a /var/log/nvme-setup.log
       fi
     done
-    
-    # Verify mounts and log completion
-    mount | grep -E "$DEV_PATH|$MOUNT_POINT" | tee -a /var/log/nvme-setup.log
-    echo "NVME setup complete at $(date)" | tee -a /var/log/nvme-setup.log
   {{ else }}
   # NVME setup is disabled
   - echo "NVME setup is disabled in configuration. Skipping NVME disk setup." | tee -a /var/log/nvme-setup.log
