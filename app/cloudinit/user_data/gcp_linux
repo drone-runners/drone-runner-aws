@@ -140,12 +140,19 @@ runcmd:
     
     # Bind mount directories
     echo "Setting up bind mounts..." | tee -a /var/log/nvme-setup.log
-    for dir in /tmp /var/lib/docker /home; do
+    for dir in /tmp /var/lib/docker /home /harness; do
       name=$(basename "$dir")
       target="$MOUNT_POINT/$name"
       
       echo "Processing directory: $dir" | tee -a /var/log/nvme-setup.log
       echo "Target directory: $target" | tee -a /var/log/nvme-setup.log
+      
+      # Ensure source directory exists
+      if [ ! -d "$dir" ]; then
+        echo "Creating source directory $dir as it doesn't exist" | tee -a /var/log/nvme-setup.log
+        mkdir -p "$dir"
+        chmod 755 "$dir"
+      fi
       
       # Create target directory
       echo "Creating target directory..." | tee -a /var/log/nvme-setup.log
@@ -153,25 +160,69 @@ runcmd:
       
       # Copy existing content
       echo "Copying content from $dir to $target..." | tee -a /var/log/nvme-setup.log
-      if [ -d "$dir" ] && [ "$(ls -A $dir 2>/dev/null)" ]; then
+      if [ "$(ls -A $dir 2>/dev/null)" ]; then
         cp -a "$dir/"* "$target/" 2>/dev/null || echo "Warning: Some files could not be copied" | tee -a /var/log/nvme-setup.log
       else
-        echo "Source directory is empty or doesn't exist" | tee -a /var/log/nvme-setup.log
+        echo "Source directory is empty" | tee -a /var/log/nvme-setup.log
       fi
       
       # Bind mount
       echo "Binding $target to $dir..." | tee -a /var/log/nvme-setup.log
+      umount "$dir" 2>/dev/null  # Unmount if already mounted
       mount --bind "$target" "$dir" | tee -a /var/log/nvme-setup.log
       if [ $? -ne 0 ]; then
         echo "Failed to bind mount $target to $dir" | tee -a /var/log/nvme-setup.log
       else
         echo "Successfully bind mounted $target to $dir" | tee -a /var/log/nvme-setup.log
       fi
+      
+      # Add to fstab for persistence
+      if ! grep -q "$target $dir" /etc/fstab; then
+        echo "$target $dir none bind 0 0" >> /etc/fstab
+        echo "Added bind mount to fstab for $dir" | tee -a /var/log/nvme-setup.log
+      fi
     done
     
     # Verify mounts and log completion
-    mount | grep -E "$DEV_PATH|$MOUNT_POINT" | tee -a /var/log/nvme-setup.log
-    echo "NVME setup complete at $(date)" | tee -a /var/log/nvme-setup.log
+    echo -e "\nVerifying all mounts:" | tee -a /var/log/nvme-setup.log
+    mount | grep -E "$DEV_PATH|$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a /var/log/nvme-setup.log
+    
+    # Check if all directories are properly mounted
+    echo -e "\nChecking if all directories are properly mounted:" | tee -a /var/log/nvme-setup.log
+    ALL_MOUNTED=true
+    for dir in /tmp /var/lib/docker /home /harness; do
+      if ! mount | grep -q " $dir "; then
+        echo "WARNING: $dir is not mounted!" | tee -a /var/log/nvme-setup.log
+        echo "Attempting to mount $dir again..." | tee -a /var/log/nvme-setup.log
+        target="$MOUNT_POINT/$(basename $dir)"
+        
+        # Try to mount again
+        umount "$dir" 2>/dev/null
+        mount --bind "$target" "$dir" | tee -a /var/log/nvme-setup.log
+        if [ $? -ne 0 ]; then
+          echo "FAILED to mount $dir again" | tee -a /var/log/nvme-setup.log
+          ALL_MOUNTED=false
+        else
+          echo "Successfully mounted $dir on retry" | tee -a /var/log/nvme-setup.log
+        fi
+      else
+        echo "✓ $dir is properly mounted" | tee -a /var/log/nvme-setup.log
+      fi
+    done
+    
+    # Show disk usage
+    echo -e "\nDisk usage:" | tee -a /var/log/nvme-setup.log
+    df -h | grep -E "$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a /var/log/nvme-setup.log
+    
+    # Show fstab entries
+    echo -e "\nfstab entries:" | tee -a /var/log/nvme-setup.log
+    grep -E "$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" /etc/fstab | tee -a /var/log/nvme-setup.log
+    
+    if [ "$ALL_MOUNTED" = true ]; then
+      echo -e "\nNVME setup SUCCESSFUL! All directories properly mounted at $(date)" | tee -a /var/log/nvme-setup.log
+    else
+      echo -e "\nNVME setup INCOMPLETE! Some directories failed to mount at $(date)" | tee -a /var/log/nvme-setup.log
+    fi
   {{ else }}
   # NVME setup is disabled
   - echo "NVME setup is disabled in configuration. Skipping NVME disk setup." | tee -a /var/log/nvme-setup.log
