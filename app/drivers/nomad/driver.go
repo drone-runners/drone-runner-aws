@@ -750,55 +750,49 @@ func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
 }
 
 func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr *logrus.Entry, logType string) {
-	retryCount := 0
 	const maxRetries = 3
+	logRecieved := false
 
-retry:
-	if retryCount >= maxRetries {
-		return
-	}
+	for retryCount := 0; retryCount < maxRetries; retryCount++ {
 
-	cancel := make(chan struct{})
-	defer close(cancel)
+		cancel := make(chan struct{})
+		defer close(cancel)
 
-	logs, errCh := p.client.AllocFS().Logs(allocation, false, taskName, logType, "", int64(0), cancel, &api.QueryOptions{})
-	if logs == nil {
-		retryCount++
-		goto retry
-	}
-	timeout := time.After(tenSecondsTimeout * 2) // Set the timeout duration
+		logs, errCh := p.client.AllocFS().Logs(allocation, false, taskName, logType, "", int64(0), cancel, &api.QueryOptions{})
+		if logs == nil {
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		timeout := time.After(tenSecondsTimeout * 2) // Set the timeout duration
 
-	// Handle logs in real-time with a timeout
-	for {
-		select {
-		case <-cancel:
-			return
-		case logLine := <-logs:
-			// Print each log line received
-			if logLine == nil {
-				retryCount++
-				if retryCount >= maxRetries {
-					return
+		// Handle logs in real-time with a timeout
+		for {
+			select {
+			case <-cancel:
+				return
+			case logLine := <-logs:
+				if logLine == nil {
+					if logRecieved == true {
+						return
+					}
+
+					time.Sleep(3 * time.Second)
+					continue
 				}
-				time.Sleep(3 * time.Second)
-				continue
-			}
-			// Reset retry counter on successful log line
-			retryCount = 0
-			if logType == "stderr" {
-				logr.WithField("task_name", taskName).WithField(logType, string(logLine.Data)).Errorln("scheduler: successfully task " + logType + " logs")
-			} else {
-				logr.WithField("task_name", taskName).WithField(logType, string(logLine.Data)).Infoln("scheduler: successfully task " + logType + " logs")
-			}
-		case <-timeout:
-			logr.WithField("task_name", taskName).Warnln("scheduler: log streaming timed out")
-			return
-		case err := <-errCh:
-			if err != nil {
-				logr.WithField("task_name", taskName).WithError(err).Errorln("scheduler: failed to stream task stderr logs")
-				retryCount++
-				time.Sleep(3 * time.Second)
-				goto retry // Restart the entire stream
+				logRecieved = true
+				if logType == "stderr" {
+					logr.WithField("task_name", taskName).WithField(logType, string(logLine.Data)).Errorln("scheduler: successfully task " + logType + " logs")
+				} else {
+					logr.WithField("task_name", taskName).WithField(logType, string(logLine.Data)).Infoln("scheduler: successfully task " + logType + " logs")
+				}
+			case <-timeout:
+				logr.WithField("task_name", taskName).Warnln("scheduler: log streaming timed out")
+				return
+			case err := <-errCh:
+				if err != nil {
+					logr.WithField("task_name", taskName).WithError(err).Errorln("scheduler: failed to stream task stderr logs")
+					time.Sleep(3 * time.Second)
+				}
 			}
 		}
 	}
