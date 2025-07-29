@@ -136,46 +136,39 @@ runcmd:
       exit 1
     fi
     
-    # Create necessary subdirectories in /harness
-    echo "Creating necessary subdirectories in $MOUNT_POINT..." | tee -a /var/log/nvme-setup.log
-    mkdir -p "$MOUNT_POINT/tmp" "$MOUNT_POINT/docker" "$MOUNT_POINT/home"
+
     
     # Verify mount and log completion
     mount | grep "$DEV_PATH" | tee -a /var/log/nvme-setup.log
     echo "NVME setup complete at $(date)" | tee -a /var/log/nvme-setup.log
     
-    # Bind mount directories
-    echo "Setting up bind mounts..." | tee -a /var/log/nvme-setup.log
+    # Create separate mount points for tmp, docker, and home
+    echo "Setting up separate mount points..." | tee -a /var/log/nvme-setup.log
     for dir in /tmp /var/lib/docker /home; do
       name=$(basename "$dir")
-      if [ "$name" = "docker" ]; then
-        target="$MOUNT_POINT/docker"
-      else
-        target="$MOUNT_POINT/$name"
-      fi
       
       echo "Processing directory: $dir" | tee -a /var/log/nvme-setup.log
-      echo "Target directory: $target" | tee -a /var/log/nvme-setup.log
       
-      # Create target directory
-      echo "Creating target directory..." | tee -a /var/log/nvme-setup.log
-      mkdir -p "$target"
+      # Create mount point directories on NVMe device
+      mount_dir="/mnt/nvme_${name}"
+      echo "Creating mount point directory: $mount_dir..." | tee -a /var/log/nvme-setup.log
+      mkdir -p "$mount_dir"
       
       # Copy existing content
-      echo "Copying content from $dir to $target..." | tee -a /var/log/nvme-setup.log
+      echo "Copying content from $dir to $mount_dir..." | tee -a /var/log/nvme-setup.log
       if [ -d "$dir" ] && [ "$(ls -A $dir 2>/dev/null)" ]; then
-        cp -a "$dir/"* "$target/" 2>/dev/null || echo "Warning: Some files could not be copied" | tee -a /var/log/nvme-setup.log
+        cp -a "$dir/"* "$mount_dir/" 2>/dev/null || echo "Warning: Some files could not be copied" | tee -a /var/log/nvme-setup.log
       else
         echo "Source directory is empty or doesn't exist" | tee -a /var/log/nvme-setup.log
       fi
       
       # Bind mount
-      echo "Binding $target to $dir..." | tee -a /var/log/nvme-setup.log
-      mount --bind "$target" "$dir" | tee -a /var/log/nvme-setup.log
+      echo "Binding $mount_dir to $dir..." | tee -a /var/log/nvme-setup.log
+      mount --bind "$mount_dir" "$dir" | tee -a /var/log/nvme-setup.log
       if [ $? -ne 0 ]; then
-        echo "Failed to bind mount $target to $dir" | tee -a /var/log/nvme-setup.log
+        echo "Failed to bind mount $mount_dir to $dir" | tee -a /var/log/nvme-setup.log
       else
-        echo "Successfully bind mounted $target to $dir" | tee -a /var/log/nvme-setup.log
+        echo "Successfully bind mounted $mount_dir to $dir" | tee -a /var/log/nvme-setup.log
       fi
     done
   {{ else }}
