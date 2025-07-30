@@ -751,15 +751,15 @@ func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
 
 func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr *logrus.Entry, logType string) {
 	const maxRetries = 3
+	const sleepBetweenTry = 3 * time.Second
 	logReceived := false
 
 	for retryCount := 0; retryCount < maxRetries; retryCount++ {
-
 		cancel := make(chan struct{})
 
 		logs, errCh := p.client.AllocFS().Logs(allocation, false, taskName, logType, "", int64(0), cancel, &api.QueryOptions{})
 		if logs == nil {
-			time.Sleep(3 * time.Second)
+			time.Sleep(sleepBetweenTry)
 			close(cancel)
 			continue
 		}
@@ -778,7 +778,7 @@ func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr
 						return
 					}
 
-					time.Sleep(3 * time.Second)
+					time.Sleep(sleepBetweenTry)
 
 					continue
 				}
@@ -796,7 +796,7 @@ func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr
 				if err != nil {
 					logr.WithField("task_name", taskName).WithError(err).Errorln("scheduler: failed to stream task stderr logs")
 					close(cancel)
-					time.Sleep(3 * time.Second)
+					time.Sleep(sleepBetweenTry)
 					break streamLoop // Break out of the labeled loop
 				}
 			}
