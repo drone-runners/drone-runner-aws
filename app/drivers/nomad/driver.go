@@ -770,7 +770,6 @@ func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr
 		for {
 			select {
 			case <-cancel:
-				close(cancel)
 				return
 			case logLine := <-logs:
 				if logLine == nil {
