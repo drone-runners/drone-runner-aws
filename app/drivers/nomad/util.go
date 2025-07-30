@@ -10,7 +10,6 @@ import (
 const (
 	gigsToMegs           = 1024
 	ignitePath           = "/usr/local/bin/ignite"
-	tenSecondsTimeout    = 10 * time.Second
 	twentySecondsTimeout = 20 * time.Second
 )
 
