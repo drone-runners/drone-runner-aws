@@ -763,7 +763,7 @@ func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr
 			close(cancel)
 			continue
 		}
-		timeout := time.After(tenSecondsTimeout * 2) // Set the timeout duration
+		timeout := time.After(twentySecondsTimeout) // Set the timeout duration
 
 		// Handle logs in real-time with a timeout
 	streamLoop:
