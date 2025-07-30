@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	gigsToMegs        = 1024
-	ignitePath        = "/usr/local/bin/ignite"
-	tenSecondsTimeout = 10 * time.Second
+	gigsToMegs           = 1024
+	ignitePath           = "/usr/local/bin/ignite"
+	twentySecondsTimeout = 20 * time.Second
 )
 
 // stringToPtr returns a pointer to a string
