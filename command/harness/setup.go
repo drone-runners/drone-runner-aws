@@ -244,11 +244,7 @@ func HandleSetup(
 				r.VMImageConfig.ImageName,
 			).Inc()
 		}
-		internalLogger.WithField("account_id", GetAccountID(&r.Context, r.Tags)).
-			WithField("project_id", r.Context.ProjectID).
-			WithField("pipeline_id", r.Context.PipelineID).
-			WithField("stage_runtime_id", stageRuntimeID).
-			WithField("org_id", getOrgID(&r.Context, r.Tags)).
+		internalLogger.WithField("stage_runtime_id", stageRuntimeID).
 			Errorln("Init step failed")
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
@@ -291,11 +287,7 @@ func HandleSetup(
 		WithField("tried_pools", pools).
 		Traceln("VM setup is complete")
 
-	internalLogger.WithField("account_id", GetAccountID(&r.Context, r.Tags)).
-		WithField("project_id", r.Context.ProjectID).
-		WithField("pipeline_id", r.Context.PipelineID).
-		WithField("stage_runtime_id", stageRuntimeID).
-		WithField("org_id", getOrgID(&r.Context, r.Tags)).
+	internalLogger.WithField("stage_runtime_id", stageRuntimeID).
 		Infoln("Init step completed successfully")
 
 	return resp, selectedPoolDriver, nil
