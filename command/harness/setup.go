@@ -247,7 +247,6 @@ func HandleSetup(
 		internalLogger.WithField("account_id", GetAccountID(&r.Context, r.Tags)).
 			WithField("project_id", r.Context.ProjectID).
 			WithField("pipeline_id", r.Context.PipelineID).
-			WithField("execution_id", r.Context.RunSequence).
 			WithField("stage_runtime_id", stageRuntimeID).
 			WithField("org_id", getOrgID(&r.Context, r.Tags)).
 			Errorln("Init step failed")
@@ -295,7 +294,6 @@ func HandleSetup(
 	internalLogger.WithField("account_id", GetAccountID(&r.Context, r.Tags)).
 		WithField("project_id", r.Context.ProjectID).
 		WithField("pipeline_id", r.Context.PipelineID).
-		WithField("execution_id", r.Context.RunSequence).
 		WithField("stage_runtime_id", stageRuntimeID).
 		WithField("org_id", getOrgID(&r.Context, r.Tags)).
 		Infoln("Init step completed successfully")
