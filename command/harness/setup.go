@@ -59,15 +59,6 @@ var (
 // Instead of passing in the env config, we pass in whatever is needed. This is because
 // this same code is being used in the new runner and we want to make sure nothing breaking
 // is added here which is not added in the new runner.
-func CreateContextLogger(context *Context, tags map[string]string, stageID string) *logrus.Entry {
-	return logrus.WithField("account_id", GetAccountID(context, tags)).
-		WithField("project_id", context.ProjectID).
-		WithField("pipeline_id", context.PipelineID).
-		WithField("execution_id", context.RunSequence).
-		WithField("stage_runtime_id", stageID).
-		WithField("org_id", getOrgID(context, tags))
-}
-
 func HandleSetup(
 	ctx context.Context,
 	r *SetupVMRequest,
@@ -253,6 +244,13 @@ func HandleSetup(
 				r.VMImageConfig.ImageName,
 			).Inc()
 		}
+		internalLogger.WithField("account_id", GetAccountID(&r.Context, r.Tags)).
+			WithField("project_id", r.Context.ProjectID).
+			WithField("pipeline_id", r.Context.PipelineID).
+			WithField("execution_id", r.Context.RunSequence).
+			WithField("stage_runtime_id", stageRuntimeID).
+			WithField("org_id", getOrgID(&r.Context, r.Tags)).
+			Errorln("Init step failed")
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
@@ -294,7 +292,12 @@ func HandleSetup(
 		WithField("tried_pools", pools).
 		Traceln("VM setup is complete")
 
-	CreateContextLogger(&r.Context, r.Tags, stageRuntimeID).
+	internalLogger.WithField("account_id", GetAccountID(&r.Context, r.Tags)).
+		WithField("project_id", r.Context.ProjectID).
+		WithField("pipeline_id", r.Context.PipelineID).
+		WithField("execution_id", r.Context.RunSequence).
+		WithField("stage_runtime_id", stageRuntimeID).
+		WithField("org_id", getOrgID(&r.Context, r.Tags)).
 		Infoln("Init step completed successfully")
 
 	return resp, selectedPoolDriver, nil
@@ -443,9 +446,6 @@ func handleSetup(
 	}
 
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
-		CreateContextLogger(&r.Context, r.Tags, stageRuntimeID).
-			Errorln("Init step failed")
-
 		go cleanUpInstanceFn(true)
 		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
@@ -460,8 +460,6 @@ func handleSetup(
 
 	_, err = client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
-		CreateContextLogger(&r.Context, r.Tags, stageRuntimeID).
-			Errorln("Init step failed")
 		go cleanUpInstanceFn(true)
 		return nil, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
