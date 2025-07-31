@@ -245,6 +245,8 @@ func HandleSetup(
 				r.VMImageConfig.ImageName,
 			).Inc()
 		}
+		internalLogger.WithField("stage_runtime_id", stageRuntimeID).
+			Errorln("Init step failed")
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
@@ -285,6 +287,9 @@ func HandleSetup(
 		WithField("instance_name", instance.Name).
 		WithField("tried_pools", pools).
 		Traceln("VM setup is complete")
+
+	internalLogger.WithField("stage_runtime_id", stageRuntimeID).
+		Infoln("Init step completed successfully")
 
 	return resp, selectedPoolDriver, nil
 }
