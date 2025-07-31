@@ -150,7 +150,6 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
 			busyCondition = append(busyCondition, condition)
 		}
-		conditions = append(conditions, busyCondition)
 
 		// Second condition: instances with 'ttl' key using extended max age
 		extendedBusyCondition := squirrel.And{
@@ -163,7 +162,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
 			extendedBusyCondition = append(extendedBusyCondition, condition)
 		}
-		conditions = append(conditions, extendedBusyCondition)
+		conditions = append(conditions, busyCondition, extendedBusyCondition)
 	}
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
