@@ -162,8 +162,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
 			extendedBusyCondition = append(extendedBusyCondition, condition)
 		}
-		conditions = append(conditions, busyCondition)
-		conditions = append(conditions, extendedBusyCondition)
+		conditions = append(conditions, busyCondition, extendedBusyCondition)
 	}
 
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
