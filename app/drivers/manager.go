@@ -369,7 +369,6 @@ func (m *Manager) Provision(
 			storageConfig,
 			zone,
 			machineType,
-			shouldUseGoogleDNS,
 			timeout,
 			isMarkedForInfraReset,
 		)
@@ -1077,7 +1076,6 @@ func (m *Manager) processExistingInstance(
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
-	shouldUseGoogleDNS bool,
 	timeout int64,
 	isMarkedForInfraReset bool,
 ) (*types.Instance, error) {
