@@ -81,9 +81,10 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 		panic("distributed dlite: purger already started")
 	}
 
+	purgerTime = 10 * time.Second
 	d.cleanupTimer = time.NewTicker(purgerTime)
 
-	logrus.Infof("distributed dlite: Instance purger started. It will run every %.2f minutes", purgerTime.Minutes())
+	logrus.Infof("distributed dlite: Instance purger started. It will run every %.2f seconds", purgerTime.Seconds())
 
 	go func() {
 		defer d.cleanupTimer.Stop()
@@ -144,7 +145,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
-			squirrel.Expr("NOT (instance_labels ? 'ttl')"),
+			squirrel.Expr("NOT (instance_labels ?? 'ttl')"), // Use ?? to escape the ? operator
 		}
 		for key, value := range queryParams.MatchLabels {
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
@@ -156,7 +157,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
-			squirrel.Expr("instance_labels ? 'ttl'"),
+			squirrel.Expr("instance_labels ?? 'ttl'"), // Use ?? to escape the ? operator
 		}
 		for key, value := range queryParams.MatchLabels {
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
