@@ -144,7 +144,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
-			squirrel.Expr("NOT (instance_labels ? 'ttl')"),
+			squirrel.Expr("NOT (instance_labels ?? 'ttl')"),
 		}
 		for key, value := range queryParams.MatchLabels {
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
@@ -156,7 +156,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Eq{"instance_state": types.StateInUse},
 			squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
-			squirrel.Expr("instance_labels ? 'ttl'"),
+			squirrel.Expr("instance_labels ?? 'ttl'"),
 		}
 		for key, value := range queryParams.MatchLabels {
 			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
