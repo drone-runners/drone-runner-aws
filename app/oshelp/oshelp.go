@@ -75,6 +75,10 @@ func GetNetrcFile(os string, env map[string]string) *spec.File {
 	switch os {
 	case OSLinux:
 		path = fmt.Sprintf("/home/ubuntu/%s", netrcName)
+	case OSWindows:
+		path = fmt.Sprintf(`C:\Windows\system32\config\systemprofile\%s`, netrcName)
+	case OSMac:
+		path = fmt.Sprintf("/Users/anka/%s", netrcName)
 	default:
 		path = fmt.Sprintf("/root/%s", netrcName)
 	}
