@@ -318,6 +318,12 @@ type EnvConfig struct {
 		Zone      string `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
 	}
 
+	Amazon struct {
+		AccessKeyID     string `envconfig:"AMAZON_ACCESS_KEY_ID"`
+		AccessKeySecret string `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
+		SessionToken    string `envconfig:"AMAZON_SESSION_TOKEN"`
+	}
+
 	Limit struct {
 		Repos   []string `envconfig:"DRONE_LIMIT_REPOS"`
 		Events  []string `envconfig:"DRONE_LIMIT_EVENTS"`
@@ -443,10 +449,13 @@ type EnvConfig struct {
 //nolint:gocritic
 func (c EnvConfig) Passwords() types.Passwords {
 	return types.Passwords{
-		AnkaToken:   c.AnkaBuild.Token,
-		Tart:        c.TartBuild.Password,
-		TartMachine: c.TartBuild.MachinePassword,
-		NomadToken:  c.Nomad.NomadToken,
+		AnkaToken:          c.AnkaBuild.Token,
+		Tart:               c.TartBuild.Password,
+		TartMachine:        c.TartBuild.MachinePassword,
+		NomadToken:         c.Nomad.NomadToken,
+		AWSAccessKeyID:     c.Amazon.AccessKeyID,
+		AWSAccessKeySecret: c.Amazon.AccessKeySecret,
+		AWSSessionToken:    c.Amazon.SessionToken,
 	}
 }
 

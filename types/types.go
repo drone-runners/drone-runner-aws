@@ -74,10 +74,13 @@ type Instance struct {
 
 // Passwords holds sensitive data.
 type Passwords struct {
-	AnkaToken   string
-	Tart        string
-	TartMachine string
-	NomadToken  string
+	AnkaToken          string
+	Tart               string
+	TartMachine        string
+	NomadToken         string
+	AWSAccessKeyID     string
+	AWSAccessKeySecret string
+	AWSSessionToken    string
 }
 
 type RunnerConfig struct {
