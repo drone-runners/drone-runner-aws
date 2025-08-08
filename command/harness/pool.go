@@ -12,6 +12,8 @@ import (
 )
 
 // SetupPool sets up a pool of instances given a config pool.
+//
+//nolint:gocritic
 func SetupPool(
 	ctx context.Context,
 	configPool *config.PoolFile,
@@ -71,6 +73,7 @@ func SetupPool(
 	return configPool, nil
 }
 
+//nolint:gocritic
 func SetupPoolWithFile(
 	ctx context.Context,
 	poolFilePath string,
