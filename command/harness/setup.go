@@ -449,6 +449,12 @@ func handleSetup(
 		b := false
 		r.SetupRequest.MountDockerSocket = &b
 	}
+	if r.Envs["DRONE_PERSIST_CREDS"] == "true" {
+		r.SetupRequest.Files = append(
+			r.SetupRequest.Files,
+			oshelp.GetNetrcFile(instance.Platform.OS, r.Envs),
+		)
+	}
 
 	_, err = client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
