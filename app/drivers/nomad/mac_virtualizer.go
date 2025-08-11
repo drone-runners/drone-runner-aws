@@ -151,44 +151,47 @@ MACHINE_PASSWORD="%s"
 
 tart_list=$(/opt/homebrew/bin/tart list | awk 'NR>1 {print $2}')
 
+# Function to check if an image name is fully qualified
+is_fully_qualified_image() {
+  local image_name="$1"
+  
+  # Check if image name contains a slash
+  if [[ "$image_name" != *"/"* ]]; then
+    return 1  # Not fully qualified
+  fi
+  
+  # Extract the registry part (before the first slash)
+  local registry_part=${image_name%%/*}
+  
+  # Check if registry part contains a dot or colon
+  if [[ "$registry_part" == *"."* || "$registry_part" == *":"* ]]; then
+    return 0  # Is fully qualified
+  else
+    return 1  # Not fully qualified
+  fi
+}
+
 # Check if the image is already in the tart list
 if echo "$tart_list" | grep -q "$VM_IMAGE"; then
   echo "Image '$VM_IMAGE' is already present. Nothing to do."
 else
   echo "Image '$VM_IMAGE' not found."
   
-  # Check if the image name is fully qualified (contains a slash and registry part has a dot or colon)
-  if [[ "$VM_IMAGE" == *"/"* ]]; then
-    # Extract the registry part (before the first slash)
-    REGISTRY_PART=${VM_IMAGE%%/*}
+  # Check if the image name is fully qualified
+  if is_fully_qualified_image "$VM_IMAGE"; then
+    echo "Fully qualified image detected. Deleting all fully qualified images..."
     
-    # Check if registry part contains a dot or colon
-    if [[ "$REGISTRY_PART" == *"."* || "$REGISTRY_PART" == *":"* ]]; then
-      echo "Fully qualified image detected. Deleting all fully qualified images..."
-      
-      # Loop through each image and delete only fully qualified images
-      for image in $tart_list; do
-        # Check if this existing image is fully qualified
-        if [[ "$image" == *"/"* ]]; then
-          # Extract the registry part of this image
-          IMAGE_REGISTRY_PART=${image%%/*}
-          
-          # Only delete if this image's registry part contains a dot or colon
-          if [[ "$IMAGE_REGISTRY_PART" == *"."* || "$IMAGE_REGISTRY_PART" == *":"* ]]; then
-            echo "Deleting fully qualified image '$image'..."
-            /opt/homebrew/bin/tart delete "$image" || true
-          else
-            echo "Skipping non-fully qualified image '$image'..."
-          fi
-        else
-          echo "Skipping non-fully qualified image '$image'..."
-        fi
-      done
-      
-      echo "Done deleting fully qualified images."
-    else
-      echo "Non-fully qualified image. Skipping deletion of other images."
-    fi
+    # Loop through each image and delete only fully qualified images
+    for image in $tart_list; do
+      if is_fully_qualified_image "$image"; then
+        echo "Deleting fully qualified image '$image'..."
+        /opt/homebrew/bin/tart delete "$image" || true
+      else
+        echo "Skipping non-fully qualified image '$image'..."
+      fi
+    done
+    
+    echo "Done deleting fully qualified images."
   else
     echo "Non-fully qualified image. Skipping deletion of other images."
   fi
