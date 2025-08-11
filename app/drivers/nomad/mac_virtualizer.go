@@ -155,17 +155,43 @@ tart_list=$(/opt/homebrew/bin/tart list | awk 'NR>1 {print $2}')
 if echo "$tart_list" | grep -q "$VM_IMAGE"; then
   echo "Image '$VM_IMAGE' is already present. Nothing to do."
 else
-  echo "Image '$VM_IMAGE' not found. Deleting all other images..."
-
-  # Loop through each image and delete it except the one specified
-  for image in $tart_list; do
-    if [ "$image" != "$DEFAULT_VM_IMAGE" ]; then
-      echo "Deleting image '$image'..."
-      /opt/homebrew/bin/tart delete "$image" || true
+  echo "Image '$VM_IMAGE' not found."
+  
+  # Check if the image name is fully qualified (contains a slash and registry part has a dot or colon)
+  if [[ "$VM_IMAGE" == *"/"* ]]; then
+    # Extract the registry part (before the first slash)
+    REGISTRY_PART=${VM_IMAGE%%/*}
+    
+    # Check if registry part contains a dot or colon
+    if [[ "$REGISTRY_PART" == *"."* || "$REGISTRY_PART" == *":"* ]]; then
+      echo "Fully qualified image detected. Deleting all fully qualified images..."
+      
+      # Loop through each image and delete only fully qualified images
+      for image in $tart_list; do
+        # Check if this existing image is fully qualified
+        if [[ "$image" == *"/"* ]]; then
+          # Extract the registry part of this image
+          IMAGE_REGISTRY_PART=${image%%/*}
+          
+          # Only delete if this image's registry part contains a dot or colon
+          if [[ "$IMAGE_REGISTRY_PART" == *"."* || "$IMAGE_REGISTRY_PART" == *":"* ]]; then
+            echo "Deleting fully qualified image '$image'..."
+            /opt/homebrew/bin/tart delete "$image" || true
+          else
+            echo "Skipping non-fully qualified image '$image'..."
+          fi
+        else
+          echo "Skipping non-fully qualified image '$image'..."
+        fi
+      done
+      
+      echo "Done deleting fully qualified images."
+    else
+      echo "Non-fully qualified image. Skipping deletion of other images."
     fi
-  done
-
-  echo "Done deleting other images."
+  else
+    echo "Non-fully qualified image. Skipping deletion of other images."
+  fi
 
   if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
   	  echo "Logging into registry..."
