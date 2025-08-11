@@ -278,6 +278,30 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 					Key:   p.userDataKey,
 					Value: googleapi.String(userData),
 				},
+				{
+					Key:   "harness-account-id",
+					Value: googleapi.String(opts.AccountID),
+				},
+				{
+					Key:   "harness-pool-name",
+					Value: googleapi.String(opts.PoolName),
+				},
+				{
+					Key:   "harness-runner-name",
+					Value: googleapi.String(opts.RunnerName),
+				},
+				{
+					Key:   "harness-resource-class",
+					Value: googleapi.String(opts.ResourceClass),
+				},
+				{
+					Key:   "harness-platform-os",
+					Value: googleapi.String(opts.Platform.OS),
+				},
+				{
+					Key:   "harness-platform-arch",
+					Value: googleapi.String(opts.Platform.Arch),
+				},
 			},
 		},
 		Disks: []*compute.AttachedDisk{
