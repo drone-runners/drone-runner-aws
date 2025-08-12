@@ -1088,7 +1088,7 @@ func (m *Manager) processExistingInstance(
 				destroyInstanceErr := pool.Driver.Destroy(ctx, []*types.Instance{inst})
 				if destroyInstanceErr != nil {
 					logrus.Warnf(
-						"failed to destroy instance %s: %w",
+						"failed to destroy instance %s: %v",
 						instanceInfo.ID,
 						destroyInstanceErr,
 					)
