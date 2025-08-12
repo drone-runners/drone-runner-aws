@@ -188,6 +188,7 @@ func HandleSetup(
 				metric.True,
 				strconv.FormatBool(poolManager.IsDistributed()),
 				owner,
+				r.ResourceClass,
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
 			).Inc()
@@ -217,6 +218,7 @@ func HandleSetup(
 			driver,
 			strconv.FormatBool(poolManager.IsDistributed()),
 			owner,
+			r.ResourceClass,
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
 		).Inc()
@@ -228,6 +230,7 @@ func HandleSetup(
 			strconv.FormatBool(poolManager.IsDistributed()),
 			"",
 			owner,
+			r.ResourceClass,
 			"",
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
@@ -241,6 +244,7 @@ func HandleSetup(
 				metric.False,
 				strconv.FormatBool(poolManager.IsDistributed()),
 				owner,
+				r.ResourceClass,
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
 			).Inc()
@@ -258,6 +262,7 @@ func HandleSetup(
 		strconv.FormatBool(poolManager.IsDistributed()),
 		instance.Zone,
 		owner,
+		r.ResourceClass,
 		instance.Address,
 		r.VMImageConfig.ImageVersion,
 		r.VMImageConfig.ImageName,
