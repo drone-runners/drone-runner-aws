@@ -158,7 +158,8 @@ func PoolFallbackCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_pool_fallbacks",
 			Help: "Total number of fallbacks triggered on the pool",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id", "resource_class", "image_version", "image_name"}, // success is true/false depending on whether fallback happened successfully
+		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id", "resource_class", "image_version", "image_name"}, 
+		// success is true/false depending on whether fallback happened successfully
 	)
 }
 
