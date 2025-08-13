@@ -353,7 +353,7 @@ func (m *Manager) Provision(
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
-		if err := m.validateGitspaceDriverCompatibility(pool, gitspaceAgentConfig); err != nil {
+		if err := m.validateGitspaceDriverCompatibility(pool); err != nil {
 			return nil, err
 		}
 
@@ -1055,7 +1055,7 @@ func (m *Manager) isGitspaceRequest(gitspaceAgentConfig *types.GitspaceAgentConf
 
 // validateGitspaceDriverCompatibility checks if the pool's driver is compatible with gitspace configuration.
 // Returns an error if the driver is incompatible.
-func (m *Manager) validateGitspaceDriverCompatibility(pool *poolEntry, gitspaceAgentConfig *types.GitspaceAgentConfig) error {
+func (m *Manager) validateGitspaceDriverCompatibility(pool *poolEntry) error {
 	if pool.Driver.DriverName() != string(types.Nomad) &&
 		pool.Driver.DriverName() != string(types.Google) &&
 		pool.Driver.DriverName() != string(types.Amazon) {
@@ -1088,7 +1088,7 @@ func (m *Manager) processExistingInstance(
 				destroyInstanceErr := pool.Driver.Destroy(ctx, []*types.Instance{inst})
 				if destroyInstanceErr != nil {
 					logrus.Warnf(
-						"failed to destroy instance %s: %w",
+						"failed to destroy instance %s: %v",
 						instanceInfo.ID,
 						destroyInstanceErr,
 					)
