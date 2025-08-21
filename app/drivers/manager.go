@@ -344,51 +344,34 @@ func (m *Manager) Provision(
 	machineType string,
 	shouldUseGoogleDNS bool,
 	instanceInfo *common.InstanceInfo,
+	timeout int64,
+	isMarkedForInfraReset bool,
 ) (*types.Instance, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
-	if gitspaceAgentConfig != nil && len(gitspaceAgentConfig.Ports) > 0 {
-		if pool.Driver.DriverName() != string(types.Nomad) &&
-			pool.Driver.DriverName() != string(types.Google) &&
-			pool.Driver.DriverName() != string(types.Amazon) {
-			return nil, fmt.Errorf("incorrect pool, gitspaces is only supported on nomad, google, and amazon")
+	if m.isGitspaceRequest(gitspaceAgentConfig) {
+		if err := m.validateGitspaceDriverCompatibility(pool); err != nil {
+			return nil, err
 		}
-		var inst *types.Instance
-		if pool.Driver.DriverName() == string(types.Google) ||
-			pool.Driver.DriverName() == string(types.Amazon) {
-			if instanceInfo != nil && instanceInfo.ID != "" {
-				if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
-					logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
-				} else {
-					logrus.Tracef("instance is suspend, waking up the instance")
-					inst = common.BuildInstanceFromRequest(*instanceInfo)
-					inst.IsHibernated = true
-					inst.State = types.StateInUse
-					inst.OwnerID = ownerID
-					inst.Started = time.Now().Unix()
-					return inst, nil
-				}
-			}
-		}
-		logrus.Infof("instance info is not present, setting up a new instance")
-		inst, err := m.setupInstance(
+
+		return m.processExistingInstance(
 			ctx,
 			pool,
+			instanceInfo,
 			serverName,
 			ownerID,
 			resourceClass,
-			nil,
-			true,
+			vmImageConfig,
 			gitspaceAgentConfig,
 			storageConfig,
 			zone,
 			machineType,
-			false,
+			timeout,
+			isMarkedForInfraReset,
 		)
-		return inst, err
 	}
 
 	strategy := m.strategy
@@ -410,7 +393,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -441,7 +424,7 @@ func (m *Manager) Provision(
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, timeout)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -607,7 +590,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, 0)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -643,6 +626,7 @@ func (m *Manager) setupInstance(
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
+	timeout int64,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
@@ -688,6 +672,7 @@ func (m *Manager) setupInstance(
 	createOptions.Zone = zone
 	createOptions.MachineType = machineType
 	createOptions.DriverName = pool.Driver.DriverName()
+	createOptions.Timeout = timeout
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
@@ -1061,4 +1046,79 @@ func (m *Manager) findOrCreateInstance(ctx context.Context, pool *poolEntry, ins
 	}
 
 	return instance, nil
+}
+
+// isGitspaceRequest checks if the request is for a GitSpace configuration with ports.
+func (m *Manager) isGitspaceRequest(gitspaceAgentConfig *types.GitspaceAgentConfig) bool {
+	return gitspaceAgentConfig != nil && len(gitspaceAgentConfig.Ports) > 0
+}
+
+// validateGitspaceDriverCompatibility checks if the pool's driver is compatible with gitspace configuration.
+// Returns an error if the driver is incompatible.
+func (m *Manager) validateGitspaceDriverCompatibility(pool *poolEntry) error {
+	if pool.Driver.DriverName() != string(types.Nomad) &&
+		pool.Driver.DriverName() != string(types.Google) &&
+		pool.Driver.DriverName() != string(types.Amazon) {
+		return fmt.Errorf("incorrect pool, gitspaces is only supported on nomad, google, and amazon")
+	}
+	return nil
+}
+
+// processExistingInstance processes an existing instance based on provided instance info.
+// It validates the instance info, creates an instance from it, and handles reset or resume operations.
+// If no valid existing instance is found, it sets up a new instance.
+func (m *Manager) processExistingInstance(
+	ctx context.Context,
+	pool *poolEntry,
+	instanceInfo *common.InstanceInfo,
+	serverName, ownerID, resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	gitspaceAgentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+	zone, machineType string,
+	timeout int64,
+	isMarkedForInfraReset bool,
+) (*types.Instance, error) {
+	if instanceInfo != nil && instanceInfo.ID != "" {
+		if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
+			logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
+		} else {
+			inst := common.BuildInstanceFromRequest(*instanceInfo)
+			if isMarkedForInfraReset {
+				destroyInstanceErr := pool.Driver.Destroy(ctx, []*types.Instance{inst})
+				if destroyInstanceErr != nil {
+					logrus.Warnf(
+						"failed to destroy instance %s: %v",
+						instanceInfo.ID,
+						destroyInstanceErr,
+					)
+				}
+				// Continue to create a new instance below
+			} else {
+				logrus.Tracef("instance is suspend, waking up the instance")
+				inst.IsHibernated = true
+				inst.State = types.StateInUse
+				inst.OwnerID = ownerID
+				inst.Started = time.Now().Unix()
+				return inst, nil
+			}
+		}
+	}
+
+	logrus.Infof("instance info is not present or reset required, setting up a new instance")
+	return m.setupInstance(
+		ctx,
+		pool,
+		serverName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		true,
+		gitspaceAgentConfig,
+		storageConfig,
+		zone,
+		machineType,
+		false,
+		timeout,
+	)
 }

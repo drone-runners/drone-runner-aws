@@ -2,6 +2,7 @@ package types
 
 import (
 	"database/sql/driver"
+	"time"
 )
 
 type InstanceState string
@@ -73,16 +74,35 @@ type Instance struct {
 
 // Passwords holds sensitive data.
 type Passwords struct {
-	AnkaToken   string
-	Tart        string
-	TartMachine string
-	NomadToken  string
+	AnkaToken          string
+	Tart               string
+	TartMachine        string
+	NomadToken         string
+	AWSAccessKeyID     string
+	AWSAccessKeySecret string
+	AWSSessionToken    string
 }
 
 type RunnerConfig struct {
 	HealthCheckTimeout        int64
 	HealthCheckWindowsTimeout int64
 	HA                        bool
+}
+
+type NomadConfig struct {
+	ClientDisconnectTimeout time.Duration
+	ResourceJobTimeout      time.Duration
+	InitTimeout             time.Duration
+	ByoiInitTimeout         time.Duration
+	DestroyTimeout          time.Duration
+	GlobalAccount           string
+	DestroyRetryAttempts    int
+	MinNomadCPUMhz          int
+	MinNomadMemoryMb        int
+	MachineFrequencyMhz     int
+	LargeBaremetalClass     string
+	GlobalAccountMac        string
+	MacMachineFrequencyMhz  int
 }
 
 type Tmate struct {
@@ -122,6 +142,8 @@ type InstanceCreateOpts struct {
 	ShouldUseGoogleDNS      bool
 	VMImageConfig           VMImageConfig
 	DriverName              string
+	Timeout                 int64
+	EnableC4D               bool
 }
 
 // Platform defines the target platform.

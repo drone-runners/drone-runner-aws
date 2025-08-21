@@ -77,6 +77,15 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 			if platformErr != nil {
 				return nil, platformErr
 			}
+			if a.Account.AccessKeyID == "" && passwords.AWSAccessKeyID != "" {
+				a.Account.AccessKeyID = passwords.AWSAccessKeyID
+			}
+			if a.Account.AccessKeySecret == "" && passwords.AWSAccessKeySecret != "" {
+				a.Account.AccessKeySecret = passwords.AWSAccessKeySecret
+			}
+			if a.Account.SessionToken == "" && passwords.AWSSessionToken != "" {
+				a.Account.SessionToken = passwords.AWSSessionToken
+			}
 			instance.Platform = *platform
 			var driver, err = amazon.New(
 				amazon.WithAccessKeyID(a.Account.AccessKeyID),
@@ -185,6 +194,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 					instance.Name: instance.Name,
 				}),
 				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
+				google.WithEnableC4D(g.EnableC4D),
 			)
 			if err != nil {
 				return nil, err

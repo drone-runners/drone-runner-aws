@@ -26,20 +26,22 @@ import (
 )
 
 type SetupVMRequest struct {
-	ID                  string            `json:"id"` // stage runtime ID
-	PoolID              string            `json:"pool_id"`
-	FallbackPoolIDs     []string          `json:"fallback_pool_ids"`
-	Tags                map[string]string `json:"tags"`
-	CorrelationID       string            `json:"correlation_id"`
-	LogKey              string            `json:"log_key"`
-	Context             Context           `json:"context,omitempty"`
-	ResourceClass       string            `json:"resource_class"`
-	api.SetupRequest    `json:"setup_request"`
-	GitspaceAgentConfig types.GitspaceAgentConfig `json:"gitspace_agent_config"`
-	StorageConfig       types.StorageConfig       `json:"storage_config"`
-	Zone                string                    `json:"zone"`
-	MachineType         string                    `json:"machine_type"`
-	InstanceInfo        common.InstanceInfo       `json:"instance_info"`
+	ID                    string            `json:"id"` // stage runtime ID
+	PoolID                string            `json:"pool_id"`
+	FallbackPoolIDs       []string          `json:"fallback_pool_ids"`
+	Tags                  map[string]string `json:"tags"`
+	CorrelationID         string            `json:"correlation_id"`
+	LogKey                string            `json:"log_key"`
+	Context               Context           `json:"context,omitempty"`
+	ResourceClass         string            `json:"resource_class"`
+	api.SetupRequest      `json:"setup_request"`
+	GitspaceAgentConfig   types.GitspaceAgentConfig `json:"gitspace_agent_config"`
+	StorageConfig         types.StorageConfig       `json:"storage_config"`
+	Zone                  string                    `json:"zone"`
+	MachineType           string                    `json:"machine_type"`
+	InstanceInfo          common.InstanceInfo       `json:"instance_info"`
+	Timeout               int64                     `json:"timeout,omitempty"`
+	IsMarkedForInfraReset bool                      `json:"is_marked_for_infra_reset,omitempty"`
 }
 
 type SetupVMResponse struct {
@@ -187,6 +189,7 @@ func HandleSetup(
 				metric.True,
 				strconv.FormatBool(poolManager.IsDistributed()),
 				owner,
+				r.ResourceClass,
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
 			).Inc()
@@ -216,6 +219,7 @@ func HandleSetup(
 			driver,
 			strconv.FormatBool(poolManager.IsDistributed()),
 			owner,
+			r.ResourceClass,
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
 		).Inc()
@@ -227,6 +231,7 @@ func HandleSetup(
 			strconv.FormatBool(poolManager.IsDistributed()),
 			"",
 			owner,
+			r.ResourceClass,
 			"",
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
@@ -240,10 +245,13 @@ func HandleSetup(
 				metric.False,
 				strconv.FormatBool(poolManager.IsDistributed()),
 				owner,
+				r.ResourceClass,
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
 			).Inc()
 		}
+		internalLogger.WithField("stage_runtime_id", stageRuntimeID).
+			Errorln("Init step failed")
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
@@ -255,6 +263,7 @@ func HandleSetup(
 		strconv.FormatBool(poolManager.IsDistributed()),
 		instance.Zone,
 		owner,
+		r.ResourceClass,
 		instance.Address,
 		r.VMImageConfig.ImageVersion,
 		r.VMImageConfig.ImageName,
@@ -284,6 +293,9 @@ func HandleSetup(
 		WithField("instance_name", instance.Name).
 		WithField("tried_pools", pools).
 		Traceln("VM setup is complete")
+
+	internalLogger.WithField("stage_runtime_id", stageRuntimeID).
+		Infoln("Init step completed successfully")
 
 	return resp, selectedPoolDriver, nil
 }
@@ -336,6 +348,8 @@ func handleSetup(
 		r.MachineType,
 		shouldUseGoogleDNS,
 		&r.InstanceInfo,
+		r.Timeout,
+		r.IsMarkedForInfraReset,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provision instance: %w", err)

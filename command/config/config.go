@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 	"unicode"
 	utf8 "unicode/utf8"
 
@@ -215,6 +216,7 @@ type (
 		Scopes                     []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
 		Hibernate                  bool              `json:"hibernate,omitempty"`
 		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 	}
 
 	GoogleAccount struct {
@@ -260,10 +262,6 @@ type (
 type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
-
-	Nomad struct {
-		NomadToken string `envconfig:"NOMAD_TOKEN"`
-	}
 
 	Anka struct {
 		VMName string `envconfig:"ANKA_VM_NAME"`
@@ -320,6 +318,12 @@ type EnvConfig struct {
 		Zone      string `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
 	}
 
+	Amazon struct {
+		AccessKeyID     string `envconfig:"AMAZON_ACCESS_KEY_ID"`
+		AccessKeySecret string `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
+		SessionToken    string `envconfig:"AMAZON_SESSION_TOKEN"`
+	}
+
 	Limit struct {
 		Repos   []string `envconfig:"DRONE_LIMIT_REPOS"`
 		Events  []string `envconfig:"DRONE_LIMIT_EVENTS"`
@@ -344,6 +348,23 @@ type EnvConfig struct {
 		HA                        bool  `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
+	Nomad struct {
+		NomadToken              string        `envconfig:"NOMAD_TOKEN"`
+		ClientDisconnectTimeout time.Duration `envconfig:"NOMAD_CLIENT_DISCONNECT_TIMEOUT" default:"4m"`
+		ResourceJobTimeout      time.Duration `envconfig:"NOMAD_RESOURCE_JOB_TIMEOUT" default:"2m"`
+		BYOIInitTimeout         time.Duration `envconfig:"NOMAD_BYOI_INIT_TIMEOUT" default:"15m"`
+		InitTimeout             time.Duration `envconfig:"NOMAD_INIT_TIMEOUT" default:"1m"`
+		DestroyTimeout          time.Duration `envconfig:"NOMAD_DESTROY_TIMEOUT" default:"3m"`
+		GlobalAccount           string        `envconfig:"NOMAD_GLOBAL_ACCOUNT" default:"PAID_POOL"`
+		DestroyRetryAttempts    int           `envconfig:"NOMAD_DESTROY_RETRY_ATTEMPTS" default:"1"`
+		MinNomadCPUMhz          int           `envconfig:"NOMAD_MIN_CPU_MHZ" default:"40"`
+		MinNomadMemoryMb        int           `envconfig:"NOMAD_MIN_MEMORY_MB" default:"20"`
+		MachineFrequencyMhz     int           `envconfig:"NOMAD_MACHINE_FREQUENCY_MHZ" default:"3500"`
+		LargeBaremetalClass     string        `envconfig:"NOMAD_LARGE_BAREMETAL_CLASS" default:"largebaremetal"`
+		GlobalAccountMac        string        `envconfig:"NOMAD_GLOBAL_ACCOUNT_MAC" default:"GLOBAL_ACCOUNT_ID_MAC"`
+		MacMachineFrequencyMhz  int           `envconfig:"NOMAD_MAC_MACHINE_FREQUENCY_MHZ" default:"3200"`
+	}
+
 	Dlite struct {
 		AccountID               string              `envconfig:"DLITE_ACCOUNT_ID"`
 		AccountSecret           string              `envconfig:"DLITE_ACCOUNT_SECRET"`
@@ -366,11 +387,11 @@ type EnvConfig struct {
 		PluginBinaryURI         string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.3-beta"`
 		PluginBinaryFallbackURI string `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.3-beta"`
 		PurgerTime              int64  `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
-		AutoInjectionBinaryURI  string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.7"`
+		AutoInjectionBinaryURI  string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.8"`
 	}
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.109/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.109/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.119/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.119/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
@@ -428,10 +449,32 @@ type EnvConfig struct {
 //nolint:gocritic
 func (c EnvConfig) Passwords() types.Passwords {
 	return types.Passwords{
-		AnkaToken:   c.AnkaBuild.Token,
-		Tart:        c.TartBuild.Password,
-		TartMachine: c.TartBuild.MachinePassword,
-		NomadToken:  c.Nomad.NomadToken,
+		AnkaToken:          c.AnkaBuild.Token,
+		Tart:               c.TartBuild.Password,
+		TartMachine:        c.TartBuild.MachinePassword,
+		NomadToken:         c.Nomad.NomadToken,
+		AWSAccessKeyID:     c.Amazon.AccessKeyID,
+		AWSAccessKeySecret: c.Amazon.AccessKeySecret,
+		AWSSessionToken:    c.Amazon.SessionToken,
+	}
+}
+
+// NomadConfig returns a types.NomadConfig with values from the environment configuration
+func (c *EnvConfig) NomadConfig() *types.NomadConfig {
+	return &types.NomadConfig{
+		ClientDisconnectTimeout: c.Nomad.ClientDisconnectTimeout,
+		ResourceJobTimeout:      c.Nomad.ResourceJobTimeout,
+		InitTimeout:             c.Nomad.InitTimeout,
+		ByoiInitTimeout:         c.Nomad.BYOIInitTimeout,
+		DestroyTimeout:          c.Nomad.DestroyTimeout,
+		GlobalAccount:           c.Nomad.GlobalAccount,
+		DestroyRetryAttempts:    c.Nomad.DestroyRetryAttempts,
+		MinNomadCPUMhz:          c.Nomad.MinNomadCPUMhz,
+		MinNomadMemoryMb:        c.Nomad.MinNomadMemoryMb,
+		MachineFrequencyMhz:     c.Nomad.MachineFrequencyMhz,
+		LargeBaremetalClass:     c.Nomad.LargeBaremetalClass,
+		GlobalAccountMac:        c.Nomad.GlobalAccountMac,
+		MacMachineFrequencyMhz:  c.Nomad.MacMachineFrequencyMhz,
 	}
 }
 

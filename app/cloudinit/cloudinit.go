@@ -38,6 +38,7 @@ type Params struct {
 	ShouldUseGoogleDNS      bool
 	DriverName              string
 	CertsDirectory          string
+	EnableC4D               bool
 }
 
 var funcs = map[string]interface{}{
@@ -102,9 +103,9 @@ var linuxBashTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Pa
 var userDataGitspacesLinux string
 var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(userDataGitspacesLinux))
 
-//go:embed user_data/gcp_linux
-var userDataGcpLinux string
-var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataGcpLinux))
+//go:embed user_data/ubuntu_linux
+var userDataUbuntu string
+var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataUbuntu))
 
 //go:embed user_data/gitspaces_ubuntu
 var userDataGitspacesUbuntu string
@@ -255,7 +256,6 @@ func Linux(params *Params) (payload string, err error) {
 			tmpl = ubuntuTemplate
 		}
 	}
-
 	// Execute selected template
 	if err := tmpl.Execute(sb, templateData); err != nil {
 		return "", fmt.Errorf("error while executing template: %w", err)

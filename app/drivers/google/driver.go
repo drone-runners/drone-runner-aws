@@ -82,6 +82,7 @@ type config struct {
 	service                    *compute.Service
 	labels                     map[string]string
 	enableNestedVirtualization bool
+	enableC4D                  bool
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -183,9 +184,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if opts.MachineType != "" {
 		p.size = opts.MachineType
 	}
-	if opts.VMImageConfig.ImageName != "" {
-		p.image = buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
-	}
+
+	// getImage returns the image to use for this instance creation
+	image := p.getImage(opts)
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -193,7 +194,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("image", p.InstanceType()).
 		WithField("pool", opts.PoolName).
 		WithField("zone", zone).
-		WithField("image", p.image).
+		WithField("image", image).
 		WithField("size", p.size).
 		WithField("google_dns", opts.ShouldUseGoogleDNS)
 
@@ -242,6 +243,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		EnableNestedVirtualization: enableNestedVirtualization,
 	}
 
+	opts.EnableC4D = p.enableC4D
+
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {
 		logr.WithError(err).
@@ -275,6 +278,30 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 					Key:   p.userDataKey,
 					Value: googleapi.String(userData),
 				},
+				{
+					Key:   "harness-account-id",
+					Value: googleapi.String(opts.AccountID),
+				},
+				{
+					Key:   "harness-pool-name",
+					Value: googleapi.String(opts.PoolName),
+				},
+				{
+					Key:   "harness-runner-name",
+					Value: googleapi.String(opts.RunnerName),
+				},
+				{
+					Key:   "harness-resource-class",
+					Value: googleapi.String(opts.ResourceClass),
+				},
+				{
+					Key:   "harness-platform-os",
+					Value: googleapi.String(opts.Platform.OS),
+				},
+				{
+					Key:   "harness-platform-arch",
+					Value: googleapi.String(opts.Platform.Arch),
+				},
 			},
 		},
 		Disks: []*compute.AttachedDisk{
@@ -285,7 +312,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				AutoDelete: true,
 				DeviceName: opts.PoolName,
 				InitializeParams: &compute.AttachedDiskInitializeParams{
-					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", p.image),
+					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", image),
 					DiskType:    fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, bootDiskType),
 					DiskSizeGb:  bootDiskSize,
 				},
@@ -875,6 +902,27 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 		)
 	}
 	return instance.Zone, nil
+}
+
+// getImage returns the appropriate image path based on the provided options
+// If no image is specified in the options, it returns the default image from p.image
+func (p *config) getImage(opts *types.InstanceCreateOpts) string {
+	// If no image is provided in the options, return the default image
+	if opts.VMImageConfig.ImageName == "" {
+		return p.image
+	}
+
+	// opts.VMImageConfig.ImageName can be of different formats.
+	// we can receive image in following 2 formats:
+	// Format #1: harness/vmimage: hosted-vm-ubuntu-2204-jammy-v20250508
+	// Format #2: projects/debian-cloud/global/images/debian-11-bullseye-v2025070
+	// isFullImagePath() method checks if given image in opts.VMImageConfig.ImageName is of Format #2 which can be
+	// directly used, else we convert Format #1 to Format #2 in buildImagePathFromTag() method.
+	if isFullImagePath(opts.VMImageConfig.ImageName) {
+		return opts.VMImageConfig.ImageName
+	}
+
+	return buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
 }
 
 // instance name must be 1-63 characters long and match the regular expression

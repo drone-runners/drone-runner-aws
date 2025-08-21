@@ -36,13 +36,17 @@ if [ "$counter" -lt "$MAX_RETRIES" ]; then
   echo "Lock released."
 fi`
 
-type MacVirtualizer struct{}
-
-func NewMacVirtualizer() *MacVirtualizer {
-	return &MacVirtualizer{}
+type MacVirtualizer struct {
+	nomadConfig *types.NomadConfig
 }
 
-func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int) (job *api.Job, id, group string, err error) { //nolint
+func NewMacVirtualizer(nomadConfig *types.NomadConfig) *MacVirtualizer {
+	return &MacVirtualizer{
+		nomadConfig: nomadConfig,
+	}
+}
+
+func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout int64) (job *api.Job, id, group string, err error) { //nolint
 	uData, err := mv.generateUserData(userData, opts)
 	if err != nil {
 		return nil, "", "", err
@@ -73,7 +77,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				StopAfterClientDisconnect: &clientDisconnectTimeout,
+				StopAfterClientDisconnect: &mv.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
 				},
@@ -83,7 +87,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "create_and_start_vm_prepare_script",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s; echo %s | base64 --decode >> %s; cat %s | base64 --decode | bash", startupScript, vmStartupScriptPath, encodedUserData, cloudInitScriptPath, vmStartupScriptPath)}, //nolint
@@ -96,7 +100,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "run_cmd",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password)},
@@ -105,7 +109,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 					{
 						Name:      "cleanup_vm_script",
 						Driver:    "raw_exec",
-						Resources: minNomadResources(),
+						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
 							"args":    []string{"-c", mv.getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vm)},
@@ -147,21 +151,50 @@ MACHINE_PASSWORD="%s"
 
 tart_list=$(/opt/homebrew/bin/tart list | awk 'NR>1 {print $2}')
 
+# Function to check if an image name is fully qualified
+is_fully_qualified_image() {
+  local image_name="$1"
+  
+  # Check if image name contains a slash
+  if [[ "$image_name" != *"/"* ]]; then
+    return 1  # Not fully qualified
+  fi
+  
+  # Extract the registry part (before the first slash)
+  local registry_part=${image_name%%/*}
+  
+  # Check if registry part contains a dot or colon
+  if [[ "$registry_part" == *"."* || "$registry_part" == *":"* ]]; then
+    return 0  # Is fully qualified
+  else
+    return 1  # Not fully qualified
+  fi
+}
+
 # Check if the image is already in the tart list
 if echo "$tart_list" | grep -q "$VM_IMAGE"; then
   echo "Image '$VM_IMAGE' is already present. Nothing to do."
 else
-  echo "Image '$VM_IMAGE' not found. Deleting all other images..."
-
-  # Loop through each image and delete it except the one specified
-  for image in $tart_list; do
-    if [ "$image" != "$DEFAULT_VM_IMAGE" ]; then
-      echo "Deleting image '$image'..."
-      /opt/homebrew/bin/tart delete "$image" || true
-    fi
-  done
-
-  echo "Done deleting other images."
+  echo "Image '$VM_IMAGE' not found."
+  
+  # Check if the image name is fully qualified
+  if is_fully_qualified_image "$VM_IMAGE"; then
+    echo "Fully qualified image detected. Deleting all fully qualified images..."
+    
+    # Loop through each image and delete only fully qualified images
+    for image in $tart_list; do
+      if is_fully_qualified_image "$image"; then
+        echo "Deleting fully qualified image '$image'..."
+        /opt/homebrew/bin/tart delete "$image" || true
+      else
+        echo "Skipping non-fully qualified image '$image'..."
+      fi
+    done
+    
+    echo "Done deleting fully qualified images."
+  else
+    echo "Non-fully qualified image. Skipping deletion of other images."
+  fi
 
   if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
   	  echo "Logging into registry..."
@@ -292,11 +325,11 @@ echo "Tart VM Started"
 }
 
 func (mv *MacVirtualizer) GetMachineFrequency() int {
-	return macMachineFrequencyMhz
+	return mv.nomadConfig.MacMachineFrequencyMhz
 }
 
 func (mv *MacVirtualizer) GetGlobalAccountID() string {
-	return globalAccountMac
+	return mv.nomadConfig.GlobalAccountMac
 }
 
 func (mv *MacVirtualizer) GetEntryPoint() string {
@@ -313,7 +346,7 @@ echo "done sleeping, port is: %s, tart ip is $(/opt/homebrew/bin/tart ip %s)"
 cntr=0
 while true
 	do
-		nc -vz $(/opt/homebrew/bin/tart ip %s) %s
+		nc -zv $(/opt/homebrew/bin/tart ip %s) %s
 		if [ $? -eq 1 ]; then
 		    echo "port check failed, incrementing counter:"
 			echo "cntr: "$cntr
@@ -403,4 +436,12 @@ nc -zv $(/opt/homebrew/bin/tart ip %s) 9079
 
 func (mv *MacVirtualizer) GetHealthCheckPort(portLabel string) string {
 	return fmt.Sprint(lehelper.LiteEnginePort)
+}
+
+func (mv *MacVirtualizer) GetInitJobTimeout(vmImageConfig types.VMImageConfig) time.Duration { //nolint
+	imageName := vmImageConfig.ImageName
+	if isFullyQualifiedImage(imageName) {
+		return mv.nomadConfig.ByoiInitTimeout // remote image from registry
+	}
+	return mv.nomadConfig.InitTimeout // local or shorthand image
 }
