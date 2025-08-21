@@ -254,6 +254,7 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		AutoInjectionBinaryURI:  opts.AutoInjectionBinaryURI,
 		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
 		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
+		DriverName:              opts.DriverName,
 	}
 	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
 		(opts.GitspaceOpts.VMInitScript != "") {
