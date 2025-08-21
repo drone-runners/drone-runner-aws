@@ -3,6 +3,7 @@ package delegate
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
@@ -47,6 +48,9 @@ func (c *delegateCommand) delegateListener() http.Handler {
 	mux.Post("/destroy", c.handleDestroy)
 	mux.Post("/step", c.handleStep)
 	mux.Post("/suspend", c.handleSuspend)
+	mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "OK") //nolint: errcheck
+	})
 
 	return mux
 }
