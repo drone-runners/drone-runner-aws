@@ -227,8 +227,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	// If imageName is not an AMI ID, resolve it to an AMI ID
 	if !isAMIID(imageName) {
-		resolvedAMI, err := p.resolveImageNameToAMI(ctx, imageName)
-		if err != nil {
+		resolvedAMI, amierr := p.resolveImageNameToAMI(ctx, imageName)
+		if amierr != nil {
 			return nil, fmt.Errorf("failed to resolve image name '%s' to AMI ID: %w", imageName, err)
 		}
 		imageName = resolvedAMI
