@@ -65,6 +65,9 @@ type config struct {
 	zoneDetails   []cf.ZoneInfo
 
 	service *ec2.EC2
+
+	// AMI cache
+	amiCache *AMICache
 }
 
 const (
@@ -93,6 +96,8 @@ func New(opts ...Option) (drivers.Driver, error) {
 		mySession := session.Must(session.NewSession())
 		p.service = ec2.New(mySession, config)
 	}
+	// Initialize AMI cache
+	p.amiCache = NewAMICache()
 	return p, nil
 }
 
@@ -219,6 +224,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("size", p.size).
 		WithField("zone", p.availabilityZone).
 		WithField("hibernate", p.CanHibernate())
+
+	// If imageName is not an AMI ID, resolve it to an AMI ID
+	if !isAMIID(imageName) {
+		resolvedAMI, amierr := p.resolveImageNameToAMI(ctx, imageName)
+		if amierr != nil {
+			return nil, fmt.Errorf("failed to resolve image name '%s' to AMI ID: %w", imageName, err)
+		}
+		imageName = resolvedAMI
+		logr.WithField("resolved_ami", imageName).Infof("resolved image name to AMI ID")
+	}
+
 	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
 	var tags = map[string]string{
 		"Name": name,
