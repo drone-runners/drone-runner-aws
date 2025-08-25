@@ -167,7 +167,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		_ = p.setup(ctx)
 	})
 
-	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
+	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	inst, err := p.create(ctx, opts, name)
 	if err != nil {
 		defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}) //nolint:errcheck
@@ -338,6 +338,10 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		},
 		Labels: p.labels,
 	}
+
+	// Apply GitspaceConfigIdentifier to labels if present
+	in.Labels = p.buildLabelsWithGitspace(opts)
+
 	if !p.noServiceAccount {
 		in.ServiceAccounts = []*compute.ServiceAccount{
 			{
@@ -927,10 +931,7 @@ func (p *config) getImage(opts *types.InstanceCreateOpts) string {
 
 // instance name must be 1-63 characters long and match the regular expression
 // [a-z]([-a-z0-9]*[a-z0-9])?
-func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
-	if gitspaceConfigIdentifier != "" {
-		return gitspaceConfigIdentifier
-	}
+func getInstanceName(runner, pool string) string {
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
 	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd
@@ -970,4 +971,23 @@ func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, err
 		}
 	}
 	return result, err
+}
+
+// buildLabelsWithGitspace creates a copy of the instance labels and adds
+// the GitspaceConfigIdentifier if present in the options.
+func (p *config) buildLabelsWithGitspace(opts *types.InstanceCreateOpts) map[string]string {
+	// Start with the default labels
+	labels := p.labels
+
+	// Add GitspaceConfigIdentifier to labels if present
+	if opts.GitspaceOpts.GitspaceConfigIdentifier != "" {
+		// Create a copy of labels to avoid modifying the original
+		labels = make(map[string]string)
+		for k, v := range p.labels {
+			labels[k] = v
+		}
+		labels["name"] = opts.GitspaceOpts.GitspaceConfigIdentifier
+	}
+
+	return labels
 }
