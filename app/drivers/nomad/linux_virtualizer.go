@@ -162,6 +162,10 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 								exit 1
 							`, ignitePath, vm, vm, vm)},
 						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "poststop",
+						},
 					},
 					{
 						Name:      "ignite_exec",
