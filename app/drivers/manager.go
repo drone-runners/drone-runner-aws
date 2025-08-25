@@ -1085,7 +1085,8 @@ func (m *Manager) processExistingInstance(
 		} else {
 			inst := common.BuildInstanceFromRequest(*instanceInfo)
 			if isMarkedForInfraReset {
-				destroyInstanceErr := pool.Driver.Destroy(ctx, []*types.Instance{inst})
+				storageCleanupType := storage.Detach
+				destroyInstanceErr := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
 				if destroyInstanceErr != nil {
 					logrus.Warnf(
 						"failed to destroy instance %s: %v",

@@ -396,7 +396,7 @@ func handleSetup(
 				}
 			}
 		}
-		err = poolManager.Destroy(context.Background(), pool, instance.ID, instance, nil)
+		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("failed to cleanup instance on setup failure")
 		}
