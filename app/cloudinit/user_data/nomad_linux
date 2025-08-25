@@ -30,6 +30,7 @@ chmod 777 /usr/bin/lite-engine
 touch $HOME/.env
 cp "/etc/environment" $HOME/.env
 echo "SKIP_PREPARE_SERVER=true" >> $HOME/.env;
+echo "CLOUD_DRIVER={{ .DriverName }}" >> $HOME/.env
 
 {{ if .PluginBinaryURI }}
 if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin || wget --retry-connrefused --tries=2 --waitretry=2 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/bin/plugin; then
