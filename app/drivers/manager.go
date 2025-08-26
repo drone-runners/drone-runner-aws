@@ -387,6 +387,13 @@ func (m *Manager) Provision(
 		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
+	logger.FromContext(ctx).
+		WithField("pool", poolName).
+		WithField("busy", len(busy)).
+		WithField("free", len(free)).
+		WithField("hotpool", len(free) > 0).
+		Traceln("provision: hotpool instances")
+
 	if len(free) == 0 {
 		pool.Unlock()
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {

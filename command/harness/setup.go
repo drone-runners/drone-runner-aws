@@ -18,9 +18,9 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/drone/runner-go/logger"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
-	"github.com/harness/lite-engine/logger"
 
 	"github.com/sirupsen/logrus"
 )
@@ -84,7 +84,13 @@ func HandleSetup(
 
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
-	var logr *logrus.Entry
+	internalLog := logrus.New()
+	internalLog.SetFormatter(&logrus.JSONFormatter{})
+
+	var (
+		logr         *logrus.Entry
+		internalLogr *logrus.Entry
+	)
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
@@ -98,9 +104,10 @@ func HandleSetup(
 
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
+		internalLog.SetLevel(logrus.TraceLevel)
+		internalLog.Out = os.Stdout
 		logr = log.WithField("stage_runtime_id", stageRuntimeID)
-
-		ctx = logger.WithContext(ctx, logr)
+		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
 	}
 
 	// append global volumes to the setup request.
@@ -122,7 +129,8 @@ func HandleSetup(
 	}
 
 	logr = AddContext(logr, &r.Context, r.Tags)
-	internalLogger := logrus.New().WithFields(logr.Data)
+	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
+	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
@@ -205,12 +213,12 @@ func HandleSetup(
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
 		).Observe(setupTime.Seconds())
-		internalLogger.WithField("os", instance.OS).
+		internalLogr.WithField("os", instance.OS).
 			WithField("arch", instance.Arch).
 			WithField("selected_pool", selectedPool).
 			WithField("requested_pool", r.PoolID).
 			WithField("instance_address", instance.Address).
-			Infof("init time for vm setup is %.2fs", setupTime.Seconds())
+			Tracef("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
 		metrics.FailedCount.WithLabelValues(
 			r.PoolID,
@@ -250,7 +258,7 @@ func HandleSetup(
 				r.VMImageConfig.ImageName,
 			).Inc()
 		}
-		internalLogger.WithField("stage_runtime_id", stageRuntimeID).
+		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 			Errorln("Init step failed")
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
@@ -294,8 +302,8 @@ func HandleSetup(
 		WithField("tried_pools", pools).
 		Traceln("VM setup is complete")
 
-	internalLogger.WithField("stage_runtime_id", stageRuntimeID).
-		Infoln("Init step completed successfully")
+	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
+		Traceln("Init step completed successfully")
 
 	return resp, selectedPoolDriver, nil
 }
