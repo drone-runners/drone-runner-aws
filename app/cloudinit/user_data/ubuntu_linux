@@ -283,6 +283,7 @@ runcmd:
   # Setup environment and start lite-engine
   - touch /root/.env
   - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+  - echo "CLOUD_DRIVER={{ .DriverName }}" >> /root/.env
   - /usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &
   
   # Setup tmate if enabled

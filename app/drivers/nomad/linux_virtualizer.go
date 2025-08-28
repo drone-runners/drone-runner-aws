@@ -162,6 +162,10 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 								exit 1
 							`, ignitePath, vm, vm, vm)},
 						},
+						Lifecycle: &api.TaskLifecycle{
+							Sidecar: false,
+							Hook:    "poststop",
+						},
 					},
 					{
 						Name:      "ignite_exec",
@@ -254,6 +258,7 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		AutoInjectionBinaryURI:  opts.AutoInjectionBinaryURI,
 		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
 		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
+		DriverName:              opts.DriverName,
 	}
 	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
 		(opts.GitspaceOpts.VMInitScript != "") {

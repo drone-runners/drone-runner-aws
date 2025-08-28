@@ -50,6 +50,7 @@ $env:Path = 'C:\Program Files\lite-engine;' + $env:Path
 refreshenv
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
+echo "CLOUD_DRIVER={{ .DriverName }}" >> "C:\Program Files\lite-engine\.env"
 
 $primaryLiteEngineUrl = "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $secondaryLiteEngineUrl = "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
