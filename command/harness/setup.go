@@ -158,8 +158,8 @@ func HandleSetup(
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
-			instance.OS,
-			instance.Arch,
+			platform.OS,
+			platform.Arch,
 			poolDriver,
 			metric.ConvertBool(fallback),
 			strconv.FormatBool(poolManager.IsDistributed()),
