@@ -142,7 +142,6 @@ func HandleSetup(
 	foundPool := false
 	fallback := false
 
-	st := time.Now()
 	var owner string
 
 	// TODO: Remove this once we start populating license information.
@@ -152,16 +151,43 @@ func HandleSetup(
 		owner = GetAccountID(&r.Context, r.Tags)
 	}
 
+	platform, _, driver := poolManager.Inspect(r.PoolID)
 	// try to provision an instance with fallbacks
+	setupTime := time.Duration(0)
 	for idx, p := range pools {
+		st := time.Now()
 		if idx > 0 {
 			fallback = true
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
+		_, _, poolDriver := poolManager.Inspect(p)
 		instance, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		setupTime = time.Since(st)
+		metrics.WaitDurationCount.WithLabelValues(
+			pool,
+			platform.OS,
+			platform.Arch,
+			poolDriver,
+			metric.ConvertBool(fallback),
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+			r.VMImageConfig.ImageVersion,
+			r.VMImageConfig.ImageName,
+		).Observe(setupTime.Seconds())
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
+			metrics.FailedCount.WithLabelValues(
+				pool,
+				platform.OS,
+				platform.Arch,
+				poolDriver,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+				r.ResourceClass,
+				r.VMImageConfig.ImageVersion,
+				r.VMImageConfig.ImageName,
+			).Inc()
 			continue
 		}
 		selectedPool = pool
@@ -169,9 +195,6 @@ func HandleSetup(
 		_, _, selectedPoolDriver = poolManager.Inspect(selectedPool)
 		break
 	}
-
-	setupTime := time.Since(st) // amount of time it took to provision an instance
-	platform, _, driver := poolManager.Inspect(r.PoolID)
 
 	// If a successful fallback happened and we have an instance setup, record it
 	if foundPool && instance != nil { // check for instance != nil just in case
@@ -202,17 +225,6 @@ func HandleSetup(
 				r.VMImageConfig.ImageName,
 			).Inc()
 		}
-		metrics.WaitDurationCount.WithLabelValues(
-			r.PoolID,
-			instance.OS,
-			instance.Arch,
-			driver,
-			metric.ConvertBool(fallback),
-			strconv.FormatBool(poolManager.IsDistributed()),
-			owner,
-			r.VMImageConfig.ImageVersion,
-			r.VMImageConfig.ImageName,
-		).Observe(setupTime.Seconds())
 		internalLogr.WithField("os", instance.OS).
 			WithField("arch", instance.Arch).
 			WithField("selected_pool", selectedPool).
@@ -220,17 +232,6 @@ func HandleSetup(
 			WithField("instance_address", instance.Address).
 			Tracef("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
-		metrics.FailedCount.WithLabelValues(
-			r.PoolID,
-			platform.OS,
-			platform.Arch,
-			driver,
-			strconv.FormatBool(poolManager.IsDistributed()),
-			owner,
-			r.ResourceClass,
-			r.VMImageConfig.ImageVersion,
-			r.VMImageConfig.ImageName,
-		).Inc()
 		metrics.BuildCount.WithLabelValues(
 			r.PoolID,
 			platform.OS,
