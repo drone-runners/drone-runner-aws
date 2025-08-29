@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"text/template"
@@ -19,9 +18,8 @@ import (
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/harness/lite-engine/logger"
+	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/nomad/api"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 )
 
@@ -129,7 +127,7 @@ func (p *config) Ping(ctx context.Context) error {
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo,funlen
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
 	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
 	for k, v := range p.enablePinning {
@@ -194,12 +192,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, vmImageConfig, p.virtualizer.GetHealthCheckupGenerator())
 	}
 
-	originalLogr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
-	// Create a new logger instance that doesn't share the original's internal state
-	logrusLogger := logrus.New()
-	logrusLogger.SetOutput(os.Stdout)
-	logr := logrusLogger.WithFields(originalLogr.Data)
-
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
 	logr.Infoln("scheduler: finding a node which has available resources ... ")
 
 	_, _, err = p.client.Jobs().Register(resourceJob, nil)
@@ -411,7 +404,7 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 }
 
 // fetchMachine returns details of the machine where the job has been allocated
-func (p *config) fetchMachine(logr *logrus.Entry, id string) (ip, nodeID string, liteEngineHostPort int, ports []int, err error) {
+func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string, liteEngineHostPort int, ports []int, err error) {
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
 	l, _, err := p.client.Jobs().Allocations(id, false, nil)
@@ -633,7 +626,7 @@ func (p *config) Start(_ context.Context, _ *types.Instance, _ string) (string, 
 // if remove is set to true, it deregisters the job in case the job hasn't reached a terminal state
 // before the timeout or before the context is marked as Done.
 // An error is returned if the job did not reach a terminal state
-func (p *config) pollForJob(ctx context.Context, id string, logr *logrus.Entry, timeout time.Duration, remove bool, terminalStates []JobStatus) (*api.Job, error) {
+func (p *config) pollForJob(ctx context.Context, id string, logr logger.Logger, timeout time.Duration, remove bool, terminalStates []JobStatus) (*api.Job, error) {
 	terminalStates = append(terminalStates, Dead) // we always return from poll if the job is dead
 	maxPollTime := time.After(timeout)
 	terminal := false
@@ -693,7 +686,7 @@ L:
 
 // deregisterJob stops the job in Nomad
 // if purge is set to true, it gc's it from nomad state as well
-func (p *config) deregisterJob(logr *logrus.Entry, id string, purge bool) error { //nolint:unparam
+func (p *config) deregisterJob(logr logger.Logger, id string, purge bool) error { //nolint:unparam
 	logr.WithField("job_id", id).WithField("purge", purge).Traceln("scheduler: trying to deregister job")
 	_, _, err := p.client.Jobs().Deregister(id, purge, &api.WriteOptions{})
 	if err != nil {
@@ -704,7 +697,7 @@ func (p *config) deregisterJob(logr *logrus.Entry, id string, purge bool) error 
 	return nil
 }
 
-func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
+func (p *config) getAllocationsForJob(logr logger.Logger, id string) {
 	allocs, _, err := p.client.Jobs().Allocations(id, true, &api.QueryOptions{})
 	if err != nil || allocs == nil || len(allocs) == 0 || allocs[0] == nil {
 		logr.WithError(err).Errorln("scheduler: unable to get allocations")
@@ -749,7 +742,7 @@ func (p *config) getAllocationsForJob(logr *logrus.Entry, id string) {
 	}
 }
 
-func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr *logrus.Entry, logType string) {
+func (p *config) streamStdLogs(allocation *api.Allocation, taskName string, logr logger.Logger, logType string) {
 	const maxRetries = 3
 	const sleepBetweenTry = 3 * time.Second
 	logReceived := false
