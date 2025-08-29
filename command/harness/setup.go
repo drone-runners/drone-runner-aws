@@ -196,8 +196,6 @@ func HandleSetup(
 		break
 	}
 
-	// amount of time it took to provision an instance
-
 	// If a successful fallback happened and we have an instance setup, record it
 	if foundPool && instance != nil { // check for instance != nil just in case
 		// add an entry in stage pool mapping if instance was created.
