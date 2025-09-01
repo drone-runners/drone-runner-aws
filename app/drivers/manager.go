@@ -400,7 +400,7 @@ func (m *Manager) Provision(
 			return nil, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
 		if err != nil {
 			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -431,7 +431,7 @@ func (m *Manager) Provision(
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)
 	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, timeout)
+		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, timeout, nil)
 	}(m.globalCtx)
 
 	return inst, nil
@@ -597,7 +597,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, 0)
+			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, 0, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -634,6 +634,7 @@ func (m *Manager) setupInstance(
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
 	timeout int64,
+	platform *types.Platform,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
@@ -643,7 +644,6 @@ func (m *Manager) setupInstance(
 	createOptions.IsHosted = IsHosted(ctx)
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
-	createOptions.Platform = pool.Platform
 	createOptions.PoolName = pool.Name
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize
@@ -700,6 +700,12 @@ func (m *Manager) setupInstance(
 				Password: vmImageConfig.Auth.Password,
 			}
 		}
+	}
+
+	if platform != nil {
+		createOptions.Platform = *platform
+	} else {
+		createOptions.Platform = pool.Platform
 	}
 
 	// create instance
@@ -1114,6 +1120,15 @@ func (m *Manager) processExistingInstance(
 	}
 
 	logrus.Infof("instance info is not present or reset required, setting up a new instance")
+
+	var platform *types.Platform
+	if instanceInfo != nil {
+		platform = &types.Platform{
+			OS:   instanceInfo.OS,
+			Arch: instanceInfo.Arch,
+		}
+	}
+
 	return m.setupInstance(
 		ctx,
 		pool,
@@ -1128,5 +1143,6 @@ func (m *Manager) processExistingInstance(
 		machineType,
 		false,
 		timeout,
+		platform,
 	)
 }
