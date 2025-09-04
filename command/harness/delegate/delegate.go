@@ -205,6 +205,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	req.SetupRequest.TIConfig.URL = "https://c52e94c8f3ea.ngrok.app"
 	resp, _, err := harness.HandleSetup(
 		ctx,
 		req,
