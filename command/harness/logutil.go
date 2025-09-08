@@ -1,0 +1,39 @@
+package harness
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorRed    = "\033[31m"
+)
+
+func colorize(s, color string) string { return color + s + colorReset }
+
+func printTitle(log *logrus.Entry, text string) { log.Infoln(colorize(text, colorYellow)) }
+
+func printOK(log *logrus.Entry, text string) { log.Infoln(colorize("✓ "+text, colorGreen)) }
+
+func printError(log *logrus.Entry, text string) { log.Infoln(colorize("✗ "+text, colorRed)) }
+
+func printKV(log *logrus.Entry, key string, value any) {
+	log.Infoln(fmt.Sprintf("%s: %v", key, value))
+}
+
+type plainFormatter struct{}
+
+func (f *plainFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	msg := entry.Message
+	if !strings.HasSuffix(msg, "\n") {
+		msg += "\n"
+	}
+	return []byte(msg), nil
+}
+
+func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
