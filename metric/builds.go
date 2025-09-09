@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,6 +19,7 @@ type Metrics struct {
 	ErrorCount             *prometheus.CounterVec
 	RunningCount           *prometheus.GaugeVec
 	RunningPerAccountCount *prometheus.GaugeVec
+	WarmPoolCount          *prometheus.GaugeVec
 	PoolFallbackCount      *prometheus.CounterVec
 	WaitDurationCount      *prometheus.HistogramVec
 	CPUPercentile          *prometheus.HistogramVec
@@ -37,13 +40,16 @@ type label struct {
 type Store struct {
 	Store       store.InstanceStore
 	Query       *types.QueryParams
+	Manager     drivers.IManager
+	PoolConfig  *config.PoolFile
 	Distributed bool
 }
 
 var (
-	True       = "true"
-	False      = "false"
-	dbInterval = 30 * time.Second
+	True             = "true"
+	False            = "false"
+	dbInterval       = 30 * time.Second
+	warmPoolInterval = 2 * time.Minute
 )
 
 func ConvertBool(b bool) string {
@@ -114,6 +120,17 @@ func RunningPerAccountCount() *prometheus.GaugeVec {
 	)
 }
 
+// WarmPoolCount provides metrics for number of warm pool executions
+func WarmPoolCount() *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "harness_ci_pipeline_warm_pool_executions",
+			Help: "Total number of warm pool executions",
+		},
+		[]string{"pool_id", "os", "arch", "driver", "state"},
+	)
+}
+
 func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 	go func() {
 		for {
@@ -125,6 +142,30 @@ func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 			wg.Wait()
 			m.RunningPerAccountCount.Reset()
 			m.RunningCount.Reset()
+		}
+	}()
+}
+
+// UpdateWarmPoolCount starts a goroutine that updates the WarmPoolCount metric every minute
+// by collecting pool statistics (free, busy, hibernating) for all pools using manager.List()
+func (m *Metrics) UpdateWarmPoolCount(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(warmPoolInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				wg := &sync.WaitGroup{}
+				for _, ms := range m.stores {
+					go m.updateWarmPoolCount(ctx, ms, wg)
+				}
+				wg.Wait()
+				// Reset the metric before setting new values
+				m.WarmPoolCount.Reset()
+			}
 		}
 	}()
 }
@@ -148,6 +189,90 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 	}
 	for k, v := range d {
 		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed), k.ownerID).Set(float64(v))
+	}
+}
+
+// updateWarmPoolCount collects pool statistics using instanceStore.List() for all pools
+// and updates the WarmPoolCount metric with free, busy, and hibernating counts
+func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+
+	// Skip if Manager or PoolConfig is not available
+	if metricStore.Manager == nil || metricStore.PoolConfig == nil {
+		return
+	}
+
+	// Iterate through all pools in the configuration
+	for _, poolInstance := range metricStore.PoolConfig.Instances {
+		poolName := poolInstance.Name
+
+		// Check if pool exists in the manager
+		if !metricStore.Manager.Exists(poolName) {
+			continue
+		}
+
+		// Get all instances for this pool using instanceStore.List()
+		busy, free, hibernating, err := metricStore.Manager.List(ctx, poolName, metricStore.Query)
+		if err != nil {
+			// Log error but continue with other pools
+			continue
+		}
+
+		// Get platform and driver information
+		platform, _, driver := metricStore.Manager.Inspect(poolName)
+
+		// Update metrics for busy instances
+		if len(busy) > 0 {
+			m.WarmPoolCount.WithLabelValues(
+				poolName,
+				platform.OS,
+				platform.Arch,
+				driver,
+				"busy",
+			).Set(float64(len(busy)))
+		}
+
+		// Count hibernated VMs from free list
+		var hibernatedCount int
+		for _, vm := range free {
+			if vm.IsHibernated {
+				hibernatedCount++
+			}
+		}
+
+		// Update metrics for free instances (free - hibernated)
+		if len(free)-hibernatedCount > 0 {
+			m.WarmPoolCount.WithLabelValues(
+				poolName,
+				platform.OS,
+				platform.Arch,
+				driver,
+				"free",
+			).Set(float64(len(free) - hibernatedCount))
+		}
+
+		// Update metrics for hibernated instances
+		if hibernatedCount > 0 {
+			m.WarmPoolCount.WithLabelValues(
+				poolName,
+				platform.OS,
+				platform.Arch,
+				driver,
+				"hibernated",
+			).Set(float64(hibernatedCount))
+		}
+
+		// Update metrics for hibernating instances
+		if len(hibernating) > 0 {
+			m.WarmPoolCount.WithLabelValues(
+				poolName,
+				platform.OS,
+				platform.Arch,
+				driver,
+				"hibernating",
+			).Set(float64(len(hibernating)))
+		}
 	}
 }
 
@@ -195,7 +320,7 @@ func WaitDurationCount() *prometheus.HistogramVec {
 			Help:    "Waiting time needed to successfully allocate a machine",
 			Buckets: []float64{5, 15, 30, 60, 300, 600},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name"},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated"},
 	)
 }
 
@@ -206,10 +331,11 @@ func RegisterMetrics() *Metrics {
 	runningPerAccountCount := RunningPerAccountCount()
 	poolFallbackCount := PoolFallbackCount()
 	waitDurationCount := WaitDurationCount()
+	warmPoolCount := WarmPoolCount()
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
 	errorCount := ErrorCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile, errorCount)
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount)
 	return &Metrics{
 		BuildCount:             buildCount,
 		FailedCount:            failedBuildCount,
@@ -220,5 +346,6 @@ func RegisterMetrics() *Metrics {
 		MemoryPercentile:       memoryPercentile,
 		CPUPercentile:          cpuPercentile,
 		ErrorCount:             errorCount,
+		WarmPoolCount:          warmPoolCount,
 	}
 }

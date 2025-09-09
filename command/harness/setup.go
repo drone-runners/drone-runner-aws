@@ -139,8 +139,13 @@ func HandleSetup(
 	var selectedPool, selectedPoolDriver string
 	var poolErr error
 	var instance *types.Instance
-	foundPool := false
-	fallback := false
+
+	var (
+		foundPool  bool
+		fallback   bool
+		warmed     bool
+		hibernated bool
+	)
 
 	var owner string
 
@@ -162,7 +167,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -174,6 +179,8 @@ func HandleSetup(
 			owner,
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
+			strconv.FormatBool(warmed),
+			strconv.FormatBool(hibernated),
 		).Observe(setupTime.Seconds())
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
@@ -323,10 +330,10 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
-) (*types.Instance, error) {
+) (*types.Instance, bool, bool, error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
-		return nil, fmt.Errorf("could not find pool: %s", pool)
+		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
 	}
 
 	stageRuntimeID := r.ID
@@ -343,7 +350,7 @@ func handleSetup(
 		}
 	}
 
-	instance, err := poolManager.Provision(
+	instance, warmed, err := poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
@@ -361,7 +368,7 @@ func handleSetup(
 		r.IsMarkedForInfraReset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to provision instance: %w", err)
+		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
 	}
 
 	logr = logr.WithField("pool_id", pool).
@@ -411,14 +418,16 @@ func handleSetup(
 		}
 	}
 
+	hibernated := false
 	if instance.IsHibernated {
 		logr.Tracef("instance %s is hibernated", instance.ID)
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
 			go cleanUpInstanceFn(false)
-			return nil, fmt.Errorf("failed to start the instance up: %w", err)
+			return nil, false, false, fmt.Errorf("failed to start the instance up: %w", err)
 		}
 		logr.Tracef("instance %s is started", instance.ID)
+		hibernated = true
 	}
 
 	instance.Stage = stageRuntimeID
@@ -426,20 +435,20 @@ func handleSetup(
 	err = poolManager.Update(ctx, instance)
 	if err != nil {
 		go cleanUpInstanceFn(false)
-		return nil, fmt.Errorf("failed to tag: %w", err)
+		return nil, false, false, fmt.Errorf("failed to tag: %w", err)
 	}
 
 	err = poolManager.SetInstanceTags(ctx, pool, instance, r.Tags)
 	if err != nil {
 		go cleanUpInstanceFn(false)
-		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
+		return nil, false, false, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
 	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port,
 		enableMock, mockTimeout)
 	if err != nil {
 		go cleanUpInstanceFn(false)
-		return nil, fmt.Errorf("failed to create LE client: %w", err)
+		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
 
 	// try the healthcheck api on the lite-engine until it responds ok
@@ -455,7 +464,7 @@ func handleSetup(
 
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
 		go cleanUpInstanceFn(true)
-		return nil, fmt.Errorf("failed to call lite-engine retry health: %w", err)
+		return nil, false, false, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
 	logr.Traceln("retry health check complete")
@@ -469,8 +478,8 @@ func handleSetup(
 	_, err = client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
 		go cleanUpInstanceFn(true)
-		return nil, fmt.Errorf("failed to call setup lite-engine: %w", err)
+		return nil, false, false, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
-	return instance, nil
+	return instance, warmed, hibernated, nil
 }
