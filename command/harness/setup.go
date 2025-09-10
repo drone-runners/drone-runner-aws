@@ -330,7 +330,12 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
-) (*types.Instance, bool, bool, error) {
+) (
+	instance *types.Instance,
+	warmed bool,
+	hibernated bool,
+	err error,
+) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
@@ -350,7 +355,7 @@ func handleSetup(
 		}
 	}
 
-	instance, warmed, err := poolManager.Provision(
+	instance, warmed, err = poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
@@ -418,7 +423,6 @@ func handleSetup(
 		}
 	}
 
-	hibernated := false
 	if instance.IsHibernated {
 		logr.Tracef("instance %s is hibernated", instance.ID)
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)

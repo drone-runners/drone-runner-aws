@@ -204,7 +204,8 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 	}
 
 	// Iterate through all pools in the configuration
-	for _, poolInstance := range metricStore.PoolConfig.Instances {
+	for i := range metricStore.PoolConfig.Instances {
+		poolInstance := metricStore.PoolConfig.Instances[i]
 		poolName := poolInstance.Name
 
 		// Check if pool exists in the manager
