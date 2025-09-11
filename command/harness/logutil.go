@@ -3,6 +3,7 @@ package harness
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/sirupsen/logrus"
 )
@@ -13,6 +14,13 @@ const (
 	colorYellow = "\033[33m"
 	colorRed    = "\033[31m"
 )
+
+func capitalize(s string) string {
+	if len(s) > 0 {
+		return string(unicode.ToUpper(rune(s[0]))) + s[1:]
+	}
+	return s
+}
 
 func colorize(s, color string) string { return color + s + colorReset }
 

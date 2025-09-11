@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
@@ -57,13 +56,6 @@ var (
 	noContext   = context.Background()
 )
 
-func capitalize(s string) string {
-	if len(s) > 0 {
-		return string(unicode.ToUpper(rune(s[0]))) + s[1:]
-	}
-	return s
-}
-
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
 // Instead of passing in the env config, we pass in whatever is needed. This is because
@@ -91,6 +83,7 @@ func HandleSetup(
 		return nil, "", errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
+	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
 	usePlainFormatter(log)
 	internalLog := logrus.New()
@@ -122,6 +115,7 @@ func HandleSetup(
 		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
 	}
 
+	// append global volumes to the setup request.
 	for _, pair := range globalVolumes {
 		src, _, ro, err := resource.ParseVolume(pair)
 		if err != nil {
@@ -159,6 +153,7 @@ func HandleSetup(
 
 	var owner string
 
+	// TODO: Remove this once we start populating license information.
 	if strings.Contains(r.PoolID, freeAccount) || getIsFreeAccount(&r.Context, r.Tags) {
 		owner = freeAccount
 	} else {
@@ -180,6 +175,7 @@ func HandleSetup(
 		"arch":           platform.Arch,
 	}).Infoln("Requested machine summary")
 	internalLogr.Infoln("Preparing a machine to execute this stage...")
+	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
 	for idx, p := range pools {
 		st := time.Now()
@@ -356,6 +352,10 @@ func HandleSetup(
 	return resp, selectedPoolDriver, nil
 }
 
+// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
+// run a health check on the lite engine. It returns information about the setup
+// VM and an error if setup failed.
+// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
 func handleSetup(
 	ctx context.Context,
 	buildLog *logrus.Entry,
@@ -368,12 +368,14 @@ func handleSetup(
 	pool,
 	owner string,
 ) (*types.Instance, error) {
+	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
 	}
 
 	stageRuntimeID := r.ID
 
+	// try to provision an instance from the pool manager.
 	query := &types.QueryParams{
 		RunnerName: runnerName,
 	}
@@ -413,6 +415,7 @@ func handleSetup(
 		WithField("image_name", r.VMImageConfig.ImageName).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
+	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
 	if instance.Provider == types.Google {
 		ilog.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", instance.EnableNestedVirtualization))
 	}
@@ -430,12 +433,14 @@ func handleSetup(
 	instanceName := instance.Name
 	instanceIP := instance.Address
 
+	// cleanUpInstanceFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpInstanceFn := func(consoleLogs bool) {
 		if consoleLogs {
 			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instanceID)
 			if logErr != nil {
 				internalLogr.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
+				// Serial console output is limited to 60000 characters since stackdriver only supports 64KB per log entry
 				const maxLogLength = 60000
 				totalLength := len(out)
 				for start := 0; start < totalLength; start += maxLogLength {
@@ -490,13 +495,14 @@ func handleSetup(
 		go cleanUpInstanceFn(false)
 		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
-
+	// try the healthcheck api on the lite-engine until it responds ok
 	internalLogr.Traceln("running healthcheck and waiting for an ok response")
 	printTitle(buildLog, "Initializing machine and running health checks...")
 	internalLogr.Infoln("Initializing machine and running health checks...")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
 	runnerConfig := poolManager.GetRunnerConfig()
 
+	// override the health check timeouts
 	healthCheckTimeout := time.Duration(runnerConfig.HealthCheckTimeout) * time.Minute
 	if instance.Platform.OS == "windows" {
 		healthCheckTimeout = time.Duration(runnerConfig.HealthCheckWindowsTimeout) * time.Minute
