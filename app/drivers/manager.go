@@ -166,7 +166,15 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 	return list[0], nil
 }
 
-func (m *Manager) List(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error) {
+func (m *Manager) List(ctx context.Context, poolName string, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error) {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return nil, nil, nil, fmt.Errorf("manager: pool %s not found", poolName)
+	}
+	return m.list(ctx, pool, queryParams)
+}
+
+func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error) {
 	list, err := m.instanceStore.List(ctx, pool.Name, queryParams)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
@@ -272,7 +280,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							defer pool.Unlock()
 
 							queryParams := &types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
-							busy, free, hibernating, err := m.List(ctx, pool, queryParams)
+							busy, free, hibernating, err := m.list(ctx, pool, queryParams)
 							if err != nil {
 								return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 							}
@@ -346,18 +354,18 @@ func (m *Manager) Provision(
 	instanceInfo *common.InstanceInfo,
 	timeout int64,
 	isMarkedForInfraReset bool,
-) (*types.Instance, error) {
+) (*types.Instance, bool, error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
-		return nil, fmt.Errorf("provision: pool name %q not found", poolName)
+		return nil, false, fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
 		if err := m.validateGitspaceDriverCompatibility(pool); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		return m.processExistingInstance(
+		inst, err := m.processExistingInstance(
 			ctx,
 			pool,
 			instanceInfo,
@@ -372,6 +380,7 @@ func (m *Manager) Provision(
 			timeout,
 			isMarkedForInfraReset,
 		)
+		return inst, false, err
 	}
 
 	strategy := m.strategy
@@ -381,10 +390,10 @@ func (m *Manager) Provision(
 
 	pool.Lock()
 
-	busy, free, _, err := m.List(ctx, pool, query)
+	busy, free, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		pool.Unlock()
-		return nil, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
+		return nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
 	logger.FromContext(ctx).
@@ -397,14 +406,14 @@ func (m *Manager) Provision(
 	if len(free) == 0 {
 		pool.Unlock()
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
-			return nil, ErrorNoInstanceAvailable
+			return nil, false, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
 		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
 		if err != nil {
-			return nil, fmt.Errorf("provision: failed to create instance: %w", err)
+			return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
-		return inst, nil
+		return inst, false, nil
 	}
 
 	sort.Slice(free, func(i, j int) bool {
@@ -424,7 +433,7 @@ func (m *Manager) Provision(
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
 		pool.Unlock()
-		return nil, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+		return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 	pool.Unlock()
 
@@ -434,7 +443,7 @@ func (m *Manager) Provision(
 		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, timeout, nil)
 	}(m.globalCtx)
 
-	return inst, nil
+	return inst, true, nil
 }
 
 // Destroy destroys an instance in a pool.
@@ -472,7 +481,7 @@ func (m *Manager) BuildPools(ctx context.Context) error {
 func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.QueryParams, destroyBusy, destroyFree bool) error {
 	pool.Lock()
 	defer pool.Unlock()
-	busy, free, hibernating, err := m.List(ctx, pool, query)
+	busy, free, hibernating, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
 	}
@@ -554,7 +563,7 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
 func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams) error {
-	instBusy, instFree, instHibernating, err := m.List(ctx, pool, query)
+	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
 	}

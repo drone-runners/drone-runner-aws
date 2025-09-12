@@ -125,6 +125,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	// Update running count from all the stores
 	c.metrics.UpdateRunningCount(ctx)
+	c.metrics.UpdateWarmPoolCount(ctx)
 
 	tags := parseTags(poolConfig)
 
@@ -208,6 +209,8 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 		Query: &types.QueryParams{
 			RunnerName: c.env.Runner.Name,
 		},
+		Manager:     c.distributedPoolManager,
+		PoolConfig:  poolConfig,
 		Distributed: true,
 	})
 	return poolConfig, nil
