@@ -85,7 +85,6 @@ func HandleSetup(
 
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
-	usePlainFormatter(log)
 	internalLog := logrus.New()
 	internalLog.SetFormatter(&logrus.JSONFormatter{})
 
@@ -95,10 +94,7 @@ func HandleSetup(
 	)
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
-		logr = logrus.NewEntry(log)
-		internalLog.SetLevel(logrus.TraceLevel)
-		internalLog.Out = os.Stdout
-		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
+		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
 	} else {
 		wc := getStreamLogger(r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
 		defer func() {
@@ -110,6 +106,7 @@ func HandleSetup(
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
 		internalLog.SetLevel(logrus.TraceLevel)
+		usePlainFormatter(log)
 		internalLog.Out = os.Stdout
 		logr = logrus.NewEntry(log)
 		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
@@ -168,13 +165,7 @@ func HandleSetup(
 	printKV(logr, "Arch", capitalize(platform.Arch))
 	logr.Infoln("")
 	printTitle(logr, "Preparing a machine to execute this stage...")
-	internalLogr.WithFields(logrus.Fields{
-		"image_version":  r.VMImageConfig.ImageVersion,
-		"resource_class": r.ResourceClass,
-		"os":             platform.OS,
-		"arch":           platform.Arch,
-	}).Infoln("Requested machine summary")
-	internalLogr.Infoln("Preparing a machine to execute this stage...")
+
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
 	for idx, p := range pools {
@@ -183,7 +174,10 @@ func HandleSetup(
 			fallback = true
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
-		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
+		internalLogr.WithField("pool_id", pool).
+			WithField("resource_class", r.ResourceClass).
+			WithField("os", platform.OS).
+			WithField("arch", platform.Arch).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
 		instance, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		setupTime = time.Since(st)
@@ -323,9 +317,13 @@ func HandleSetup(
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
 	printOK(logr, "VM setup is complete")
-	internalLogr.Infoln("VM setup is complete")
 
-	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
+	internalLogr.WithField("selected_pool", selectedPool).
+		WithField("stage_runtime_id", stageRuntimeID).
+		WithField("ip", instance.Address).
+		WithField("id", instance.ID).
+		WithField("instance_name", instance.Name).
+		WithField("tried_pools", pools).
 		Traceln("Init step completed successfully")
 
 	totalInitTime := time.Since(initStartTime)
@@ -421,7 +419,14 @@ func handleSetup(
 	}
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
-	buildLog.Infof("Info: stage_runtime_id=%s ip=%s pool=%s", stageRuntimeID, instance.Address, pool)
+
+	// Log EnableNestedVirtualization status for all providers
+	if instance.Provider == types.Google {
+		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
+	} else {
+		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", false)
+	}
+
 	internalLogr.WithFields(logrus.Fields{
 		"pool_id":       pool,
 		"ip":            instance.Address,
@@ -461,7 +466,7 @@ func handleSetup(
 		}
 		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil)
 		if err != nil {
-			internalLogr.WithError(err).Errorln("failed to cleanup instance on setup failure")
+			ilog.WithError(err).Errorln("failed to cleanup instance on setup failure")
 		}
 	}
 
@@ -496,9 +501,7 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
-	internalLogr.Traceln("running healthcheck and waiting for an ok response")
 	printTitle(buildLog, "Initializing machine and running health checks...")
-	internalLogr.Infoln("Initializing machine and running health checks...")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
 	runnerConfig := poolManager.GetRunnerConfig()
 
@@ -514,7 +517,6 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
-	internalLogr.Traceln("retry health check complete")
 	printOK(buildLog, "Machine health check passed")
 	internalLogr.Infoln("Machine health check passed")
 
