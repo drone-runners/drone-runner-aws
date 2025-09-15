@@ -238,6 +238,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
 	var tags = map[string]string{
 		"Name": name,
+		"harness-account-id":     opts.AccountID,
+		"harness-pool-name":      opts.PoolName,
+		"harness-runner-name":    opts.RunnerName,
+		"harness-resource-class": opts.ResourceClass,
+		"harness-platform-os":    opts.Platform.OS,
+		"harness-platform-arch":  opts.Platform.Arch,
 	}
 	var volumeTags = map[string]string{}
 	// add user defined tags
