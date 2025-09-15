@@ -237,7 +237,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
 	var tags = map[string]string{
-		"Name": name,
+		"Name":                   name,
 		"harness-account-id":     opts.AccountID,
 		"harness-pool-name":      opts.PoolName,
 		"harness-runner-name":    opts.RunnerName,
