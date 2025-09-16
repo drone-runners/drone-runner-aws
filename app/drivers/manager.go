@@ -361,10 +361,10 @@ func (m *Manager) Provision(
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
-		if err := m.validateGitspaceDriverCompatibility(pool); err != nil {
+		if err = m.validateGitspaceDriverCompatibility(pool); err != nil {
 			return nil, false, err
 		}
-		inst, err := m.processExistingInstance(
+		existingInstance, err := m.processExistingInstance(
 			ctx,
 			pool,
 			instanceInfo,
@@ -379,7 +379,7 @@ func (m *Manager) Provision(
 			timeout,
 			isMarkedForInfraReset,
 		)
-		return inst, false, err
+		return existingInstance, false, err
 	}
 
 	instance, hotpool, err := m.provisionFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName)
@@ -594,7 +594,27 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 }
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
-func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams, setupInstanceWithHibernate func(context.Context, *poolEntry, string, string, string, *spec.VMImageConfig, *types.GitspaceAgentConfig, *types.StorageConfig, string, string, bool, int64, *types.Platform) (*types.Instance, error)) error {
+func (m *Manager) buildPool(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName string,
+	query *types.QueryParams,
+	setupInstanceWithHibernate func(
+		context.Context,
+		*poolEntry,
+		string,
+		string,
+		string,
+		*spec.VMImageConfig,
+		*types.GitspaceAgentConfig,
+		*types.StorageConfig,
+		string,
+		string,
+		bool,
+		int64,
+		*types.Platform,
+	) (*types.Instance, error),
+) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err

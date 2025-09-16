@@ -160,16 +160,16 @@ func (s InstanceStore) FindAndClaim(
 	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
 	// --- Convert subquery to SQL + args ---
-	subSql, subArgs, err := subQuery.ToSql()
+	subSQL, subArgs, err := subQuery.ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build CTE subquery: %w", err)
 	}
 
 	// --- Shift placeholders in subquery to start after $1 (newState) ---
 	for i := len(subArgs); i > 0; i-- {
-		old := fmt.Sprintf("$%d", i)
-		new := fmt.Sprintf("$%d", i+1)
-		subSql = strings.ReplaceAll(subSql, old, new)
+		oldPlaceholder := fmt.Sprintf("$%d", i)
+		newPlaceholder := fmt.Sprintf("$%d", i+1)
+		subSQL = strings.ReplaceAll(subSQL, oldPlaceholder, newPlaceholder)
 	}
 
 	// --- Clean RETURNING columns ---
@@ -187,7 +187,7 @@ SET instance_state = $1,
 FROM candidate
 WHERE instances.instance_id = candidate.inst_id
 RETURNING %s
-`, subSql, cleanColumns)
+`, subSQL, cleanColumns) //nolint: gosec
 
 	// --- Combine args: newState first, then subquery args ---
 	args := append([]interface{}{newState}, subArgs...)

@@ -54,7 +54,21 @@ func (d *DistributedManager) Provision(
 	if err != nil {
 		return nil, false, err
 	}
-	return d.provisionFromPool(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName)
+	return d.provisionFromPool(
+		ctx,
+		pool,
+		serverName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		gitspaceAgentConfig,
+		storageConfig,
+		zone,
+		machineType,
+		shouldUseGoogleDNS,
+		timeout,
+		poolName,
+	)
 }
 
 func (d *DistributedManager) BuildPools(ctx context.Context) error {
@@ -236,14 +250,13 @@ func (d *DistributedManager) setupInstanceAsync(
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
 	timeout int64,
-) (*types.Instance, error) {
+) {
 	go func(ctx context.Context) {
 		_, err := d.setupInstanceWithHibernate(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
 		if err != nil {
 			logrus.WithError(err).Errorln("failed to setup instance asynchronously")
 		}
 	}(d.globalCtx)
-	return nil, nil
 }
 
 // setupInstanceWithHibernate handles setting up the instance into hibernate mode
@@ -263,12 +276,12 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 	if err != nil {
 		return nil, err
 	}
-	go func(ctx context.Context) {
-		err = d.hibernate(ctx, pool.Name, tlsServerName, inst)
+	go func() {
+		err = d.hibernate(context.Background(), pool.Name, tlsServerName, inst)
 		if err != nil {
 			logrus.WithError(err).Errorln("failed to hibernate the vm")
 		}
-	}(ctx)
+	}()
 	return inst, nil
 }
 
@@ -305,17 +318,17 @@ func (d *DistributedManager) hibernate(
 
 	// Perform the actual hibernation using the driver with retries
 	logrus.WithField("instanceID", claimedInstance.ID).Infoln("Hibernating vm")
-	
+
 	const maxRetries = 3
 	const baseDelay = 30 * time.Second // Start with 30 seconds as AWS suggests "a few minutes"
-	
+
 	var hibernateErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		hibernateErr = pool.Driver.Hibernate(ctx, claimedInstance.ID, poolName, claimedInstance.Zone)
 		if hibernateErr == nil {
 			break // Success, exit retry loop
 		}
-		
+
 		// Check if this is a retryable hibernation error
 		if attempt < maxRetries {
 			delay := time.Duration(attempt) * baseDelay // Linear backoff: 30s, 60s, 90s
@@ -327,11 +340,11 @@ func (d *DistributedManager) hibernate(
 			time.Sleep(delay)
 			continue
 		}
-		
+
 		// For max retries reached, break immediately
 		break
 	}
-	
+
 	if hibernateErr != nil {
 		// Revert state back to created if hibernation fails
 		claimedInstance.State = types.StateCreated
@@ -398,7 +411,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 					// MatchLabels in the query params are used in a generic manner to match it against the labels stored in the instance
 					// This is similar to how K8s matchLabels and labels work.
 					for _, pool := range d.poolMap {
-						if err := d.startInstancePurger(ctx, pool, maxAgeBusy, queryParams); err != nil {
+						if err := d.startInstancePurger(ctx, pool, maxAgeBusy, &queryParams); err != nil {
 							logger.FromContext(ctx).WithError(err).
 								Errorln("distributed dlite: purger: Failed to purge stale instances")
 						}
@@ -411,7 +424,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 	return nil
 }
 
-func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy time.Duration, queryParams types.QueryParams) error {
+func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy time.Duration, queryParams *types.QueryParams) error {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
