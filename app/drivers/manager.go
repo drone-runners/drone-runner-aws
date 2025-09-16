@@ -361,10 +361,10 @@ func (m *Manager) Provision(
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
-		if err = m.validateGitspaceDriverCompatibility(pool); err != nil {
-			return nil, false, err
+		if gsErr := m.validateGitspaceDriverCompatibility(pool); gsErr != nil {
+			return nil, false, gsErr
 		}
-		existingInstance, err := m.processExistingInstance(
+		existingInstance, gsErr := m.processExistingInstance(
 			ctx,
 			pool,
 			instanceInfo,
@@ -379,10 +379,25 @@ func (m *Manager) Provision(
 			timeout,
 			isMarkedForInfraReset,
 		)
-		return existingInstance, false, err
+		return existingInstance, false, gsErr
 	}
 
-	instance, hotpool, err := m.provisionFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName)
+	instance, hotpool, err := m.provisionFromPool(
+		ctx,
+		pool,
+		query,
+		serverName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		gitspaceAgentConfig,
+		storageConfig,
+		zone,
+		machineType,
+		shouldUseGoogleDNS,
+		timeout,
+		poolName,
+	)
 
 	// the go routine here uses the global context because this function is called
 	// from setup API call (and we can't use HTTP request context for async tasks)

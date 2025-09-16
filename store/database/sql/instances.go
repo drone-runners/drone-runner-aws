@@ -177,6 +177,7 @@ func (s InstanceStore) FindAndClaim(
 	cleanColumns = strings.TrimSpace(cleanColumns)
 
 	// --- Build final CTE UPDATE SQL ---
+	//nolint: gosec
 	finalSql := fmt.Sprintf(`
 WITH candidate AS (
     %s
@@ -187,7 +188,7 @@ SET instance_state = $1,
 FROM candidate
 WHERE instances.instance_id = candidate.inst_id
 RETURNING %s
-`, subSQL, cleanColumns) //nolint: gosec
+`, subSQL, cleanColumns)
 
 	// --- Combine args: newState first, then subquery args ---
 	args := append([]interface{}{newState}, subArgs...)
