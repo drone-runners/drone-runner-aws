@@ -332,7 +332,6 @@ func (d *DistributedManager) hibernate(
 		if hibernateErr == nil {
 			break // Success, exit retry loop
 		}
-
 		// Check if this is a retryable hibernation error
 		if attempt < maxRetries {
 			delay := time.Duration(attempt) * baseDelay // Linear backoff: 30s, 60s, 90s
