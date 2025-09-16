@@ -2,6 +2,8 @@ package sql
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -120,6 +122,96 @@ func (s InstanceStore) Update(_ context.Context, instance *types.Instance) error
 	}
 	_, err = s.db.Exec(query, arg...)
 	return err
+}
+
+func (s InstanceStore) FindAndClaim(
+	ctx context.Context,
+	params *types.QueryParams,
+	newState types.InstanceState,
+	allowedStates []types.InstanceState,
+) (*types.Instance, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() //nolint
+
+	// --- Build subquery (CTE) ---
+	subQuery := builder.Select("instance_id AS inst_id").
+		From("instances").
+		Where(squirrel.Eq{"instance_pool": params.PoolName})
+
+	if params.RunnerName != "" {
+		subQuery = subQuery.Where(squirrel.Eq{"runner_name": params.RunnerName})
+	}
+
+	if params.InstanceID != "" {
+		subQuery = subQuery.Where(squirrel.Eq{"instance_id": params.InstanceID})
+	}
+
+	if len(allowedStates) > 0 {
+		stateVals := make([]interface{}, len(allowedStates))
+		for i, state := range allowedStates {
+			stateVals[i] = state
+		}
+		subQuery = subQuery.Where(squirrel.Eq{"instance_state": stateVals})
+	}
+
+	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
+
+	// --- Convert subquery to SQL + args ---
+	subSql, subArgs, err := subQuery.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build CTE subquery: %w", err)
+	}
+
+	// --- Shift placeholders in subquery to start after $1 (newState) ---
+	for i := len(subArgs); i > 0; i-- {
+		old := fmt.Sprintf("$%d", i)
+		new := fmt.Sprintf("$%d", i+1)
+		subSql = strings.ReplaceAll(subSql, old, new)
+	}
+
+	// --- Clean RETURNING columns ---
+	cleanColumns := strings.ReplaceAll(instanceColumns, "\n", "")
+	cleanColumns = strings.TrimSpace(cleanColumns)
+
+	// --- Build final CTE UPDATE SQL ---
+	finalSql := fmt.Sprintf(`
+WITH candidate AS (
+    %s
+)
+UPDATE instances
+SET instance_state = $1,
+    instance_updated = extract(epoch FROM now())
+FROM candidate
+WHERE instances.instance_id = candidate.inst_id
+RETURNING %s
+`, subSql, cleanColumns)
+
+	// --- Combine args: newState first, then subquery args ---
+	args := append([]interface{}{newState}, subArgs...)
+
+	// --- Execute ---
+	dst := new(types.Instance)
+	err = tx.QueryRowContext(ctx, finalSql, args...).Scan(
+		&dst.Name, &dst.ID, &dst.NodeID, &dst.Address, &dst.Provider,
+		&dst.State, &dst.Pool, &dst.Image, &dst.Region, &dst.Zone,
+		&dst.Size, &dst.OS, &dst.Arch, &dst.Variant, &dst.Version,
+		&dst.OSName, &dst.Stage, &dst.CAKey, &dst.CACert, &dst.TLSKey,
+		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
+		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
+		&dst.EnableNestedVirtualization,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return dst, nil
 }
 
 func (s InstanceStore) Purge(ctx context.Context) error {

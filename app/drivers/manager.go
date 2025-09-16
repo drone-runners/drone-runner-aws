@@ -317,7 +317,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 								}
 							}
 
-							err = m.buildPool(ctx, pool, serverName, nil)
+							err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate)
 							if err != nil {
 								return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
 							}
@@ -355,16 +355,15 @@ func (m *Manager) Provision(
 	timeout int64,
 	isMarkedForInfraReset bool,
 ) (*types.Instance, bool, error) {
-	pool := m.poolMap[poolName]
-	if pool == nil {
-		return nil, false, fmt.Errorf("provision: pool name %q not found", poolName)
+	pool, err := m.validatePool(poolName)
+	if err != nil {
+		return nil, false, err
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
 		if err := m.validateGitspaceDriverCompatibility(pool); err != nil {
 			return nil, false, err
 		}
-
 		inst, err := m.processExistingInstance(
 			ctx,
 			pool,
@@ -383,11 +382,49 @@ func (m *Manager) Provision(
 		return inst, false, err
 	}
 
+	instance, hotpool, err := m.provisionFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName)
+
+	// the go routine here uses the global context because this function is called
+	// from setup API call (and we can't use HTTP request context for async tasks)
+	// TODO: Move to outbox
+	if hotpool {
+		go func(ctx context.Context) {
+			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, zone, machineType, false, timeout, nil)
+		}(m.globalCtx)
+	}
+	return instance, hotpool, err
+}
+
+func (m *Manager) validatePool(poolName string) (*poolEntry, error) {
+	if _, ok := m.poolMap[poolName]; !ok {
+		return nil, fmt.Errorf("pool %q not found", poolName)
+	}
+	return m.poolMap[poolName], nil
+}
+
+// getStrategy returns the strategy for the manager
+func (m *Manager) getStrategy() Strategy {
 	strategy := m.strategy
 	if strategy == nil {
 		strategy = Greedy{}
 	}
+	return strategy
+}
 
+// provisionFromPool handles provisioning for regular managers using in-memory locks
+func (m *Manager) provisionFromPool(
+	ctx context.Context,
+	pool *poolEntry,
+	query *types.QueryParams,
+	serverName, ownerID, resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	gitspaceAgentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+	zone, machineType string,
+	shouldUseGoogleDNS bool,
+	timeout int64,
+	poolName string,
+) (*types.Instance, bool, error) {
 	pool.Lock()
 
 	busy, free, _, err := m.list(ctx, pool, query)
@@ -402,6 +439,8 @@ func (m *Manager) Provision(
 		WithField("free", len(free)).
 		WithField("hotpool", len(free) > 0).
 		Traceln("provision: hotpool instances")
+
+	strategy := m.getStrategy()
 
 	if len(free) == 0 {
 		pool.Unlock()
@@ -436,13 +475,6 @@ func (m *Manager) Provision(
 		return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 	pool.Unlock()
-
-	// the go routine here uses the global context because this function is called
-	// from setup API call (and we can't use HTTP request context for async tasks)
-	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, timeout, nil)
-	}(m.globalCtx)
-
 	return inst, true, nil
 }
 
@@ -562,7 +594,7 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 }
 
 // BuildPool populates a pool with as many instances as it's needed for the pool.
-func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams) error {
+func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams, setupInstanceWithHibernate func(context.Context, *poolEntry, string, string, string, *spec.VMImageConfig, *types.GitspaceAgentConfig, *types.StorageConfig, string, string, bool, int64, *types.Platform) (*types.Instance, error)) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
@@ -606,7 +638,7 @@ func (m *Manager) buildPool(ctx context.Context, pool *poolEntry, tlsServerName 
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := m.setupInstance(ctx, pool, tlsServerName, "", "", nil, false, nil, nil, "", "", false, 0, nil)
+			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", "", nil, nil, nil, "", "", false, 0, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				return
@@ -629,7 +661,32 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsSe
 	pool.Lock()
 	defer pool.Unlock()
 
-	return m.buildPool(ctx, pool, tlsServerName, query)
+	return m.buildPool(ctx, pool, tlsServerName, query, m.setupInstanceWithHibernate)
+}
+
+func (m *Manager) setupInstanceWithHibernate(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName, ownerID, resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	agentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+	zone, machineType string,
+	shouldUseGoogleDNS bool,
+	timeout int64,
+	platform *types.Platform,
+) (*types.Instance, error) {
+	inst, err := m.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		herr := m.hibernateOrStopWithRetries(context.Background(), pool.Name, tlsServerName, inst, false)
+		if herr != nil {
+			logrus.WithError(herr).Errorln("failed to hibernate the vm")
+		}
+	}()
+	return inst, nil
 }
 
 func (m *Manager) setupInstance(
@@ -746,15 +803,6 @@ func (m *Manager) setupInstance(
 		_ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
 		return nil, err
 	}
-
-	if !inuse {
-		go func() {
-			herr := m.hibernateWithRetries(context.Background(), pool.Name, tlsServerName, inst)
-			if herr != nil {
-				logrus.WithError(herr).Errorln("failed to hibernate the vm")
-			}
-		}()
-	}
 	return inst, nil
 }
 
@@ -817,14 +865,6 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	}
 
 	return pool.Driver.Logs(ctx, instanceID)
-}
-
-func (m *Manager) hibernateWithRetries(
-	ctx context.Context,
-	poolName, tlsServerName string,
-	instance *types.Instance,
-) error {
-	return m.hibernateOrStopWithRetries(ctx, poolName, tlsServerName, instance, false)
 }
 
 func (m *Manager) hibernateOrStopWithRetries(
