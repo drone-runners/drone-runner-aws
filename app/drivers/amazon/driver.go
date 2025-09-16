@@ -245,6 +245,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		"harness-platform-os":    opts.Platform.OS,
 		"harness-platform-arch":  opts.Platform.Arch,
 	}
+
 	var volumeTags = map[string]string{}
 	// add user defined tags
 	for k, v := range p.tags {
