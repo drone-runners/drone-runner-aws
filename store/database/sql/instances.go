@@ -178,7 +178,7 @@ func (s InstanceStore) FindAndClaim(
 
 	// --- Build final CTE UPDATE SQL ---
 	//nolint: gosec
-	finalSql := fmt.Sprintf(`
+	finalSQL := fmt.Sprintf(`
 WITH candidate AS (
     %s
 )
@@ -195,7 +195,7 @@ RETURNING %s
 
 	// --- Execute ---
 	dst := new(types.Instance)
-	err = tx.QueryRowContext(ctx, finalSql, args...).Scan(
+	err = tx.QueryRowContext(ctx, finalSQL, args...).Scan(
 		&dst.Name, &dst.ID, &dst.NodeID, &dst.Address, &dst.Provider,
 		&dst.State, &dst.Pool, &dst.Image, &dst.Region, &dst.Zone,
 		&dst.Size, &dst.OS, &dst.Arch, &dst.Variant, &dst.Version,
