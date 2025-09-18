@@ -116,6 +116,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				amazon.WithTags(a.Tags),
 				amazon.WithHibernate(a.Hibernate),
 				amazon.WithZoneDetails(a.ZoneDetails),
+				amazon.WithEnableC4D(a.EnableC4D),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)

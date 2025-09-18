@@ -52,6 +52,7 @@ type (
 		Hibernate     bool              `json:"hibernate,omitempty"`
 		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
 		ZoneDetails   []ZoneInfo        `json:"zone_details,omitempty" yaml:"zone_details,omitempty"`
+		EnableC4D     bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 	}
 
 	ZoneInfo struct {
