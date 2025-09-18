@@ -158,13 +158,14 @@ func HandleSetup(
 	}
 
 	platform, _, driver := poolManager.Inspect(r.PoolID)
+	imgVersionDefault, imgNameDefault := defaultOsImages(platform.OS, platform.Arch)
 	printTitle(logr, "Requested machine:")
-	printKV(logr, "Image Version", r.VMImageConfig.ImageVersion)
+	printKV(logr, "Image Version", defaultString(r.VMImageConfig.ImageVersion, imgVersionDefault))
+	printKV(logr, "Image Name", defaultString(r.VMImageConfig.ImageName, imgNameDefault))
 	printKV(logr, "Machine Size", r.ResourceClass)
 	printKV(logr, "OS", capitalize(platform.OS))
 	printKV(logr, "Arch", capitalize(platform.Arch))
 	logr.Infoln("")
-	printTitle(logr, "Preparing a machine to execute this stage...")
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
@@ -406,6 +407,13 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
 	}
 
+	// Log EnableNestedVirtualization status for all providers
+	if instance.Provider == types.Google {
+		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
+	} else {
+		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", false)
+	}
+
 	ilog := internalLogr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
@@ -419,13 +427,6 @@ func handleSetup(
 	}
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
-
-	// Log EnableNestedVirtualization status for all providers
-	if instance.Provider == types.Google {
-		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
-	} else {
-		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", false)
-	}
 
 	internalLogr.WithFields(logrus.Fields{
 		"pool_id":       pool,
@@ -500,8 +501,7 @@ func handleSetup(
 		go cleanUpInstanceFn(false)
 		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
-	// try the healthcheck api on the lite-engine until it responds ok
-	printTitle(buildLog, "Initializing machine and running health checks...")
+
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
 	runnerConfig := poolManager.GetRunnerConfig()
 
