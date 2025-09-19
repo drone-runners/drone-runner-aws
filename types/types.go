@@ -40,6 +40,7 @@ const (
 	StateCreated     = InstanceState("created")
 	StateInUse       = InstanceState("inuse")
 	StateHibernating = InstanceState("hibernating")
+	StateTerminating = InstanceState("terminating")
 )
 
 type Instance struct {
@@ -161,6 +162,8 @@ type QueryParams struct {
 	Platform    *Platform
 	RunnerName  string
 	MatchLabels map[string]string
+	PoolName    string
+	InstanceID  string
 }
 
 type StageOwner struct {
