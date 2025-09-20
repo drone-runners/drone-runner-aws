@@ -47,8 +47,11 @@ chmod 777 /usr/bin/split_tests
 {{ end }}
 
 {{ if .AutoInjectionBinaryURI }}
+mkdir -p /tmp/harness/bin
 wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || wget --retry-connrefused --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection
 chmod 777 /usr/bin/auto-injection
+cp /usr/bin/auto-injection /tmp/harness/bin/auto-injection
+chmod 777 /tmp/harness/bin/auto-injection
 {{ end }}
 
 {{ if eq .Platform.Arch "amd64" }}
