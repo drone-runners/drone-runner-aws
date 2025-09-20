@@ -52,7 +52,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 		return nil, "", "", err
 	}
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
-	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, defaultVMImage, vmImageConfig, resource, port)))
+	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, vmImageConfig, resource, port)))
 	vmStartupScriptPath := fmt.Sprintf("/tmp/%s.sh", vm)
 	cloudInitScriptPath := fmt.Sprintf("/tmp/cloud_init_%s.sh", vm)
 	id = "tart_job_" + vm
@@ -130,14 +130,13 @@ func (mv *MacVirtualizer) generateUserData(userData string, opts *types.Instance
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string { //nolint:gocritic
+func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string { //nolint:gocritic
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 set -eo pipefail
 
-DEFAULT_VM_IMAGE="%s"
 VM_IMAGE="%s"
 VM_ID="%s"
 
@@ -171,11 +170,23 @@ is_fully_qualified_image() {
   fi
 }
 
-# Check if the image is already in the tart list
-if echo "$tart_list" | grep -q "$VM_IMAGE"; then
-  echo "Image '$VM_IMAGE' is already present. Nothing to do."
+# Function to encode the image name
+encode() {
+  echo -n "ENC:$(echo -n "$1" | base64)"
+}
+
+# Only sanitize if VM_IMAGE is fully qualified
+if is_fully_qualified_image "$VM_IMAGE"; then
+  ENCODED_IMAGE_NAME=$(encode "$VM_IMAGE")
 else
-  echo "Image '$VM_IMAGE' not found."
+  ENCODED_IMAGE_NAME="$VM_IMAGE"
+fi
+
+# Check if the image is already in the tart list
+if echo "$tart_list" | grep -q "$ENCODED_IMAGE_NAME"; then
+  echo "Image '$ENCODED_IMAGE_NAME' is already present. Nothing to do."
+else
+  echo "Image '$ENCODED_IMAGE_NAME' not found."
   
   # Check if the image name is fully qualified
   if is_fully_qualified_image "$VM_IMAGE"; then
@@ -183,7 +194,7 @@ else
     
     # Loop through each image and delete only fully qualified images
     for image in $tart_list; do
-      if is_fully_qualified_image "$image"; then
+      if is_fully_qualified_image "$image" || [[ "$image" == ENC:* ]]; then
         echo "Deleting fully qualified image '$image'..."
         /opt/homebrew/bin/tart delete "$image" || true
       else
@@ -197,11 +208,20 @@ else
   fi
 
   if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
-  	  echo "Logging into registry..."
-	  mv ~/Library/Keychains/login.keychain-db ~/Library/Keychains/login.keychain-db.backup
-	  security create-keychain -p "$MACHINE_PASSWORD" login.keychain-db
-	  security unlock-keychain -p "$MACHINE_PASSWORD" ~/Library/Keychains/login.keychain-db
-      echo "$REGISTRY_PASSWORD" | /opt/homebrew/bin/tart login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+	  echo "Pulling image $VM_IMAGE..."
+	  TART_REGISTRY_HOSTNAME="$REGISTRY" TART_REGISTRY_USERNAME="$REGISTRY_USERNAME" TART_REGISTRY_PASSWORD="$REGISTRY_PASSWORD" /opt/homebrew/bin/tart pull "$VM_IMAGE"
+
+      echo "Exporting image $VM_IMAGE to /tmp/${ENCODED_IMAGE_NAME}.tvm..."
+      /opt/homebrew/bin/tart export "$VM_IMAGE" "/tmp/${ENCODED_IMAGE_NAME}.tvm"
+
+	  echo "Pruning tart OCI cache..."
+	  /opt/homebrew/bin/tart prune --entries caches --older-than=0
+
+      echo "Importing image from /tmp/${ENCODED_IMAGE_NAME}.tvm as $ENCODED_IMAGE_NAME..."
+      /opt/homebrew/bin/tart import "/tmp/${ENCODED_IMAGE_NAME}.tvm" "$ENCODED_IMAGE_NAME"
+
+      echo "Removing temporary file /tmp/${ENCODED_IMAGE_NAME}.tvm..."
+      rm -f "/tmp/${ENCODED_IMAGE_NAME}.tvm" || true
   else
 	  echo "No registry details provided, skipping logging."
   fi
@@ -209,7 +229,7 @@ fi
 
 echo "Cloning tart VM with id $VM_ID"
 # Install the VM
-/opt/homebrew/bin/tart clone "$VM_IMAGE" "$VM_ID"
+/opt/homebrew/bin/tart clone "$ENCODED_IMAGE_NAME" "$VM_ID"
 
 echo "Setting tart VM config with id $VM_ID"
 # Update VM configuration
@@ -320,7 +340,7 @@ while true
 		sleep 1
 	done
 echo "Tart VM Started"
-`, defaultVMImage, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
+`, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
 		vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password, machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, lockFunction, vmID, port, UnlockFunction)
 }
 
