@@ -197,7 +197,10 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 			c.env.Settings.PluginBinaryURI,
 			c.env.Settings.AutoInjectionBinaryURI,
 			c.env.LiteEngine.FallbackPath,
-			c.env.Settings.PluginBinaryFallbackURI, types.RunnerConfig(c.env.RunnerConfig)))
+			c.env.Settings.PluginBinaryFallbackURI,
+			types.RunnerConfig(c.env.RunnerConfig),
+			c.env.Settings.AnnotationsBinaryURI,
+			c.env.Settings.AnnotationsBinaryFallbackURI))
 	poolConfig, err := harness.SetupPoolWithEnv(ctx, &c.env, c.distributedPoolManager, c.poolFile)
 	if err != nil {
 		logrus.WithError(err).Error("could not setup distributed pool")

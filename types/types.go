@@ -134,6 +134,8 @@ type InstanceCreateOpts struct {
 	GitspaceOpts            GitspaceOpts
 	StorageOpts             StorageOpts
 	AutoInjectionBinaryURI  string
+	AnnotationsBinaryURI    string
+	AnnotationsBinaryFallbackURI string
 	Labels                  map[string]string
 	Zone                    string
 	MachineType             string

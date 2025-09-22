@@ -279,6 +279,14 @@ runcmd:
     (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
   - chmod 777 /usr/bin/envman
   {{ end }}
+
+  # Download and install annotations CLI if configured (only for amd64)
+  {{ if and (eq .Platform.Arch "amd64") .AnnotationsBinaryURI }}
+  - |
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryURI }}" -O /usr/bin/annotations-cli && echo "Successfully downloaded annotations CLI from primary URL.") {{ if .AnnotationsBinaryFallbackURI }} || \
+    (echo "Primary URL failed for annotations CLI. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryFallbackURI }}" -O /usr/bin/annotations-cli && echo "Successfully downloaded annotations CLI from fallback URL."){{ end }}
+  - chmod 755 /usr/bin/annotations-cli
+  {{ end }}
   
   # Setup environment and start lite-engine
   - touch /root/.env

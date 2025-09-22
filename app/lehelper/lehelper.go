@@ -33,6 +33,8 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		ShouldUseGoogleDNS:      opts.ShouldUseGoogleDNS,
 		DriverName:              opts.DriverName,
 		EnableC4D:               opts.EnableC4D,
+		AnnotationsBinaryURI:    opts.AnnotationsBinaryURI,
+		AnnotationsBinaryFallbackURI: opts.AnnotationsBinaryFallbackURI,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
