@@ -39,6 +39,8 @@ type Params struct {
 	DriverName              string
 	CertsDirectory          string
 	EnableC4D               bool
+	AnnotationsBinaryURI    string
+	AnnotationsBinaryFallbackURI string
 }
 
 var funcs = map[string]interface{}{

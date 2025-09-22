@@ -44,6 +44,8 @@ type (
 		liteEngineFallbackPath  string
 		pluginBinaryFallbackURI string
 		runnerConfig            types.RunnerConfig
+		annotationsBinaryURI    string
+		annotationsBinaryFallbackURI string
 	}
 
 	poolEntry struct {
@@ -69,6 +71,8 @@ func New(
 		liteEngineFallbackPath:  env.LiteEngine.FallbackPath,
 		pluginBinaryFallbackURI: env.Settings.PluginBinaryFallbackURI,
 		runnerConfig:            types.RunnerConfig(env.RunnerConfig),
+		annotationsBinaryURI:    env.Settings.AnnotationsBinaryURI,
+		annotationsBinaryFallbackURI: env.Settings.AnnotationsBinaryFallbackURI,
 	}
 }
 
@@ -85,6 +89,7 @@ func NewManager(
 	autoInjectionBinaryURI,
 	liteEngineFallbackPath,
 	pluginBinaryFallbackURI string, runnerConfig types.RunnerConfig,
+	annotationsBinaryURI string, annotationsBinaryFallbackURI string,
 ) *Manager {
 	return &Manager{
 		globalCtx:               globalContext,
@@ -99,6 +104,8 @@ func NewManager(
 		liteEngineFallbackPath:  liteEngineFallbackPath,
 		pluginBinaryFallbackURI: pluginBinaryFallbackURI,
 		runnerConfig:            runnerConfig,
+		annotationsBinaryURI:    annotationsBinaryURI,
+		annotationsBinaryFallbackURI: annotationsBinaryFallbackURI,
 	}
 }
 
@@ -776,6 +783,8 @@ func (m *Manager) setupInstance(
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
+	createOptions.AnnotationsBinaryURI = m.annotationsBinaryURI
+	createOptions.AnnotationsBinaryFallbackURI = m.annotationsBinaryFallbackURI
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:                   agentConfig.Secret,
