@@ -124,29 +124,31 @@ type InstanceCreateOpts struct {
 	TLSCert        []byte
 	LiteEnginePath string
 	Platform
-	PoolName                string
-	RunnerName              string
-	Limit                   int
-	Pool                    int
-	HarnessTestBinaryURI    string
-	PluginBinaryURI         string
-	Tmate                   Tmate
-	AccountID               string
-	IsHosted                bool
-	ResourceClass           string
-	GitspaceOpts            GitspaceOpts
-	StorageOpts             StorageOpts
-	AutoInjectionBinaryURI  string
-	Labels                  map[string]string
-	Zone                    string
-	MachineType             string
-	LiteEngineFallbackPath  string
-	PluginBinaryFallbackURI string
-	ShouldUseGoogleDNS      bool
-	VMImageConfig           VMImageConfig
-	DriverName              string
-	Timeout                 int64
-	EnableC4D               bool
+	PoolName                     string
+	RunnerName                   string
+	Limit                        int
+	Pool                         int
+	HarnessTestBinaryURI         string
+	PluginBinaryURI              string
+	Tmate                        Tmate
+	AccountID                    string
+	IsHosted                     bool
+	ResourceClass                string
+	GitspaceOpts                 GitspaceOpts
+	StorageOpts                  StorageOpts
+	AutoInjectionBinaryURI       string
+	AnnotationsBinaryURI         string
+	AnnotationsBinaryFallbackURI string
+	Labels                       map[string]string
+	Zone                         string
+	MachineType                  string
+	LiteEngineFallbackPath       string
+	PluginBinaryFallbackURI      string
+	ShouldUseGoogleDNS           bool
+	VMImageConfig                VMImageConfig
+	DriverName                   string
+	Timeout                      int64
+	EnableC4D                    bool
 }
 
 // Platform defines the target platform.

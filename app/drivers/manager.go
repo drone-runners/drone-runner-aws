@@ -29,21 +29,23 @@ var _ IManager = (*Manager)(nil)
 
 type (
 	Manager struct {
-		globalCtx               context.Context
-		poolMap                 map[string]*poolEntry
-		strategy                Strategy
-		cleanupTimer            *time.Ticker
-		runnerName              string
-		liteEnginePath          string
-		instanceStore           store.InstanceStore
-		stageOwnerStore         store.StageOwnerStore
-		harnessTestBinaryURI    string
-		pluginBinaryURI         string
-		tmate                   types.Tmate
-		autoInjectionBinaryURI  string
-		liteEngineFallbackPath  string
-		pluginBinaryFallbackURI string
-		runnerConfig            types.RunnerConfig
+		globalCtx                    context.Context
+		poolMap                      map[string]*poolEntry
+		strategy                     Strategy
+		cleanupTimer                 *time.Ticker
+		runnerName                   string
+		liteEnginePath               string
+		instanceStore                store.InstanceStore
+		stageOwnerStore              store.StageOwnerStore
+		harnessTestBinaryURI         string
+		pluginBinaryURI              string
+		tmate                        types.Tmate
+		autoInjectionBinaryURI       string
+		liteEngineFallbackPath       string
+		pluginBinaryFallbackURI      string
+		runnerConfig                 types.RunnerConfig
+		annotationsBinaryURI         string
+		annotationsBinaryFallbackURI string
 	}
 
 	poolEntry struct {
@@ -58,17 +60,19 @@ func New(
 	env *config.EnvConfig,
 ) *Manager {
 	return &Manager{
-		globalCtx:               globalContext,
-		instanceStore:           instanceStore,
-		tmate:                   types.Tmate(env.Tmate),
-		runnerName:              env.Runner.Name,
-		liteEnginePath:          env.LiteEngine.Path,
-		harnessTestBinaryURI:    env.Settings.HarnessTestBinaryURI,
-		pluginBinaryURI:         env.Settings.PluginBinaryURI,
-		autoInjectionBinaryURI:  env.Settings.AutoInjectionBinaryURI,
-		liteEngineFallbackPath:  env.LiteEngine.FallbackPath,
-		pluginBinaryFallbackURI: env.Settings.PluginBinaryFallbackURI,
-		runnerConfig:            types.RunnerConfig(env.RunnerConfig),
+		globalCtx:                    globalContext,
+		instanceStore:                instanceStore,
+		tmate:                        types.Tmate(env.Tmate),
+		runnerName:                   env.Runner.Name,
+		liteEnginePath:               env.LiteEngine.Path,
+		harnessTestBinaryURI:         env.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:              env.Settings.PluginBinaryURI,
+		autoInjectionBinaryURI:       env.Settings.AutoInjectionBinaryURI,
+		liteEngineFallbackPath:       env.LiteEngine.FallbackPath,
+		pluginBinaryFallbackURI:      env.Settings.PluginBinaryFallbackURI,
+		runnerConfig:                 types.RunnerConfig(env.RunnerConfig),
+		annotationsBinaryURI:         env.Settings.AnnotationsBinaryURI,
+		annotationsBinaryFallbackURI: env.Settings.AnnotationsBinaryFallbackURI,
 	}
 }
 
@@ -85,20 +89,23 @@ func NewManager(
 	autoInjectionBinaryURI,
 	liteEngineFallbackPath,
 	pluginBinaryFallbackURI string, runnerConfig types.RunnerConfig,
+	annotationsBinaryURI string, annotationsBinaryFallbackURI string,
 ) *Manager {
 	return &Manager{
-		globalCtx:               globalContext,
-		instanceStore:           instanceStore,
-		tmate:                   tmate,
-		stageOwnerStore:         stageOwnerStore,
-		runnerName:              runnerName,
-		liteEnginePath:          liteEnginePath,
-		harnessTestBinaryURI:    harnessTestBinaryURI,
-		pluginBinaryURI:         pluginBinaryURI,
-		autoInjectionBinaryURI:  autoInjectionBinaryURI,
-		liteEngineFallbackPath:  liteEngineFallbackPath,
-		pluginBinaryFallbackURI: pluginBinaryFallbackURI,
-		runnerConfig:            runnerConfig,
+		globalCtx:                    globalContext,
+		instanceStore:                instanceStore,
+		tmate:                        tmate,
+		stageOwnerStore:              stageOwnerStore,
+		runnerName:                   runnerName,
+		liteEnginePath:               liteEnginePath,
+		harnessTestBinaryURI:         harnessTestBinaryURI,
+		pluginBinaryURI:              pluginBinaryURI,
+		autoInjectionBinaryURI:       autoInjectionBinaryURI,
+		liteEngineFallbackPath:       liteEngineFallbackPath,
+		pluginBinaryFallbackURI:      pluginBinaryFallbackURI,
+		runnerConfig:                 runnerConfig,
+		annotationsBinaryURI:         annotationsBinaryURI,
+		annotationsBinaryFallbackURI: annotationsBinaryFallbackURI,
 	}
 }
 
@@ -776,6 +783,8 @@ func (m *Manager) setupInstance(
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
+	createOptions.AnnotationsBinaryURI = m.annotationsBinaryURI
+	createOptions.AnnotationsBinaryFallbackURI = m.annotationsBinaryFallbackURI
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:                   agentConfig.Secret,
