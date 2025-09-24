@@ -157,7 +157,7 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_state": stateVals})
 	}
 
-	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
+	subQuery = subQuery.OrderBy("instance_started DESC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
 	// --- Convert subquery to SQL + args ---
 	subSQL, subArgs, err := subQuery.ToSql()

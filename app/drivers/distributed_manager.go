@@ -135,6 +135,10 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 	}
 
 	// 2. Destroy the claimed instances
+	logrus.WithField("pool", pool.Name).
+		WithField("instance_count", len(instancesToDestroy)).
+		WithField("instances", instancesToDestroy).
+		Infoln("cleaning up instances")
 	err := pool.Driver.Destroy(ctx, instancesToDestroy)
 	if err != nil {
 		// If destroy fails, we don't proceed to delete them from the DB.
