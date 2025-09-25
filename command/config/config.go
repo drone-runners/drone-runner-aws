@@ -377,6 +377,13 @@ type EnvConfig struct {
 		PoolMapByAccount        PoolMapperByAccount `envconfig:"DLITE_POOL_MAP_BY_ACCOUNT_ID"`
 	}
 
+	OutboxProcessor struct {
+		PollIntervalSecs  int `envconfig:"DLITE_OUTBOXER_POLL_INTERVAL_SECS" default:"30"`
+		RetryIntervalSecs int `envconfig:"DLITE_OUTBOXER_RETRY_INTERVAL_SECS" default:"300"`
+		MaxRetries        int `envconfig:"DLITE_OUTBOXER_MAX_RETRIES" default:"25"`
+		BatchSize         int `envconfig:"DLITE_OUTBOXER_BATCH_SIZE" default:"20"`
+	}
+
 	Settings struct {
 		ReusePool               bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge              int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
