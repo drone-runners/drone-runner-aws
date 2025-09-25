@@ -66,18 +66,28 @@ func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	}
 }
 
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, error) {
+// ProvideSQLOutboxStore provides an outbox store.
+func ProvideSQLOutboxStore(db *sqlx.DB) store.OutboxStore {
+	switch db.DriverName() {
+	case "postgres":
+		return sql.NewOutboxStore(db)
+	default:
+		return nil
+	}
+}
+
+func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, error) {
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil
 	}
 
 	db, err := ProvideSQLDatabase(driver, datasource)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), nil
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), nil
 }
