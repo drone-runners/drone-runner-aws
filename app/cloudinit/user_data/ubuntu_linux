@@ -1,5 +1,4 @@
 #cloud-config
-
 # Package installation
 {{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
 packages:
@@ -14,7 +13,6 @@ packages:
   - wget
   - docker-ce
 {{ end }}
-
 {{ if .EnableC4D }}
 # Early boot commands to detect NVMe disk
 bootcmd:
@@ -22,19 +20,31 @@ bootcmd:
   - touch /var/log/nvme-setup.log
   - echo "Starting NVME disk detection at $(date)" >> /var/log/nvme-setup.log
   - lsblk -d >> /var/log/nvme-setup.log 2>&1
-  - echo "Looking for NVME disks with size around 375G..." >> /var/log/nvme-setup.log
+  - echo "Looking for any NVME disk (largest) excluding root..." >> /var/log/nvme-setup.log
   - |
-    NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme.*3[0-9]{2}G" | head -n1 | awk '{print $1}')
+    set -e
+    ROOT_SRC=$(findmnt -no SOURCE / || true)
+    ROOT_BASE=""
+    if [ -n "$ROOT_SRC" ]; then
+      # Try to get parent disk name; fallback to stripping partition suffix
+      ROOT_BASE=$(lsblk -no pkname "$ROOT_SRC" 2>/dev/null || true)
+      if [ -z "$ROOT_BASE" ]; then
+        ROOT_BASE=$(basename "$ROOT_SRC" | sed 's/[0-9]*$//')
+      fi
+    fi
+    echo "Root source: $ROOT_SRC, root base: $ROOT_BASE" >> /var/log/nvme-setup.log
+    # Pick the largest non-root NVMe disk
+    NVME_DEV=$(lsblk -bdno NAME,TYPE,SIZE | awk -v rb="$ROOT_BASE" '$1 ~ /^nvme/ && $2=="disk" && $1 != rb {print $1, $3}' | sort -k2,2n | tail -1 | awk '{print $1}')
     if [ -z "$NVME_DEV" ]; then
-      echo "No NVME disk with size ~375G found, trying any NVME disk..." >> /var/log/nvme-setup.log
-      NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme" | head -n1 | awk '{print $1}')
+      # Fallback to first non-root NVMe if size-based selection fails
+      NVME_DEV=$(lsblk -dno NAME | awk -v rb="$ROOT_BASE" '/^nvme/ && $1 != rb {print $1; exit}')
     fi
     if [ -n "$NVME_DEV" ]; then
       echo "/dev/$NVME_DEV" > /etc/nvme_device_path
-      echo "Found NVMe disk: /dev/$NVME_DEV" >> /var/log/nvme-setup.log
+      echo "Selected NVMe disk: /dev/$NVME_DEV" >> /var/log/nvme-setup.log
       ls -la /dev/$NVME_DEV >> /var/log/nvme-setup.log 2>&1
     else
-      echo "No NVME disk found at all" >> /var/log/nvme-setup.log
+      echo "No suitable NVME disk found (excluding root)" >> /var/log/nvme-setup.log
       echo "Available disks:" >> /var/log/nvme-setup.log
       lsblk >> /var/log/nvme-setup.log 2>&1
     fi
@@ -45,7 +55,6 @@ bootcmd:
   - touch /var/log/nvme-setup.log
   - echo "NVME setup is disabled. Skipping NVME disk detection." >> /var/log/nvme-setup.log
 {{ end }}
-
 # Certificate files
 write_files:
 - path: {{ .CaCertPath }}
@@ -60,7 +69,6 @@ write_files:
   permissions: '0600'
   encoding: b64
   content: {{ .TLSKey | base64 }}
-
 # Main runtime commands
 runcmd:
   # Enable command tracing
@@ -78,162 +86,116 @@ runcmd:
   {{ if .EnableC4D }}
   # NVMe disk setup
   - |
-    # Define logging function
-    log_echo() {
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] $@" | tee -a /var/log/nvme-setup.log
-    }
-    
-    log_echo "Starting NVME disk setup"
-    lsblk | tee -a /var/log/nvme-setup.log
-    
-    # Check if device path file exists
-    if [ ! -f /etc/nvme_device_path ]; then
-      log_echo "NVMe device path file not found. Trying to detect NVME disk directly..."
-      
-      # Try to detect NVME disk directly
-      NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme.*3[0-9]{2}G" | head -n1 | awk '{print $1}')
-      if [ -z "$NVME_DEV" ]; then
-        log_echo "No NVME disk with size ~375G found, trying any NVME disk..."
-        NVME_DEV=$(lsblk -dno NAME,SIZE | grep -E "nvme" | head -n1 | awk '{print $1}')
-      fi
-      
-      if [ -n "$NVME_DEV" ]; then
-        DEV_PATH="/dev/$NVME_DEV"
-        log_echo "Found NVME disk directly: $DEV_PATH"
-      else
-        log_echo "No NVME disk found. Skipping NVME setup."
-        exit 0
-      fi
-    else
-      DEV_PATH=$(cat /etc/nvme_device_path)
-      log_echo "Read device path from file: $DEV_PATH"
-      
-      # Check if device path is empty
-      if [ -z "$DEV_PATH" ]; then
-        log_echo "NVMe device path is empty. Skipping NVMe setup."
-        exit 0
-      fi
-      
-      # Check if device exists
-      if [ ! -b "$DEV_PATH" ]; then
-        log_echo "NVMe device $DEV_PATH does not exist. Skipping NVMe setup."
-        exit 0
-      fi
-    fi
-    
-    # At this point we have a valid DEV_PATH
+    cat > /tmp/nvme-setup.sh <<'EOS'
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    LOGFILE="/var/log/nvme-setup.log"
     MOUNT_POINT="/mnt/ephemeral"
-    log_echo "Using device: $DEV_PATH"
-    log_echo "Using mount point: $MOUNT_POINT"
-    
-    # Format the disk
-    log_echo "Formatting $DEV_PATH as ext4..."
-    mkfs.ext4 -F "$DEV_PATH" | tee -a /var/log/nvme-setup.log
-    if [ $? -ne 0 ]; then
-      log_echo "Failed to format $DEV_PATH. Skipping NVME setup."
+
+    mkdir -p /var/log
+    touch "$LOGFILE"
+    # Do not overwrite if already set by bootcmd
+    [ -f /var/log/cloud-init-start.ts ] || date -u +%s > /var/log/cloud-init-start.ts
+
+    log() {
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] $@" | tee -a "$LOGFILE"
+    }
+
+    step_start() {
+      STEP_NAME="$1"
+      STEP_START=$(date +%s)
+      log ">>> Starting: $STEP_NAME"
+    }
+
+    step_end() {
+      STEP_END=$(date +%s)
+      DURATION=$((STEP_END - STEP_START))
+      log "<<< Finished: $STEP_NAME (Duration: ${DURATION}s)"
+    }
+
+    ### Step 1: Detect NVMe disk
+    step_start "Disk detection"
+    ROOT_SRC=$(findmnt -no SOURCE / || true)
+    ROOT_BASE=""
+    if [ -n "$ROOT_SRC" ]; then
+      ROOT_BASE=$(lsblk -no pkname "$ROOT_SRC" 2>/dev/null || true)
+      if [ -z "$ROOT_BASE" ]; then
+        ROOT_BASE=$(basename "$ROOT_SRC" | sed 's/[0-9]*$//')
+      fi
+    fi
+    log "Root source: $ROOT_SRC, root base: $ROOT_BASE"
+
+    NVME_DEV=$(lsblk -bdno NAME,TYPE,SIZE | awk -v rb="$ROOT_BASE" '$1 ~ /^nvme/ && $2=="disk" && $1 != rb {print $1, $3}' | sort -k2,2n | tail -1 | awk '{print $1}')
+    if [ -z "$NVME_DEV" ]; then
+      NVME_DEV=$(lsblk -dno NAME | awk -v rb="$ROOT_BASE" '/^nvme/ && $1 != rb {print $1; exit}')
+    fi
+
+    if [ -n "${NVME_DEV:-}" ]; then
+      DEV_PATH="/dev/$NVME_DEV"
+      echo "$DEV_PATH" > /etc/nvme_device_path
+      log "Selected NVMe disk: $DEV_PATH"
+    else
+      log "No suitable NVME disk found (excluding root)"
       exit 1
     fi
-    
-    # Mount the disk
-    log_echo "Mounting $DEV_PATH to $MOUNT_POINT..."
+    step_end "Disk detection"
+
+    ### Step 2: Format disk (always fresh)
+    step_start "Formatting disk"
+    mkfs.ext4 -F "$DEV_PATH" | tee -a "$LOGFILE"
+    step_end "Formatting disk"
+
+    ### Step 3: Mount disk
+    step_start "Mounting disk"
     mkdir -p "$MOUNT_POINT"
-    mount "$DEV_PATH" "$MOUNT_POINT" | tee -a /var/log/nvme-setup.log
-    if [ $? -ne 0 ]; then
-      log_echo "Failed to mount $DEV_PATH to $MOUNT_POINT. Skipping NVME setup."
-      exit 1
+    mount "$DEV_PATH" "$MOUNT_POINT"
+
+    # Get UUID for fstab
+    UUID=$(blkid -s UUID -o value "$DEV_PATH")
+    if ! grep -q "$UUID" /etc/fstab; then
+      echo "UUID=$UUID  $MOUNT_POINT  ext4  defaults,nofail  0 2" >> /etc/fstab
+      log "Added $MOUNT_POINT mount to /etc/fstab (UUID=$UUID)"
     fi
-    
-    # Bind mount directories
-    log_echo "Setting up bind mounts..."
-    for dir in /tmp /var/lib/docker /home /harness; do
-      name=$(basename "$dir")
-      target="$MOUNT_POINT/$name"
-      
-      log_echo "Processing directory: $dir"
-      log_echo "Target directory: $target"
-      
-      # Ensure source directory exists
-      if [ ! -d "$dir" ]; then
-        log_echo "Creating source directory $dir as it doesn't exist"
-        mkdir -p "$dir"
-        chmod 755 "$dir"
-      fi
-      
-      # Create target directory
-      log_echo "Creating target directory..."
+    step_end "Mounting disk"
+
+    ### Step 4: Bind mounts for critical directories
+    for dir in /tmp /harness; do
+      step_start "Bind-mounting $dir"
+
+      target="$MOUNT_POINT/$(basename "$dir")"
+      [ ! -d "$dir" ] && { log "Creating $dir"; mkdir -p "$dir"; chmod 755 "$dir"; }
       mkdir -p "$target"
-      
-      # Copy existing content
-      log_echo "Copying content from $dir to $target..."
-      if [ "$(ls -A $dir 2>/dev/null)" ]; then
-        cp -a "$dir/"* "$target/" 2>/dev/null || log_echo "Warning: Some files could not be copied"
+
+      if [ "$(ls -A "$dir" 2>/dev/null)" ]; then
+        log "Copying content from $dir to $target..."
+        cp -a "$dir/"* "$target/" 2>/dev/null || log "Warning: Some files could not be copied"
       else
-        log_echo "Source directory is empty"
+        log "$dir is empty, nothing to copy"
       fi
-      
-      # Bind mount
-      log_echo "Binding $target to $dir..."
-      umount "$dir" 2>/dev/null  # Unmount if already mounted
-      mount --bind "$target" "$dir" | tee -a /var/log/nvme-setup.log
-      if [ $? -ne 0 ]; then
-        log_echo "Failed to bind mount $target to $dir"
-      else
-        log_echo "Successfully bind mounted $target to $dir"
+
+      umount "$dir" 2>/dev/null || true
+      mount --bind "$target" "$dir" || log "Failed to bind mount $dir"
+
+      # Ensure persistence
+      if ! grep -qE "[[:space:]]$dir[[:space:]]" /etc/fstab; then
+        echo "$target  $dir  none  bind  0 0" >> /etc/fstab
+        log "Added bind mount for $dir -> $target in /etc/fstab"
       fi
-      
-      # No need for fstab entries in ephemeral VMs
+
+      step_end "Bind-mounting $dir"
     done
-    
-    # Verify mounts and log completion
-    log_echo "Verifying all mounts:"
-    mount | grep -E "$DEV_PATH|$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" >> /var/log/nvme-setup.log
-    mount | grep -E "$DEV_PATH|$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness"
-    
-    # Check if all directories are properly mounted
-    log_echo "Checking if all directories are properly mounted:"
-    ALL_MOUNTED=false  # Start with false and only set to true if all mounts succeed
-    MOUNT_SUCCESS=true  # Track if all mounts in this loop succeed
-    
-    for dir in /tmp /var/lib/docker /home /harness; do
-      if ! mount | grep -q " $dir "; then
-        log_echo "WARNING: $dir is not mounted!"
-        log_echo "Attempting to mount $dir again..."
-        target="$MOUNT_POINT/$(basename $dir)"
-        
-        # Try to mount again
-        umount "$dir" 2>/dev/null
-        mount --bind "$target" "$dir" 2>&1 | tee -a /var/log/nvme-setup.log
-        if [ $? -ne 0 ]; then
-          log_echo "FAILED to mount $dir again"
-          MOUNT_SUCCESS=false  # This mount attempt failed
-        else
-          log_echo "Successfully mounted $dir on retry"
-        fi
-      else
-        log_echo "✓ $dir is properly mounted"
-      fi
-    done
-    
-    # Only set ALL_MOUNTED to true if all mounts were successful
-    if [ "$MOUNT_SUCCESS" = true ] && mount | grep -q " /tmp " && mount | grep -q " /var/lib/docker " && mount | grep -q " /home " && mount | grep -q " /harness "; then
-      ALL_MOUNTED=true
-      log_echo "All required directories are properly mounted"
-    else
-      log_echo "Some directories are not properly mounted"
-    fi
-    
-    # Show disk usage
-    log_echo "Disk usage:"
-    df -h | grep -E "$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" >> /var/log/nvme-setup.log
-    df -h | grep -E "$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness"
-    
-    # No need to show fstab entries since we're not using them for ephemeral VMs
-    
-    if [ "$ALL_MOUNTED" = true ]; then
-      log_echo "NVME setup SUCCESSFUL! All directories properly mounted"
-    else
-      log_echo "NVME setup INCOMPLETE! Some directories failed to mount"
-    fi
+
+    ### Step 5: Verify mounts
+    step_start "Verifying mounts"
+    mount | grep -E "$UUID|$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a "$LOGFILE" || true
+    df -h | grep -E "$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a "$LOGFILE" || true
+    step_end "Verifying mounts"
+
+    log "Setup complete. All mounts will persist across reboot."
+    EOS
+    chmod +x /tmp/nvme-setup.sh
+    /tmp/nvme-setup.sh
   {{ else }}
   # NVME setup is disabled
   - |
