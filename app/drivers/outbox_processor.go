@@ -106,8 +106,8 @@ func (p *OutboxProcessor) processPendingJobs() error {
 				"runner_name": p.manager.runnerName,
 			}).Errorln("failed to process job")
 			// Update the job to pending with the error message
-			if err := p.outboxStore.UpdateStatus(p.ctx, job.ID, types.OutboxJobStatusPending, err.Error()); err != nil {
-				logrus.WithError(err).WithFields(logrus.Fields{
+			if updateErr := p.outboxStore.UpdateStatus(p.ctx, job.ID, types.OutboxJobStatusPending, err.Error()); updateErr != nil {
+				logrus.WithError(updateErr).WithFields(logrus.Fields{
 					"job_id":      job.ID,
 					"pool_name":   job.PoolName,
 					"runner_name": p.manager.runnerName,
