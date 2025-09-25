@@ -224,7 +224,6 @@ func (d *DistributedManager) provisionFromPool(
 			WithField("hotpool", true).
 			Traceln("provision: claimed hotpool instance")
 
-		// TODO: change this to an outbox entry
 		d.setupInstanceAsync(ctx, inst)
 		return inst, true, nil
 	}
@@ -509,11 +508,8 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		logr.WithError(err).Errorf("distributed dlite: failed to delete instances of pool=%q", pool.Name)
 	}
 
-	// TODO: Move to outbox
-	err = d.buildPool(ctx, pool, d.GetTLSServerName(), nil, d.setupInstanceWithHibernate)
-	if err != nil {
-		return fmt.Errorf("distributed dlite: failed to rebuld pool=%q error: %w", pool.Name, err)
-	}
-
+	// Nothing to do here
+	// 1. Instance was not hotpool instance, so no need to build pool
+	// 2. Instance was hotpool instance, so it will be built by the outbox processor
 	return nil
 }
