@@ -223,7 +223,7 @@ func (d *DistributedManager) provisionFromPool(
 			Traceln("provision: claimed hotpool instance")
 
 		// TODO: change this to an outbox entry
-		d.setupInstanceAsync(pool, tlsServerName, ownerID, resourceClass, vmImageConfig, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout)
+		d.setupInstanceAsync(pool, tlsServerName, "", "", nil, nil, nil, "", "", false, timeout)
 		return inst, true, nil
 	}
 
