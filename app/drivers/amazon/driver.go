@@ -67,7 +67,8 @@ type config struct {
 	service *ec2.EC2
 
 	// AMI cache
-	amiCache *AMICache
+	amiCache  *AMICache
+	enableC4D bool
 }
 
 const (
@@ -284,6 +285,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			Arn: aws.String(p.iamProfileArn),
 		}
 	}
+	opts.EnableC4D = p.enableC4D
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {

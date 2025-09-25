@@ -289,3 +289,9 @@ func WithZoneDetails(zoneDetails []cf.ZoneInfo) Option {
 		p.zoneDetails = zoneDetails
 	}
 }
+
+func WithEnableC4D(enableC4D bool) Option {
+	return func(p *config) {
+		p.enableC4D = enableC4D
+	}
+}
