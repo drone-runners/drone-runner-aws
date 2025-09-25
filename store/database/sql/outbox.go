@@ -60,7 +60,7 @@ func (s *outboxStore) FindAndClaimPending(ctx context.Context, runnerName string
 	if err != nil {
 		return nil, fmt.Errorf("error starting transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint
 
 	// Build subquery (CTE) to find candidate jobs
 	subQuery := squirrel.Select("id AS job_id").
@@ -84,6 +84,7 @@ func (s *outboxStore) FindAndClaimPending(ctx context.Context, runnerName string
 	}
 
 	// Build final CTE UPDATE SQL
+	//nolint: gosec
 	finalSQL := fmt.Sprintf(`
 WITH candidate AS (
 	%s
@@ -98,10 +99,10 @@ RETURNING id, pool_name, runner_name, job_type, job_params, created_at, processe
 `, subSQL)
 
 	// Combine args: status first, then subquery args
-	args := append(subArgs, types.OutboxJobStatusRunning)
+	subArgs = append(subArgs, types.OutboxJobStatusRunning)
 
 	// Execute and scan results
-	rows, err := tx.QueryContext(ctx, finalSQL, args...)
+	rows, err := tx.QueryContext(ctx, finalSQL, subArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("error executing update: %w", err)
 	}
@@ -110,7 +111,7 @@ RETURNING id, pool_name, runner_name, job_type, job_params, created_at, processe
 	var jobs []*types.OutboxJob
 	for rows.Next() {
 		job := new(types.OutboxJob)
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&job.ID,
 			&job.PoolName,
 			&job.RunnerName,
@@ -122,8 +123,8 @@ RETURNING id, pool_name, runner_name, job_type, job_params, created_at, processe
 			&job.ErrorMessage,
 			&job.RetryCount,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("error scanning job: %w", err)
+		if scanErr != nil {
+			return nil, fmt.Errorf("error scanning job: %w", scanErr)
 		}
 		jobs = append(jobs, job)
 	}
