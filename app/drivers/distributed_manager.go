@@ -23,11 +23,13 @@ var _ IManager = (*DistributedManager)(nil)
 
 type DistributedManager struct {
 	Manager
+	outboxStore store.OutboxStore
 }
 
-func NewDistributedManager(manager *Manager) *DistributedManager {
+func NewDistributedManager(manager *Manager, outboxStore store.OutboxStore) *DistributedManager {
 	return &DistributedManager{
-		*manager,
+		Manager:     *manager,
+		outboxStore: outboxStore,
 	}
 }
 
@@ -222,8 +224,7 @@ func (d *DistributedManager) provisionFromPool(
 			WithField("hotpool", true).
 			Traceln("provision: claimed hotpool instance")
 
-		// TODO: change this to an outbox entry
-		d.setupInstanceAsync(pool, tlsServerName, "", "", nil, nil, nil, "", "", false, timeout)
+		d.setupInstanceAsync(ctx, inst)
 		return inst, true, nil
 	}
 
@@ -244,23 +245,34 @@ func (d *DistributedManager) provisionFromPool(
 	return inst, false, nil
 }
 
-// setupInstanceAsync handles setting up the instance asynchronously
+// setupInstanceAsync creates an outbox job for setting up the instance
 func (d *DistributedManager) setupInstanceAsync(
-	pool *poolEntry,
-	tlsServerName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
-	agentConfig *types.GitspaceAgentConfig,
-	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
-	timeout int64,
+	ctx context.Context,
+	inst *types.Instance,
 ) {
-	go func(ctx context.Context) {
-		_, err := d.setupInstanceWithHibernate(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
-		if err != nil {
-			logrus.WithError(err).Errorln("failed to setup instance asynchronously")
-		}
-	}(d.globalCtx)
+	if inst == nil || inst.Pool == "" || inst.RunnerName == "" {
+		logger.FromContext(ctx).Errorln("setupInstanceAsync: instance is nil or pool or runner name is empty")
+		return
+	}
+	// Create outbox job
+	job := &types.OutboxJob{
+		PoolName:   inst.Pool,
+		RunnerName: inst.RunnerName,
+		JobType:    types.OutboxJobTypeSetupInstance,
+		JobParams:  nil, // TODO: add job params in future if needed
+		Status:     types.OutboxJobStatusPending,
+	}
+
+	if err := d.outboxStore.Create(ctx, job); err != nil {
+		logger.FromContext(ctx).WithError(err).Errorln("setupInstanceAsync: failed to create outbox job")
+		return
+	}
+
+	logger.FromContext(ctx).
+		WithField("job_id", job.ID).
+		WithField("pool_name", inst.Pool).
+		WithField("runner_name", inst.RunnerName).
+		Infoln("setupInstanceAsync: created outbox job for instance setup")
 }
 
 // setupInstanceWithHibernate handles setting up the instance into hibernate mode
@@ -281,6 +293,11 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 		return nil, err
 	}
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logrus.WithField("panic", r).Errorln("panic in hibernate goroutine")
+			}
+		}()
 		err = d.hibernate(context.Background(), pool.Name, tlsServerName, inst)
 		if err != nil {
 			logrus.WithError(err).Errorln("failed to hibernate the vm")
@@ -317,7 +334,7 @@ func (d *DistributedManager) hibernate(
 	allowedStates := []types.InstanceState{types.StateCreated}
 	claimedInstance, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateHibernating, allowedStates)
 	if err != nil {
-		return fmt.Errorf("hibernate: failed to claim instance for hibernation %s of %q pool: %w", claimedInstance.ID, poolName, err)
+		return fmt.Errorf("hibernate: failed to claim instance for hibernation for %q pool: %w", poolName, err)
 	}
 
 	// Perform the actual hibernation using the driver with retries
@@ -492,11 +509,8 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		logr.WithError(err).Errorf("distributed dlite: failed to delete instances of pool=%q", pool.Name)
 	}
 
-	// TODO: Move to outbox
-	err = d.buildPool(ctx, pool, d.GetTLSServerName(), nil, d.setupInstanceWithHibernate)
-	if err != nil {
-		return fmt.Errorf("distributed dlite: failed to rebuld pool=%q error: %w", pool.Name, err)
-	}
-
+	// Nothing to do here
+	// 1. Instance was not hotpool instance, so no need to build pool
+	// 2. Instance was hotpool instance, so it will be built by the outbox processor
 	return nil
 }

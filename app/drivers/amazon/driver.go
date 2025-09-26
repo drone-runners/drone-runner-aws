@@ -802,6 +802,9 @@ func (p *config) waitForVolumeAvailable(ctx context.Context, volumeID *string) e
 // cleanupVolumes waits for instances to terminate and handles volume cleanup based on cleanup type
 func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, cleanupType storage.CleanupType, volumeIDs []*string) error {
 	logr := logger.FromContext(ctx)
+	if cleanupType != storage.Delete || len(volumeIDs) == 0 {
+		return nil
+	}
 
 	// Wait for instances to terminate
 	logr.Infoln("aws: waiting for instance termination")
@@ -810,10 +813,6 @@ func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, clea
 	}); err != nil {
 		logr.WithError(err).Errorln("aws: failed waiting for instance termination")
 		return err
-	}
-
-	if cleanupType != storage.Delete || len(volumeIDs) == 0 {
-		return nil
 	}
 
 	// Delete the persistent volumes
