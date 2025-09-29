@@ -127,7 +127,7 @@ func (p *config) Ping(ctx context.Context) error {
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo,funlen
 	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
 	for k, v := range p.enablePinning {
