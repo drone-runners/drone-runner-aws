@@ -95,12 +95,6 @@ func HandleSetup(
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
-		// ensure internal logger is initialized even when streaming is disabled
-		internalLog.Out = os.Stdout
-		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
-		// set trace level for consistency with streaming mode
-		log.SetLevel(logrus.TraceLevel)
-		internalLog.SetLevel(logrus.TraceLevel)
 	} else {
 		wc := getStreamLogger(r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
 		defer func() {
@@ -136,22 +130,6 @@ func HandleSetup(
 		r.Volumes = append(r.Volumes, &vol)
 	}
 
-	platform, _, driver := poolManager.Inspect(r.PoolID)
-	imgVersionDefault, imgNameDefault := defaultOsImages(platform.OS, platform.Arch)
-	printTitle(logr, "Requested machine:")
-	printKV(logr, "Image Version", defaultString(r.VMImageConfig.ImageVersion, imgVersionDefault))
-	printKV(logr, "Image Name", defaultString(r.VMImageConfig.ImageName, imgNameDefault))
-	printKV(logr, "Machine Size", r.ResourceClass)
-	printKV(logr, "OS", capitalize(platform.OS))
-	printKV(logr, "Arch", capitalize(platform.Arch))
-	logr.Infoln("")
-
-	// enrich the internal logger with static fields that won't change across attempts
-	internalLogr = internalLogr.
-		WithField("resource_class", r.ResourceClass).
-		WithField("os", platform.OS).
-		WithField("arch", platform.Arch)
-
 	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
 	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
 
@@ -179,6 +157,16 @@ func HandleSetup(
 		owner = GetAccountID(&r.Context, r.Tags)
 	}
 
+	platform, _, driver := poolManager.Inspect(r.PoolID)
+	imgVersionDefault, imgNameDefault := defaultOsImages(platform.OS, platform.Arch)
+	printTitle(logr, "Requested machine:")
+	printKV(logr, "Image Version", defaultString(r.VMImageConfig.ImageVersion, imgVersionDefault))
+	printKV(logr, "Image Name", defaultString(r.VMImageConfig.ImageName, imgNameDefault))
+	printKV(logr, "Machine Size", r.ResourceClass)
+	printKV(logr, "OS", capitalize(platform.OS))
+	printKV(logr, "Arch", capitalize(platform.Arch))
+	logr.Infoln("")
+
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
 	for idx, p := range pools {
@@ -187,7 +175,10 @@ func HandleSetup(
 			fallback = true
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
-		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
+		internalLogr.WithField("pool_id", pool).
+			WithField("resource_class", r.ResourceClass).
+			WithField("os", platform.OS).
+			WithField("arch", platform.Arch).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
 		instance, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		setupTime = time.Since(st)
@@ -289,7 +280,8 @@ func HandleSetup(
 			).Inc()
 		}
 		printError(logr, "Init step failed")
-		internalLogr.Errorln("Init step failed")
+		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
+			Errorln("Init step failed")
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
 	}
 
@@ -328,6 +320,7 @@ func HandleSetup(
 	printOK(logr, "VM setup is complete")
 
 	internalLogr.WithField("selected_pool", selectedPool).
+		WithField("stage_runtime_id", stageRuntimeID).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name).
@@ -466,6 +459,7 @@ func handleSetup(
 						WithField("instance_name", instanceName).
 						WithField("ip", instanceIP).
 						WithField("pool_id", pool).
+						WithField("stage_runtime_id", stageRuntimeID).
 						WithField("log_index", logIndex).
 						Infof("serial console output: %s", out[start:end])
 				}
