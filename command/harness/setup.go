@@ -423,13 +423,7 @@ func handleSetup(
 	}
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
-
-	// Log EnableNestedVirtualization status for all providers
-	if instance.Provider == types.Google {
-		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
-	} else {
-		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", false)
-	}
+	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 
 	ilog.WithFields(logrus.Fields{
 		"pool_id":       pool,
