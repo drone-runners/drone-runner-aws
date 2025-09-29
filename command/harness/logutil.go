@@ -45,24 +45,3 @@ func (f *plainFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 }
 
 func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
-
-func defaultString(value, defaultValue string) string {
-	if value == "" {
-		return defaultValue
-	}
-	return value
-}
-
-func defaultOsImages(osName, arch string) (string, string) {
-	osName = strings.ToLower(osName)
-	arch = strings.ToLower(arch)
-
-	if osName == "linux" && (arch == "amd64" || arch == "arm64") {
-		return "ubuntu-latest", "ubuntu-22"
-	} else if osName == "windows" && arch == "amd64" {
-		return "windows-latest", "windows-19"
-	} else if osName == "darwin" && arch == "arm64" {
-		return "mac-latest", "sonoma-latest"
-	}
-	return "", ""
-}
