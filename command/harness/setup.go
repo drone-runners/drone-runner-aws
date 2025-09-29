@@ -95,6 +95,9 @@ func HandleSetup(
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
+		// ensure internal logger is initialized even when streaming is disabled
+		internalLog.Out = os.Stdout
+		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
 	} else {
 		wc := getStreamLogger(r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
 		defer func() {
@@ -130,9 +133,6 @@ func HandleSetup(
 		r.Volumes = append(r.Volumes, &vol)
 	}
 
-	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
-	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
-
 	pools := []string{}
 	pools = append(pools, r.PoolID)
 	pools = append(pools, r.FallbackPoolIDs...)
@@ -158,6 +158,8 @@ func HandleSetup(
 	}
 
 	platform, _, driver := poolManager.Inspect(r.PoolID)
+	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
+	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
 	printTitle(logr, "Requested machine:")
 	printKV(logr, "Image Version", r.VMImageConfig.ImageVersion)
 	printKV(logr, "Machine Size", r.ResourceClass)
@@ -165,6 +167,11 @@ func HandleSetup(
 	printKV(logr, "Arch", capitalize(platform.Arch))
 	logr.Infoln("")
 	printTitle(logr, "Preparing a machine to execute this stage...")
+	// enrich the internal logger with static fields that won't change across attempts
+	internalLogr = internalLogr.
+		WithField("resource_class", r.ResourceClass).
+		WithField("os", platform.OS).
+		WithField("arch", platform.Arch)
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
@@ -174,12 +181,9 @@ func HandleSetup(
 			fallback = true
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
-		internalLogr.WithField("pool_id", pool).
-			WithField("resource_class", r.ResourceClass).
-			WithField("os", platform.OS).
-			WithField("arch", platform.Arch).Traceln("starting the setup process")
+		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -365,7 +369,7 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
-) (*types.Instance, error) {
+) (*types.Instance, bool, bool, error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
@@ -385,7 +389,7 @@ func handleSetup(
 		}
 	}
 
-	instance, warmed, err = poolManager.Provision(
+	instance, warmed, err := poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
@@ -427,7 +431,7 @@ func handleSetup(
 		printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", false)
 	}
 
-	internalLogr.WithFields(logrus.Fields{
+	ilog.WithFields(logrus.Fields{
 		"pool_id":       pool,
 		"ip":            instance.Address,
 		"instance_id":   instance.ID,
@@ -443,7 +447,7 @@ func handleSetup(
 		if consoleLogs {
 			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instanceID)
 			if logErr != nil {
-				internalLogr.WithError(logErr).Errorln("failed to fetch console output logs")
+				ilog.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
 				// Serial console output is limited to 60000 characters since stackdriver only supports 64KB per log entry
 				const maxLogLength = 60000
@@ -533,5 +537,6 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
+	hibernated := instance.IsHibernated
 	return instance, warmed, hibernated, nil
 }
