@@ -14,16 +14,17 @@ import (
 )
 
 type Metrics struct {
-	BuildCount             *prometheus.CounterVec
-	FailedCount            *prometheus.CounterVec
-	ErrorCount             *prometheus.CounterVec
-	RunningCount           *prometheus.GaugeVec
-	RunningPerAccountCount *prometheus.GaugeVec
-	WarmPoolCount          *prometheus.GaugeVec
-	PoolFallbackCount      *prometheus.CounterVec
-	WaitDurationCount      *prometheus.HistogramVec
-	CPUPercentile          *prometheus.HistogramVec
-	MemoryPercentile       *prometheus.HistogramVec
+	BuildCount               *prometheus.CounterVec
+	FailedCount              *prometheus.CounterVec
+	ErrorCount               *prometheus.CounterVec
+	RunningCount             *prometheus.GaugeVec
+	RunningPerAccountCount   *prometheus.GaugeVec
+	WarmPoolCount            *prometheus.GaugeVec
+	PoolFallbackCount        *prometheus.CounterVec
+	WaitDurationCount        *prometheus.HistogramVec
+	TotalVMInitDurationCount *prometheus.HistogramVec
+	CPUPercentile            *prometheus.HistogramVec
+	MemoryPercentile         *prometheus.HistogramVec
 
 	stores []*Store
 }
@@ -313,12 +314,24 @@ func MemoryPercentile() *prometheus.HistogramVec {
 	)
 }
 
-// WaitDurationCount provides metrics for amount of time needed to wait to setup a machine
+// WaitDurationCount provides metrics for amount of time needed to wait to setup a machine in a particular pool
 func WaitDurationCount() *prometheus.HistogramVec {
 	return prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "harness_ci_runner_wait_duration_seconds",
-			Help:    "Waiting time needed to successfully allocate a machine",
+			Help:    "Waiting time needed to successfully allocate a machine in a pool",
+			Buckets: []float64{5, 15, 30, 60, 300, 600},
+		},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated"},
+	)
+}
+
+// TotalVMInitDurationCount provides metrics for amount of time needed to wait to setup a machine
+func TotalVMInitDurationCount() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_runner_total_vm_init_duration_seconds",
+			Help:    "Total time needed to successfully allocate a machine",
 			Buckets: []float64{5, 15, 30, 60, 300, 600},
 		},
 		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated"},
@@ -332,21 +345,23 @@ func RegisterMetrics() *Metrics {
 	runningPerAccountCount := RunningPerAccountCount()
 	poolFallbackCount := PoolFallbackCount()
 	waitDurationCount := WaitDurationCount()
+	totalVMInitDurationCount := TotalVMInitDurationCount()
 	warmPoolCount := WarmPoolCount()
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
 	errorCount := ErrorCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount)
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount)
 	return &Metrics{
-		BuildCount:             buildCount,
-		FailedCount:            failedBuildCount,
-		RunningCount:           runningCount,
-		RunningPerAccountCount: runningPerAccountCount,
-		PoolFallbackCount:      poolFallbackCount,
-		WaitDurationCount:      waitDurationCount,
-		MemoryPercentile:       memoryPercentile,
-		CPUPercentile:          cpuPercentile,
-		ErrorCount:             errorCount,
-		WarmPoolCount:          warmPoolCount,
+		BuildCount:               buildCount,
+		FailedCount:              failedBuildCount,
+		RunningCount:             runningCount,
+		RunningPerAccountCount:   runningPerAccountCount,
+		PoolFallbackCount:        poolFallbackCount,
+		WaitDurationCount:        waitDurationCount,
+		TotalVMInitDurationCount: totalVMInitDurationCount,
+		MemoryPercentile:         memoryPercentile,
+		CPUPercentile:            cpuPercentile,
+		ErrorCount:               errorCount,
+		WarmPoolCount:            warmPoolCount,
 	}
 }
