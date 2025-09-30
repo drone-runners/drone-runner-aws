@@ -160,11 +160,6 @@ func HandleSetup(
 	platform, _, driver := poolManager.Inspect(r.PoolID)
 	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
 	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
-	printTitle(logr, "Requested machine:")
-	printKV(logr, "Image Version", r.VMImageConfig.ImageVersion)
-	printKV(logr, "Machine Size", r.ResourceClass)
-	printKV(logr, "OS", capitalize(platform.OS))
-	printKV(logr, "Arch", capitalize(platform.Arch))
 	internalLogr = internalLogr.
 		WithField("resource_class", r.ResourceClass).
 		WithField("os", platform.OS).
@@ -181,6 +176,12 @@ func HandleSetup(
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
 		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		printTitle(logr, "Requested machine:")
+		printKV(logr, "Image Version", useNonEmpty(r.VMImageConfig.ImageName, instance.Image))
+		printKV(logr, "Machine Size", r.ResourceClass)
+		printKV(logr, "OS", capitalize(platform.OS))
+		printKV(logr, "Arch", capitalize(platform.Arch))
+		printKV(logr, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
