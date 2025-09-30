@@ -283,9 +283,9 @@ runcmd:
   # Download and install annotations CLI if configured (only for amd64)
   {{ if and (eq .Platform.Arch "amd64") .AnnotationsBinaryURI }}
   - |
-    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryURI }}" -O /usr/bin/annotations-cli && echo "Successfully downloaded annotations CLI from primary URL.") {{ if .AnnotationsBinaryFallbackURI }} || \
-    (echo "Primary URL failed for annotations CLI. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryFallbackURI }}" -O /usr/bin/annotations-cli && echo "Successfully downloaded annotations CLI from fallback URL."){{ end }}
-  - chmod 755 /usr/bin/annotations-cli
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryURI }}" -O /usr/bin/harness-agent && echo "Successfully downloaded annotations CLI from primary URL.") {{ if .AnnotationsBinaryFallbackURI }} || \
+    (echo "Primary URL failed for annotations CLI. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryFallbackURI }}" -O /usr/bin/harness-agent && echo "Successfully downloaded annotations CLI from fallback URL."){{ end }}
+  - chmod 755 /usr/bin/harness-agent
   {{ end }}
   
   # Setup environment and start lite-engine
