@@ -416,8 +416,8 @@ func handleSetup(
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
 	ilog.Traceln("successfully provisioned VM in pool")
-	printOK(buildLog, "Machine provisioned successfully")
 	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
+	printOK(buildLog, "Machine provisioned successfully")
 	printTitle(buildLog, "Preparing a machine to execute this stage...")
 
 	ilog.WithFields(logrus.Fields{
