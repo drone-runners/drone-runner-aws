@@ -48,7 +48,19 @@ func useNonEmpty(ImageConfigName, PoolConfigImage string) string {
 	if ImageConfigName != "" {
 		return ImageConfigName
 	}
-	return PoolConfigImage
+	return lastPathSegment(PoolConfigImage)
+}
+
+func lastPathSegment(s string) string {
+	if s == "" {
+		return s
+	}
+	s = strings.TrimSuffix(s, "/")
+	idx := strings.LastIndex(s, "/")
+	if idx == -1 {
+		return s
+	}
+	return s[idx+1:]
 }
 
 func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
