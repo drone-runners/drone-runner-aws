@@ -414,7 +414,7 @@ func handleSetup(
 		WithField("image_name", useNonEmpty(r.VMImageConfig.ImageName, instance.Image)).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
-	printKV(buildLog, "Image Version", useNonEmpty(r.VMImageConfig.ImageName, instance.Image))
+	printKV(buildLog, "Image Version", useNonEmpty(r.VMImageConfig.ImageVersion, instance.Image))
 	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 
 	ilog.Traceln("successfully provisioned VM in pool")
