@@ -369,7 +369,7 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
-) (instance *types.Instance, warmed bool, hibernated bool, err error) {
+) (instance *types.Instance, warmed, hibernated bool, err error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
