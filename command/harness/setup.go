@@ -175,12 +175,12 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		printTitle(logr, "Requested machine:")
-		printKV(logr, "Image Version", useNonEmpty(r.VMImageConfig.ImageName, instance.Image))
 		printKV(logr, "Machine Size", r.ResourceClass)
 		printKV(logr, "OS", capitalize(platform.OS))
 		printKV(logr, "Arch", capitalize(platform.Arch))
+		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		printKV(logr, "Image Version", useNonEmpty(r.VMImageConfig.ImageName, instance.Image))
 		printKV(logr, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
@@ -415,9 +415,11 @@ func handleSetup(
 		WithField("instance_name", instance.Name).
 		WithField("image_name", r.VMImageConfig.ImageName).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
+	
+	printKV(buildLog, "Image Version", useNonEmpty(r.VMImageConfig.ImageName, instance.Image))
+	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 
 	ilog.Traceln("successfully provisioned VM in pool")
-	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 	printOK(buildLog, "Machine provisioned successfully")
 	printTitle(buildLog, "Preparing a machine to execute this stage...")
 
