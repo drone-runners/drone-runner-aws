@@ -167,7 +167,6 @@ func HandleSetup(
 	printKV(logr, "Arch", capitalize(platform.Arch))
 	logr.Infoln("")
 	printTitle(logr, "Preparing a machine to execute this stage...")
-	// enrich the internal logger with static fields that won't change across attempts
 	internalLogr = internalLogr.
 		WithField("resource_class", r.ResourceClass).
 		WithField("os", platform.OS).
@@ -253,6 +252,7 @@ func HandleSetup(
 			WithField("selected_pool", selectedPool).
 			WithField("requested_pool", r.PoolID).
 			WithField("instance_address", instance.Address).
+			WithField("tried_pools", pools).
 			Tracef("init time for vm setup in pool %s is %.2fs", selectedPool, setupTime.Seconds())
 	} else {
 		metrics.BuildCount.WithLabelValues(
@@ -417,13 +417,10 @@ func handleSetup(
 		WithField("image_name", r.VMImageConfig.ImageName).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
-	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
-	if instance.Provider == types.Google {
-		ilog.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", instance.EnableNestedVirtualization))
-	}
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
 	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
+	printTitle(buildLog, "Preparing a machine to execute this stage...")
 
 	ilog.WithFields(logrus.Fields{
 		"pool_id":       pool,
@@ -499,7 +496,6 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
-	printTitle(buildLog, "Initializing machine and running health checks...")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
 	runnerConfig := poolManager.GetRunnerConfig()
 
