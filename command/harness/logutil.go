@@ -44,4 +44,11 @@ func (f *plainFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return []byte(msg), nil
 }
 
+func useNonEmpty(ImageConfigName, PoolConfigImage string) string {
+	if ImageConfigName != "" {
+		return ImageConfigName
+	}
+	return PoolConfigImage
+}
+
 func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
