@@ -165,8 +165,6 @@ func HandleSetup(
 	printKV(logr, "Machine Size", r.ResourceClass)
 	printKV(logr, "OS", capitalize(platform.OS))
 	printKV(logr, "Arch", capitalize(platform.Arch))
-	logr.Infoln("")
-	printTitle(logr, "Preparing a machine to execute this stage...")
 	internalLogr = internalLogr.
 		WithField("resource_class", r.ResourceClass).
 		WithField("os", platform.OS).
