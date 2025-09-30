@@ -180,8 +180,6 @@ func HandleSetup(
 		printKV(logr, "OS", capitalize(platform.OS))
 		printKV(logr, "Arch", capitalize(platform.Arch))
 		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
-		printKV(logr, "Image Version", useNonEmpty(r.VMImageConfig.ImageName, instance.Image))
-		printKV(logr, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -413,9 +411,9 @@ func handleSetup(
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name).
-		WithField("image_name", r.VMImageConfig.ImageName).
+		WithField("image_name", useNonEmpty(r.VMImageConfig.ImageName, instance.Image)).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
-	
+
 	printKV(buildLog, "Image Version", useNonEmpty(r.VMImageConfig.ImageName, instance.Image))
 	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 
