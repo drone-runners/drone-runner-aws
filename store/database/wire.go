@@ -21,7 +21,10 @@ var WireSet = wire.NewSet(
 	ProvideSQLInstanceStore,
 )
 
-const SingleInstance = "singleinstance"
+const (
+	SingleInstance = "singleinstance"
+	Postgres       = "postgres"
+)
 
 // ProvideSQLDatabase provides a database connection.
 func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
@@ -42,7 +45,7 @@ func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
 // ProvideSQLInstanceStore provides an instance store.
 func ProvideSQLInstanceStore(db *sqlx.DB) store.InstanceStore {
 	switch db.DriverName() {
-	case "postgres":
+	case Postgres:
 		return sql.NewInstanceStore(db)
 	case SingleInstance:
 		// this is a store with a single instance, used by exec and setup commands
@@ -57,7 +60,7 @@ func ProvideSQLInstanceStore(db *sqlx.DB) store.InstanceStore {
 // ProvideSQLStageOwnerStore provides an stage owner store.
 func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	switch db.DriverName() {
-	case "postgres":
+	case Postgres:
 		return sql.NewStageOwnerStore(db)
 	default:
 		return sql.NewStageOwnerStoreSync(
@@ -66,18 +69,28 @@ func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	}
 }
 
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, error) {
+// ProvideSQLOutboxStore provides an outbox store.
+func ProvideSQLOutboxStore(db *sqlx.DB) store.OutboxStore {
+	switch db.DriverName() {
+	case Postgres:
+		return sql.NewOutboxStore(db)
+	default:
+		return nil
+	}
+}
+
+func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, error) {
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil
 	}
 
 	db, err := ProvideSQLDatabase(driver, datasource)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), nil
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), nil
 }
