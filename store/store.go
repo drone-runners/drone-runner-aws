@@ -14,6 +14,7 @@ type InstanceStore interface {
 	Update(context.Context, *types.Instance) error
 	Purge(context.Context) error
 	DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error)
+	FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState) (*types.Instance, error)
 }
 
 type StageOwnerStore interface {
