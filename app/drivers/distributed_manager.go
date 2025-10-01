@@ -457,7 +457,10 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		// First condition: instances without 'ttl' key using default max age
 		busyCondition := squirrel.And{
 			squirrel.Eq{"instance_pool": pool.Name},
-			squirrel.Eq{"instance_state": types.StateInUse},
+			squirrel.Or{
+				squirrel.Eq{"instance_state": types.StateInUse},
+				squirrel.Eq{"instance_state": types.StateTerminating},
+			},
 			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
 			squirrel.Expr("NOT (instance_labels ?? 'ttl')"),
 		}
@@ -469,7 +472,10 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 		// Second condition: instances with 'ttl' key using extended max age
 		extendedBusyCondition := squirrel.And{
 			squirrel.Eq{"instance_pool": pool.Name},
-			squirrel.Eq{"instance_state": types.StateInUse},
+			squirrel.Or{
+				squirrel.Eq{"instance_state": types.StateInUse},
+				squirrel.Eq{"instance_state": types.StateTerminating},
+			},
 			squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
 			squirrel.Expr("instance_labels ?? 'ttl'"),
 		}
