@@ -210,11 +210,9 @@ func (d *DistributedManager) provisionFromPool(
 	// If we successfully claimed an instance, update it and return
 	if inst != nil {
 		inst.OwnerID = ownerID
-		if inst.IsHibernated {
-			// update started time after bringing instance from hibernate
-			// this will make sure that purger only picks it when it is actually used for max age
-			inst.Started = time.Now().Unix()
-		}
+		// update started time after claiming the instance
+		// this will make sure that purger only picks it when it is actually used for max age
+		inst.Started = time.Now().Unix()
 		if err = d.instanceStore.Update(ctx, inst); err != nil {
 			return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 		}
