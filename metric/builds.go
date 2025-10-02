@@ -340,7 +340,7 @@ func TotalVMInitDurationCount() *prometheus.HistogramVec {
 }
 
 // DestroyDurationCount provides metrics for the time taken to teardown/destroy a VM
-// This helps track slow teardowns that might delay pool capacity and identify misbehaving pods
+// This helps track slow teardowns that might delay pool capacity
 func DestroyDurationCount() *prometheus.HistogramVec {
 	return prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -348,7 +348,7 @@ func DestroyDurationCount() *prometheus.HistogramVec {
 			Help:    "Time taken to destroy/teardown a VM instance",
 			Buckets: []float64{1, 5, 10, 30, 60, 120, 300},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "pod_name", "warmed", "hibernated", "success"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "warmed", "hibernated", "success"},
 	)
 }
 

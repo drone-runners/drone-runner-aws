@@ -288,12 +288,8 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	req.Context.TaskID = rs.CorrelationID
 
 	ctx := r.Context()
-	runnerName := c.env.Runner.Name
-	if runnerName == "" {
-		runnerName = "unknown"
-	}
 	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.env.LiteEngine.EnableMock,
-		c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager, c.metrics, runnerName)
+		c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager, c.metrics)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("task_id", rs.CorrelationID).WithError(err).Error("could not destroy VM")
 		writeError(w, err)
