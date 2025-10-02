@@ -44,7 +44,6 @@ func HandleDestroy(
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-	runnerName string,
 ) error {
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
@@ -82,7 +81,7 @@ func HandleDestroy(
 			}
 			return ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr, runnerName)
+			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
@@ -100,7 +99,7 @@ func HandleDestroy(
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, enableMock bool, mockTimeout int,
-	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry, runnerName string) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
 	var poolID string
 	if r.InstanceInfo.PoolName == "" {
@@ -199,7 +198,6 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			inst.Arch,
 			string(inst.Provider),
 			strconv.FormatBool(poolManager.IsDistributed()),
-			runnerName,
 			strconv.FormatBool(inst.IsWarmed),
 			strconv.FormatBool(inst.IsHibernated),
 			strconv.FormatBool(destroySuccess),
@@ -223,7 +221,6 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		inst.Arch,
 		string(inst.Provider),
 		strconv.FormatBool(poolManager.IsDistributed()),
-		runnerName,
 		strconv.FormatBool(inst.IsWarmed),
 		strconv.FormatBool(inst.IsHibernated),
 		strconv.FormatBool(destroySuccess),
