@@ -22,6 +22,7 @@ type Metrics struct {
 	WarmPoolCount          *prometheus.GaugeVec
 	PoolFallbackCount      *prometheus.CounterVec
 	WaitDurationCount      *prometheus.HistogramVec
+	DestroyDurationCount   *prometheus.HistogramVec
 	CPUPercentile          *prometheus.HistogramVec
 	MemoryPercentile       *prometheus.HistogramVec
 
@@ -325,6 +326,19 @@ func WaitDurationCount() *prometheus.HistogramVec {
 	)
 }
 
+// DestroyDurationCount provides metrics for the time taken to teardown/destroy a VM
+// This helps track slow teardowns that might delay pool capacity and identify misbehaving pods
+func DestroyDurationCount() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_runner_destroy_duration_seconds",
+			Help:    "Time taken to destroy/teardown a VM instance",
+			Buckets: []float64{1, 5, 10, 30, 60, 120, 300},
+		},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "pod_name", "warmed", "hibernated", "success"},
+	)
+}
+
 func RegisterMetrics() *Metrics {
 	buildCount := BuildCount()
 	failedBuildCount := FailedBuildCount()
@@ -332,11 +346,12 @@ func RegisterMetrics() *Metrics {
 	runningPerAccountCount := RunningPerAccountCount()
 	poolFallbackCount := PoolFallbackCount()
 	waitDurationCount := WaitDurationCount()
+	destroyDurationCount := DestroyDurationCount()
 	warmPoolCount := WarmPoolCount()
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
 	errorCount := ErrorCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount)
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, destroyDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount)
 	return &Metrics{
 		BuildCount:             buildCount,
 		FailedCount:            failedBuildCount,
@@ -344,6 +359,7 @@ func RegisterMetrics() *Metrics {
 		RunningPerAccountCount: runningPerAccountCount,
 		PoolFallbackCount:      poolFallbackCount,
 		WaitDurationCount:      waitDurationCount,
+		DestroyDurationCount:   destroyDurationCount,
 		MemoryPercentile:       memoryPercentile,
 		CPUPercentile:          cpuPercentile,
 		ErrorCount:             errorCount,
