@@ -94,6 +94,9 @@ func HandleSetup(
 	if r.SetupRequest.LogConfig.URL == "" {
 		log.Out = os.Stdout
 		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
+		// ensure internal logger is initialized even when streaming is disabled
+		internalLog.Out = os.Stdout
+		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
 	} else {
 		wc := getStreamLogger(r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
 		defer func() {
@@ -105,8 +108,9 @@ func HandleSetup(
 		log.Out = wc
 		log.SetLevel(logrus.TraceLevel)
 		internalLog.SetLevel(logrus.TraceLevel)
+		usePlainFormatter(log)
 		internalLog.Out = os.Stdout
-		logr = log.WithField("stage_runtime_id", stageRuntimeID)
+		logr = logrus.NewEntry(log)
 		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
 	}
 
@@ -127,10 +131,6 @@ func HandleSetup(
 		}
 		r.Volumes = append(r.Volumes, &vol)
 	}
-
-	logr = AddContext(logr, &r.Context, r.Tags)
-	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
-	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
@@ -157,6 +157,13 @@ func HandleSetup(
 	}
 
 	platform, _, driver := poolManager.Inspect(r.PoolID)
+	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
+	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
+	internalLogr = internalLogr.
+		WithField("resource_class", r.ResourceClass).
+		WithField("os", platform.OS).
+		WithField("arch", platform.Arch)
+
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
 	for idx, p := range pools {
@@ -165,9 +172,13 @@ func HandleSetup(
 			fallback = true
 		}
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
-		logr.WithField("pool_id", pool).Traceln("starting the setup process")
+		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		printTitle(logr, "Requested machine:")
+		printKV(logr, "Machine Size", r.ResourceClass)
+		printKV(logr, "OS", capitalize(platform.OS))
+		printKV(logr, "Arch", capitalize(platform.Arch))
+		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -183,7 +194,7 @@ func HandleSetup(
 			strconv.FormatBool(hibernated),
 		).Observe(setupTime.Seconds())
 		if poolErr != nil {
-			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
+			internalLogr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
 			metrics.FailedCount.WithLabelValues(
 				pool,
 				platform.OS,
@@ -210,7 +221,7 @@ func HandleSetup(
 		if findErr != nil {
 			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
 				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil); derr != nil {
-					logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
+					internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 				}
 				return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
 			}
@@ -237,6 +248,7 @@ func HandleSetup(
 			WithField("selected_pool", selectedPool).
 			WithField("requested_pool", r.PoolID).
 			WithField("instance_address", instance.Address).
+			WithField("tried_pools", pools).
 			Tracef("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
 		metrics.BuildCount.WithLabelValues(
@@ -266,6 +278,7 @@ func HandleSetup(
 				r.VMImageConfig.ImageName,
 			).Inc()
 		}
+		printError(logr, "Init step failed")
 		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 			Errorln("Init step failed")
 		return nil, "", fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
@@ -303,14 +316,14 @@ func HandleSetup(
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
-	logr.WithField("selected_pool", selectedPool).
+	printOK(logr, "VM setup is complete")
+
+	internalLogr.WithField("selected_pool", selectedPool).
+		WithField("stage_runtime_id", stageRuntimeID).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name).
 		WithField("tried_pools", pools).
-		Traceln("VM setup is complete")
-
-	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 		Traceln("Init step completed successfully")
 
 	return resp, selectedPoolDriver, nil
@@ -322,7 +335,8 @@ func HandleSetup(
 // It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
 func handleSetup(
 	ctx context.Context,
-	logr *logrus.Entry,
+	buildLog *logrus.Entry,
+	internalLogr *logrus.Entry,
 	r *SetupVMRequest,
 	runnerName string,
 	enableMock bool,
@@ -330,12 +344,7 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
-) (
-	instance *types.Instance,
-	warmed bool,
-	hibernated bool,
-	err error,
-) {
+) (instance *types.Instance, warmed, hibernated bool, err error) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
@@ -376,16 +385,26 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
 	}
 
-	logr = logr.WithField("pool_id", pool).
+	ilog := internalLogr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
-		WithField("instance_name", instance.Name).WithField("image_name", r.VMImageConfig.ImageName).WithField("image_version", r.VMImageConfig.ImageVersion)
+		WithField("instance_name", instance.Name).
+		WithField("image_name", useNonEmpty(r.VMImageConfig.ImageName, instance.Image)).
+		WithField("image_version", r.VMImageConfig.ImageVersion)
 
-	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
-	if instance.Provider == types.Google {
-		logr.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", instance.EnableNestedVirtualization))
-	}
-	logr.Traceln("successfully provisioned VM in pool")
+	printKV(buildLog, "Image Version", useNonEmpty(r.VMImageConfig.ImageVersion, instance.Image))
+	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
+
+	ilog.Traceln("successfully provisioned VM in pool")
+	printOK(buildLog, "Machine provisioned successfully")
+	printTitle(buildLog, "Preparing a machine to execute this stage...")
+
+	ilog.WithFields(logrus.Fields{
+		"pool_id":       pool,
+		"ip":            instance.Address,
+		"instance_id":   instance.ID,
+		"instance_name": instance.Name,
+	}).Infoln("Machine provisioned successfully")
 
 	instanceID := instance.ID
 	instanceName := instance.Name
@@ -396,7 +415,7 @@ func handleSetup(
 		if consoleLogs {
 			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instanceID)
 			if logErr != nil {
-				logr.WithError(logErr).Errorln("failed to fetch console output logs")
+				ilog.WithError(logErr).Errorln("failed to fetch console output logs")
 			} else {
 				// Serial console output is limited to 60000 characters since stackdriver only supports 64KB per log entry
 				const maxLogLength = 60000
@@ -419,19 +438,18 @@ func handleSetup(
 		}
 		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil)
 		if err != nil {
-			logr.WithError(err).Errorln("failed to cleanup instance on setup failure")
+			ilog.WithError(err).Errorln("failed to cleanup instance on setup failure")
 		}
 	}
 
 	if instance.IsHibernated {
-		logr.Tracef("instance %s is hibernated", instance.ID)
+		ilog.Tracef("instance %s is hibernated", instance.ID)
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
 			go cleanUpInstanceFn(false)
 			return nil, false, false, fmt.Errorf("failed to start the instance up: %w", err)
 		}
-		logr.Tracef("instance %s is started", instance.ID)
-		hibernated = true
+		ilog.Tracef("instance %s is started", instance.ID)
 	}
 
 	instance.Stage = stageRuntimeID
@@ -454,9 +472,7 @@ func handleSetup(
 		go cleanUpInstanceFn(false)
 		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
-
 	// try the healthcheck api on the lite-engine until it responds ok
-	logr.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
 	runnerConfig := poolManager.GetRunnerConfig()
 
@@ -467,11 +483,13 @@ func handleSetup(
 	}
 
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
+		printError(buildLog, "Machine health check failed")
 		go cleanUpInstanceFn(true)
 		return nil, false, false, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
-	logr.Traceln("retry health check complete")
+	printOK(buildLog, "Machine health check passed")
+	internalLogr.Infoln("Machine health check passed")
 
 	// Currently m1 architecture does not enable nested virtualisation, so we disable docker.
 	if instance.Platform.OS == oshelp.OSMac {
@@ -481,9 +499,11 @@ func handleSetup(
 
 	_, err = client.Setup(ctx, &r.SetupRequest)
 	if err != nil {
+		printError(buildLog, "Machine setup failed")
 		go cleanUpInstanceFn(true)
 		return nil, false, false, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
+	hibernated = instance.IsHibernated
 	return instance, warmed, hibernated, nil
 }
