@@ -14,17 +14,18 @@ import (
 )
 
 type Metrics struct {
-	BuildCount               *prometheus.CounterVec
-	FailedCount              *prometheus.CounterVec
-	ErrorCount               *prometheus.CounterVec
-	RunningCount             *prometheus.GaugeVec
-	RunningPerAccountCount   *prometheus.GaugeVec
-	WarmPoolCount            *prometheus.GaugeVec
-	PoolFallbackCount        *prometheus.CounterVec
-	WaitDurationCount        *prometheus.HistogramVec
+	BuildCount             *prometheus.CounterVec
+	FailedCount            *prometheus.CounterVec
+	ErrorCount             *prometheus.CounterVec
+	RunningCount           *prometheus.GaugeVec
+	RunningPerAccountCount *prometheus.GaugeVec
+	WarmPoolCount          *prometheus.GaugeVec
+	PoolFallbackCount      *prometheus.CounterVec
+	WaitDurationCount      *prometheus.HistogramVec
 	TotalVMInitDurationCount *prometheus.HistogramVec
-	CPUPercentile            *prometheus.HistogramVec
-	MemoryPercentile         *prometheus.HistogramVec
+	DestroyDurationCount   *prometheus.HistogramVec
+	CPUPercentile          *prometheus.HistogramVec
+	MemoryPercentile       *prometheus.HistogramVec
 
 	stores []*Store
 }
@@ -338,6 +339,19 @@ func TotalVMInitDurationCount() *prometheus.HistogramVec {
 	)
 }
 
+// DestroyDurationCount provides metrics for the time taken to teardown/destroy a VM
+// This helps track slow teardowns that might delay pool capacity and identify misbehaving pods
+func DestroyDurationCount() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_runner_destroy_duration_seconds",
+			Help:    "Time taken to destroy/teardown a VM instance",
+			Buckets: []float64{1, 5, 10, 30, 60, 120, 300},
+		},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "pod_name", "warmed", "hibernated", "success"},
+	)
+}
+
 func RegisterMetrics() *Metrics {
 	buildCount := BuildCount()
 	failedBuildCount := FailedBuildCount()
@@ -346,11 +360,12 @@ func RegisterMetrics() *Metrics {
 	poolFallbackCount := PoolFallbackCount()
 	waitDurationCount := WaitDurationCount()
 	totalVMInitDurationCount := TotalVMInitDurationCount()
+	destroyDurationCount := DestroyDurationCount()
 	warmPoolCount := WarmPoolCount()
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
 	errorCount := ErrorCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount) //nolint:lll
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, destroyDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount) //nolint:lll
 	return &Metrics{
 		BuildCount:               buildCount,
 		FailedCount:              failedBuildCount,
@@ -359,6 +374,7 @@ func RegisterMetrics() *Metrics {
 		PoolFallbackCount:        poolFallbackCount,
 		WaitDurationCount:        waitDurationCount,
 		TotalVMInitDurationCount: totalVMInitDurationCount,
+		DestroyDurationCount:     destroyDurationCount,
 		MemoryPercentile:         memoryPercentile,
 		CPUPercentile:            cpuPercentile,
 		ErrorCount:               errorCount,

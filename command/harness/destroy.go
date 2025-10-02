@@ -44,6 +44,7 @@ func HandleDestroy(
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
+	runnerName string,
 ) error {
 	if r.StageRuntimeID == "" {
 		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
@@ -81,7 +82,7 @@ func HandleDestroy(
 			}
 			return ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr, runnerName)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
@@ -99,7 +100,7 @@ func HandleDestroy(
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, enableMock bool, mockTimeout int,
-	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry, runnerName string) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
 	var poolID string
 	if r.InstanceInfo.PoolName == "" {
@@ -117,6 +118,9 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr = AddContext(logr, &r.Context, map[string]string{})
 
 	logr.Infoln("starting the destroy process")
+
+	// Start timing the destroy operation
+	destroyStartTime := time.Now()
 
 	var inst *types.Instance
 	err := common.ValidateStructForKeys(r.InstanceInfo, []string{"ID", "Zone", "PoolName", "StorageIdentifier"})
@@ -184,9 +188,25 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
+	var destroySuccess bool
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
+		destroySuccess = false
+		// Record destroy duration metric even on failure
+		destroyDuration := time.Since(destroyStartTime)
+		metrics.DestroyDurationCount.WithLabelValues(
+			poolID,
+			inst.OS,
+			inst.Arch,
+			string(inst.Provider),
+			strconv.FormatBool(poolManager.IsDistributed()),
+			runnerName,
+			strconv.FormatBool(inst.IsWarmed),
+			strconv.FormatBool(inst.IsHibernated),
+			strconv.FormatBool(destroySuccess),
+		).Observe(destroyDuration.Seconds())
 		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
+	destroySuccess = true
 	logr.Infoln("destroyed instance")
 
 	envState().Delete(r.StageRuntimeID)
@@ -194,6 +214,20 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
+
+	// Record destroy duration metric on success
+	destroyDuration := time.Since(destroyStartTime)
+	metrics.DestroyDurationCount.WithLabelValues(
+		poolID,
+		inst.OS,
+		inst.Arch,
+		string(inst.Provider),
+		strconv.FormatBool(poolManager.IsDistributed()),
+		runnerName,
+		strconv.FormatBool(inst.IsWarmed),
+		strconv.FormatBool(inst.IsHibernated),
+		strconv.FormatBool(destroySuccess),
+	).Observe(destroyDuration.Seconds())
 
 	return inst, nil
 }
