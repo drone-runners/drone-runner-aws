@@ -467,6 +467,7 @@ func (m *Manager) provisionFromPool(
 		if err != nil {
 			return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
+		inst.IsWarmed = false
 		return inst, false, nil
 	}
 
@@ -479,6 +480,7 @@ func (m *Manager) provisionFromPool(
 	inst := free[0]
 	inst.State = types.StateInUse
 	inst.OwnerID = ownerID
+	inst.IsWarmed = true
 	if inst.IsHibernated {
 		// update started time after bringing instance from hibernate
 		// this will make sure that purger only picks it when it is actually used for max age
