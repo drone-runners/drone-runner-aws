@@ -64,6 +64,7 @@ type Instance struct {
 	Updated                    int64       `db:"instance_updated" json:"updated"`
 	Started                    int64       `db:"instance_started" json:"started"`
 	IsHibernated               bool        `db:"is_hibernated" json:"is_hibernated"`
+	IsWarmed                   bool        `db:"is_warmed" json:"is_warmed"`
 	Port                       int64       `db:"instance_port" json:"port"`
 	RunnerName                 string      `db:"runner_name" json:"runner_name"`
 	GitspacePortMappings       map[int]int `json:"gitspaces_port_mappings"`
