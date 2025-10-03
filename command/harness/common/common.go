@@ -23,6 +23,8 @@ type InstanceInfo struct {
 	CACert            []byte `json:"ca_cert"`
 	TLSKey            []byte `json:"tls_key"`
 	TLSCert           []byte `json:"tls_cert"`
+	IsWarmed          bool   `json:"is_warmed"`
+	IsHibernated      bool   `json:"is_hibernated"`
 }
 
 // ValidateStruct checks if all fields of a struct are populated.
@@ -80,7 +82,8 @@ func BuildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance { //nol
 			OS:   instanceInfo.OS,
 			Arch: instanceInfo.Arch,
 		},
-		IsHibernated:      false,
+		IsHibernated:      instanceInfo.IsHibernated,
+		IsWarmed:          instanceInfo.IsWarmed,
 		Port:              instanceInfo.Port,
 		Zone:              instanceInfo.Zone,
 		StorageIdentifier: instanceInfo.StorageIdentifier,

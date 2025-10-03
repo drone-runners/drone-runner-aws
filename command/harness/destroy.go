@@ -59,6 +59,9 @@ func HandleDestroy(
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 
+	// Start timing the destroy operation
+	destroyStartTime := time.Now()
+
 	for {
 		duration := b.NextBackOff()
 		// drain the timer
@@ -81,17 +84,25 @@ func HandleDestroy(
 			}
 			return ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			inst, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
 					lastErr = err
 				}
 				if duration == backoff.Stop {
+					// Record metric on final failure after all retries exhausted
+					if inst != nil {
+						recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, false)
+					}
 					return err
 				}
 				cnt++
 				continue
+			}
+			// Record metric on success
+			if inst != nil {
+				recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, true)
 			}
 			return nil
 		}
@@ -117,9 +128,6 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr = AddContext(logr, &r.Context, map[string]string{})
 
 	logr.Infoln("starting the destroy process")
-
-	// Start timing the destroy operation
-	destroyStartTime := time.Now()
 
 	var inst *types.Instance
 	err := common.ValidateStructForKeys(r.InstanceInfo, []string{"ID", "Zone", "PoolName", "StorageIdentifier"})
@@ -187,24 +195,9 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
-	var destroySuccess bool
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		destroySuccess = false
-		// Record destroy duration metric even on failure
-		destroyDuration := time.Since(destroyStartTime)
-		metrics.DestroyDurationCount.WithLabelValues(
-			poolID,
-			inst.OS,
-			inst.Arch,
-			string(inst.Provider),
-			strconv.FormatBool(poolManager.IsDistributed()),
-			strconv.FormatBool(inst.IsWarmed),
-			strconv.FormatBool(inst.IsHibernated),
-			strconv.FormatBool(destroySuccess),
-		).Observe(destroyDuration.Seconds())
-		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+		return inst, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
-	destroySuccess = true
 	logr.Infoln("destroyed instance")
 
 	envState().Delete(r.StageRuntimeID)
@@ -213,20 +206,21 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 
-	// Record destroy duration metric on success
-	destroyDuration := time.Since(destroyStartTime)
+	return inst, nil
+}
+
+func recordDestroyMetric(metrics *metric.Metrics, poolManager drivers.IManager, inst *types.Instance, startTime time.Time, success bool) {
+	destroyDuration := time.Since(startTime)
 	metrics.DestroyDurationCount.WithLabelValues(
-		poolID,
+		inst.Pool,
 		inst.OS,
 		inst.Arch,
 		string(inst.Provider),
 		strconv.FormatBool(poolManager.IsDistributed()),
 		strconv.FormatBool(inst.IsWarmed),
 		strconv.FormatBool(inst.IsHibernated),
-		strconv.FormatBool(destroySuccess),
+		strconv.FormatBool(success),
 	).Observe(destroyDuration.Seconds())
-
-	return inst, nil
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
