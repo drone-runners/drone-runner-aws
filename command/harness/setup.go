@@ -301,6 +301,8 @@ func HandleSetup(
 		CACert:            instance.CACert,
 		TLSKey:            instance.TLSKey,
 		TLSCert:           instance.TLSCert,
+		IsWarmed:          instance.IsWarmed,
+		IsHibernated:      instance.IsHibernated,
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
