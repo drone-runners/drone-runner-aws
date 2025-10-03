@@ -59,6 +59,9 @@ func HandleDestroy(
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 
+	// Start timing the destroy operation
+	destroyStartTime := time.Now()
+
 	for {
 		duration := b.NextBackOff()
 		// drain the timer
@@ -81,17 +84,25 @@ func HandleDestroy(
 			}
 			return ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			inst, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
 					lastErr = err
 				}
 				if duration == backoff.Stop {
+					// Record metric on final failure after all retries exhausted
+					if inst != nil {
+						recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, false)
+					}
 					return err
 				}
 				cnt++
 				continue
+			}
+			// Record metric on success
+			if inst != nil {
+				recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, true)
 			}
 			return nil
 		}
@@ -185,7 +196,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+		return inst, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroyed instance")
 
@@ -196,6 +207,20 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	}
 
 	return inst, nil
+}
+
+func recordDestroyMetric(metrics *metric.Metrics, poolManager drivers.IManager, inst *types.Instance, startTime time.Time, success bool) {
+	destroyDuration := time.Since(startTime)
+	metrics.DestroyDurationCount.WithLabelValues(
+		inst.Pool,
+		inst.OS,
+		inst.Arch,
+		string(inst.Provider),
+		strconv.FormatBool(poolManager.IsDistributed()),
+		strconv.FormatBool(inst.IsWarmed),
+		strconv.FormatBool(inst.IsHibernated),
+		strconv.FormatBool(success),
+	).Observe(destroyDuration.Seconds())
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
