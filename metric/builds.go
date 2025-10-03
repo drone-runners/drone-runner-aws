@@ -351,7 +351,8 @@ func RegisterMetrics() *Metrics {
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
 	errorCount := ErrorCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, destroyDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount)
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount,
+		waitDurationCount, destroyDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount)
 	return &Metrics{
 		BuildCount:             buildCount,
 		FailedCount:            failedBuildCount,
