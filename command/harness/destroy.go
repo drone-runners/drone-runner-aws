@@ -217,6 +217,9 @@ func recordDestroyMetric(metrics *metric.Metrics, poolManager drivers.IManager, 
 	platform, _, driver := poolManager.Inspect(poolID)
 
 	// Defensive check: if pool doesn't exist or values are empty, use fallback
+	if poolID == "" {
+		poolID = "unknown"
+	}
 	if driver == "" {
 		driver = "unknown"
 	}
