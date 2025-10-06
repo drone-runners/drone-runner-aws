@@ -84,7 +84,7 @@ func HandleDestroy(
 			}
 			return ctx.Err()
 		case <-timer.C:
-			inst, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			inst, poolID, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
@@ -92,8 +92,8 @@ func HandleDestroy(
 				}
 				if duration == backoff.Stop {
 					// Record metric on final failure after all retries exhausted
-					if inst != nil {
-						recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, false)
+					if inst != nil && poolID != "" {
+						recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, false, poolID)
 					}
 					return err
 				}
@@ -101,8 +101,8 @@ func HandleDestroy(
 				continue
 			}
 			// Record metric on success
-			if inst != nil {
-				recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, true)
+			if inst != nil && poolID != "" {
+				recordDestroyMetric(metrics, poolManager, inst, destroyStartTime, true, poolID)
 			}
 			return nil
 		}
@@ -110,13 +110,13 @@ func HandleDestroy(
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, enableMock bool, mockTimeout int,
-	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, string, error) {
 	logr = logr.WithField("retry_count", retryCount)
 	var poolID string
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
 		if err != nil || entity == nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+			return nil, "", errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 		}
 		poolID = entity.PoolName
 	} else {
@@ -135,10 +135,10 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.Infof("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v", err)
 		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
 		if err != nil {
-			return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
+			return nil, "", fmt.Errorf("cannot get the instance by tag: %w", err)
 		}
 		if inst == nil {
-			return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+			return nil, "", fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
 		}
 	} else {
 		logr.Infoln("Using the instance information from the VM Cleanup Request")
@@ -196,7 +196,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		return inst, fmt.Errorf("cannot destroy the instance: %w", err)
+		return inst, poolID, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroyed instance")
 
@@ -206,16 +206,32 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 
-	return inst, nil
+	return inst, poolID, nil
 }
 
-func recordDestroyMetric(metrics *metric.Metrics, poolManager drivers.IManager, inst *types.Instance, startTime time.Time, success bool) {
+func recordDestroyMetric(metrics *metric.Metrics, poolManager drivers.IManager, inst *types.Instance, startTime time.Time, success bool, poolID string) {
 	destroyDuration := time.Since(startTime)
+
+	// Get platform info from pool configuration (same pattern as setup.go)
+	// This ensures we always have valid OS/Arch/Driver values
+	platform, _, driver := poolManager.Inspect(poolID)
+
+	// Defensive check: if pool doesn't exist or values are empty, use fallback
+	if driver == "" {
+		driver = "unknown"
+	}
+	if platform.OS == "" {
+		platform.OS = "unknown"
+	}
+	if platform.Arch == "" {
+		platform.Arch = "unknown"
+	}
+
 	metrics.DestroyDurationCount.WithLabelValues(
-		inst.Pool,
-		inst.OS,
-		inst.Arch,
-		string(inst.Provider),
+		poolID,
+		platform.OS,
+		platform.Arch,
+		driver,
 		strconv.FormatBool(poolManager.IsDistributed()),
 		strconv.FormatBool(inst.IsWarmed),
 		strconv.FormatBool(inst.IsHibernated),
