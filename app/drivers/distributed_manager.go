@@ -10,8 +10,8 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -31,7 +31,6 @@ func NewDistributedManager(manager *Manager) *DistributedManager {
 		*manager,
 	}
 }
-
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
