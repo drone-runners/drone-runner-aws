@@ -44,11 +44,11 @@ func (f *plainFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return []byte(msg), nil
 }
 
-func useNonEmpty(ImageConfigName, PoolConfigImage string) string {
-	if ImageConfigName != "" {
-		return ImageConfigName
+func useNonEmpty(imageConfigName, poolConfigImage string) string {
+	if imageConfigName != "" {
+		return imageConfigName
 	}
-	return lastPathSegment(PoolConfigImage)
+	return lastPathSegment(poolConfigImage)
 }
 
 func lastPathSegment(s string) string {
