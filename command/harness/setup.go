@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/metric"
 
@@ -42,6 +43,22 @@ type SetupVMRequest struct {
 	InstanceInfo          common.InstanceInfo       `json:"instance_info"`
 	Timeout               int64                     `json:"timeout,omitempty"`
 	IsMarkedForInfraReset bool                      `json:"is_marked_for_infra_reset,omitempty"`
+}
+
+// deriveEnableNestedVirtualization reads the nested virtualization flag from the pool YAML config.
+// Returns false if not set or not applicable for the provider.
+func deriveEnableNestedVirtualization(poolManager drivers.IManager, pool string) bool {
+    poolCfg, err := poolManager.GetPoolConfig(pool)
+    if err != nil || poolCfg == nil {
+        return false
+    }
+    switch poolCfg.Type {
+    case string(types.Google), "gcp":
+        if g, ok := poolCfg.Spec.(*config.Google); ok {
+            return g.EnableNestedVirtualization
+        }
+    }
+    return false
 }
 
 type SetupVMResponse struct {
@@ -164,6 +181,15 @@ func HandleSetup(
 		WithField("resource_class", r.ResourceClass).
 		WithField("os", platform.OS).
 		WithField("arch", platform.Arch)
+	
+		printTitle(logr, "Requested machine:")
+		printKV(logr, "Machine Size", r.ResourceClass)
+		printKV(logr, "OS", capitalize(platform.OS))
+		printKV(logr, "Arch", capitalize(platform.Arch))
+		poolImageForLog := derivePoolImageForLog(poolManager, r.PoolID)
+		printKV(logr, "Image Version", useNonEmpty(r.VMImageConfig.ImageVersion, poolImageForLog))
+		nvFromConfig := deriveEnableNestedVirtualization(poolManager, r.PoolID)
+		printKV(logr, "Hardware Acceleration (Nested Virtualization)", nvFromConfig)
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
@@ -175,10 +201,6 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		printTitle(logr, "Requested machine:")
-		printKV(logr, "Machine Size", r.ResourceClass)
-		printKV(logr, "OS", capitalize(platform.OS))
-		printKV(logr, "Arch", capitalize(platform.Arch))
 		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
@@ -405,7 +427,7 @@ func handleSetup(
 	)
 	if err != nil {
 		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
-	}
+	}	
 
 	ilog := internalLogr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
@@ -413,9 +435,6 @@ func handleSetup(
 		WithField("instance_name", instance.Name).
 		WithField("image_name", useNonEmpty(r.VMImageConfig.ImageName, instance.Image)).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
-
-	printKV(buildLog, "Image Version", useNonEmpty(r.VMImageConfig.ImageVersion, instance.Image))
-	printKV(buildLog, "Hardware Acceleration (Nested Virtualization)", instance.EnableNestedVirtualization)
 
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
@@ -528,4 +547,42 @@ func handleSetup(
 
 	hibernated = instance.IsHibernated
 	return instance, warmed, hibernated, nil
+}
+
+// derivePoolImageForLog extracts an image identifier from the pool YAML config for logging purposes.
+// It returns an empty string if the pool config is missing or does not match a known driver type.
+func derivePoolImageForLog(poolManager drivers.IManager, pool string) string {
+    poolCfg, err := poolManager.GetPoolConfig(pool)
+    if err != nil || poolCfg == nil {
+        return ""
+    }
+    switch poolCfg.Type {
+    case string(types.Google), "gcp":
+        if g, ok := poolCfg.Spec.(*config.Google); ok {
+            return g.Image
+        }
+    case string(types.DigitalOcean):
+        if d, ok := poolCfg.Spec.(*config.DigitalOcean); ok {
+            return d.Image
+        }
+    case string(types.Azure):
+        if az, ok := poolCfg.Spec.(*config.Azure); ok {
+            if az.Image.Version != "" {
+                return az.Image.Version
+            } else if az.Image.SKU != "" {
+                return az.Image.SKU
+            } else if az.Image.Offer != "" {
+                return az.Image.Offer
+            }
+        }
+    case string(types.Amazon):
+        if a, ok := poolCfg.Spec.(*config.Amazon); ok {
+            return a.AMI
+        }
+    case string(types.Nomad):
+        if n, ok := poolCfg.Spec.(*config.Nomad); ok {
+            return n.VM.Image
+        }
+    }
+    return ""
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -34,4 +35,5 @@ type IManager interface {
 	IsDistributed() bool
 	GetRunnerConfig() types.RunnerConfig
 	Suspend(ctx context.Context, poolID string, instance *types.Instance) error
+	GetPoolConfig(poolName string) (*config.Instance, error)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -21,6 +22,7 @@ type Pool struct {
 	Platform types.Platform
 
 	Driver Driver
+	Config *config.Instance
 }
 
 type Driver interface {
