@@ -78,6 +78,7 @@ func HandleSetup(
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 ) (*SetupVMResponse, string, error) {
+	initStartTime := time.Now()
 	stageRuntimeID := r.ID
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
@@ -242,7 +243,7 @@ func HandleSetup(
 			WithField("selected_pool", selectedPool).
 			WithField("requested_pool", r.PoolID).
 			WithField("instance_address", instance.Address).
-			Tracef("init time for vm setup is %.2fs", setupTime.Seconds())
+			Tracef("init time for vm setup in pool %s is %.2fs", selectedPool, setupTime.Seconds())
 	} else {
 		metrics.BuildCount.WithLabelValues(
 			r.PoolID,
@@ -317,6 +318,27 @@ func HandleSetup(
 
 	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 		Traceln("Init step completed successfully")
+
+	totalInitTime := time.Since(initStartTime)
+	internalLogr.WithField("os", instance.OS).
+		WithField("arch", instance.Arch).
+		WithField("selected_pool", selectedPool).
+		WithField("requested_pool", r.PoolID).
+		WithField("instance_address", instance.Address).
+		Tracef("total init time for vm setup is %.2fs", totalInitTime.Seconds())
+	metrics.TotalVMInitDurationCount.WithLabelValues(
+		selectedPool,
+		platform.OS,
+		platform.Arch,
+		selectedPoolDriver,
+		metric.ConvertBool(fallback),
+		strconv.FormatBool(poolManager.IsDistributed()),
+		owner,
+		r.VMImageConfig.ImageVersion,
+		r.VMImageConfig.ImageName,
+		strconv.FormatBool(warmed),
+		strconv.FormatBool(hibernated),
+	).Observe(totalInitTime.Seconds())
 
 	return resp, selectedPoolDriver, nil
 }

@@ -45,6 +45,10 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 	return nil, nil
 }
 
+func (s InstanceStore) FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState) (*types.Instance, error) {
+	panic("implement me")
+}
+
 func (s InstanceStore) Purge(ctx context.Context) error {
 	return nil
 }

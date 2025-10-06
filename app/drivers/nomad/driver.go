@@ -137,7 +137,7 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo,funlen
 	vm := strings.ToLower(random(20)) //nolint:gomnd
 	class := ""
 	for k, v := range p.enablePinning {
@@ -207,18 +207,24 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	_, _, err = p.client.Jobs().Register(resourceJob, nil)
 	if err != nil {
-		defer p.getAllocationsForJob(logr, resourceJobID)
+		defer func() {
+			go p.getAllocationsForJob(logr, resourceJobID)
+		}()
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `p.nomadConfig.ResourceJobTimeout`, we fail the step
 	job, err := p.pollForJob(ctx, resourceJobID, logr, p.nomadConfig.ResourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
-		defer p.getAllocationsForJob(logr, resourceJobID)
+		defer func() {
+			go p.getAllocationsForJob(logr, resourceJobID)
+		}()
 		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
 	}
 
 	if job == nil || isTerminal(job) {
-		defer p.getAllocationsForJob(logr, resourceJobID)
+		defer func() {
+			go p.getAllocationsForJob(logr, resourceJobID)
+		}()
 		return nil, fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
@@ -226,7 +232,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// get the machine details where the resource job was allocated
 	ip, id, liteEngineHostPort, gitspacesPorts, err := p.fetchMachine(logr, resourceJobID)
 	if err != nil {
-		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+		defer func() {
+			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+		}()
 		return nil, err
 	}
 
@@ -250,7 +258,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	} else {
 		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, p.userData, p.machinePassword, p.vmImage, vmImageConfig, liteEngineHostPort, resource, opts, gitspacesPortMappings, opts.Timeout) //nolint
 		if err != nil {
-			defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+			defer func() {
+				go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+			}()
 			return nil, err
 		}
 	}
@@ -267,7 +277,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 
 	labelsBytes, marshalErr := json.Marshal(opts.Labels)
 	if marshalErr != nil {
-		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+		defer func() {
+			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+		}()
 		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
 	}
 	instance := &types.Instance{
@@ -296,24 +308,30 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Infoln("scheduler: submitting VM creation job")
 	_, _, err = p.client.Jobs().Register(initJob, nil)
 	if err != nil {
-		defer p.getAllocationsForJob(logr, initJobID)
-		defer p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+		defer func() {
+			go p.getAllocationsForJob(logr, initJobID)
+			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
+		}()
 		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Infoln("scheduler: successfully submitted init job, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, p.virtualizer.GetInitJobTimeout(vmImageConfig), true, []JobStatus{Dead})
 	if err != nil {
-		defer p.getAllocationsForJob(logr, initJobID)
-		// Destroy the VM if it's in a partially created state
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer func() {
+			go p.getAllocationsForJob(logr, initJobID)
+			// Destroy the VM if it's in a partially created state
+			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		}()
 		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
 	// Make sure all subtasks in the init job passed
 	err = p.checkTaskGroupStatus(initJobID, initTaskGroup)
 	if err != nil {
-		defer p.getAllocationsForJob(logr, initJobID)
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer func() {
+			go p.getAllocationsForJob(logr, initJobID)
+			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		}()
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Infoln("scheduler: Successfully submitted polled job")
@@ -321,12 +339,16 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
 	job, _, err = p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
 	if err != nil {
-		defer p.getAllocationsForJob(logr, resourceJobID)
+		defer func() {
+			go p.getAllocationsForJob(logr, resourceJobID)
+		}()
 		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobID, initJobID, vm)
 	}
 	if job == nil || isTerminal(job) {
-		defer p.getAllocationsForJob(logr, resourceJobID)
-		defer p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		defer func() {
+			go p.getAllocationsForJob(logr, resourceJobID)
+			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
+		}()
 		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)
 	}
 
