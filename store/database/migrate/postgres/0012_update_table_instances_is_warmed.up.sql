@@ -1,0 +1,1 @@
+ALTER TABLE instances ADD COLUMN is_warmed BOOLEAN NOT NULL DEFAULT false;

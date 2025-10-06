@@ -244,6 +244,7 @@ const instanceColumns = `
 ,instance_started
 ,instance_updated
 ,is_hibernated
+,is_warmed
 ,instance_port
 ,instance_owner_id
 ,instance_storage_identifier
@@ -282,6 +283,7 @@ INSERT INTO instances (
 ,instance_started
 ,instance_updated
 ,is_hibernated
+,is_warmed
 ,instance_port
 ,instance_owner_id
 ,runner_name
@@ -313,6 +315,7 @@ INSERT INTO instances (
 ,:instance_started
 ,:instance_updated
 ,:is_hibernated
+,:is_warmed
 ,:instance_port
 ,:instance_owner_id
 ,:runner_name
@@ -334,6 +337,7 @@ SET
  ,instance_stage	= :instance_stage
  ,instance_updated  = :instance_updated
  ,is_hibernated 	= :is_hibernated
+ ,is_warmed 		= :is_warmed
  ,instance_address  = :instance_address
  ,instance_owner_id = :instance_owner_id
  ,instance_started  = :instance_started
