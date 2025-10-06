@@ -19,10 +19,10 @@ const (
 )
 
 func capitalize(s string) string {
-    if len(s) > 0 {
-        return string(unicode.ToUpper(rune(s[0]))) + s[1:]
-    }
-    return s
+	if len(s) > 0 {
+		return string(unicode.ToUpper(rune(s[0]))) + s[1:]
+	}
+	return s
 }
 
 func colorize(s, color string) string { return color + s + colorReset }
@@ -71,14 +71,14 @@ func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
 // logRequestedMachine prints the standard "Requested machine" block with
 // size, OS, Arch, image, and nested virtualization flag.
 func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID string, platform types.Platform, resourceClass, imageVersion string) {
-    printTitle(logr, "Requested machine:")
-    printKV(logr, "Machine Size", resourceClass)
-    printKV(logr, "OS", capitalize(platform.OS))
-    printKV(logr, "Arch", capitalize(platform.Arch))
-    poolImageForLog := derivePoolImageForLog(poolManager, poolID)
-    printKV(logr, "Image Version", useNonEmpty(imageVersion, poolImageForLog))
-    nvFromConfig := deriveEnableNestedVirtualization(poolManager, poolID)
-    printKV(logr, "Hardware Acceleration (Nested Virtualization)", nvFromConfig)
+	printTitle(logr, "Requested machine:")
+	printKV(logr, "Machine Size", resourceClass)
+	printKV(logr, "OS", capitalize(platform.OS))
+	printKV(logr, "Arch", capitalize(platform.Arch))
+	poolImageForLog := derivePoolImageForLog(poolManager, poolID)
+	printKV(logr, "Image Version", useNonEmpty(imageVersion, poolImageForLog))
+	nvFromConfig := deriveEnableNestedVirtualization(poolManager, poolID)
+	printKV(logr, "Hardware Acceleration (Nested Virtualization)", nvFromConfig)
 }
 
 // deriveEnableNestedVirtualization reads the nested virtualization flag from the pool YAML config.
