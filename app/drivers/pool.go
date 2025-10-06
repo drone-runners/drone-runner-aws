@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -22,7 +21,8 @@ type Pool struct {
 	Platform types.Platform
 
 	Driver Driver
-	Config *config.Instance
+	// Spec stores only the provider-specific spec from the pool YAML (e.g., *config.Google, *config.Amazon, etc.).
+	Spec interface{}
 }
 
 type Driver interface {

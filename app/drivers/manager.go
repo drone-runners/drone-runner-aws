@@ -102,15 +102,15 @@ func NewManager(
 	}
 }
 
-func (m *Manager) GetPoolConfig(poolName string) (*config.Instance, error) {
+func (m *Manager) GetPoolSpec(poolName string) (interface{}, error) {
 	entry := m.poolMap[poolName]
 	if entry == nil {
 		return nil, fmt.Errorf("manager: pool %s not found", poolName)
 	}
-	if entry.Config == nil {
-		return nil, fmt.Errorf("manager: pool %s does not have a stored config", poolName)
+	if entry.Spec == nil {
+		return nil, fmt.Errorf("manager: pool %s does not have a stored spec", poolName)
 	}
-	return entry.Config, nil
+	return entry.Spec, nil
 }
 
 func (m *Manager) Inspect(name string) (platform types.Platform, rootDir, driver string) {

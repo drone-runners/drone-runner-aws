@@ -10,7 +10,6 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -72,9 +71,9 @@ func (d *DistributedManager) Provision(
 	)
 }
 
-// GetPoolConfig returns the original pool configuration instance for the given pool name.
-func (d *DistributedManager) GetPoolConfig(poolName string) (*config.Instance, error) {
-	return d.Manager.GetPoolConfig(poolName)
+// GetPoolSpec returns the original provider-specific spec for the given pool name.
+func (d *DistributedManager) GetPoolSpec(poolName string) (interface{}, error) {
+	return d.Manager.GetPoolSpec(poolName)
 }
 
 func (d *DistributedManager) BuildPools(ctx context.Context) error {
