@@ -40,6 +40,7 @@ func HandleDestroy(
 	ctx context.Context,
 	r *VMCleanupRequest,
 	s store.StageOwnerStore,
+	crs store.CapacityReservationStore,
 	enableMock bool, // only used for scale testing
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
@@ -81,7 +82,7 @@ func HandleDestroy(
 			}
 			return ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			_, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
@@ -98,7 +99,7 @@ func HandleDestroy(
 	}
 }
 
-func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, enableMock bool, mockTimeout int,
+func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
 	var poolID string
@@ -193,6 +194,12 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
+	}
+
+	if crs != nil {
+		if err = crs.Delete(ctx, r.StageRuntimeID); err != nil {
+			logr.WithError(err).Errorln("failed to delete capacity reservation entity")
+		}
 	}
 
 	return inst, nil

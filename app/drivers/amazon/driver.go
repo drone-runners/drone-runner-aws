@@ -201,6 +201,16 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 	return nil
 }
 
+// ReserveCapacity reserves capacity for a VM
+func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, errors.New("capacity reservation not supported for amazon driver")
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return errors.New("capacity cleanup not supported for amazon driver")
+}
+
 // Create an AWS instance for the pool, it will not perform build specific setup.
 //
 //nolint:gocyclo

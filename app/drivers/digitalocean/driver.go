@@ -2,6 +2,7 @@ package digitalocean
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -63,6 +64,16 @@ func (p *config) Ping(ctx context.Context) error {
 	client := newClient(ctx, p.pat)
 	_, _, err := client.Droplets.List(ctx, &godo.ListOptions{})
 	return err
+}
+
+// ReserveCapacity reserves capacity for a VM
+func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, errors.New("capacity reservation not supported for digitalocean driver")
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return errors.New("capacity cleanup not supported for digitalocean driver")
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.

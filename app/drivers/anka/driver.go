@@ -68,6 +68,16 @@ func (p *config) CanHibernate() bool {
 	return false
 }
 
+// ReserveCapacity reserves capacity for a VM
+func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, errors.New("capacity reservation not supported for anka driver")
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return errors.New("capacity cleanup not supported for anka driver")
+}
+
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd

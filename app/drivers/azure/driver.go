@@ -112,6 +112,16 @@ func (c *config) Zones() string {
 	return z
 }
 
+// ReserveCapacity reserves capacity for a VM
+func (c *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, errors.New("capacity reservation not supported for azure driver")
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (c *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return errors.New("capacity cleanup not supported for azure driver")
+}
+
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	sanitizedRunnerName := strings.ReplaceAll(opts.RunnerName, " ", "-")
 	sanitizedPoolName := strings.ReplaceAll(opts.PoolName, " ", "-")
