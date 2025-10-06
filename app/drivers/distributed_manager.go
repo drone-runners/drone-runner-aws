@@ -71,6 +71,7 @@ func (d *DistributedManager) Provision(
 		timeout,
 		poolName,
 	)
+}
 
 // GetPoolConfig returns the original pool configuration instance for the given pool name.
 func (d *DistributedManager) GetPoolConfig(poolName string) (*config.Instance, error) {
