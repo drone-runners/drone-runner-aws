@@ -66,18 +66,30 @@ func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	}
 }
 
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, error) {
+// ProvideSQLStageOwnerStore provides an stage owner store.
+func ProvideSQLCapacityReservationStore(db *sqlx.DB) store.CapacityReservationStore {
+	switch db.DriverName() {
+	case "postgres":
+		return sql.NewCapacityReservationStore(db)
+	default:
+		return sql.NewCapacityReservationStoreSync(
+			sql.NewCapacityReservationStore(db),
+		)
+	}
+}
+
+func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.CapacityReservationStore, error) {
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil
 	}
 
 	db, err := ProvideSQLDatabase(driver, datasource)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), nil
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLCapacityReservationStore(db), nil
 }

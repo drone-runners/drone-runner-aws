@@ -55,6 +55,10 @@ func (d *DistributedManager) GetStageOwnerStore() store.StageOwnerStore {
 	return d.stageOwnerStore
 }
 
+func (d *DistributedManager) GetCapacityReservationStore() store.CapacityReservationStore {
+	return d.capacityReservationStore
+}
+
 func (d *DistributedManager) GetTLSServerName() string {
 	// keep server name constant since any runner should be able to send request to LE
 	return "distributed-dlite"

@@ -21,3 +21,9 @@ type StageOwnerStore interface {
 	Create(context.Context, *types.StageOwner) error
 	Delete(context.Context, string) error
 }
+
+type CapacityReservationStore interface {
+	Find(ctx context.Context, id string) (*types.CapacityReservation, error)
+	Create(context.Context, *types.CapacityReservation) error
+	Delete(context.Context, string) error
+}

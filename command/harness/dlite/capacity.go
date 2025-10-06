@@ -13,22 +13,16 @@ import (
 	"github.com/wings-software/dlite/httphelper"
 )
 
-const (
-	initTimeoutSec        = 30 * 60
-	initTimeoutSecForBYOI = 60 * 60
-)
-
-type VMInitTask struct {
+type VMCapacityTask struct {
 	c *dliteCommand
 }
 
-type VMInitRequest struct {
-	SetupVMRequest harness.SetupVMRequest      `json:"setup_vm_request"`
-	Services       []*harness.ExecuteVMRequest `json:"services"`
-	Distributed    bool                        `json:"distributed,omitempty"`
+type VMCapacityRequest struct {
+	SetupVMRequest harness.SetupVMRequest `json:"setup_vm_request"`
+	Distributed    bool                   `json:"distributed,omitempty"`
 }
 
-func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := logrus.New()
 	task := &client.Task{}
 	err := json.NewDecoder(r.Body).Decode(task)
@@ -64,10 +58,10 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Make the setup call
 	req.SetupVMRequest.CorrelationID = task.ID
 	poolManager := t.c.getPoolManager(req.Distributed)
-	setupResp, selectedPoolDriver, err := harness.HandleSetup(
-		ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(),
+	setupResp, err := harness.HandleCapacityReservation(
+		ctx, &req.SetupVMRequest, poolManager.GetCapacityReservationStore(),
 		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
-		t.c.env.Runner.Name, t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs,
+		t.c.env.Runner.Name,
 		poolManager, t.c.metrics)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
@@ -75,38 +69,10 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
-	serviceStatuses := []VMServiceStatus{}
-	var status VMServiceStatus
-
-	// Start all the services
-	for i, s := range req.Services {
-		req.Services[i].IPAddress = setupResp.IPAddress
-		req.Services[i].CorrelationID = task.ID
-		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
-		resp, err := harness.HandleStep(ctx, req.Services[i], poolManager.GetStageOwnerStore(), t.c.env.Runner.Volumes,
-			t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs, poolManager, t.c.metrics, false)
-		if err != nil {
-			status.Status = Error
-			status.ErrorMessage = err.Error()
-		} else if resp.Error != "" {
-			status.Status = Error
-			status.ErrorMessage = resp.Error
-		}
-		serviceStatuses = append(serviceStatuses, status)
-	}
 
 	// Construct final response
 	resp := VMTaskExecutionResponse{
-		ServiceStatuses:        serviceStatuses,
-		IPAddress:              setupResp.IPAddress,
-		CommandExecutionStatus: Success,
-		DelegateMetaInfo: DelegateMetaInfo{
-			HostName: t.c.delegateInfo.Host,
-			ID:       t.c.delegateInfo.ID,
-		},
-		PoolDriverUsed:        selectedPoolDriver,
-		GitspacesPortMappings: setupResp.GitspacesPortMappings,
-		InstanceInfo:          setupResp.InstanceInfo,
+		CapacityReservation: *setupResp,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }

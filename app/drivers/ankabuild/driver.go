@@ -52,6 +52,16 @@ func New(opts ...Option) (drivers.Driver, error) {
 	return c, nil
 }
 
+// ReserveCapacity reserves capacity for a VM
+func (c *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, errors.New("capacity reservation not supported for ankabuild driver")
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (c *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return errors.New("capacity cleanup not supported for ankabuild driver")
+}
+
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd

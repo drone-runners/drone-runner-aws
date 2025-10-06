@@ -90,6 +90,16 @@ func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 	return "", errors.New("Unimplemented")
 }
 
+// ReserveCapacity reserves capacity for a VM
+func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, errors.New("capacity reservation not supported for vmfusion driver")
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return errors.New("capacity cleanup not supported for vmfusion driver")
+}
+
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	machineName := fmt.Sprintf(opts.RunnerName+"-"+"-%d", time.Now().Unix())
 
