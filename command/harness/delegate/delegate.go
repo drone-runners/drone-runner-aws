@@ -30,12 +30,13 @@ import (
 )
 
 type delegateCommand struct {
-	envFile         string
-	env             config.EnvConfig
-	poolFile        string
-	poolManager     *drivers.Manager
-	metrics         *metric.Metrics
-	stageOwnerStore store.StageOwnerStore
+	envFile                  string
+	env                      config.EnvConfig
+	poolFile                 string
+	poolManager              *drivers.Manager
+	metrics                  *metric.Metrics
+	stageOwnerStore          store.StageOwnerStore
+	capacityReservationStore store.CapacityReservationStore
 }
 
 func (c *delegateCommand) delegateListener() http.Handler {
@@ -109,12 +110,13 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	instanceStore, stageOwnerStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+	instanceStore, stageOwnerStore, capacityReservationStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
 
 	c.stageOwnerStore = stageOwnerStore
+	c.capacityReservationStore = capacityReservationStore
 	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
 
 	_, err = harness.SetupPoolWithEnv(ctx, &c.env, c.poolManager, c.poolFile)
@@ -288,7 +290,7 @@ func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) 
 	req.Context.TaskID = rs.CorrelationID
 
 	ctx := r.Context()
-	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.env.LiteEngine.EnableMock,
+	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.capacityReservationStore, c.env.LiteEngine.EnableMock,
 		c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager, c.metrics)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("task_id", rs.CorrelationID).WithError(err).Error("could not destroy VM")

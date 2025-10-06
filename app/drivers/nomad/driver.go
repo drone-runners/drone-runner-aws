@@ -125,6 +125,16 @@ func (p *config) Ping(ctx context.Context) error {
 	return errors.New("could not create a client to the nomad server")
 }
 
+// ReserveCapacity reserves capacity for a VM
+func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, errors.New("capacity reservation not supported for nomad driver")
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return errors.New("capacity cleanup not supported for nomad driver")
+}
+
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo

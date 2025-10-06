@@ -51,6 +51,11 @@ type SetupVMResponse struct {
 	InstanceInfo          common.InstanceInfo `json:"instance_info"`
 }
 
+type CapacityReservationResponse struct {
+	CapacityReservationSuccess bool                      `json:"capacity_reservation_success"`
+	CapacityReservationDetails types.CapacityReservation `json:"capacity_reservation_details"`
+}
+
 var (
 	freeAccount = "free"
 	noContext   = context.Background()
@@ -486,4 +491,285 @@ func handleSetup(
 	}
 
 	return instance, warmed, hibernated, nil
+}
+
+// HandleSetup tries to setup an instance in any of the pools given in the setup request.
+// It calls handleSetup internally for each pool instance trying to complete a setup.
+// Instead of passing in the env config, we pass in whatever is needed. This is because
+// this same code is being used in the new runner and we want to make sure nothing breaking
+// is added here which is not added in the new runner.
+func HandleCapacityReservation(
+	ctx context.Context,
+	r *SetupVMRequest,
+	crs store.CapacityReservationStore,
+	globalVolumes []string,
+	poolMapByAccount map[string]map[string]string,
+	runnerName string,
+	poolManager drivers.IManager,
+	metrics *metric.Metrics,
+) (*types.CapacityReservation, error) {
+	stageRuntimeID := r.ID
+	if stageRuntimeID == "" {
+		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
+	}
+
+	if r.PoolID == "" {
+		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
+	}
+
+	// Sets up logger to stream the logs in case log config is set
+	log := logrus.New()
+	internalLog := logrus.New()
+	internalLog.SetFormatter(&logrus.JSONFormatter{})
+
+	var (
+		logr         *logrus.Entry
+		internalLogr *logrus.Entry
+	)
+	if r.SetupRequest.LogConfig.URL == "" {
+		log.Out = os.Stdout
+		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
+	} else {
+		wc := getStreamLogger(r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
+		defer func() {
+			if err := wc.Close(); err != nil {
+				log.WithError(err).Debugln("failed to close log stream")
+			}
+		}()
+
+		log.Out = wc
+		log.SetLevel(logrus.TraceLevel)
+		internalLog.SetLevel(logrus.TraceLevel)
+		internalLog.Out = os.Stdout
+		logr = log.WithField("stage_runtime_id", stageRuntimeID)
+		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
+	}
+
+	// append global volumes to the setup request.
+	for _, pair := range globalVolumes {
+		src, _, ro, err := resource.ParseVolume(pair)
+		if err != nil {
+			log.Warn(err)
+			continue
+		}
+		vol := lespec.Volume{
+			HostPath: &lespec.VolumeHostPath{
+				ID:       fileID(src),
+				Name:     fileID(src),
+				Path:     src,
+				ReadOnly: ro,
+			},
+		}
+		r.Volumes = append(r.Volumes, &vol)
+	}
+
+	logr = AddContext(logr, &r.Context, r.Tags)
+	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
+	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
+
+	pools := []string{}
+	pools = append(pools, r.PoolID)
+	pools = append(pools, r.FallbackPoolIDs...)
+
+	var selectedPool string
+	var poolErr error
+	var capacity *types.CapacityReservation
+
+	var (
+		foundPool bool
+		fallback  bool
+		warmed    bool
+	)
+
+	var owner string
+
+	// TODO: Remove this once we start populating license information.
+	if strings.Contains(r.PoolID, freeAccount) || getIsFreeAccount(&r.Context, r.Tags) {
+		owner = freeAccount
+	} else {
+		owner = GetAccountID(&r.Context, r.Tags)
+	}
+
+	platform, _, driver := poolManager.Inspect(r.PoolID)
+	// try to provision an instance with fallbacks
+	setupTime := time.Duration(0)
+	for idx, p := range pools {
+		st := time.Now()
+		if idx > 0 {
+			fallback = true
+		}
+		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
+		logr.WithField("pool_id", pool).Traceln("starting the setup process")
+		_, _, poolDriver := poolManager.Inspect(p)
+		capacity, warmed, poolErr = handleCapacityReservation(ctx, logr, r, runnerName, poolManager, pool, owner)
+		setupTime = time.Since(st)
+		metrics.WaitDurationCount.WithLabelValues(
+			pool,
+			platform.OS,
+			platform.Arch,
+			poolDriver,
+			metric.ConvertBool(fallback),
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+			r.VMImageConfig.ImageVersion,
+			r.VMImageConfig.ImageName,
+			strconv.FormatBool(warmed),
+		).Observe(setupTime.Seconds())
+		if poolErr != nil {
+			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
+			metrics.FailedCount.WithLabelValues(
+				pool,
+				platform.OS,
+				platform.Arch,
+				poolDriver,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+				r.ResourceClass,
+				r.VMImageConfig.ImageVersion,
+				r.VMImageConfig.ImageName,
+			).Inc()
+			continue
+		}
+		selectedPool = pool
+		foundPool = true
+		_, _, _ = poolManager.Inspect(selectedPool)
+		break
+	}
+
+	// If a successful fallback happened and we have an instance setup, record it
+	if foundPool && capacity != nil { // check for instance != nil just in case
+		// add an entry in stage pool mapping if instance was created.
+		_, findErr := crs.Find(noContext, stageRuntimeID)
+		if findErr != nil {
+			if cerr := crs.Create(noContext, capacity); cerr != nil {
+				if capacity.InstanceID != "" {
+					if derr := poolManager.Destroy(noContext, selectedPool, capacity.InstanceID, nil, nil); derr != nil {
+						logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
+					}
+				}
+				return nil, fmt.Errorf("could not create stage owner entity: %w", cerr)
+			}
+		}
+		if fallback {
+			// fallback metric records the first pool ID which was tried and the associated driver.
+			// We don't record final pool which was used as this metric is only used to get data about
+			// which drivers and pools are causing fallbacks.
+			//metrics.PoolFallbackCount.WithLabelValues(
+			//	r.PoolID,
+			//	instance.OS,
+			//	instance.Arch,
+			//	driver,
+			//	metric.True,
+			//	strconv.FormatBool(poolManager.IsDistributed()),
+			//	owner,
+			//	r.ResourceClass,
+			//	r.VMImageConfig.ImageVersion,
+			//	r.VMImageConfig.ImageName,
+			//).Inc()
+		}
+		//internalLogr.WithField("os", instance.OS).
+		//	WithField("arch", instance.Arch).
+		//	WithField("selected_pool", selectedPool).
+		//	WithField("requested_pool", r.PoolID).
+		//	WithField("instance_address", instance.Address).
+		//	Tracef("init time for vm setup is %.2fs", setupTime.Seconds())
+	} else {
+		metrics.BuildCount.WithLabelValues(
+			r.PoolID,
+			platform.OS,
+			platform.Arch,
+			driver,
+			strconv.FormatBool(poolManager.IsDistributed()),
+			"",
+			owner,
+			r.ResourceClass,
+			"",
+			r.VMImageConfig.ImageVersion,
+			r.VMImageConfig.ImageName,
+		).Inc()
+		if fallback {
+			metrics.PoolFallbackCount.WithLabelValues(
+				r.PoolID,
+				platform.OS,
+				platform.Arch,
+				driver,
+				metric.False,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+				r.ResourceClass,
+				r.VMImageConfig.ImageVersion,
+				r.VMImageConfig.ImageName,
+			).Inc()
+		}
+		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
+			Errorln("Init step failed")
+		return nil, fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
+	}
+
+	logr.WithField("selected_pool", selectedPool).
+		WithField("tried_pools", pools).
+		Traceln("VM capacity reservation is complete")
+
+	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
+		Traceln("Capacity reservation step completed successfully")
+
+	return capacity, nil
+}
+
+// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
+// run a health check on the lite engine. It returns information about the setup
+// VM and an error if setup failed.
+// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
+func handleCapacityReservation(
+	ctx context.Context,
+	logr *logrus.Entry,
+	r *SetupVMRequest,
+	runnerName string,
+	poolManager drivers.IManager,
+	pool,
+	owner string,
+) (
+	capacityReservation *types.CapacityReservation,
+	warmed bool,
+	err error,
+) {
+	// check if the pool exists in the pool manager.
+	if !poolManager.Exists(pool) {
+		return nil, false, fmt.Errorf("could not find pool: %s", pool)
+	}
+
+	// try to provision an instance from the pool manager.
+	query := &types.QueryParams{
+		RunnerName: runnerName,
+	}
+
+	shouldUseGoogleDNS := false
+	if len(r.SetupRequest.Envs) != 0 {
+		if r.SetupRequest.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
+			shouldUseGoogleDNS = true
+		}
+	}
+
+	capacityReservation, warmed, err = poolManager.ReserveCapacity(
+		ctx,
+		pool,
+		poolManager.GetTLSServerName(),
+		owner,
+		r.ResourceClass,
+		&r.VMImageConfig,
+		query,
+		&r.GitspaceAgentConfig,
+		&r.StorageConfig,
+		r.Zone,
+		r.MachineType,
+		shouldUseGoogleDNS,
+		r.Timeout,
+	)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to reserve capacity: %w", err)
+	}
+
+	logr.Traceln("successfully reserved capacity for VM in pool")
+
+	return capacityReservation, warmed, nil
 }

@@ -2,22 +2,24 @@ package dlite
 
 import (
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/api"
 )
 
 type VMTaskExecutionResponse struct {
-	ErrorMessage           string                 `json:"error_message"`
-	IPAddress              string                 `json:"ip_address"`
-	OutputVars             map[string]string      `json:"output_vars"`
-	ServiceStatuses        []VMServiceStatus      `json:"service_statuses"`
-	CommandExecutionStatus CommandExecutionStatus `json:"command_execution_status"`
-	DelegateMetaInfo       DelegateMetaInfo       `json:"delegate_meta_info"`
-	Artifact               []byte                 `json:"artifact,omitempty"`
-	PoolDriverUsed         string                 `json:"pool_driver_used"`
-	Outputs                []*api.OutputV2        `json:"outputs"`
-	OptimizationState      string                 `json:"optimization_state"`
-	GitspacesPortMappings  map[int]int            `json:"gitspaces_port_mappings"`
-	InstanceInfo           common.InstanceInfo    `json:"instance_info"`
+	ErrorMessage           string                    `json:"error_message"`
+	IPAddress              string                    `json:"ip_address"`
+	OutputVars             map[string]string         `json:"output_vars"`
+	ServiceStatuses        []VMServiceStatus         `json:"service_statuses"`
+	CommandExecutionStatus CommandExecutionStatus    `json:"command_execution_status"`
+	DelegateMetaInfo       DelegateMetaInfo          `json:"delegate_meta_info"`
+	Artifact               []byte                    `json:"artifact,omitempty"`
+	PoolDriverUsed         string                    `json:"pool_driver_used"`
+	Outputs                []*api.OutputV2           `json:"outputs"`
+	OptimizationState      string                    `json:"optimization_state"`
+	GitspacesPortMappings  map[int]int               `json:"gitspaces_port_mappings"`
+	InstanceInfo           common.InstanceInfo       `json:"instance_info"`
+	CapacityReservation    types.CapacityReservation `json:"capacity_reservation"`
 }
 
 type DelegateMetaInfo struct {
