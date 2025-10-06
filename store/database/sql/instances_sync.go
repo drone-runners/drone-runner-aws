@@ -47,6 +47,12 @@ func (i InstanceStoreSync) Update(ctx context.Context, instance *types.Instance)
 	return i.base.Update(ctx, instance)
 }
 
+func (i InstanceStoreSync) FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState) (*types.Instance, error) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	panic("implement me")
+}
+
 func (i InstanceStoreSync) Purge(ctx context.Context) error {
 	mutex.Lock()
 	defer mutex.Unlock()
