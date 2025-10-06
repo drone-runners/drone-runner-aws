@@ -357,6 +357,7 @@ func (m *Manager) Provision(
 	instanceInfo *common.InstanceInfo,
 	timeout int64,
 	isMarkedForInfraReset bool,
+	reservedCapacity *types.CapacityReservation,
 ) (*types.Instance, bool, error) {
 	pool, err := m.validatePool(poolName)
 	if err != nil {
@@ -400,6 +401,7 @@ func (m *Manager) Provision(
 		shouldUseGoogleDNS,
 		timeout,
 		poolName,
+		reservedCapacity,
 	)
 
 	// the go routine here uses the global context because this function is called
@@ -442,6 +444,7 @@ func (m *Manager) provisionFromPool(
 	shouldUseGoogleDNS bool,
 	timeout int64,
 	poolName string,
+	reservedCapacity *types.CapacityReservation,
 ) (*types.Instance, bool, error) {
 	pool.Lock()
 
@@ -466,11 +469,15 @@ func (m *Manager) provisionFromPool(
 			return nil, false, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity)
 		if err != nil {
 			return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
 		return inst, false, nil
+	}
+
+	if reservedCapacity != nil {
+		go pool.Driver.DestroyCapacity(ctx, reservedCapacity)
 	}
 
 	sort.Slice(free, func(i, j int) bool {
@@ -513,16 +520,42 @@ func (m *Manager) ReserveCapacity(
 	shouldUseGoogleDNS bool,
 	timeout int64,
 ) (*types.CapacityReservation, bool, error) {
-	pool := m.poolMap[poolName]
-	if pool == nil {
-		return nil, false, fmt.Errorf("provision: pool name %q not found", poolName)
+	pool, err := m.validatePool(poolName)
+	if err != nil {
+		return nil, false, err
 	}
 
-	strategy := m.strategy
-	if strategy == nil {
-		strategy = Greedy{}
+	capacity, hotpool, err := m.reserveCapacityFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName)
+	if err != nil {
+		return nil, false, err
 	}
 
+	// the go routine here uses the global context because this function is called
+	// from setup API call (and we can't use HTTP request context for async tasks)
+	// TODO: Move to outbox
+	if hotpool {
+		go func(ctx context.Context) {
+			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, zone, machineType, false, timeout, nil)
+		}(m.globalCtx)
+	}
+
+	return capacity, hotpool, err
+}
+
+// provisionFromPool handles provisioning for regular managers using in-memory locks
+func (m *Manager) reserveCapacityFromPool(
+	ctx context.Context,
+	pool *poolEntry,
+	query *types.QueryParams,
+	serverName, ownerID, resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	gitspaceAgentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+	zone, machineType string,
+	shouldUseGoogleDNS bool,
+	timeout int64,
+	poolName string,
+) (*types.CapacityReservation, bool, error) {
 	pool.Lock()
 
 	busy, free, _, err := m.list(ctx, pool, query)
@@ -539,6 +572,8 @@ func (m *Manager) ReserveCapacity(
 		Traceln("provision: hotpool instances")
 
 	var capacity *types.CapacityReservation
+
+	strategy := m.getStrategy()
 	if len(free) == 0 {
 		pool.Unlock()
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
@@ -574,13 +609,6 @@ func (m *Manager) ReserveCapacity(
 
 	capacity.InstanceID = inst.ID
 	capacity.PoolName = poolName
-
-	// the go routine here uses the global context because this function is called
-	// from setup API call (and we can't use HTTP request context for async tasks)
-	go func(ctx context.Context) {
-		_, _ = m.setupInstance(ctx, pool, serverName, "", "", nil, false, nil, nil, zone, machineType, false, timeout, nil)
-	}(m.globalCtx)
-
 	return capacity, true, nil
 }
 
@@ -802,7 +830,7 @@ func (m *Manager) setupInstanceWithHibernate(
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
-	inst, err := m.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform)
+	inst, err := m.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -827,6 +855,7 @@ func (m *Manager) setupInstance(
 	shouldUseGoogleDNS bool,
 	timeout int64,
 	platform *types.Platform,
+	reservedCapacity *types.CapacityReservation,
 ) (*types.Instance, error) {
 	var inst *types.Instance
 	retain := "false"
@@ -872,6 +901,7 @@ func (m *Manager) setupInstance(
 	createOptions.MachineType = machineType
 	createOptions.DriverName = pool.Driver.DriverName()
 	createOptions.Timeout = timeout
+	createOptions.CapacityReservation = reservedCapacity
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
@@ -1418,5 +1448,6 @@ func (m *Manager) processExistingInstance(
 		false,
 		timeout,
 		platform,
+		nil,
 	)
 }

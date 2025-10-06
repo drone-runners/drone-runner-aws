@@ -145,6 +145,7 @@ type InstanceCreateOpts struct {
 	DriverName              string
 	Timeout                 int64
 	EnableC4D               bool
+	CapacityReservation     *CapacityReservation
 }
 
 // Platform defines the target platform.

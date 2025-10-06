@@ -211,6 +211,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		ctx,
 		req,
 		c.stageOwnerStore,
+		c.capacityReservationStore,
 		c.env.Runner.Volumes,
 		c.env.Dlite.PoolMapByAccount.Convert(),
 		c.env.Runner.Name,

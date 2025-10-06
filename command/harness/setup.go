@@ -70,6 +70,7 @@ func HandleSetup(
 	ctx context.Context,
 	r *SetupVMRequest,
 	s store.StageOwnerStore,
+	crs store.CapacityReservationStore,
 	globalVolumes []string,
 	poolMapByAccount map[string]map[string]string,
 	runnerName string,
@@ -173,7 +174,13 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+
+		capacity, capFindErr := crs.Find(noContext, stageRuntimeID)
+		if capFindErr != nil {
+			logr.WithError(capFindErr).Error("could not find capacity reservation")
+		}
+
+		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -357,6 +364,7 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
+	reservedCapacity *types.CapacityReservation,
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -382,23 +390,34 @@ func handleSetup(
 		}
 	}
 
-	instance, warmed, err = poolManager.Provision(
-		ctx,
-		pool,
-		poolManager.GetTLSServerName(),
-		owner,
-		r.ResourceClass,
-		&r.VMImageConfig,
-		query,
-		&r.GitspaceAgentConfig,
-		&r.StorageConfig,
-		r.Zone,
-		r.MachineType,
-		shouldUseGoogleDNS,
-		&r.InstanceInfo,
-		r.Timeout,
-		r.IsMarkedForInfraReset,
-	)
+	var reservedInstance *types.Instance
+	if reservedCapacity.PoolName == pool && reservedCapacity.InstanceID != "" {
+		reservedInstance, err = getInstance(ctx, reservedCapacity.PoolName, reservedCapacity.StageID, reservedCapacity.InstanceID, poolManager)
+	}
+
+	if reservedInstance != nil {
+		instance = reservedInstance
+		warmed = true
+	} else {
+		instance, warmed, err = poolManager.Provision(
+			ctx,
+			pool,
+			poolManager.GetTLSServerName(),
+			owner,
+			r.ResourceClass,
+			&r.VMImageConfig,
+			query,
+			&r.GitspaceAgentConfig,
+			&r.StorageConfig,
+			r.Zone,
+			r.MachineType,
+			shouldUseGoogleDNS,
+			&r.InstanceInfo,
+			r.Timeout,
+			r.IsMarkedForInfraReset,
+			reservedCapacity,
+		)
+	}
 	if err != nil {
 		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
 	}
@@ -663,6 +682,7 @@ func HandleCapacityReservation(
 		// add an entry in stage pool mapping if instance was created.
 		_, findErr := crs.Find(noContext, stageRuntimeID)
 		if findErr != nil {
+			capacity.StageID = stageRuntimeID
 			if cerr := crs.Create(noContext, capacity); cerr != nil {
 				if capacity.InstanceID != "" {
 					if derr := poolManager.Destroy(noContext, selectedPool, capacity.InstanceID, nil, nil); derr != nil {

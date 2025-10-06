@@ -21,7 +21,10 @@ var WireSet = wire.NewSet(
 	ProvideSQLInstanceStore,
 )
 
-const SingleInstance = "singleinstance"
+const (
+	SingleInstance = "singleinstance"
+	Postgres       = "postgres"
+)
 
 // ProvideSQLDatabase provides a database connection.
 func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
@@ -42,7 +45,7 @@ func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
 // ProvideSQLInstanceStore provides an instance store.
 func ProvideSQLInstanceStore(db *sqlx.DB) store.InstanceStore {
 	switch db.DriverName() {
-	case "postgres":
+	case Postgres:
 		return sql.NewInstanceStore(db)
 	case SingleInstance:
 		// this is a store with a single instance, used by exec and setup commands
@@ -57,7 +60,7 @@ func ProvideSQLInstanceStore(db *sqlx.DB) store.InstanceStore {
 // ProvideSQLStageOwnerStore provides an stage owner store.
 func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 	switch db.DriverName() {
-	case "postgres":
+	case Postgres:
 		return sql.NewStageOwnerStore(db)
 	default:
 		return sql.NewStageOwnerStoreSync(
@@ -69,7 +72,7 @@ func ProvideSQLStageOwnerStore(db *sqlx.DB) store.StageOwnerStore {
 // ProvideSQLStageOwnerStore provides an stage owner store.
 func ProvideSQLCapacityReservationStore(db *sqlx.DB) store.CapacityReservationStore {
 	switch db.DriverName() {
-	case "postgres":
+	case Postgres:
 		return sql.NewCapacityReservationStore(db)
 	default:
 		return sql.NewCapacityReservationStoreSync(
