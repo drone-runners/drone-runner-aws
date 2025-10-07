@@ -166,6 +166,29 @@ func HandleSetup(
 	platform, _, driver := poolManager.Inspect(r.PoolID)
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
+
+	var capacity *types.CapacityReservation
+	var capFindErr error
+	if crs != nil {
+		capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
+		if capFindErr != nil {
+			logr.WithError(capFindErr).Error("could not find capacity reservation")
+		}
+	}
+
+	// if capacity was reserved in any pool then that pool should be tried first
+	if capacity != nil && capacity.PoolName != "" {
+		for i, p := range pools {
+			if p == capacity.PoolName {
+				// Move matched pool to the front
+				if i != 0 {
+					pools = append([]string{p}, append(pools[:i], pools[i+1:]...)...)
+				}
+				break
+			}
+		}
+	}
+
 	for idx, p := range pools {
 		st := time.Now()
 		if idx > 0 {
@@ -174,15 +197,6 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-
-		var capacity *types.CapacityReservation
-		var capFindErr error
-		if crs != nil {
-			capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
-			if capFindErr != nil {
-				logr.WithError(capFindErr).Error("could not find capacity reservation")
-			}
-		}
 
 		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
@@ -395,7 +409,7 @@ func handleSetup(
 	}
 
 	var reservedInstance *types.Instance
-	if reservedCapacity.PoolName == pool && reservedCapacity.InstanceID != "" {
+	if reservedCapacity != nil && reservedCapacity.PoolName == pool && reservedCapacity.InstanceID != "" {
 		reservedInstance, err = getInstance(ctx, reservedCapacity.PoolName, reservedCapacity.StageID, reservedCapacity.InstanceID, poolManager)
 	}
 
