@@ -333,7 +333,16 @@ func (d *DistributedManager) provisionFromPool(
 			Traceln("provision: claimed hotpool instance")
 
 		if reservedCapacity != nil {
-			go pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+			go func() {
+				err := pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+				if err != nil {
+					logger.FromContext(ctx).
+						WithField("pool", poolName).
+						WithField("instance_id", inst.ID).
+						WithField("hotpool", true).
+						Traceln("provision: failed to destroy reserved capacity")
+				}
+			}()
 		}
 
 		// TODO: change this to an outbox entry

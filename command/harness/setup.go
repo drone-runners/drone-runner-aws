@@ -538,11 +538,6 @@ func handleSetup(
 	return instance, warmed, hibernated, nil
 }
 
-// HandleSetup tries to setup an instance in any of the pools given in the setup request.
-// It calls handleSetup internally for each pool instance trying to complete a setup.
-// Instead of passing in the env config, we pass in whatever is needed. This is because
-// this same code is being used in the new runner and we want to make sure nothing breaking
-// is added here which is not added in the new runner.
 func HandleCapacityReservation(
 	ctx context.Context,
 	r *SetupVMRequest,
@@ -622,8 +617,6 @@ func HandleCapacityReservation(
 
 	var (
 		foundPool bool
-		fallback  bool
-		warmed    bool
 	)
 
 	var owner string
@@ -635,44 +628,12 @@ func HandleCapacityReservation(
 		owner = GetAccountID(&r.Context, r.Tags)
 	}
 
-	platform, _, driver := poolManager.Inspect(r.PoolID)
-	// try to provision an instance with fallbacks
-	setupTime := time.Duration(0)
-	for idx, p := range pools {
-		st := time.Now()
-		if idx > 0 {
-			fallback = true
-		}
+	for _, p := range pools {
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
-		_, _, poolDriver := poolManager.Inspect(p)
-		capacity, warmed, poolErr = handleCapacityReservation(ctx, logr, r, runnerName, poolManager, pool, owner)
-		setupTime = time.Since(st)
-		metrics.WaitDurationCount.WithLabelValues(
-			pool,
-			platform.OS,
-			platform.Arch,
-			poolDriver,
-			metric.ConvertBool(fallback),
-			strconv.FormatBool(poolManager.IsDistributed()),
-			owner,
-			r.VMImageConfig.ImageVersion,
-			r.VMImageConfig.ImageName,
-			strconv.FormatBool(warmed),
-		).Observe(setupTime.Seconds())
+		capacity, _, poolErr = handleCapacityReservation(ctx, logr, r, runnerName, poolManager, pool, owner)
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
-			metrics.FailedCount.WithLabelValues(
-				pool,
-				platform.OS,
-				platform.Arch,
-				poolDriver,
-				strconv.FormatBool(poolManager.IsDistributed()),
-				owner,
-				r.ResourceClass,
-				r.VMImageConfig.ImageVersion,
-				r.VMImageConfig.ImageName,
-			).Inc()
 			continue
 		}
 		selectedPool = pool
@@ -693,63 +654,13 @@ func HandleCapacityReservation(
 						logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 					}
 				}
-				return nil, fmt.Errorf("could not create stage owner entity: %w", cerr)
+				return nil, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
 			}
 		}
-		if fallback {
-			// fallback metric records the first pool ID which was tried and the associated driver.
-			// We don't record final pool which was used as this metric is only used to get data about
-			// which drivers and pools are causing fallbacks.
-			//metrics.PoolFallbackCount.WithLabelValues(
-			//	r.PoolID,
-			//	instance.OS,
-			//	instance.Arch,
-			//	driver,
-			//	metric.True,
-			//	strconv.FormatBool(poolManager.IsDistributed()),
-			//	owner,
-			//	r.ResourceClass,
-			//	r.VMImageConfig.ImageVersion,
-			//	r.VMImageConfig.ImageName,
-			//).Inc()
-		}
-		//internalLogr.WithField("os", instance.OS).
-		//	WithField("arch", instance.Arch).
-		//	WithField("selected_pool", selectedPool).
-		//	WithField("requested_pool", r.PoolID).
-		//	WithField("instance_address", instance.Address).
-		//	Tracef("init time for vm setup is %.2fs", setupTime.Seconds())
 	} else {
-		metrics.BuildCount.WithLabelValues(
-			r.PoolID,
-			platform.OS,
-			platform.Arch,
-			driver,
-			strconv.FormatBool(poolManager.IsDistributed()),
-			"",
-			owner,
-			r.ResourceClass,
-			"",
-			r.VMImageConfig.ImageVersion,
-			r.VMImageConfig.ImageName,
-		).Inc()
-		if fallback {
-			metrics.PoolFallbackCount.WithLabelValues(
-				r.PoolID,
-				platform.OS,
-				platform.Arch,
-				driver,
-				metric.False,
-				strconv.FormatBool(poolManager.IsDistributed()),
-				owner,
-				r.ResourceClass,
-				r.VMImageConfig.ImageVersion,
-				r.VMImageConfig.ImageName,
-			).Inc()
-		}
 		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
-			Errorln("Init step failed")
-		return nil, fmt.Errorf("could not provision a VM from the pool: %w", poolErr)
+			Errorln("Capacity Reservation failed")
+		return nil, fmt.Errorf("could not reserve capacity for a VM from the pool: %w", poolErr)
 	}
 
 	logr.WithField("selected_pool", selectedPool).
@@ -762,10 +673,6 @@ func HandleCapacityReservation(
 	return capacity, nil
 }
 
-// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
-// run a health check on the lite engine. It returns information about the setup
-// VM and an error if setup failed.
-// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
 func handleCapacityReservation(
 	ctx context.Context,
 	logr *logrus.Entry,

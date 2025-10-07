@@ -469,7 +469,7 @@ func (m *Manager) provisionFromPool(
 			return nil, false, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity)
+		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity) //nolint:lll
 		if err != nil {
 			return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -477,7 +477,15 @@ func (m *Manager) provisionFromPool(
 	}
 
 	if reservedCapacity != nil {
-		go pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+		go func() {
+			err := pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+			if err != nil {
+				logger.FromContext(ctx).
+					WithField("pool", poolName).
+					WithError(err).
+					Traceln("provision: failed to destroy reserved capacity")
+			}
+		}()
 	}
 
 	sort.Slice(free, func(i, j int) bool {
@@ -525,7 +533,7 @@ func (m *Manager) ReserveCapacity(
 		return nil, false, err
 	}
 
-	capacity, hotpool, err := m.reserveCapacityFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName)
+	capacity, hotpool, err := m.reserveCapacityFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName) //nolint:lll
 	if err != nil {
 		return nil, false, err
 	}
