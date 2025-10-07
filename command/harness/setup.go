@@ -467,6 +467,7 @@ func handleSetup(
 			return nil, false, false, fmt.Errorf("failed to start the instance up: %w", err)
 		}
 		ilog.Tracef("instance %s is started", instance.ID)
+		hibernated = true
 	}
 
 	instance.Stage = stageRuntimeID
@@ -521,6 +522,5 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
-	hibernated = instance.IsHibernated
 	return instance, warmed, hibernated, nil
 }
