@@ -478,7 +478,7 @@ func (m *Manager) provisionFromPool(
 
 	if reservedCapacity != nil {
 		go func() {
-			err := pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+			err = pool.Driver.DestroyCapacity(ctx, reservedCapacity)
 			if err != nil {
 				logger.FromContext(ctx).
 					WithField("pool", poolName).
@@ -742,20 +742,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {

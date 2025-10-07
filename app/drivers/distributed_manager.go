@@ -334,7 +334,7 @@ func (d *DistributedManager) provisionFromPool(
 
 		if reservedCapacity != nil {
 			go func() {
-				err := pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+				err = pool.Driver.DestroyCapacity(ctx, reservedCapacity)
 				if err != nil {
 					logger.FromContext(ctx).
 						WithField("pool", poolName).
