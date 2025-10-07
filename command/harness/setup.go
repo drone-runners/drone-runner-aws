@@ -175,9 +175,13 @@ func HandleSetup(
 		logr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
 
-		capacity, capFindErr := crs.Find(noContext, stageRuntimeID)
-		if capFindErr != nil {
-			logr.WithError(capFindErr).Error("could not find capacity reservation")
+		var capacity *types.CapacityReservation
+		var capFindErr error
+		if crs != nil {
+			capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
+			if capFindErr != nil {
+				logr.WithError(capFindErr).Error("could not find capacity reservation")
+			}
 		}
 
 		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
