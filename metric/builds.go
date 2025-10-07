@@ -14,17 +14,19 @@ import (
 )
 
 type Metrics struct {
-	BuildCount               *prometheus.CounterVec
-	FailedCount              *prometheus.CounterVec
-	ErrorCount               *prometheus.CounterVec
-	RunningCount             *prometheus.GaugeVec
-	RunningPerAccountCount   *prometheus.GaugeVec
-	WarmPoolCount            *prometheus.GaugeVec
-	PoolFallbackCount        *prometheus.CounterVec
-	WaitDurationCount        *prometheus.HistogramVec
-	TotalVMInitDurationCount *prometheus.HistogramVec
-	CPUPercentile            *prometheus.HistogramVec
-	MemoryPercentile         *prometheus.HistogramVec
+	BuildCount                *prometheus.CounterVec
+	FailedCount               *prometheus.CounterVec
+	ErrorCount                *prometheus.CounterVec
+	RunningCount              *prometheus.GaugeVec
+	RunningPerAccountCount    *prometheus.GaugeVec
+	WarmPoolCount             *prometheus.GaugeVec
+	PoolFallbackCount         *prometheus.CounterVec
+	WaitDurationCount         *prometheus.HistogramVec
+	TotalVMInitDurationCount  *prometheus.HistogramVec
+	CPUPercentile             *prometheus.HistogramVec
+	MemoryPercentile          *prometheus.HistogramVec
+	DestroyCount              *prometheus.CounterVec
+	DestroyDurationCount      *prometheus.HistogramVec
 
 	stores []*Store
 }
@@ -338,6 +340,29 @@ func TotalVMInitDurationCount() *prometheus.HistogramVec {
 	)
 }
 
+// DestroyCount provides metrics for total number of VM destroy operations (successful + failed)
+func DestroyCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "harness_ci_runner_vm_destroy_total",
+			Help: "Total number of VM destroy operations",
+		},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id", "status"},
+	)
+}
+
+// DestroyDurationCount provides metrics for amount of time needed to destroy a VM
+func DestroyDurationCount() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_runner_vm_destroy_duration_seconds",
+			Help:    "Time taken to destroy a VM instance",
+			Buckets: []float64{5, 10, 30, 60, 120, 300},
+		},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id", "status"},
+	)
+}
+
 func RegisterMetrics() *Metrics {
 	buildCount := BuildCount()
 	failedBuildCount := FailedBuildCount()
@@ -350,7 +375,9 @@ func RegisterMetrics() *Metrics {
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
 	errorCount := ErrorCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount) //nolint:lll
+	destroyCount := DestroyCount()
+	destroyDurationCount := DestroyDurationCount()
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount, destroyCount, destroyDurationCount) //nolint:lll
 	return &Metrics{
 		BuildCount:               buildCount,
 		FailedCount:              failedBuildCount,
@@ -363,5 +390,7 @@ func RegisterMetrics() *Metrics {
 		CPUPercentile:            cpuPercentile,
 		ErrorCount:               errorCount,
 		WarmPoolCount:            warmPoolCount,
+		DestroyCount:             destroyCount,
+		DestroyDurationCount:     destroyDurationCount,
 	}
 }
