@@ -66,6 +66,8 @@ var (
 // Instead of passing in the env config, we pass in whatever is needed. This is because
 // this same code is being used in the new runner and we want to make sure nothing breaking
 // is added here which is not added in the new runner.
+//
+//nolint:gocyclo
 func HandleSetup(
 	ctx context.Context,
 	r *SetupVMRequest,
