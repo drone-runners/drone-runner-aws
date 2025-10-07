@@ -247,7 +247,6 @@ func HandleSetup(
 			WithField("selected_pool", selectedPool).
 			WithField("requested_pool", r.PoolID).
 			WithField("instance_address", instance.Address).
-			WithField("tried_pools", pools).
 			Tracef("init time for vm setup in pool %s is %.2fs", selectedPool, setupTime.Seconds())
 	} else {
 		metrics.BuildCount.WithLabelValues(
@@ -412,6 +411,11 @@ func handleSetup(
 		WithField("image_name", useNonEmpty(r.VMImageConfig.ImageName, instance.Image)).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
+		// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
+	if instance.Provider == types.Google {
+		ilog.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", instance.EnableNestedVirtualization))
+	}
+
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
 	printTitle(buildLog, "Preparing a machine to execute this stage...")
@@ -491,6 +495,7 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
+	ilog.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
 	runnerConfig := poolManager.GetRunnerConfig()
 
