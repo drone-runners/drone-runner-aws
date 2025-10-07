@@ -554,6 +554,9 @@ func handleSetup(
 	return instance, warmed, hibernated, nil
 }
 
+// HandleCapacityReservation tries to reserve capacity for a future vm init an in any of the pools given in the
+// setup request. It calls handleCapacityReservation internally for each pool instance trying to complete a
+// capacity reservation.
 func HandleCapacityReservation(
 	ctx context.Context,
 	r *SetupVMRequest,
@@ -689,6 +692,7 @@ func HandleCapacityReservation(
 	return capacity, nil
 }
 
+// handleCapacityReservation tries to reserve capacity for a future vm init an instance in a given pool.
 func handleCapacityReservation(
 	ctx context.Context,
 	logr *logrus.Entry,

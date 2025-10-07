@@ -511,7 +511,7 @@ func (m *Manager) provisionFromPool(
 	return inst, true, nil
 }
 
-// Provision returns an instance for a job execution and tags it as in use.
+// ReserveCapacity returns an reserved capacity for a future vm initialize task.
 // This method and BuildPool method contain logic for maintaining pool size.
 func (m *Manager) ReserveCapacity(
 	ctx context.Context,
@@ -550,7 +550,7 @@ func (m *Manager) ReserveCapacity(
 	return capacity, hotpool, err
 }
 
-// provisionFromPool handles provisioning for regular managers using in-memory locks
+// reserveCapacityFromPool handles capacity reservation for regular managers using in-memory locks
 func (m *Manager) reserveCapacityFromPool(
 	ctx context.Context,
 	pool *poolEntry,
@@ -742,20 +742,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
