@@ -100,6 +100,9 @@ func HandleDestroy(
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, enableMock bool, mockTimeout int,
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	// Start measuring destroy duration
+	destroyStartTime := time.Now()
+
 	logr = logr.WithField("retry_count", retryCount)
 	var poolID string
 	if r.InstanceInfo.PoolName == "" {
@@ -184,7 +187,36 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
+	var owner string
+	if inst.OwnerID != "" {
+		owner = inst.OwnerID
+	} else {
+		owner = GetAccountID(&r.Context, map[string]string{})
+	}
+
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
+		// Record failed destroy metrics
+		destroyDuration := time.Since(destroyStartTime)
+		metrics.DestroyCount.WithLabelValues(
+			poolID,
+			inst.OS,
+			inst.Arch,
+			string(inst.Provider),
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+			"failed",
+		).Inc()
+		metrics.DestroyDurationCount.WithLabelValues(
+			poolID,
+			inst.OS,
+			inst.Arch,
+			string(inst.Provider),
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+			"failed",
+		).Observe(destroyDuration.Seconds())
+		logr.WithField("destroy_duration_seconds", destroyDuration.Seconds()).
+			Errorln("failed to destroy instance")
 		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroyed instance")
@@ -194,6 +226,29 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
+
+	// Record successful destroy metrics
+	destroyDuration := time.Since(destroyStartTime)
+	metrics.DestroyCount.WithLabelValues(
+		poolID,
+		inst.OS,
+		inst.Arch,
+		string(inst.Provider),
+		strconv.FormatBool(poolManager.IsDistributed()),
+		owner,
+		"success",
+	).Inc()
+	metrics.DestroyDurationCount.WithLabelValues(
+		poolID,
+		inst.OS,
+		inst.Arch,
+		string(inst.Provider),
+		strconv.FormatBool(poolManager.IsDistributed()),
+		owner,
+		"success",
+	).Observe(destroyDuration.Seconds())
+	logr.WithField("destroy_duration_seconds", destroyDuration.Seconds()).
+		Infoln("destroy operation completed successfully")
 
 	return inst, nil
 }
