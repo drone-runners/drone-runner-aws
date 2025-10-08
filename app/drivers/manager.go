@@ -102,7 +102,17 @@ func NewManager(
 	}
 }
 
-// Inspect returns OS, root directory and driver for a pool.
+func (m *Manager) GetPoolSpec(poolName string) (interface{}, error) {
+	entry := m.poolMap[poolName]
+	if entry == nil {
+		return nil, fmt.Errorf("manager: pool %s not found", poolName)
+	}
+	if entry.Spec == nil {
+		return nil, fmt.Errorf("manager: pool %s does not have a stored spec", poolName)
+	}
+	return entry.Spec, nil
+}
+
 func (m *Manager) Inspect(name string) (platform types.Platform, rootDir, driver string) {
 	entry := m.poolMap[name]
 	if entry == nil {

@@ -34,4 +34,5 @@ type IManager interface {
 	IsDistributed() bool
 	GetRunnerConfig() types.RunnerConfig
 	Suspend(ctx context.Context, poolID string, instance *types.Instance) error
+	GetPoolSpec(poolName string) (interface{}, error)
 }

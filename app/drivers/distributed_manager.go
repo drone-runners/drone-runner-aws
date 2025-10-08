@@ -73,6 +73,11 @@ func (d *DistributedManager) Provision(
 	)
 }
 
+// GetPoolSpec returns the original provider-specific spec for the given pool name.
+func (d *DistributedManager) GetPoolSpec(poolName string) (interface{}, error) {
+	return d.Manager.GetPoolSpec(poolName)
+}
+
 func (d *DistributedManager) BuildPools(ctx context.Context) error {
 	query := types.QueryParams{RunnerName: d.runnerName}
 	buildPoolWrapper := func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error {
