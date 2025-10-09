@@ -202,7 +202,7 @@ RETURNING %s
 		&dst.OSName, &dst.Stage, &dst.CAKey, &dst.CACert, &dst.TLSKey,
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
-		&dst.EnableNestedVirtualization,
+		&dst.EnableNestedVirtualization, &dst.RunnerName,
 	)
 	if err != nil {
 		return nil, err
@@ -249,6 +249,7 @@ const instanceColumns = `
 ,instance_storage_identifier
 ,instance_labels
 ,enable_nested_virtualization
+,runner_name
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
