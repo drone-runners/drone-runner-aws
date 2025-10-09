@@ -518,7 +518,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	}
 
 	// Nothing to do here
-	// 1. Instance was not hotpool instance, so no need to build pool
-	// 2. Instance was hotpool instance, so it will be built by the outbox processor
+	// 1. Instance was not a hotpool instance, so no need to build pool
+	// 2. Instance was a hotpool instance, so it will be built by the outbox processor
 	return nil
 }

@@ -95,6 +95,12 @@ func (p *OutboxProcessor) processPendingJobs() error {
 					"pool_name":   job.PoolName,
 					"runner_name": p.manager.runnerName,
 				}).Errorln("failed to delete job after max retries")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"job_id":      job.ID,
+					"pool_name":   job.PoolName,
+					"runner_name": p.manager.runnerName,
+				}).Infoln("deleted job after max retries")
 			}
 			continue
 		}
