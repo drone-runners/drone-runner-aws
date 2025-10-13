@@ -100,6 +100,10 @@ func (c *config) CanHibernate() bool {
 	return false
 }
 
+func (c *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
+	return c.offer, nil
+}
+
 func (c *config) Zones() string {
 	var z string
 	if len(z) == 1 {

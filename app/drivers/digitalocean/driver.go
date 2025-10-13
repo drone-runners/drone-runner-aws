@@ -59,6 +59,18 @@ func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
 
+func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
+	// If no image name is provided, return the default image
+	if config.ImageName == "" {
+		return p.image, nil
+	}
+
+	// For DigitalOcean, images are identified by their slug or ID
+	// The image name can be either a slug (e.g., "ubuntu-20-04-x64")
+	// or an ID (numeric string)
+	return config.ImageName, nil
+}
+
 func (p *config) Ping(ctx context.Context) error {
 	client := newClient(ctx, p.pat)
 	_, _, err := client.Droplets.List(ctx, &godo.ListOptions{})
@@ -84,6 +96,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	// create a new digitalocean request
+	image, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image: %w", err)
+	}
+
 	req := &godo.DropletCreateRequest{
 		Name:     name,
 		Region:   p.region,
@@ -91,9 +108,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Tags:     p.tags,
 		IPv6:     false,
 		UserData: userData,
-
 		Image: godo.DropletCreateImage{
-			Slug: p.image,
+			Slug: image,
 		},
 	}
 	// set the ssh keys if they are provided
@@ -134,7 +150,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		State:        types.StateCreated,
 		Pool:         opts.PoolName,
 		Region:       p.region,
-		Image:        p.image,
+		Image:        image,
 		Size:         p.size,
 		Platform:     opts.Platform,
 		CAKey:        opts.CAKey,

@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS INSTANCE_POOL_ID_IMAGE_NAME_INSTANCE_STATE_INDEX ON instances(instance_pool, instance_image, instance_state);

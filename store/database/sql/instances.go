@@ -149,6 +149,10 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_id": params.InstanceID})
 	}
 
+	if params.ImageName != "" {
+		subQuery = subQuery.Where(squirrel.Eq{"instance_image": params.ImageName})
+	}
+
 	if len(allowedStates) > 0 {
 		stateVals := make([]interface{}, len(allowedStates))
 		for i, state := range allowedStates {

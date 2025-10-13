@@ -117,6 +117,16 @@ func (p *config) CanHibernate() bool {
 	return false
 }
 
+func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
+	// If no image name is provided, return the default VM image
+	if config.ImageName == "" {
+		return p.vmImage, nil
+	}
+
+	// For Nomad, the image name is the VM image path or identifier
+	return config.ImageName, nil
+}
+
 // Ping checks that we can ping the machine
 func (p *config) Ping(ctx context.Context) error {
 	if p.client != nil {

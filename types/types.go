@@ -165,6 +165,7 @@ type QueryParams struct {
 	MatchLabels map[string]string
 	PoolName    string
 	InstanceID  string
+	ImageName   string
 }
 
 type StageOwner struct {

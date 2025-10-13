@@ -206,8 +206,11 @@ func (d *DistributedManager) provisionFromPool(
 	// For distributed manager, first try to claim an existing free instance
 	allowedStates := []types.InstanceState{types.StateCreated}
 
+	// Resolve the image name to a fully qualified image name
+	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
+
 	// Try to find and claim a free instance atomically
-	inst, err := d.instanceStore.FindAndClaim(ctx, &types.QueryParams{PoolName: poolName}, types.StateInUse, allowedStates)
+	inst, err := d.instanceStore.FindAndClaim(ctx, &types.QueryParams{PoolName: poolName, ImageName: fullyQualifiedImageName}, types.StateInUse, allowedStates)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, false, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
 	}
