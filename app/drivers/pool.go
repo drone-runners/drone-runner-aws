@@ -39,4 +39,6 @@ type Driver interface {
 	RootDir() string
 	DriverName() string
 	CanHibernate() bool
+	// GetFullyQualifiedImage returns the fully qualified image name based on the provided VMImageConfig
+	GetFullyQualifiedImage(ctx context.Context, config *types.VMImageConfig) (string, error)
 }

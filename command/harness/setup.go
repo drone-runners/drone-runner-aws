@@ -520,7 +520,8 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
-	_, err = client.Setup(ctx, &r.SetupRequest)
+	setupTimeout := time.Duration(runnerConfig.SetupTimeout) * time.Second
+	_, err = client.RetrySetup(ctx, &r.SetupRequest, setupTimeout)
 	if err != nil {
 		printError(buildLog, "Machine setup failed")
 		go cleanUpInstanceFn(true)

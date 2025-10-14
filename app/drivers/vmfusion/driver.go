@@ -86,6 +86,16 @@ func (p *config) CanHibernate() bool {
 	return false
 }
 
+func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
+	// If no image name is provided, return the default ISO path
+	if config.ImageName == "" {
+		return p.ISO, nil
+	}
+
+	// For VMFusion, the image name is the path to the ISO file
+	return config.ImageName, nil
+}
+
 func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 	return "", errors.New("Unimplemented")
 }
@@ -116,8 +126,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if err != nil {
 		return nil, err
 	}
+	iso, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image: %w", err)
+	}
 	err = vmxt.Execute(vmxFile, VmxTemplateData{
-		ISO:         p.ISO,
+		ISO:         iso,
 		MachineName: p.MachineName,
 		CPU:         p.CPU,
 		Memory:      p.Memory,
@@ -205,7 +219,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Provider: types.VMFusion, // this is driver, though its the old legacy name of provider
 		State:    types.StateCreated,
 		Pool:     opts.PoolName,
-		Image:    p.ISO,
+		Image:    iso,
 		Platform: opts.Platform,
 		Address:  instanceIP,
 		CACert:   opts.CACert,

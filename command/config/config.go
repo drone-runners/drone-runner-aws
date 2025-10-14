@@ -346,6 +346,7 @@ type EnvConfig struct {
 	RunnerConfig struct {
 		HealthCheckTimeout        int64 `envconfig:"HEALTH_CHECK_TIMEOUT" default:"3"`
 		HealthCheckWindowsTimeout int64 `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5"`
+		SetupTimeout              int64 `envconfig:"SETUP_TIMEOUT" default:"10"`
 		HA                        bool  `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
@@ -398,8 +399,8 @@ type EnvConfig struct {
 		AutoInjectionBinaryURI  string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.11"`
 	}
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.132/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.132/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.138/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.138/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}

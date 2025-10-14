@@ -75,13 +75,18 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		SkipContainerSize: false,
 	}
 
+	vmID, err := c.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image: %w", err)
+	}
+
 	request := &createVMParams{
 		Name:                   machineName,
 		StartupScript:          uData,
 		StartupScriptCondition: startupScriptCondition,
 		ScriptMonitoring:       true,
 		ScriptFailHandler:      scriptFailHandler,
-		VMID:                   c.vmID,
+		VMID:                   vmID,
 		ScriptTimeout:          scriptTimeout,
 		Tag:                    c.tag,
 		Disk:                   diskSizeRequest,
@@ -269,4 +274,14 @@ func (c *config) DriverName() string {
 
 func (c *config) CanHibernate() bool {
 	return false
+}
+
+func (c *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
+	// If no image name is provided, return the default VM ID
+	if config.ImageName == "" {
+		return c.vmID, nil
+	}
+
+	// For AnkaBuild, the image name is the VM ID or VM template name
+	return config.ImageName, nil
 }

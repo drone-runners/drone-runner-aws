@@ -88,6 +88,7 @@ type Passwords struct {
 type RunnerConfig struct {
 	HealthCheckTimeout        int64
 	HealthCheckWindowsTimeout int64
+	SetupTimeout              int64
 	HA                        bool
 }
 
@@ -165,6 +166,7 @@ type QueryParams struct {
 	MatchLabels map[string]string
 	PoolName    string
 	InstanceID  string
+	ImageName   string
 }
 
 type StageOwner struct {

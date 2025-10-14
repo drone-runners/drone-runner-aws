@@ -186,7 +186,10 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	}
 
 	// getImage returns the image to use for this instance creation
-	image := p.getImage(opts)
+	image, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image: %w", err)
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -910,23 +913,23 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 
 // getImage returns the appropriate image path based on the provided options
 // If no image is specified in the options, it returns the default image from p.image
-func (p *config) getImage(opts *types.InstanceCreateOpts) string {
-	// If no image is provided in the options, return the default image
-	if opts.VMImageConfig.ImageName == "" {
-		return p.image
+func (p *config) GetFullyQualifiedImage(ctx context.Context, config *types.VMImageConfig) (string, error) {
+	// If no image name is provided, return the default image
+	if config.ImageName == "" {
+		return p.image, nil
 	}
 
-	// opts.VMImageConfig.ImageName can be of different formats.
+	// config.ImageName can be of different formats.
 	// we can receive image in following 2 formats:
 	// Format #1: harness/vmimage: hosted-vm-ubuntu-2204-jammy-v20250508
 	// Format #2: projects/debian-cloud/global/images/debian-11-bullseye-v2025070
-	// isFullImagePath() method checks if given image in opts.VMImageConfig.ImageName is of Format #2 which can be
+	// isFullImagePath() method checks if given image in config.ImageName is of Format #2 which can be
 	// directly used, else we convert Format #1 to Format #2 in buildImagePathFromTag() method.
-	if isFullImagePath(opts.VMImageConfig.ImageName) {
-		return opts.VMImageConfig.ImageName
+	if isFullImagePath(config.ImageName) {
+		return config.ImageName, nil
 	}
 
-	return buildImagePathFromTag(opts.VMImageConfig.ImageName, p.projectID)
+	return buildImagePathFromTag(config.ImageName, p.projectID), nil
 }
 
 // instance name must be 1-63 characters long and match the regular expression
