@@ -122,7 +122,7 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 	var instancesToDestroy []*types.Instance
 	for {
 		// Claim one instance at a time to avoid long transactions and to process them sequentially.
-		instance, err := d.instanceStore.FindAndClaim(ctx, query, types.StateTerminating, allowedStates)
+		instance, err := d.instanceStore.FindAndClaim(ctx, query, types.StateTerminating, allowedStates, false)
 		if err != nil {
 			// If no rows are found, it means we have claimed all available instances.
 			if errors.Is(err, sql.ErrNoRows) {
@@ -210,7 +210,7 @@ func (d *DistributedManager) provisionFromPool(
 	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
 
 	// Try to find and claim a free instance atomically
-	inst, err := d.instanceStore.FindAndClaim(ctx, &types.QueryParams{PoolName: poolName, ImageName: fullyQualifiedImageName}, types.StateInUse, allowedStates)
+	inst, err := d.instanceStore.FindAndClaim(ctx, &types.QueryParams{PoolName: poolName, ImageName: fullyQualifiedImageName}, types.StateInUse, allowedStates, true)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, false, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
 	}
@@ -218,9 +218,6 @@ func (d *DistributedManager) provisionFromPool(
 	// If we successfully claimed an instance, update it and return
 	if inst != nil {
 		inst.OwnerID = ownerID
-		// update started time after claiming the instance
-		// this will make sure that purger only picks it when it is actually used for max age
-		inst.Started = time.Now().Unix()
 		if err = d.instanceStore.Update(ctx, inst); err != nil {
 			return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 		}
@@ -338,7 +335,7 @@ func (d *DistributedManager) hibernate(
 		InstanceID: instance.ID,
 	}
 	allowedStates := []types.InstanceState{types.StateCreated}
-	claimedInstance, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateHibernating, allowedStates)
+	claimedInstance, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateHibernating, allowedStates, false)
 	if err != nil {
 		return fmt.Errorf("hibernate: failed to claim instance for hibernation for %q pool: %w", poolName, err)
 	}

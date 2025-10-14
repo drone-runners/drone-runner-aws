@@ -129,6 +129,7 @@ func (s InstanceStore) FindAndClaim(
 	params *types.QueryParams,
 	newState types.InstanceState,
 	allowedStates []types.InstanceState,
+	updateStartTime bool,
 ) (*types.Instance, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -161,7 +162,7 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_state": stateVals})
 	}
 
-	subQuery = subQuery.OrderBy("instance_started DESC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
+	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
 	// --- Convert subquery to SQL + args ---
 	subSQL, subArgs, err := subQuery.ToSql()
@@ -188,14 +189,15 @@ WITH candidate AS (
 )
 UPDATE instances
 SET instance_state = $1,
-    instance_updated = extract(epoch FROM now())
+    instance_updated = extract(epoch FROM now()),
+    instance_started = CASE WHEN $%d THEN extract(epoch FROM now()) ELSE instance_started END
 FROM candidate
 WHERE instances.instance_id = candidate.inst_id
 RETURNING %s
-`, subSQL, cleanColumns)
+`, subSQL, len(subArgs)+2, cleanColumns)
 
-	// --- Combine args: newState first, then subquery args ---
-	args := append([]interface{}{newState}, subArgs...)
+	// --- Combine args: newState first, then subquery args, then updateStartTime ---
+	args := append([]interface{}{newState}, append(subArgs, updateStartTime)...)
 
 	// --- Execute ---
 	dst := new(types.Instance)
