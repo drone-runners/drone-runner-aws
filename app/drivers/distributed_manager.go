@@ -59,7 +59,6 @@ func (d *DistributedManager) ReserveCapacity(
 		ownerID,
 		resourceClass,
 		vmImageConfig,
-		gitspaceAgentConfig,
 		storageConfig,
 		zone,
 		machineType,
@@ -233,7 +232,6 @@ func (d *DistributedManager) reserveCapacityFromPool(
 	pool *poolEntry,
 	tlsServerName, ownerID, resourceClass string,
 	vmImageConfig *spec.VMImageConfig,
-	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
@@ -285,7 +283,7 @@ func (d *DistributedManager) reserveCapacityFromPool(
 		WithField("hotpool", false).
 		Traceln("provision: no hotpool instances available, creating new instance")
 	// Create a new instance
-	capacity, err = d.reserveCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
+	capacity, err = d.reserveCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
 	if err != nil {
 		return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 	}

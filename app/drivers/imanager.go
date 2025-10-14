@@ -21,7 +21,7 @@ type IManager interface {
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration, purgerTime time.Duration) error
 	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool, reservedCapacity *types.CapacityReservation) (*types.Instance, bool, error) //nolint
-	ReserveCapacity(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, timeout int64) (*types.CapacityReservation, bool, error)                                                                                    //nolint
+	ReserveCapacity(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, timeout int64) (*types.CapacityReservation, bool, error)                                                                                                                                    //nolint
 	Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error

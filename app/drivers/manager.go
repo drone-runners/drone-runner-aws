@@ -521,7 +521,6 @@ func (m *Manager) ReserveCapacity(
 	resourceClass string,
 	vmImageConfig *spec.VMImageConfig,
 	query *types.QueryParams,
-	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	zone string,
 	machineType string,
@@ -533,7 +532,7 @@ func (m *Manager) ReserveCapacity(
 		return nil, false, err
 	}
 
-	capacity, hotpool, err := m.reserveCapacityFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName) //nolint:lll
+	capacity, hotpool, err := m.reserveCapacityFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName) //nolint:lll
 	if err != nil {
 		return nil, false, err
 	}
@@ -557,7 +556,6 @@ func (m *Manager) reserveCapacityFromPool(
 	query *types.QueryParams,
 	serverName, ownerID, resourceClass string,
 	vmImageConfig *spec.VMImageConfig,
-	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
@@ -587,7 +585,7 @@ func (m *Manager) reserveCapacityFromPool(
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
 			return nil, false, ErrorNoInstanceAvailable
 		}
-		capacity, err = m.reserveCapacity(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
+		capacity, err = m.reserveCapacity(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
 		if err != nil {
 			return nil, false, fmt.Errorf("provision: failed to reserve capacity: %w", err)
 		}
@@ -742,20 +740,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
@@ -975,7 +973,6 @@ func (m *Manager) reserveCapacity(
 	pool *poolEntry,
 	tlsServerName, ownerID, resourceClass string,
 	vmImageConfig *spec.VMImageConfig,
-	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	zone, machineType string,
 	shouldUseGoogleDNS bool,
@@ -1011,16 +1008,6 @@ func (m *Manager) reserveCapacity(
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
-	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
-		createOptions.GitspaceOpts = types.GitspaceOpts{
-			Secret:                   agentConfig.Secret,
-			AccessToken:              agentConfig.AccessToken,
-			Ports:                    agentConfig.Ports,
-			VMInitScript:             agentConfig.VMInitScript,
-			GitspaceConfigIdentifier: agentConfig.GitspaceConfigIdentifier,
-		}
-		retain = "true"
-	}
 	createOptions.Labels = map[string]string{"retain": retain}
 	createOptions.Zone = zone
 	createOptions.MachineType = machineType
