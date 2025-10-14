@@ -18,8 +18,8 @@ type VMCapacityTask struct {
 }
 
 type VMCapacityRequest struct {
-	SetupVMRequest harness.SetupVMRequest `json:"setup_vm_request"`
-	Distributed    bool                   `json:"distributed,omitempty"`
+	CapacityReservationRequest harness.CapacityReservationRequest `json:"capacity_reservation_request"`
+	Distributed                bool                               `json:"distributed,omitempty"`
 }
 
 func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +39,7 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
-	req := &VMInitRequest{}
+	req := &VMCapacityRequest{}
 	err = json.Unmarshal(taskBytes, req)
 	if err != nil {
 		logr.WithError(err).Errorln("could not unmarshal task request data")
@@ -47,19 +47,19 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	timeout := initTimeoutSec
-	if val, ok := req.SetupVMRequest.SetupRequest.Envs["CI_ENABLE_BYOI_HOSTED"]; ok && val == "true" {
+	if val, ok := req.CapacityReservationRequest.Envs["CI_ENABLE_BYOI_HOSTED"]; ok && val == "true" {
 		timeout = initTimeoutSecForBYOI
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	accountID := harness.GetAccountID(&req.SetupVMRequest.Context, map[string]string{})
+	accountID := harness.GetAccountID(&req.CapacityReservationRequest.Context, map[string]string{})
 
 	// Make the setup call
-	req.SetupVMRequest.CorrelationID = task.ID
+	req.CapacityReservationRequest.CorrelationID = task.ID
 	poolManager := t.c.getPoolManager(req.Distributed)
 	setupResp, err := harness.HandleCapacityReservation(
-		ctx, &req.SetupVMRequest, poolManager.GetCapacityReservationStore(),
+		ctx, &req.CapacityReservationRequest, poolManager.GetCapacityReservationStore(),
 		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
 		t.c.env.Runner.Name,
 		poolManager, t.c.metrics)
