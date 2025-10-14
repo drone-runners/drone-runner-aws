@@ -41,7 +41,6 @@ func (d *DistributedManager) ReserveCapacity(
 	resourceClass string,
 	vmImageConfig *spec.VMImageConfig,
 	query *types.QueryParams,
-	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	zone string,
 	machineType string,
