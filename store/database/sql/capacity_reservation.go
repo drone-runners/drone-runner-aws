@@ -54,8 +54,7 @@ SELECT
  stage_id
 ,pool_name
 ,instance_id
-,machine_ip
-,gcp_reservation_id
+,reservation_id
 FROM capacity_reservation
 `
 
@@ -68,14 +67,12 @@ INSERT INTO capacity_reservation (
  stage_id
 ,pool_name
 ,instance_id
-,machine_ip
-,gcp_reservation_id
+,reservation_id
 ) values (
  :stage_id
 ,:pool_name
 ,:instance_id
-,:machine_ip
-,:gcp_reservation_id
+,:reservation_id
 ) RETURNING stage_id
 `
 
