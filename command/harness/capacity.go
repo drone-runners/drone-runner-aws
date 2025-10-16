@@ -2,12 +2,13 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
-	errors "github.com/drone-runners/drone-runner-aws/app/types"
+	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -37,8 +38,8 @@ type CapacityReservationRequest struct {
 }
 
 type CapacityReservationResponse struct {
-	CapacityReservationSuccess bool                      `json:"capacity_reservation_success"`
-	CapacityReservationDetails types.CapacityReservation `json:"capacity_reservation_details"`
+	CapacityReservation          *types.CapacityReservation `json:"capacity_reservation"`
+	CapacityReservationSupported bool                       `json:"capacity_reservation_supported"`
 }
 
 // HandleCapacityReservation tries to reserve capacity for a future vm init an in any of the pools given in the
@@ -53,14 +54,16 @@ func HandleCapacityReservation(
 	runnerName string,
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-) (*types.CapacityReservation, error) {
+) (*CapacityReservationResponse, error) {
 	stageRuntimeID := r.ID
+
+	resp := &CapacityReservationResponse{CapacityReservationSupported: false, CapacityReservation: nil}
 	if stageRuntimeID == "" {
-		return nil, errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
+		return resp, ierrors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
 
 	if r.PoolID == "" {
-		return nil, errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
+		return resp, ierrors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
 	// Sets up logger to stream the logs in case log config is set
@@ -109,6 +112,8 @@ func HandleCapacityReservation(
 
 	var owner string
 
+	var unsupportedErr *ierrors.ErrCapacityReservationNotSupported
+
 	// TODO: Remove this once we start populating license information.
 	if strings.Contains(r.PoolID, freeAccount) || getIsFreeAccount(&r.Context, r.Tags) {
 		owner = freeAccount
@@ -118,10 +123,13 @@ func HandleCapacityReservation(
 
 	for _, p := range pools {
 		pool := fetchPool(r.LogConfig.AccountID, p, poolMapByAccount)
-		logr.WithField("pool_id", pool).Traceln("starting the setup process")
+		logr.WithField("pool_id", pool).Traceln("starting the capacity reservation process")
 		capacity, _, poolErr = handleCapacityReservation(ctx, logr, r, runnerName, poolManager, pool, owner)
 		if poolErr != nil {
-			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
+			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not reserve capacity")
+			if !errors.As(poolErr, &unsupportedErr) {
+				resp.CapacityReservationSupported = true
+			}
 			continue
 		}
 		selectedPool = pool
@@ -142,13 +150,15 @@ func HandleCapacityReservation(
 						logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 					}
 				}
-				return nil, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
+				return resp, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
 			}
 		}
+		resp.CapacityReservationSupported = true
+		resp.CapacityReservation = capacity
 	} else {
 		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 			Errorln("Capacity Reservation failed")
-		return nil, fmt.Errorf("could not reserve capacity for a VM from the pool: %w", poolErr)
+		return resp, fmt.Errorf("could not reserve capacity for a VM from the pool: %w", poolErr)
 	}
 
 	logr.WithField("selected_pool", selectedPool).
@@ -158,7 +168,7 @@ func HandleCapacityReservation(
 	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 		Traceln("Capacity reservation step completed successfully")
 
-	return capacity, nil
+	return resp, nil
 }
 
 // handleCapacityReservation tries to reserve capacity for a future vm init an instance in a given pool.
@@ -208,7 +218,7 @@ func handleCapacityReservation(
 		r.Timeout,
 	)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to reserve capacity: %w", err)
+		return nil, false, err
 	}
 
 	logr.Traceln("successfully reserved capacity for VM in pool")

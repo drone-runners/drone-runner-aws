@@ -587,7 +587,7 @@ func (m *Manager) reserveCapacityFromPool(
 		}
 		capacity, err = m.reserveCapacity(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
 		if err != nil {
-			return nil, false, fmt.Errorf("provision: failed to reserve capacity: %w", err)
+			return nil, false, err
 		}
 		return capacity, false, nil
 	}

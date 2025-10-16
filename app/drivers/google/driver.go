@@ -16,6 +16,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -164,12 +165,12 @@ func (p *config) Ping(ctx context.Context) error {
 
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	return nil, errors.New("capacity reservation not supported for google driver")
+	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
 // DestroyCapacity destroys capacity for a VM
 func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
-	return errors.New("capacity cleanup not supported for google driver")
+	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {

@@ -26,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dchest/uniuri"
+	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 )
 
 var _ drivers.Driver = (*config)(nil)
@@ -203,12 +204,12 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	return nil, errors.New("capacity reservation not supported for amazon driver")
+	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
 // DestroyCapacity destroys capacity for a VM
 func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
-	return errors.New("capacity cleanup not supported for amazon driver")
+	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.

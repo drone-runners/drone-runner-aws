@@ -15,6 +15,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -127,12 +128,12 @@ func (p *config) Ping(ctx context.Context) error {
 
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	return nil, errors.New("capacity reservation not supported for nomad driver")
+	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
 // DestroyCapacity destroys capacity for a VM
 func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
-	return errors.New("capacity cleanup not supported for nomad driver")
+	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.

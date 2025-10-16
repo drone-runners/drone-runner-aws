@@ -47,9 +47,6 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	timeout := initTimeoutSec
-	if val, ok := req.CapacityReservationRequest.Envs["CI_ENABLE_BYOI_HOSTED"]; ok && val == "true" {
-		timeout = initTimeoutSecForBYOI
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
@@ -72,7 +69,7 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Construct final response
 	resp := VMTaskExecutionResponse{
-		CapacityReservation: *setupResp,
+		CapacityReservationResponse: *setupResp,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }

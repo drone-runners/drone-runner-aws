@@ -10,6 +10,7 @@ import (
 	"github.com/dchest/uniuri"
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
+	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -54,12 +55,12 @@ func New(opts ...Option) (drivers.Driver, error) {
 
 // ReserveCapacity reserves capacity for a VM
 func (c *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	return nil, errors.New("capacity reservation not supported for ankabuild driver")
+	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: c.DriverName()}
 }
 
 // DestroyCapacity destroys capacity for a VM
 func (c *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
-	return errors.New("capacity cleanup not supported for ankabuild driver")
+	return &ierrors.ErrCapacityReservationNotSupported{Driver: c.DriverName()}
 }
 
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {

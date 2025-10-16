@@ -284,7 +284,7 @@ func (d *DistributedManager) reserveCapacityFromPool(
 	// Create a new instance
 	capacity, err = d.reserveCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
 	if err != nil {
-		return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+		return nil, false, err
 	}
 	return capacity, false, nil
 }
