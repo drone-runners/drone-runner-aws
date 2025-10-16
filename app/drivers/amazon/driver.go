@@ -12,7 +12,6 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
-	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -577,7 +576,7 @@ func (p *config) Hibernate(ctx context.Context, instanceID, poolName, _ string) 
 		logr.WithError(err).
 			Errorln("aws: failed to hibernate the VM")
 		if isHibernateRetryable(err) {
-			return &itypes.RetryableError{Msg: err.Error()}
+			return &ierrors.RetryableError{Msg: err.Error()}
 		}
 		return err
 	}
