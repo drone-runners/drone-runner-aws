@@ -45,3 +45,11 @@ type ErrCapacityReservationNotSupported struct {
 func (e *ErrCapacityReservationNotSupported) Error() string {
 	return fmt.Sprintf("capacity reservation not supported for %s driver", e.Driver)
 }
+
+type ErrCapacityUnavailable struct {
+	Driver string
+}
+
+func (e *ErrCapacityUnavailable) Error() string {
+	return fmt.Sprintf("capacity unavailable for %s driver", e.Driver)
+}

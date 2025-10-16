@@ -37,11 +37,6 @@ type CapacityReservationRequest struct {
 	Envs            map[string]string    `json:"envs,omitempty"`
 }
 
-type CapacityReservationResponse struct {
-	CapacityReservation          *types.CapacityReservation `json:"capacity_reservation"`
-	CapacityReservationSupported bool                       `json:"capacity_reservation_supported"`
-}
-
 // HandleCapacityReservation tries to reserve capacity for a future vm init an in any of the pools given in the
 // setup request. It calls handleCapacityReservation internally for each pool instance trying to complete a
 // capacity reservation.
@@ -54,16 +49,15 @@ func HandleCapacityReservation(
 	runnerName string,
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-) (*CapacityReservationResponse, error) {
+) (*types.CapacityReservation, error) {
 	stageRuntimeID := r.ID
 
-	resp := &CapacityReservationResponse{CapacityReservationSupported: false, CapacityReservation: nil}
 	if stageRuntimeID == "" {
-		return resp, ierrors.NewBadRequestError("mandatory field 'id' in the request body is empty")
+		return nil, ierrors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
 
 	if r.PoolID == "" {
-		return resp, ierrors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
+		return nil, ierrors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
 
 	// Sets up logger to stream the logs in case log config is set
@@ -112,7 +106,8 @@ func HandleCapacityReservation(
 
 	var owner string
 
-	var unsupportedErr *ierrors.ErrCapacityReservationNotSupported
+	capacityUnavailable := false
+	var capacityUnavailableErr *ierrors.ErrCapacityUnavailable
 
 	// TODO: Remove this once we start populating license information.
 	if strings.Contains(r.PoolID, freeAccount) || getIsFreeAccount(&r.Context, r.Tags) {
@@ -127,8 +122,8 @@ func HandleCapacityReservation(
 		capacity, _, poolErr = handleCapacityReservation(ctx, logr, r, runnerName, poolManager, pool, owner)
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not reserve capacity")
-			if !errors.As(poolErr, &unsupportedErr) {
-				resp.CapacityReservationSupported = true
+			if !errors.As(poolErr, &capacityUnavailableErr) {
+				capacityUnavailable = true
 			}
 			continue
 		}
@@ -150,15 +145,17 @@ func HandleCapacityReservation(
 						logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 					}
 				}
-				return resp, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
+				return nil, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
 			}
 		}
-		resp.CapacityReservationSupported = true
-		resp.CapacityReservation = capacity
 	} else {
 		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 			Errorln("Capacity Reservation failed")
-		return resp, fmt.Errorf("could not reserve capacity for a VM from the pool: %w", poolErr)
+		// If atleast one pool failed only with capacity unavailable then its not an actual failure
+		if capacityUnavailable {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("could not reserve capacity for a VM from the pool: %w", poolErr)
 	}
 
 	logr.WithField("selected_pool", selectedPool).
@@ -168,7 +165,7 @@ func HandleCapacityReservation(
 	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 		Traceln("Capacity reservation step completed successfully")
 
-	return resp, nil
+	return capacity, nil
 }
 
 // handleCapacityReservation tries to reserve capacity for a future vm init an instance in a given pool.

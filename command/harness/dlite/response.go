@@ -19,7 +19,7 @@ type VMTaskExecutionResponse struct {
 	OptimizationState           string                              `json:"optimization_state"`
 	GitspacesPortMappings       map[int]int                         `json:"gitspaces_port_mappings"`
 	InstanceInfo                common.InstanceInfo                 `json:"instance_info"`
-	CapacityReservationResponse harness.CapacityReservationResponse `json:"capacity_reservation"`
+	CapacityReservationResponse harness.CapacityReservationResponse `json:"capacity_reservation_response"`
 }
 
 type DelegateMetaInfo struct {
