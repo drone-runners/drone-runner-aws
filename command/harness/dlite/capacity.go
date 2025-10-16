@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
+	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/httphelper"
@@ -55,7 +56,7 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Make the setup call
 	req.CapacityReservationRequest.CorrelationID = task.ID
 	poolManager := t.c.getPoolManager(req.Distributed)
-	setupResp, err := harness.HandleCapacityReservation(
+	capacityReservationResponse, err := harness.HandleCapacityReservation(
 		ctx, &req.CapacityReservationRequest, poolManager.GetCapacityReservationStore(),
 		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
 		t.c.env.Runner.Name,
@@ -67,9 +68,13 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if capacityReservationResponse == nil {
+		capacityReservationResponse = &types.CapacityReservation{}
+	}
+
 	// Construct final response
 	resp := VMTaskExecutionResponse{
-		CapacityReservationResponse: *setupResp,
+		CapacityReservation: *capacityReservationResponse,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }
