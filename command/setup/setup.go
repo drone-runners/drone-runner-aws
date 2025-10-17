@@ -130,7 +130,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	)
 
 	// use a single instance db, as we only need one machine
-	store, _, _, err := database.ProvideStore(database.SingleInstance, "")
+	store, _, _, _, err := database.ProvideStore(database.SingleInstance, "")
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
