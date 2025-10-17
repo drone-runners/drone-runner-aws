@@ -114,6 +114,27 @@ func (p *config) RootDir() string {
 	return p.rootDir
 }
 
+func (p *config) GetFullyQualifiedImage(ctx context.Context, config *types.VMImageConfig) (string, error) {
+	imageName := p.image
+	// If no image name is provided, return the default image
+	if config.ImageName != "" {
+		imageName = config.ImageName
+	}
+
+	// If the image name is already an AMI ID (starts with "ami-"), return it as is
+	if isAMIID(imageName) {
+		return imageName, nil
+	}
+
+	// Otherwise, resolve the image name to an AMI ID
+	resolvedAMI, err := p.resolveImageNameToAMI(ctx, imageName)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve image name to AMI: %w", err)
+	}
+	logger.FromContext(ctx).WithField("image_name", imageName).WithField("resolved_ami", resolvedAMI).Infof("resolved image name to AMI ID")
+	return resolvedAMI, nil
+}
+
 func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
@@ -221,9 +242,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return nil, fmt.Errorf("failed to configure dynamic fields: %s", err)
 	}
 
-	imageName := p.image
-	if opts.VMImageConfig.ImageName != "" {
-		imageName = opts.VMImageConfig.ImageName
+	resolvedAMI, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image: %w", err)
 	}
 
 	logr := logger.FromContext(ctx).
@@ -231,20 +252,10 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("ami", p.InstanceType()).
 		WithField("pool", opts.PoolName).
 		WithField("region", p.region).
-		WithField("image", imageName).
+		WithField("ami", resolvedAMI).
 		WithField("size", p.size).
 		WithField("zone", p.availabilityZone).
 		WithField("hibernate", p.CanHibernate())
-
-	// If imageName is not an AMI ID, resolve it to an AMI ID
-	if !isAMIID(imageName) {
-		resolvedAMI, amierr := p.resolveImageNameToAMI(ctx, imageName)
-		if amierr != nil {
-			return nil, fmt.Errorf("failed to resolve image name '%s' to AMI ID: %w", imageName, err)
-		}
-		imageName = resolvedAMI
-		logr.WithField("resolved_ami", imageName).Infof("resolved image name to AMI ID")
-	}
 
 	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
 	var tags = map[string]string{
@@ -305,7 +316,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	in := &ec2.RunInstancesInput{
-		ImageId:            aws.String(imageName),
+		ImageId:            aws.String(resolvedAMI),
 		InstanceType:       aws.String(p.size),
 		Placement:          &ec2.Placement{AvailabilityZone: aws.String(p.availabilityZone)},
 		MinCount:           aws.Int64(1),
@@ -437,7 +448,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Provider:             types.Amazon, // this is driver, though its the old legacy name of provider
 		State:                types.StateCreated,
 		Pool:                 opts.PoolName,
-		Image:                imageName,
+		Image:                resolvedAMI,
 		Zone:                 p.availabilityZone,
 		Region:               p.region,
 		Size:                 p.size,
@@ -812,6 +823,9 @@ func (p *config) waitForVolumeAvailable(ctx context.Context, volumeID *string) e
 // cleanupVolumes waits for instances to terminate and handles volume cleanup based on cleanup type
 func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, cleanupType storage.CleanupType, volumeIDs []*string) error {
 	logr := logger.FromContext(ctx)
+	if cleanupType != storage.Delete || len(volumeIDs) == 0 {
+		return nil
+	}
 
 	// Wait for instances to terminate
 	logr.Infoln("aws: waiting for instance termination")
@@ -820,10 +834,6 @@ func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, clea
 	}); err != nil {
 		logr.WithError(err).Errorln("aws: failed waiting for instance termination")
 		return err
-	}
-
-	if cleanupType != storage.Delete || len(volumeIDs) == 0 {
-		return nil
 	}
 
 	// Delete the persistent volumes

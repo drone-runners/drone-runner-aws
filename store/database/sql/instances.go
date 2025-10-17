@@ -129,6 +129,7 @@ func (s InstanceStore) FindAndClaim(
 	params *types.QueryParams,
 	newState types.InstanceState,
 	allowedStates []types.InstanceState,
+	updateStartTime bool,
 ) (*types.Instance, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -149,6 +150,10 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_id": params.InstanceID})
 	}
 
+	if params.ImageName != "" {
+		subQuery = subQuery.Where(squirrel.Eq{"instance_image": params.ImageName})
+	}
+
 	if len(allowedStates) > 0 {
 		stateVals := make([]interface{}, len(allowedStates))
 		for i, state := range allowedStates {
@@ -157,7 +162,7 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_state": stateVals})
 	}
 
-	subQuery = subQuery.OrderBy("instance_started DESC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
+	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
 	// --- Convert subquery to SQL + args ---
 	subSQL, subArgs, err := subQuery.ToSql()
@@ -177,21 +182,22 @@ func (s InstanceStore) FindAndClaim(
 	cleanColumns = strings.TrimSpace(cleanColumns)
 
 	// --- Build final CTE UPDATE SQL ---
-	//nolint: gosec
+	//nolint: gosec,gomnd
 	finalSQL := fmt.Sprintf(`
 WITH candidate AS (
     %s
 )
 UPDATE instances
 SET instance_state = $1,
-    instance_updated = extract(epoch FROM now())
+    instance_updated = extract(epoch FROM now()),
+    instance_started = CASE WHEN $%d THEN extract(epoch FROM now()) ELSE instance_started END
 FROM candidate
 WHERE instances.instance_id = candidate.inst_id
 RETURNING %s
-`, subSQL, cleanColumns)
+`, subSQL, len(subArgs)+2, cleanColumns)
 
-	// --- Combine args: newState first, then subquery args ---
-	args := append([]interface{}{newState}, subArgs...)
+	// --- Combine args: newState first, then subquery args, then updateStartTime ---
+	args := append([]interface{}{newState}, append(subArgs, updateStartTime)...)
 
 	// --- Execute ---
 	dst := new(types.Instance)
@@ -202,7 +208,7 @@ RETURNING %s
 		&dst.OSName, &dst.Stage, &dst.CAKey, &dst.CACert, &dst.TLSKey,
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
-		&dst.EnableNestedVirtualization,
+		&dst.EnableNestedVirtualization, &dst.RunnerName,
 	)
 	if err != nil {
 		return nil, err
@@ -249,6 +255,7 @@ const instanceColumns = `
 ,instance_storage_identifier
 ,instance_labels
 ,enable_nested_virtualization
+,runner_name
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `

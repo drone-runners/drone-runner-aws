@@ -110,7 +110,8 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	instanceStore, stageOwnerStore, capacityReservationStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+	instanceStore, stageOwnerStore, _, capacityReservationStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}

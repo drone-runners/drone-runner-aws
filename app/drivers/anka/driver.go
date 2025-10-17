@@ -79,6 +79,16 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
+func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
+	// If no image name is provided, return the default VM ID
+	if config.ImageName == "" {
+		return p.vmID, nil
+	}
+
+	// For Anka, the image name is the VM ID or VM template name
+	return config.ImageName, nil
+}
+
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
 	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
@@ -96,7 +106,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	var result []byte
-	cmdCloneVM := commandCloneVM(ctx, p.vmID, machineName)
+	vmID, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image: %w", err)
+	}
+	cmdCloneVM := commandCloneVM(ctx, vmID, machineName)
 	_, err = cmdCloneVM.CombinedOutput()
 	if err != nil {
 		logr.WithError(err).Error("Failed to clone VM")

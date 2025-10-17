@@ -31,6 +31,7 @@ type dliteCommand struct {
 	poolManager            drivers.IManager
 	distributedPoolManager drivers.IManager
 	metrics                *metric.Metrics
+	outboxProcessor        *drivers.OutboxProcessor
 }
 
 func RegisterDlite(app *kingpin.Application) {
@@ -139,12 +140,20 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
+	c.outboxProcessor.Start()
+
 	var g errgroup.Group
 
 	g.Go(func() error {
 		<-ctx.Done()
 		// delete unused instances for distributed pool
 		return harness.Cleanup(c.env.Settings.ReusePool, c.distributedPoolManager, false, true)
+	})
+
+	g.Go(func() error {
+		<-ctx.Done()
+		c.outboxProcessor.Stop()
+		return nil
 	})
 
 	g.Go(func() error {
@@ -181,7 +190,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
 	logrus.Infoln("Starting postgres database")
-	instanceStore, stageOwnerStore, capacityReservationStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
+	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 		return nil, err
@@ -199,7 +208,14 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 			c.env.Settings.PluginBinaryURI,
 			c.env.Settings.AutoInjectionBinaryURI,
 			c.env.LiteEngine.FallbackPath,
-			c.env.Settings.PluginBinaryFallbackURI, types.RunnerConfig(c.env.RunnerConfig)))
+			c.env.Settings.PluginBinaryFallbackURI, types.RunnerConfig(c.env.RunnerConfig)), outboxStore)
+	c.outboxProcessor = drivers.NewOutboxProcessor(ctx,
+		c.distributedPoolManager.(*drivers.DistributedManager),
+		outboxStore, time.Duration(c.env.OutboxProcessor.PollIntervalSecs)*time.Second,
+		time.Duration(c.env.OutboxProcessor.RetryIntervalSecs)*time.Second,
+		c.env.OutboxProcessor.MaxRetries,
+		c.env.OutboxProcessor.BatchSize,
+	)
 	poolConfig, err := harness.SetupPoolWithEnv(ctx, &c.env, c.distributedPoolManager, c.poolFile)
 	if err != nil {
 		logrus.WithError(err).Error("could not setup distributed pool")

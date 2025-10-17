@@ -45,7 +45,7 @@ func (s InstanceStore) List(_ context.Context, pool string, params *types.QueryP
 	return nil, nil
 }
 
-func (s InstanceStore) FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState) (*types.Instance, error) {
+func (s InstanceStore) FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error) {
 	panic("implement me")
 }
 

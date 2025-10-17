@@ -115,3 +115,9 @@ func (p *config) DriverName() string {
 func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
+
+func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
+	// For Noop driver, just return the image name as is
+	// This is a no-op implementation used for testing
+	return config.ImageName, nil
+}

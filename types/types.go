@@ -2,6 +2,7 @@ package types
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"time"
 )
 
@@ -87,6 +88,7 @@ type Passwords struct {
 type RunnerConfig struct {
 	HealthCheckTimeout        int64
 	HealthCheckWindowsTimeout int64
+	SetupTimeout              int64
 	HA                        bool
 }
 
@@ -165,6 +167,7 @@ type QueryParams struct {
 	MatchLabels map[string]string
 	PoolName    string
 	InstanceID  string
+	ImageName   string
 }
 
 type StageOwner struct {
@@ -225,4 +228,33 @@ type VMImageAuth struct {
 	Registry string
 	Username string
 	Password string
+}
+
+// OutboxJobStatus represents the status of an outbox job
+type OutboxJobStatus string
+
+const (
+	OutboxJobStatusPending = OutboxJobStatus("pending")
+	OutboxJobStatusRunning = OutboxJobStatus("running")
+)
+
+// OutboxJobType represents the type of outbox job
+type OutboxJobType string
+
+const (
+	OutboxJobTypeSetupInstance = OutboxJobType("setup_instance")
+)
+
+// OutboxJob represents a job in the outbox queue
+type OutboxJob struct {
+	ID           int64            `db:"id" json:"id"`
+	PoolName     string           `db:"pool_name" json:"pool_name"`
+	RunnerName   string           `db:"runner_name" json:"runner_name"`
+	JobType      OutboxJobType    `db:"job_type" json:"job_type"`
+	JobParams    *json.RawMessage `db:"job_params" json:"job_params"`
+	CreatedAt    int64            `db:"created_at" json:"created_at"`
+	ProcessedAt  *int64           `db:"processed_at" json:"processed_at"`
+	Status       OutboxJobStatus  `db:"status" json:"status"`
+	ErrorMessage *string          `db:"error_message" json:"error_message"`
+	RetryCount   int              `db:"retry_count" json:"retry_count"`
 }
