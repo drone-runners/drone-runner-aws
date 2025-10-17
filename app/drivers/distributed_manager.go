@@ -35,6 +35,42 @@ func NewDistributedManager(manager *Manager, outboxStore store.OutboxStore) *Dis
 
 // Provision returns an instance for a job execution and tags it as in use.
 // This method and BuildPool method contain logic for maintaining pool size.
+func (d *DistributedManager) ReserveCapacity(
+	ctx context.Context,
+	poolName,
+	serverName,
+	ownerID,
+	resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	query *types.QueryParams,
+	storageConfig *types.StorageConfig,
+	zone string,
+	machineType string,
+	shouldUseGoogleDNS bool,
+	timeout int64,
+) (*types.CapacityReservation, bool, error) {
+	pool, err := d.validatePool(poolName)
+	if err != nil {
+		return nil, false, err
+	}
+	return d.reserveCapacityFromPool(
+		ctx,
+		pool,
+		serverName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		storageConfig,
+		zone,
+		machineType,
+		shouldUseGoogleDNS,
+		timeout,
+		poolName,
+	)
+}
+
+// Provision returns an instance for a job execution and tags it as in use.
+// This method and BuildPool method contain logic for maintaining pool size.
 func (d *DistributedManager) Provision(
 	ctx context.Context,
 	poolName,
@@ -51,6 +87,7 @@ func (d *DistributedManager) Provision(
 	instanceInfo *common.InstanceInfo,
 	timeout int64,
 	isMarkedForInfraReset bool,
+	reservedCapacity *types.CapacityReservation,
 ) (*types.Instance, bool, error) {
 	pool, err := d.validatePool(poolName)
 	if err != nil {
@@ -70,6 +107,7 @@ func (d *DistributedManager) Provision(
 		shouldUseGoogleDNS,
 		timeout,
 		poolName,
+		reservedCapacity,
 	)
 }
 
@@ -181,6 +219,10 @@ func (d *DistributedManager) GetStageOwnerStore() store.StageOwnerStore {
 	return d.stageOwnerStore
 }
 
+func (d *DistributedManager) GetCapacityReservationStore() store.CapacityReservationStore {
+	return d.capacityReservationStore
+}
+
 func (d *DistributedManager) GetTLSServerName() string {
 	// keep server name constant since any runner should be able to send request to LE
 	return "distributed-dlite"
@@ -188,6 +230,73 @@ func (d *DistributedManager) GetTLSServerName() string {
 
 func (d *DistributedManager) IsDistributed() bool {
 	return true
+}
+
+// reserveCapacityFromPool overrides the Manager's reserveCapacityFromPool method to use FindAndClaim for distributed coordination
+func (d *DistributedManager) reserveCapacityFromPool(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName, ownerID, resourceClass string,
+	vmImageConfig *spec.VMImageConfig,
+	storageConfig *types.StorageConfig,
+	zone, machineType string,
+	shouldUseGoogleDNS bool,
+	timeout int64,
+	poolName string,
+) (*types.CapacityReservation, bool, error) {
+	// For distributed manager, first try to claim an existing free instance
+	allowedStates := []types.InstanceState{types.StateCreated}
+
+	// Resolve the image name to a fully qualified image name
+	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
+
+	// Try to find and claim a free instance atomically
+	inst, err := d.instanceStore.FindAndClaim(ctx, &types.QueryParams{PoolName: poolName, ImageName: fullyQualifiedImageName}, types.StateInUse, allowedStates, true)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, false, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
+	}
+
+	var capacity *types.CapacityReservation
+
+	// If we successfully claimed an instance, update it and return
+	if inst != nil {
+		inst.OwnerID = ownerID
+		if inst.IsHibernated {
+			// update started time after bringing instance from hibernate
+			// this will make sure that purger only picks it when it is actually used for max age
+			inst.Started = time.Now().Unix()
+		}
+		if err = d.instanceStore.Update(ctx, inst); err != nil {
+			return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+		}
+		logger.FromContext(ctx).
+			WithField("pool", poolName).
+			WithField("instance_id", inst.ID).
+			WithField("hotpool", true).
+			Traceln("provision: claimed hotpool instance")
+
+		// TODO: change this to an outbox entry
+		d.setupInstanceAsync(ctx, inst)
+		capacity.InstanceID = inst.ID
+		capacity.PoolName = poolName
+		return capacity, true, nil
+	}
+
+	// No free instances available, create a new one
+	// In distributed mode, we don't check pool capacity limits since:
+	// 1. Pool MaxSize is typically per-runner, but we'd be checking against global counts
+	// 2. FindAndClaim already provides natural backpressure through database constraints
+	// 3. Infrastructure limits (cloud quotas, etc.) will provide the real boundaries
+	logger.FromContext(ctx).
+		WithField("pool", poolName).
+		WithField("hotpool", false).
+		Traceln("provision: no hotpool instances available, creating new instance")
+	// Create a new instance
+	capacity, err = d.reserveCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	return capacity, false, nil
 }
 
 // provisionFromPool overrides the Manager's provisionFromPool method to use FindAndClaim for distributed coordination
@@ -202,6 +311,7 @@ func (d *DistributedManager) provisionFromPool(
 	shouldUseGoogleDNS bool,
 	timeout int64,
 	poolName string,
+	reservedCapacity *types.CapacityReservation,
 ) (*types.Instance, bool, error) {
 	// For distributed manager, first try to claim an existing free instance
 	allowedStates := []types.InstanceState{types.StateCreated}
@@ -227,6 +337,20 @@ func (d *DistributedManager) provisionFromPool(
 			WithField("hotpool", true).
 			Traceln("provision: claimed hotpool instance")
 
+		if reservedCapacity != nil {
+			go func() {
+				err = pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+				if err != nil {
+					logger.FromContext(ctx).
+						WithField("pool", poolName).
+						WithField("instance_id", inst.ID).
+						WithField("hotpool", true).
+						Traceln("provision: failed to destroy reserved capacity")
+				}
+			}()
+		}
+
+		// TODO: change this to an outbox entry
 		d.setupInstanceAsync(ctx, inst)
 		return inst, true, nil
 	}
@@ -241,7 +365,7 @@ func (d *DistributedManager) provisionFromPool(
 		WithField("hotpool", false).
 		Traceln("provision: no hotpool instances available, creating new instance")
 	// Create a new instance
-	inst, err = d.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, true, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
+	inst, err = d.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, true, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity)
 	if err != nil {
 		return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
@@ -291,7 +415,7 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
-	inst, err := d.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform)
+	inst, err := d.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform, nil)
 	if err != nil {
 		return nil, err
 	}

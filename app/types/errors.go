@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 type RetryableError struct {
 	Msg string
 }
@@ -35,3 +37,19 @@ func NewNotFoundError(msg string) *NotFoundError {
 }
 
 func (e *NotFoundError) Error() string { return e.Msg }
+
+type ErrCapacityReservationNotSupported struct {
+	Driver string
+}
+
+func (e *ErrCapacityReservationNotSupported) Error() string {
+	return fmt.Sprintf("capacity reservation not supported for %s driver", e.Driver)
+}
+
+type ErrCapacityUnavailable struct {
+	Driver string
+}
+
+func (e *ErrCapacityUnavailable) Error() string {
+	return fmt.Sprintf("capacity unavailable for %s driver", e.Driver)
+}

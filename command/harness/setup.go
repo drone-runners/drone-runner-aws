@@ -61,10 +61,13 @@ var (
 // Instead of passing in the env config, we pass in whatever is needed. This is because
 // this same code is being used in the new runner and we want to make sure nothing breaking
 // is added here which is not added in the new runner.
+//
+//nolint:gocyclo
 func HandleSetup(
 	ctx context.Context,
 	r *SetupVMRequest,
 	s store.StageOwnerStore,
+	crs store.CapacityReservationStore,
 	globalVolumes []string,
 	poolMapByAccount map[string]map[string]string,
 	runnerName string,
@@ -169,6 +172,29 @@ func HandleSetup(
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
+
+	var capacity *types.CapacityReservation
+	var capFindErr error
+	if crs != nil {
+		capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
+		if capFindErr != nil {
+			logr.WithError(capFindErr).Error("could not find capacity reservation")
+		}
+	}
+
+	// if capacity was reserved in any pool then that pool should be tried first
+	if capacity != nil && capacity.PoolName != "" {
+		for i, p := range pools {
+			if p == capacity.PoolName {
+				// Move matched pool to the front
+				if i != 0 {
+					pools = append([]string{p}, append(pools[:i], pools[i+1:]...)...)
+				}
+				break
+			}
+		}
+	}
+
 	for idx, p := range pools {
 		st := time.Now()
 		if idx > 0 {
@@ -177,7 +203,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -363,7 +389,13 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
-) (instance *types.Instance, warmed, hibernated bool, err error) {
+	reservedCapacity *types.CapacityReservation,
+) (
+	instance *types.Instance,
+	warmed bool,
+	hibernated bool,
+	err error,
+) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
@@ -383,23 +415,34 @@ func handleSetup(
 		}
 	}
 
-	instance, warmed, err = poolManager.Provision(
-		ctx,
-		pool,
-		poolManager.GetTLSServerName(),
-		owner,
-		r.ResourceClass,
-		&r.VMImageConfig,
-		query,
-		&r.GitspaceAgentConfig,
-		&r.StorageConfig,
-		r.Zone,
-		r.MachineType,
-		shouldUseGoogleDNS,
-		&r.InstanceInfo,
-		r.Timeout,
-		r.IsMarkedForInfraReset,
-	)
+	var reservedInstance *types.Instance
+	if reservedCapacity != nil && reservedCapacity.PoolName == pool && reservedCapacity.InstanceID != "" {
+		reservedInstance, err = getInstance(ctx, reservedCapacity.PoolName, reservedCapacity.StageID, reservedCapacity.InstanceID, poolManager)
+	}
+
+	if reservedInstance != nil {
+		instance = reservedInstance
+		warmed = true
+	} else {
+		instance, warmed, err = poolManager.Provision(
+			ctx,
+			pool,
+			poolManager.GetTLSServerName(),
+			owner,
+			r.ResourceClass,
+			&r.VMImageConfig,
+			query,
+			&r.GitspaceAgentConfig,
+			&r.StorageConfig,
+			r.Zone,
+			r.MachineType,
+			shouldUseGoogleDNS,
+			&r.InstanceInfo,
+			r.Timeout,
+			r.IsMarkedForInfraReset,
+			reservedCapacity,
+		)
+	}
 	if err != nil {
 		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
 	}
@@ -411,7 +454,7 @@ func handleSetup(
 		WithField("image_name", useNonEmpty(r.VMImageConfig.ImageName, instance.Image)).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
-		// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
+	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
 	if instance.Provider == types.Google {
 		ilog.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", instance.EnableNestedVirtualization))
 	}
