@@ -185,7 +185,15 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
-	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
+	var capacity *types.CapacityReservation
+	if crs != nil {
+		capacity, err = crs.Find(ctx, r.StageRuntimeID)
+		if err != nil {
+			logr.WithError(err).Errorln("failed to find capacity reservation entity")
+		}
+	}
+
+	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType, capacity); err != nil {
 		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroyed instance")

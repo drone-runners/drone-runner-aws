@@ -629,7 +629,7 @@ func (m *Manager) reserveCapacityFromPool(
 }
 
 // Destroy destroys an instance in a pool.
-func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error {
+func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType, capacityReservation *types.CapacityReservation) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("provision: pool name %q not found", poolName)
@@ -652,6 +652,10 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 		logrus.Warnf("failed to delete instance %s from store with err: %s", instance.ID, derr)
 	}
 	logrus.WithField("instance", instance.ID).Infof("instance destroyed")
+
+	if capErr := pool.Driver.DestroyCapacity(ctx, capacityReservation); capErr != nil {
+		logrus.Warnf("failed to delete capacity reservation with error: %s", capErr)
+	}
 	return nil
 }
 
@@ -750,20 +754,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
@@ -1144,7 +1148,7 @@ func (m *Manager) hibernateOrStopWithRetries(
 
 	shouldHibernate := m.waitForInstanceConnectivity(ctx, tlsServerName, instance.ID)
 	if !shouldHibernate {
-		if derr := m.Destroy(ctx, poolName, instance.ID, instance, nil); derr != nil {
+		if derr := m.Destroy(ctx, poolName, instance.ID, instance, nil, nil); derr != nil {
 			logrus.WithError(derr).WithField("instanceID", instance.ID).Errorln("failed to cleanup instance after connectivity failure")
 		}
 		return fmt.Errorf("hibernate: connectivity check deadline exceeded")

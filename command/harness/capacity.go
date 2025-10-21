@@ -141,7 +141,7 @@ func HandleCapacityReservation(
 			capacity.StageID = stageRuntimeID
 			if cerr := crs.Create(noContext, capacity); cerr != nil {
 				if capacity.InstanceID != "" {
-					if derr := poolManager.Destroy(noContext, selectedPool, capacity.InstanceID, nil, nil); derr != nil {
+					if derr := poolManager.Destroy(noContext, selectedPool, capacity.InstanceID, nil, nil, capacity); derr != nil {
 						logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 					}
 				}
