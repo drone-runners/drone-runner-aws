@@ -169,7 +169,7 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 
 	logr.Infof("destroying instance %s", instanceID)
 
-	if err := poolMngr.Destroy(ctx, poolName, instanceID, nil, nil); err != nil {
+	if err := poolMngr.Destroy(ctx, poolName, instanceID, nil, nil, nil); err != nil {
 		logr.WithError(err).Errorln("cannot destroy the instance")
 		return err
 	}
