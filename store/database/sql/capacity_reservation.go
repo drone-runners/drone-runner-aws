@@ -2,7 +2,9 @@ package sql
 
 import (
 	"context"
+	"time"
 
+	"github.com/Masterminds/squirrel"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 
@@ -25,12 +27,33 @@ func (s CapacityReservationStore) Find(_ context.Context, id string) (*types.Cap
 	return dst, err
 }
 
-func (s CapacityReservationStore) Create(_ context.Context, capacityReservation *types.CapacityReservation) error {
-	query, arg, err := s.db.BindNamed(capacityReservationInsert, capacityReservation)
-	if err != nil {
+func (s CapacityReservationStore) Create(ctx context.Context, capacityReservation *types.CapacityReservation) error {
+	now := time.Now().Unix()
+
+	query := squirrel.Insert("capacity_reservation").
+		Columns(
+			"stage_id",
+			"pool_name",
+			"instance_id",
+			"reservation_id",
+			"created_at",
+		).
+		Values(
+			capacityReservation.StageID,
+			capacityReservation.PoolName,
+			capacityReservation.InstanceID,
+			capacityReservation.ReservationID,
+			now,
+		).
+		Suffix("RETURNING stage_id").
+		RunWith(s.db).
+		PlaceholderFormat(squirrel.Dollar)
+
+	if err := query.QueryRowContext(ctx).Scan(&capacityReservation.StageID); err != nil {
 		return err
 	}
-	return s.db.QueryRow(query, arg...).Scan(&capacityReservation.StageID)
+
+	return nil
 }
 
 func (s CapacityReservationStore) Delete(ctx context.Context, id string) error {
@@ -60,20 +83,6 @@ FROM capacity_reservation
 
 const capacityReservationFindByID = capacityReservationBase + `
 WHERE stage_id = $1
-`
-
-const capacityReservationInsert = `
-INSERT INTO capacity_reservation (
- stage_id
-,pool_name
-,instance_id
-,reservation_id
-) values (
- :stage_id
-,:pool_name
-,:instance_id
-,:reservation_id
-) RETURNING stage_id
 `
 
 const capacityReservationDelete = `

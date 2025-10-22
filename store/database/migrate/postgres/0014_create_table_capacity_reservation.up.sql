@@ -3,4 +3,5 @@ CREATE TABLE IF NOT EXISTS capacity_reservation (
     ,pool_name         VARCHAR(250)
     ,instance_id       VARCHAR(250)
     ,reservation_id    VARCHAR(250)
+    ,created_at INTEGER NOT NULL,
     );
