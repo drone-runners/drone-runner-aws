@@ -14,13 +14,16 @@ import (
 	"github.com/wings-software/dlite/httphelper"
 )
 
+const (
+	capacityTimeoutSec = 10 * 60
+)
+
 type VMCapacityTask struct {
 	c *dliteCommand
 }
 
 type VMCapacityRequest struct {
 	CapacityReservationRequest harness.CapacityReservationRequest `json:"capacity_reservation_request"`
-	Distributed                bool                               `json:"distributed,omitempty"`
 }
 
 func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +50,7 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
-	timeout := initTimeoutSec
+	timeout := capacityTimeoutSec
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
@@ -55,15 +58,15 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Make the setup call
 	req.CapacityReservationRequest.CorrelationID = task.ID
-	poolManager := t.c.getPoolManager(req.Distributed)
+	poolManager := t.c.distributedPoolManager
 	capacityReservationResponse, err := harness.HandleCapacityReservation(
 		ctx, &req.CapacityReservationRequest, poolManager.GetCapacityReservationStore(),
 		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
 		t.c.env.Runner.Name,
 		poolManager, t.c.metrics)
 	if err != nil {
-		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
-		logr.WithError(err).WithField("account_id", accountID).Error("could not setup VM")
+		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(true)).Inc()
+		logr.WithError(err).WithField("account_id", accountID).Error("could not reserve capacity for VM")
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
