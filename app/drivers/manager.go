@@ -481,7 +481,9 @@ func (m *Manager) provisionFromPool(
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
 			return nil, nil, false, ErrorNoInstanceAvailable
 		}
-		inst, capacity, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTask) //nolint:lll
+		var inst *types.Instance
+		var capacity *types.CapacityReservation
+		inst, capacity, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTask) //nolint:lll
 		if err != nil {
 			if isCapacityTask {
 				return nil, nil, false, err
@@ -657,20 +659,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
@@ -856,7 +858,8 @@ func (m *Manager) setupInstance(
 
 	if isCapacityTask {
 		// create instance
-		capacity, err := pool.Driver.ReserveCapacity(ctx, createOptions)
+		var capacity *types.CapacityReservation
+		capacity, err = pool.Driver.ReserveCapacity(ctx, createOptions)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("manager: failed to reserve capacity")
