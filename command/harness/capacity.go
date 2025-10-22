@@ -200,7 +200,7 @@ func handleCapacityReservation(
 		}
 	}
 
-	capacityReservation, warmed, err = poolManager.ReserveCapacity(
+	_, capacityReservation, warmed, err = poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
@@ -208,11 +208,16 @@ func handleCapacityReservation(
 		r.ResourceClass,
 		&r.VMImageConfig,
 		query,
+		nil,
 		&r.StorageConfig,
 		r.Zone,
 		r.MachineType,
 		shouldUseGoogleDNS,
+		nil,
 		r.Timeout,
+		false,
+		nil,
+		true,
 	)
 	if err != nil {
 		return nil, false, err

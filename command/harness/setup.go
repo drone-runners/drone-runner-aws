@@ -424,7 +424,7 @@ func handleSetup(
 		instance = reservedInstance
 		warmed = true
 	} else {
-		instance, warmed, err = poolManager.Provision(
+		instance, _, warmed, err = poolManager.Provision(
 			ctx,
 			pool,
 			poolManager.GetTLSServerName(),
@@ -441,6 +441,7 @@ func handleSetup(
 			r.Timeout,
 			r.IsMarkedForInfraReset,
 			reservedCapacity,
+			false,
 		)
 	}
 	if err != nil {

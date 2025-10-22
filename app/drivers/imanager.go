@@ -20,8 +20,7 @@ type IManager interface {
 	Update(ctx context.Context, instance *types.Instance) error
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration, purgerTime time.Duration) error
-	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool, reservedCapacity *types.CapacityReservation) (*types.Instance, bool, error) //nolint
-	ReserveCapacity(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, timeout int64) (*types.CapacityReservation, bool, error)                                                                                                                                    //nolint
+	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool, reservedCapacity *types.CapacityReservation, isCapacityTask bool) (*types.Instance, *types.CapacityReservation, bool, error) //nolint 	//nolint
 	Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType, capacityReservation *types.CapacityReservation) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error

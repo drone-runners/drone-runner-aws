@@ -368,17 +368,18 @@ func (m *Manager) Provision(
 	timeout int64,
 	isMarkedForInfraReset bool,
 	reservedCapacity *types.CapacityReservation,
-) (*types.Instance, bool, error) {
+	isCapacityTask bool,
+) (*types.Instance, *types.CapacityReservation, bool, error) {
 	pool, err := m.validatePool(poolName)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
 		if gsErr := m.validateGitspaceDriverCompatibility(pool); gsErr != nil {
-			return nil, false, gsErr
+			return nil, nil, false, gsErr
 		}
-		existingInstance, gsErr := m.processExistingInstance(
+		existingInstance, _, gsErr := m.processExistingInstance(
 			ctx,
 			pool,
 			instanceInfo,
@@ -393,10 +394,10 @@ func (m *Manager) Provision(
 			timeout,
 			isMarkedForInfraReset,
 		)
-		return existingInstance, false, gsErr
+		return existingInstance, nil, false, gsErr
 	}
 
-	instance, hotpool, err := m.provisionFromPool(
+	instance, capacity, hotpool, err := m.provisionFromPool(
 		ctx,
 		pool,
 		query,
@@ -412,6 +413,7 @@ func (m *Manager) Provision(
 		timeout,
 		poolName,
 		reservedCapacity,
+		isCapacityTask,
 	)
 
 	// the go routine here uses the global context because this function is called
@@ -422,7 +424,7 @@ func (m *Manager) Provision(
 			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, zone, machineType, false, timeout, nil)
 		}(m.globalCtx)
 	}
-	return instance, hotpool, err
+	return instance, capacity, hotpool, err
 }
 
 func (m *Manager) validatePool(poolName string) (*poolEntry, error) {
@@ -455,13 +457,14 @@ func (m *Manager) provisionFromPool(
 	timeout int64,
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
-) (*types.Instance, bool, error) {
+	isCapacityTask bool,
+) (*types.Instance, *types.CapacityReservation, bool, error) {
 	pool.Lock()
 
 	busy, free, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		pool.Unlock()
-		return nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
+		return nil, nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
 	logger.FromContext(ctx).
@@ -476,16 +479,19 @@ func (m *Manager) provisionFromPool(
 	if len(free) == 0 {
 		pool.Unlock()
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
-			return nil, false, ErrorNoInstanceAvailable
+			return nil, nil, false, ErrorNoInstanceAvailable
 		}
-		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity) //nolint:lll
+		inst, capacity, err := m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTask) //nolint:lll
 		if err != nil {
-			return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+			if isCapacityTask {
+				return nil, nil, false, err
+			}
+			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
-		return inst, false, nil
+		return inst, capacity, false, nil
 	}
 
+	// Destroy any capacity reserved for this pool since we are using hotpool instead
 	if reservedCapacity != nil {
 		go func() {
 			err = pool.Driver.DestroyCapacity(ctx, reservedCapacity)
@@ -515,117 +521,14 @@ func (m *Manager) provisionFromPool(
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
 		pool.Unlock()
-		return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+		return nil, nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+	}
+	capacity := &types.CapacityReservation{
+		InstanceID: inst.ID,
+		PoolName:   poolName,
 	}
 	pool.Unlock()
-	return inst, true, nil
-}
-
-// ReserveCapacity returns an reserved capacity for a future vm initialize task.
-// This method and BuildPool method contain logic for maintaining pool size.
-func (m *Manager) ReserveCapacity(
-	ctx context.Context,
-	poolName,
-	serverName,
-	ownerID,
-	resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
-	query *types.QueryParams,
-	storageConfig *types.StorageConfig,
-	zone string,
-	machineType string,
-	shouldUseGoogleDNS bool,
-	timeout int64,
-) (*types.CapacityReservation, bool, error) {
-	pool, err := m.validatePool(poolName)
-	if err != nil {
-		return nil, false, err
-	}
-
-	capacity, hotpool, err := m.reserveCapacityFromPool(ctx, pool, query, serverName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, poolName) //nolint:lll
-	if err != nil {
-		return nil, false, err
-	}
-
-	// the go routine here uses the global context because this function is called
-	// from setup API call (and we can't use HTTP request context for async tasks)
-	// TODO: Move to outbox
-	if hotpool {
-		go func(ctx context.Context) {
-			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, zone, machineType, false, timeout, nil)
-		}(m.globalCtx)
-	}
-
-	return capacity, hotpool, err
-}
-
-// reserveCapacityFromPool handles capacity reservation for regular managers using in-memory locks
-func (m *Manager) reserveCapacityFromPool(
-	ctx context.Context,
-	pool *poolEntry,
-	query *types.QueryParams,
-	serverName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
-	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
-	timeout int64,
-	poolName string,
-) (*types.CapacityReservation, bool, error) {
-	pool.Lock()
-
-	busy, free, _, err := m.list(ctx, pool, query)
-	if err != nil {
-		pool.Unlock()
-		return nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
-	}
-
-	logger.FromContext(ctx).
-		WithField("pool", poolName).
-		WithField("busy", len(busy)).
-		WithField("free", len(free)).
-		WithField("hotpool", len(free) > 0).
-		Traceln("provision: hotpool instances")
-
-	var capacity *types.CapacityReservation
-
-	strategy := m.getStrategy()
-	if len(free) == 0 {
-		pool.Unlock()
-		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
-			return nil, false, ErrorNoInstanceAvailable
-		}
-		capacity, err = m.reserveCapacity(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
-		if err != nil {
-			return nil, false, err
-		}
-		return capacity, false, nil
-	}
-
-	sort.Slice(free, func(i, j int) bool {
-		iTime := time.Unix(free[i].Started, 0)
-		jTime := time.Unix(free[j].Started, 0)
-		return iTime.Before(jTime)
-	})
-
-	inst := free[0]
-	inst.State = types.StateInUse
-	inst.OwnerID = ownerID
-	if inst.IsHibernated {
-		// update started time after bringing instance from hibernate
-		// this will make sure that purger only picks it when it is actually used for max age
-		inst.Started = time.Now().Unix()
-	}
-	err = m.instanceStore.Update(ctx, inst)
-	if err != nil {
-		pool.Unlock()
-		return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
-	}
-	pool.Unlock()
-
-	capacity.InstanceID = inst.ID
-	capacity.PoolName = poolName
-	return capacity, true, nil
+	return inst, capacity, true, nil
 }
 
 // Destroy destroys an instance in a pool.
@@ -754,20 +657,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
@@ -850,7 +753,7 @@ func (m *Manager) setupInstanceWithHibernate(
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
-	inst, err := m.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform, nil)
+	inst, _, err := m.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -876,7 +779,8 @@ func (m *Manager) setupInstance(
 	timeout int64,
 	platform *types.Platform,
 	reservedCapacity *types.CapacityReservation,
-) (*types.Instance, error) {
+	isCapacityTask bool,
+) (*types.Instance, *types.CapacityReservation, error) {
 	var inst *types.Instance
 	retain := "false"
 
@@ -925,7 +829,7 @@ func (m *Manager) setupInstance(
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
-		return nil, err
+		return nil, nil, err
 	}
 	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
 		createOptions.VMImageConfig = types.VMImageConfig{
@@ -950,12 +854,23 @@ func (m *Manager) setupInstance(
 		createOptions.Platform = pool.Platform
 	}
 
+	if isCapacityTask {
+		// create instance
+		capacity, err := pool.Driver.ReserveCapacity(ctx, createOptions)
+		if err != nil {
+			logrus.WithError(err).
+				Errorln("manager: failed to reserve capacity")
+			return nil, nil, err
+		}
+		return nil, capacity, nil
+	}
+
 	// create instance
 	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to create instance")
-		return nil, err
+		return nil, nil, err
 	}
 
 	if inuse {
@@ -967,7 +882,7 @@ func (m *Manager) setupInstance(
 	if inst.Labels == nil {
 		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
 		if marshalErr != nil {
-			return nil, fmt.Errorf("manager: could not marshal default labels, err: %w", marshalErr)
+			return nil, nil, fmt.Errorf("manager: could not marshal default labels, err: %w", marshalErr)
 		}
 		inst.Labels = labelsBytes
 	}
@@ -977,93 +892,9 @@ func (m *Manager) setupInstance(
 		logrus.WithError(err).
 			Errorln("manager: failed to store instance")
 		_ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
-		return nil, err
+		return nil, nil, err
 	}
-	return inst, nil
-}
-
-func (m *Manager) reserveCapacity(
-	ctx context.Context,
-	pool *poolEntry,
-	tlsServerName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
-	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
-	timeout int64,
-	platform *types.Platform,
-) (*types.CapacityReservation, error) {
-	var capacity *types.CapacityReservation
-	retain := "false"
-
-	// generate certs
-	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
-	createOptions.IsHosted = IsHosted(ctx)
-	createOptions.LiteEnginePath = m.liteEnginePath
-	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
-	createOptions.PoolName = pool.Name
-	createOptions.Limit = pool.MaxSize
-	createOptions.Pool = pool.MinSize
-	createOptions.HarnessTestBinaryURI = m.harnessTestBinaryURI
-	createOptions.PluginBinaryURI = m.pluginBinaryURI
-	createOptions.PluginBinaryFallbackURI = m.pluginBinaryFallbackURI
-	createOptions.Tmate = m.tmate
-	createOptions.AccountID = ownerID
-	createOptions.ResourceClass = resourceClass
-	createOptions.ShouldUseGoogleDNS = shouldUseGoogleDNS
-	if storageConfig != nil {
-		createOptions.StorageOpts = types.StorageOpts{
-			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
-			Identifier:         storageConfig.Identifier,
-			Size:               storageConfig.Size,
-			Type:               storageConfig.Type,
-			BootDiskSize:       storageConfig.BootDiskSize,
-			BootDiskType:       storageConfig.BootDiskType,
-		}
-	}
-	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
-	createOptions.Labels = map[string]string{"retain": retain}
-	createOptions.Zone = zone
-	createOptions.MachineType = machineType
-	createOptions.DriverName = pool.Driver.DriverName()
-	createOptions.Timeout = timeout
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("manager: failed to generate certificates")
-		return nil, err
-	}
-	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
-		createOptions.VMImageConfig = types.VMImageConfig{
-			ImageName:    vmImageConfig.ImageName,
-			Username:     vmImageConfig.Username,
-			Password:     vmImageConfig.Password,
-			ImageVersion: vmImageConfig.ImageVersion,
-		}
-
-		if vmImageConfig.Auth != nil {
-			createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
-				Registry: vmImageConfig.Auth.Address,
-				Username: vmImageConfig.Auth.Username,
-				Password: vmImageConfig.Auth.Password,
-			}
-		}
-	}
-
-	if platform != nil {
-		createOptions.Platform = *platform
-	} else {
-		createOptions.Platform = pool.Platform
-	}
-
-	// create instance
-	capacity, err = pool.Driver.ReserveCapacity(ctx, createOptions)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("manager: failed to reserve capacity")
-		return nil, err
-	}
-
-	return capacity, nil
+	return inst, nil, nil
 }
 
 func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string, instanceInfo *common.InstanceInfo) (*types.Instance, error) {
@@ -1404,7 +1235,7 @@ func (m *Manager) processExistingInstance(
 	zone, machineType string,
 	timeout int64,
 	isMarkedForInfraReset bool,
-) (*types.Instance, error) {
+) (*types.Instance, *types.CapacityReservation, error) {
 	if instanceInfo != nil && instanceInfo.ID != "" {
 		if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
 			logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
@@ -1427,7 +1258,7 @@ func (m *Manager) processExistingInstance(
 				inst.State = types.StateInUse
 				inst.OwnerID = ownerID
 				inst.Started = time.Now().Unix()
-				return inst, nil
+				return inst, nil, nil
 			}
 		}
 	}
@@ -1458,5 +1289,6 @@ func (m *Manager) processExistingInstance(
 		timeout,
 		platform,
 		nil,
+		false,
 	)
 }
