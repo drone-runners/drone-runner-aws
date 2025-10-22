@@ -174,6 +174,8 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 		return fmt.Errorf("failed to delete destroyed instances from database: %w", err)
 	}
 
+	go d.destroyCapacity(ctx, instancesToDestroy)
+
 	return nil
 }
 
@@ -253,6 +255,17 @@ func (d *DistributedManager) provisionFromPool(
 						WithField("instance_id", inst.ID).
 						WithField("hotpool", true).
 						Warnln("provision: failed to destroy reserved capacity")
+				}
+				if d.capacityReservationStore != nil {
+					if err == nil {
+						if err = d.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
+							logger.FromContext(ctx).
+								WithField("pool", poolName).
+								WithField("instance_id", inst.ID).
+								WithField("hotpool", true).
+								Warnln("provision: failed to delete capacity reservation entity")
+						}
+					}
 				}
 			}()
 		}
@@ -579,6 +592,8 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	if err != nil {
 		logr.WithError(err).Errorf("distributed dlite: failed to delete instances of pool=%q", pool.Name)
 	}
+
+	go d.destroyCapacity(ctx, instances)
 
 	// Nothing to do here
 	// 1. Instance was not a hotpool instance, so no need to build pool

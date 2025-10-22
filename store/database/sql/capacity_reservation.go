@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Masterminds/squirrel"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 
@@ -27,33 +26,13 @@ func (s CapacityReservationStore) Find(_ context.Context, id string) (*types.Cap
 	return dst, err
 }
 
-func (s CapacityReservationStore) Create(ctx context.Context, capacityReservation *types.CapacityReservation) error {
-	now := time.Now().Unix()
-
-	query := squirrel.Insert("capacity_reservation").
-		Columns(
-			"stage_id",
-			"pool_name",
-			"instance_id",
-			"reservation_id",
-			"created_at",
-		).
-		Values(
-			capacityReservation.StageID,
-			capacityReservation.PoolName,
-			capacityReservation.InstanceID,
-			capacityReservation.ReservationID,
-			now,
-		).
-		Suffix("RETURNING stage_id").
-		RunWith(s.db).
-		PlaceholderFormat(squirrel.Dollar)
-
-	if err := query.QueryRowContext(ctx).Scan(&capacityReservation.StageID); err != nil {
+func (s CapacityReservationStore) Create(_ context.Context, capacityReservation *types.CapacityReservation) error {
+	capacityReservation.CreatedAt = time.Now().Unix()
+	query, arg, err := s.db.BindNamed(capacityReservationInsert, capacityReservation)
+	if err != nil {
 		return err
 	}
-
-	return nil
+	return s.db.QueryRow(query, arg...).Scan(&capacityReservation.StageID)
 }
 
 func (s CapacityReservationStore) Delete(ctx context.Context, id string) error {
@@ -68,6 +47,16 @@ func (s CapacityReservationStore) Delete(ctx context.Context, id string) error {
 	return tx.Commit()
 }
 
+func (s CapacityReservationStore) ListByPoolName(ctx context.Context, poolName string) ([]*types.CapacityReservation, error) {
+	query := capacityReservationFindByPoolName
+
+	var reservations []*types.CapacityReservation
+	if err := s.db.SelectContext(ctx, &reservations, query, poolName); err != nil {
+		return nil, err
+	}
+	return reservations, nil
+}
+
 func (s CapacityReservationStore) Purge(ctx context.Context) error {
 	panic("implement me")
 }
@@ -78,7 +67,23 @@ SELECT
 ,pool_name
 ,instance_id
 ,reservation_id
+,created_at
 FROM capacity_reservation
+`
+const capacityReservationInsert = `
+INSERT INTO capacity_reservation (
+ stage_id
+,pool_name
+,instance_id
+,reservation_id
+,created_at
+) values (
+ :stage_id
+,:pool_name
+,:instance_id
+,:reservation_id
+,:created_at
+) RETURNING stage_id
 `
 
 const capacityReservationFindByID = capacityReservationBase + `
@@ -88,4 +93,7 @@ WHERE stage_id = $1
 const capacityReservationDelete = `
 DELETE FROM capacity_reservation
 WHERE stage_id = $1
+`
+const capacityReservationFindByPoolName = capacityReservationBase + `
+WHERE pool_name = $1
 `

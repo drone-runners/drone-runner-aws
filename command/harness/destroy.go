@@ -204,12 +204,6 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 
-	if crs != nil {
-		if err = crs.Delete(ctx, r.StageRuntimeID); err != nil {
-			logr.WithError(err).Errorln("failed to delete capacity reservation entity")
-		}
-	}
-
 	return inst, nil
 }
 

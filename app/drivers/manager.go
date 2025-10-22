@@ -33,6 +33,7 @@ type (
 		poolMap                  map[string]*poolEntry
 		strategy                 Strategy
 		cleanupTimer             *time.Ticker
+		capacityCleanupTimer     *time.Ticker
 		runnerName               string
 		liteEnginePath           string
 		instanceStore            store.InstanceStore
@@ -330,6 +331,8 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 								}
 							}
 
+							go m.destroyCapacity(ctx, instances)
+
 							err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate)
 							if err != nil {
 								return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
@@ -340,6 +343,83 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 					if err != nil {
 						logger.FromContext(ctx).WithError(err).
 							Errorln("purger: Failed to purge stale instances")
+					}
+				}
+			}()
+		}
+	}()
+
+	return nil
+}
+
+func (m *Manager) StartCapacityPurger(ctx context.Context, maxAgeFree time.Duration) error {
+	if m.capacityCleanupTimer != nil {
+		panic("capacity cleanup purger already started")
+	}
+
+	d := time.Duration(maxAgeFree.Minutes() * 0.9 * float64(time.Minute))
+	m.capacityCleanupTimer = time.NewTicker(d)
+
+	logrus.Infof("Instance purger started. It will run every %.2f minutes", d.Minutes())
+
+	go func() {
+		for {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logrus.Errorf("PANIC %v\n%s", r, debug.Stack())
+					}
+				}()
+
+				select {
+				case <-ctx.Done():
+					return
+				case <-m.capacityCleanupTimer.C:
+					logrus.Traceln("Launching capacity reservation purger")
+
+					err := m.forEach(ctx,
+						m.GetTLSServerName(),
+						nil,
+						func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error {
+							logr := logger.FromContext(ctx).
+								WithField("driver", pool.Driver.DriverName()).
+								WithField("pool", pool.Name)
+							pool.Lock()
+							defer pool.Unlock()
+
+							reservedCapacitiesForPool, err := m.capacityReservationStore.ListByPoolName(ctx, pool.Name)
+							if err != nil {
+								return fmt.Errorf("failed to list capacity reservations for pool=%q error: %w", pool.Name, err)
+							}
+
+							var capacitiesToDelete []*types.CapacityReservation
+
+							for _, capacityReservation := range reservedCapacitiesForPool {
+								inst, err := m.GetInstanceByStageID(ctx, pool.Name, capacityReservation.StageID)
+								if err != nil {
+									logr.WithError(err)
+									continue
+								}
+								if inst == nil || inst.ID == "" {
+									createdAt := time.Unix(inst.Started, 0)
+									if time.Since(createdAt) > maxAgeFree {
+										capacitiesToDelete = append(capacitiesToDelete, capacityReservation)
+									}
+								}
+
+							}
+
+							if len(capacitiesToDelete) == 0 {
+								return nil
+							}
+
+							m.destroyCapacityFromReservation(ctx, capacitiesToDelete)
+
+							return nil
+						})
+					if err != nil {
+						logger.FromContext(ctx).WithError(err).
+							Errorln("purger: Failed to purge stale capacities")
 					}
 				}
 			}()
@@ -503,6 +583,16 @@ func (m *Manager) provisionFromPool(
 					WithError(err).
 					Traceln("provision: failed to destroy reserved capacity")
 			}
+			if m.capacityReservationStore != nil {
+				if err == nil {
+					if err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
+						logger.FromContext(ctx).
+							WithField("pool", poolName).
+							WithError(err).
+							Traceln("provision: failed to delete capacity reservation entity")
+					}
+				}
+			}
 		}()
 	}
 
@@ -560,7 +650,15 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 
 	if capErr := pool.Driver.DestroyCapacity(ctx, capacityReservation); capErr != nil {
 		logrus.Warnf("failed to delete capacity reservation with error: %s", capErr)
+	} else {
+		if m.capacityReservationStore != nil {
+			crsErr := m.capacityReservationStore.Delete(ctx, capacityReservation.StageID)
+			if crsErr != nil {
+				logrus.Warnf("failed to delete capacity in store with error: %s", capErr)
+			}
+		}
 	}
+
 	return nil
 }
 
@@ -602,6 +700,8 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 			return err
 		}
 	}
+
+	go m.destroyCapacity(ctx, instances)
 
 	return nil
 }
@@ -978,6 +1078,49 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	}
 
 	return pool.Driver.Logs(ctx, instanceID)
+}
+
+func (m *Manager) destroyCapacity(ctx context.Context, instances []*types.Instance) {
+	if m.capacityReservationStore != nil {
+		// traverse the instances and destroy the capacity reservation
+		for _, instance := range instances {
+			if instance.Stage != "" {
+				capacity, _ := m.capacityReservationStore.Find(ctx, instance.Stage)
+				if capacity != nil {
+					pool := m.poolMap[capacity.PoolName]
+					err := pool.Driver.DestroyCapacity(ctx, capacity)
+					if err != nil {
+						logrus.WithError(err).Errorf("failed to destroy capacity reservation of stage %s\n", capacity.StageID)
+					} else {
+						err = m.capacityReservationStore.Delete(ctx, instance.Stage)
+						if err != nil {
+							logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (m *Manager) destroyCapacityFromReservation(ctx context.Context, capacties []*types.CapacityReservation) {
+	if m.capacityReservationStore != nil {
+		// traverse the instances and destroy the capacity reservation
+		for _, capacity := range capacties {
+			if capacity != nil {
+				pool := m.poolMap[capacity.PoolName]
+				err := pool.Driver.DestroyCapacity(ctx, capacity)
+				if err != nil {
+					logrus.WithError(err).Errorf("failed to destroy capacity reservation of stage %s\n", capacity.StageID)
+				} else {
+					err = m.capacityReservationStore.Delete(ctx, capacity.StageID)
+					if err != nil {
+						logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (m *Manager) hibernateOrStopWithRetries(

@@ -36,4 +36,5 @@ type CapacityReservationStore interface {
 	Find(ctx context.Context, id string) (*types.CapacityReservation, error)
 	Create(context.Context, *types.CapacityReservation) error
 	Delete(context.Context, string) error
+	ListByPoolName(ctx context.Context, poolName string) ([]*types.CapacityReservation, error)
 }
