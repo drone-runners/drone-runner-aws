@@ -216,30 +216,17 @@ func (d *DistributedManager) provisionFromPool(
 	allowedStates := []types.InstanceState{types.StateCreated}
 
 	// Resolve image name
-	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{
-		ImageName: vmImageConfig.ImageName,
-	})
+	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
 
 	// Try to find and claim a free instance atomically
-	inst, err := d.instanceStore.FindAndClaim(
-		ctx,
-		&types.QueryParams{PoolName: poolName, ImageName: fullyQualifiedImageName},
-		types.StateInUse,
-		allowedStates,
-		true,
-	)
+	inst, err := d.instanceStore.FindAndClaim(ctx, &types.QueryParams{PoolName: poolName, ImageName: fullyQualifiedImageName}, types.StateInUse, allowedStates, true)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, nil, false, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
 	}
 
-	// If an existing instance was claimed
+	// If we successfully claimed an instance, update it and return
 	if inst != nil {
 		inst.OwnerID = ownerID
-		if inst.IsHibernated {
-			// update started time after bringing instance from hibernate
-			inst.Started = time.Now().Unix()
-		}
-
 		if err = d.instanceStore.Update(ctx, inst); err != nil {
 			return nil, nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 		}
@@ -283,31 +270,14 @@ func (d *DistributedManager) provisionFromPool(
 		WithField("hotpool", false).
 		Traceln("provision: no hotpool instances available, creating new instance")
 
-	inst, capacity, err := d.setupInstance(
-		ctx,
-		pool,
-		tlsServerName,
-		ownerID,
-		resourceClass,
-		vmImageConfig,
-		true,
-		agentConfig,
-		storageConfig,
-		zone,
-		machineType,
-		shouldUseGoogleDNS,
-		timeout,
-		nil,
-		reservedCapacity,
-		isCapacityTaskInput,
-	)
+	// Create a new instance
+	inst, capacity, err := d.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, true, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTaskInput)
 	if err != nil {
 		if isCapacityTaskInput {
 			return nil, nil, false, err
 		}
 		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
-
 	return inst, capacity, false, nil
 }
 
