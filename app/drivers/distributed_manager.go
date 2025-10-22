@@ -247,7 +247,7 @@ func (d *DistributedManager) provisionFromPool(
 		// If it's a normal provision flow, destroy reserved capacity (if any)
 		if !isCapacityTaskInput && reservedCapacity != nil {
 			go func() {
-				if err := pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
+				if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
 					logger.FromContext(ctx).
 						WithField("pool", poolName).
 						WithField("instance_id", inst.ID).
@@ -271,7 +271,22 @@ func (d *DistributedManager) provisionFromPool(
 		Traceln("provision: no hotpool instances available, creating new instance")
 
 	// Create a new instance
-	inst, capacity, err := d.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, true, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTaskInput)
+	inst, capacity, err := d.setupInstance(ctx,
+		pool,
+		tlsServerName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		true,
+		agentConfig,
+		storageConfig,
+		zone,
+		machineType,
+		shouldUseGoogleDNS,
+		timeout,
+		nil,
+		reservedCapacity,
+		isCapacityTaskInput)
 	if err != nil {
 		if isCapacityTaskInput {
 			return nil, nil, false, err
@@ -324,7 +339,22 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
-	inst, _, err := d.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform, nil, false)
+	inst, _, err := d.setupInstance(ctx,
+		pool,
+		tlsServerName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		false,
+		agentConfig,
+		storageConfig,
+		zone,
+		machineType,
+		shouldUseGoogleDNS,
+		timeout,
+		platform,
+		nil,
+		false)
 	if err != nil {
 		return nil, err
 	}
