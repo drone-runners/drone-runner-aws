@@ -668,7 +668,7 @@ func (p *config) getInstanceIP(i *compute.Instance) string {
 
 func (p *config) suspendInstance(ctx context.Context, projectID, zone, name string) (*compute.Operation, error) {
 	return retry(ctx, getRetries, secSleep, func() (*compute.Operation, error) {
-		return p.service.Instances.Suspend(projectID, zone, name).Context(ctx).Do()
+		return p.service.Instances.Suspend(projectID, zone, name).Context(ctx).DiscardLocalSsd(true).Do()
 	})
 }
 
