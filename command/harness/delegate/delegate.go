@@ -110,14 +110,13 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	instanceStore, stageOwnerStore, _, capacityReservationStore, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
+	instanceStore, stageOwnerStore, _, _, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource)
 
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
 
 	c.stageOwnerStore = stageOwnerStore
-	c.capacityReservationStore = capacityReservationStore
 	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
 
 	_, err = harness.SetupPoolWithEnv(ctx, &c.env, c.poolManager, c.poolFile)

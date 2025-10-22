@@ -85,9 +85,7 @@ func ProvideSQLCapacityReservationStore(db *sqlx.DB) store.CapacityReservationSt
 	case Postgres:
 		return sql.NewCapacityReservationStore(db)
 	default:
-		return sql.NewCapacityReservationStoreSync(
-			sql.NewCapacityReservationStore(db),
-		)
+		return nil
 	}
 }
 

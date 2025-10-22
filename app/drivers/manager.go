@@ -755,7 +755,22 @@ func (m *Manager) setupInstanceWithHibernate(
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
-	inst, _, err := m.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform, nil, false)
+	inst, _, err := m.setupInstance(ctx,
+		pool,
+		tlsServerName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		false,
+		agentConfig,
+		storageConfig,
+		zone,
+		machineType,
+		shouldUseGoogleDNS,
+		timeout,
+		platform,
+		nil,
+		false)
 	if err != nil {
 		return nil, err
 	}
