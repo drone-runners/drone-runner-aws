@@ -111,7 +111,16 @@ func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager dr
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 
-	return SetupPool(ctx, configPool, env.Runner.Name, env.Passwords(), poolManager, env.Settings.BusyMaxAge, env.Settings.FreeMaxAge, env.Settings.PurgerTime, env.Settings.ReusePool, env.Settings.FreeCapacityMaxAgeMinutes)
+	return SetupPool(ctx,
+		configPool,
+		env.Runner.Name,
+		env.Passwords(),
+		poolManager,
+		env.Settings.BusyMaxAge,
+		env.Settings.FreeMaxAge,
+		env.Settings.PurgerTime,
+		env.Settings.ReusePool,
+		env.Settings.FreeCapacityMaxAgeMinutes)
 }
 
 func Cleanup(reusePool bool, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {
