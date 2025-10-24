@@ -44,6 +44,10 @@ runcmd:
 - 'cp /usr/bin/auto-injection /tmp/harness/bin/auto-injection'
 - 'chmod 777 /tmp/harness/bin/auto-injection'
 {{ end }}
+{{ if .AnnotationsBinaryURI }}
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli'
+- 'chmod 755 /usr/bin/hcli'
+{{ end }}
 {{ if eq .Platform.Arch "amd64" }}
 - 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
 - 'chmod 777 /usr/bin/envman'

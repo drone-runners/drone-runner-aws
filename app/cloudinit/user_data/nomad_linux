@@ -56,6 +56,17 @@ cp /usr/bin/auto-injection /tmp/harness/bin/auto-injection
 chmod 777 /tmp/harness/bin/auto-injection
 {{ end }}
 
+{{ if .AnnotationsBinaryURI }}
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 -nv "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli; then
+    echo "Successfully downloaded annotations CLI from primary URL."
+else
+    echo "Primary URL failed for annotations CLI. Trying fallback URL..."
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli
+    echo "Successfully downloaded annotations CLI from fallback URL."
+fi
+chmod 755 /usr/bin/hcli
+{{ end }}
+
 {{ if eq .Platform.Arch "amd64" }}
 if curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman; then
 	echo "Successfully downloaded envman binary from primary URL."
