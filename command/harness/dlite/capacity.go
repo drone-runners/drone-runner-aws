@@ -77,7 +77,8 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Construct final response
 	resp := VMTaskExecutionResponse{
-		CapacityReservation: *capacityReservationResponse,
+		CommandExecutionStatus: Success,
+		CapacityReservation:    *capacityReservationResponse,
 	}
 	httphelper.WriteJSON(w, resp, httpOK)
 }

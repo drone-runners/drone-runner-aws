@@ -122,7 +122,7 @@ func HandleCapacityReservation(
 		capacity, _, poolErr = handleCapacityReservation(ctx, logr, r, runnerName, poolManager, pool, owner)
 		if poolErr != nil {
 			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not reserve capacity")
-			if !errors.As(poolErr, &capacityUnavailableErr) {
+			if errors.As(poolErr, &capacityUnavailableErr) {
 				capacityUnavailable = true
 			}
 			continue
