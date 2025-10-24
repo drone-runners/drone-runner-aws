@@ -647,12 +647,14 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 	}
 	logrus.WithField("instance", instance.ID).Infof("instance destroyed")
 
-	if capErr := pool.Driver.DestroyCapacity(ctx, capacityReservation); capErr != nil {
-		logrus.Warnf("failed to delete capacity reservation with error: %s", capErr)
-	} else if m.capacityReservationStore != nil {
-		crsErr := m.capacityReservationStore.Delete(ctx, capacityReservation.StageID)
-		if crsErr != nil {
-			logrus.Warnf("failed to delete capacity in store with error: %s", capErr)
+	if capacityReservation != nil {
+		if capErr := pool.Driver.DestroyCapacity(ctx, capacityReservation); capErr != nil {
+			logrus.Warnf("failed to delete capacity reservation with error: %s", capErr)
+		} else if m.capacityReservationStore != nil {
+			crsErr := m.capacityReservationStore.Delete(ctx, capacityReservation.StageID)
+			if crsErr != nil {
+				logrus.Warnf("failed to delete capacity in store with error: %s", capErr)
+			}
 		}
 	}
 
@@ -756,20 +758,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
