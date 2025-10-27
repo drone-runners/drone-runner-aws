@@ -213,7 +213,7 @@ func (d *DistributedManager) provisionFromPool(
 	timeout int64,
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
-	isCapacityTaskInput bool,
+	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
 	allowedStates := []types.InstanceState{types.StateCreated}
 
@@ -247,7 +247,7 @@ func (d *DistributedManager) provisionFromPool(
 		}
 
 		// If it's a normal provision flow, destroy reserved capacity (if any)
-		if !isCapacityTaskInput && reservedCapacity != nil {
+		if !isCapacityTask && reservedCapacity != nil {
 			go func() {
 				if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
 					logger.FromContext(ctx).
@@ -299,9 +299,9 @@ func (d *DistributedManager) provisionFromPool(
 		timeout,
 		nil,
 		reservedCapacity,
-		isCapacityTaskInput)
+		isCapacityTask)
 	if err != nil {
-		if isCapacityTaskInput {
+		if isCapacityTask {
 			return nil, nil, false, err
 		}
 		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
