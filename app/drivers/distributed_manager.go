@@ -81,7 +81,7 @@ func (d *DistributedManager) GetPoolSpec(poolName string) (interface{}, error) {
 func (d *DistributedManager) BuildPools(ctx context.Context) error {
 	query := types.QueryParams{RunnerName: d.runnerName}
 	buildPoolWrapper := func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error {
-		return d.buildPool(ctx, pool, serverName, query, d.setupInstanceWithHibernate)
+		return d.buildPool(ctx, pool, serverName, query, d.setupInstanceWithHibernate, d.setupInstanceAsync)
 	}
 	return d.forEach(ctx, d.GetTLSServerName(), &query, buildPoolWrapper)
 }
@@ -227,7 +227,7 @@ func (d *DistributedManager) provisionFromPool(
 			WithField("hotpool", true).
 			Traceln("provision: claimed hotpool instance")
 
-		d.setupInstanceAsync(ctx, inst)
+		d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName)
 		return inst, true, nil
 	}
 
@@ -250,17 +250,16 @@ func (d *DistributedManager) provisionFromPool(
 
 // setupInstanceAsync creates an outbox job for setting up the instance
 func (d *DistributedManager) setupInstanceAsync(
-	ctx context.Context,
-	inst *types.Instance,
+	ctx context.Context, poolName, runnerName string,
 ) {
-	if inst == nil || inst.Pool == "" || inst.RunnerName == "" {
-		logger.FromContext(ctx).Errorln("setupInstanceAsync: instance is nil or pool or runner name is empty")
+	if poolName == "" || runnerName == "" {
+		logger.FromContext(ctx).Errorln("setupInstanceAsync: pool or runner name is empty")
 		return
 	}
 	// Create outbox job
 	job := &types.OutboxJob{
-		PoolName:   inst.Pool,
-		RunnerName: inst.RunnerName,
+		PoolName:   poolName,
+		RunnerName: runnerName,
 		JobType:    types.OutboxJobTypeSetupInstance,
 		JobParams:  nil, // TODO: add job params in future if needed
 		Status:     types.OutboxJobStatusPending,
@@ -273,8 +272,8 @@ func (d *DistributedManager) setupInstanceAsync(
 
 	logger.FromContext(ctx).
 		WithField("job_id", job.ID).
-		WithField("pool_name", inst.Pool).
-		WithField("runner_name", inst.RunnerName).
+		WithField("pool_name", poolName).
+		WithField("runner_name", runnerName).
 		Infoln("setupInstanceAsync: created outbox job for instance setup")
 }
 
@@ -434,10 +433,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 					// MatchLabels in the query params are used in a generic manner to match it against the labels stored in the instance
 					// This is similar to how K8s matchLabels and labels work.
 					for _, pool := range d.poolMap {
-						if err := d.startInstancePurger(ctx, pool, maxAgeBusy, &queryParams); err != nil {
-							logger.FromContext(ctx).WithError(err).
-								Errorln("distributed dlite: purger: Failed to purge stale instances")
-						}
+						d.startInstancePurger(ctx, pool, maxAgeBusy, maxAgeFree, &queryParams)
 					}
 				}
 			}()
@@ -447,78 +443,129 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 	return nil
 }
 
-func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy time.Duration, queryParams *types.QueryParams) error {
+func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy, maxAgeFree time.Duration, queryParams *types.QueryParams) {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
 
-	conditions := squirrel.Or{}
-	currentTime := time.Now()
-
+	// Handle busy instance cleanup
 	if maxAgeBusy != 0 {
-		extendedMaxBusy := 7 * 24 * time.Hour
-		// First condition: instances without 'ttl' key using default max age
-		busyCondition := squirrel.And{
-			squirrel.Eq{"instance_pool": pool.Name},
-			squirrel.Or{
-				squirrel.Eq{"instance_state": types.StateInUse},
-				squirrel.Eq{"instance_state": types.StateTerminating},
-			},
-			squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
-			squirrel.Expr("NOT (instance_labels ?? 'ttl')"),
+		if err := d.cleanupBusyInstances(ctx, pool, maxAgeBusy, queryParams); err != nil {
+			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup busy instances")
 		}
-		for key, value := range queryParams.MatchLabels {
-			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
-			busyCondition = append(busyCondition, condition)
-		}
-
-		// Second condition: instances with 'ttl' key using extended max age
-		extendedBusyCondition := squirrel.And{
-			squirrel.Eq{"instance_pool": pool.Name},
-			squirrel.Or{
-				squirrel.Eq{"instance_state": types.StateInUse},
-				squirrel.Eq{"instance_state": types.StateTerminating},
-			},
-			squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
-			squirrel.Expr("instance_labels ?? 'ttl'"),
-		}
-		for key, value := range queryParams.MatchLabels {
-			condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
-			extendedBusyCondition = append(extendedBusyCondition, condition)
-		}
-		conditions = append(conditions, busyCondition, extendedBusyCondition)
 	}
 
+	// Handle free instance cleanup
+	if maxAgeFree != 0 {
+		if err := d.cleanupFreeInstances(ctx, pool, maxAgeFree, queryParams); err != nil {
+			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup free instances")
+		}
+	}
+}
+
+// cleanupBusyInstances handles cleanup of busy instances (StateInUse, StateTerminating)
+func (d *DistributedManager) cleanupBusyInstances(ctx context.Context, pool *poolEntry, maxAgeBusy time.Duration, queryParams *types.QueryParams) error {
+	conditions := squirrel.Or{}
+	currentTime := time.Now()
+	extendedMaxBusy := 7 * 24 * time.Hour
+
+	// First condition: instances without 'ttl' key using default max age
+	busyCondition := squirrel.And{
+		squirrel.Eq{"instance_pool": pool.Name},
+		squirrel.Or{
+			squirrel.Eq{"instance_state": types.StateInUse},
+			squirrel.Eq{"instance_state": types.StateTerminating},
+		},
+		squirrel.Lt{"instance_started": currentTime.Add(-maxAgeBusy).Unix()},
+		squirrel.Expr("NOT (instance_labels ?? 'ttl')"),
+	}
+	for key, value := range queryParams.MatchLabels {
+		condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+		busyCondition = append(busyCondition, condition)
+	}
+
+	// Second condition: instances with 'ttl' key using extended max age
+	extendedBusyCondition := squirrel.And{
+		squirrel.Eq{"instance_pool": pool.Name},
+		squirrel.Or{
+			squirrel.Eq{"instance_state": types.StateInUse},
+			squirrel.Eq{"instance_state": types.StateTerminating},
+		},
+		squirrel.Lt{"instance_started": currentTime.Add(-extendedMaxBusy).Unix()},
+		squirrel.Expr("instance_labels ?? 'ttl'"),
+	}
+	for key, value := range queryParams.MatchLabels {
+		condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+		extendedBusyCondition = append(extendedBusyCondition, condition)
+	}
+	conditions = append(conditions, busyCondition, extendedBusyCondition)
+	_, err := d.executeInstanceCleanup(ctx, pool, conditions, "busy")
+	return err
+}
+
+// cleanupFreeInstances handles cleanup of free instances (StateCreated, StateHibernating)
+func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poolEntry, maxAgeFree time.Duration, queryParams *types.QueryParams) error {
+	currentTime := time.Now()
+
+	// Condition for free instances
+	freeCondition := squirrel.And{
+		squirrel.Eq{"instance_pool": pool.Name},
+		squirrel.Or{
+			squirrel.Eq{"instance_state": types.StateCreated},
+			squirrel.Eq{"instance_state": types.StateHibernating},
+		},
+		squirrel.Lt{"instance_started": currentTime.Add(-maxAgeFree).Unix()},
+	}
+	for key, value := range queryParams.MatchLabels {
+		condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
+		freeCondition = append(freeCondition, condition)
+	}
+
+	conditions := squirrel.Or{freeCondition}
+
+	// Execute cleanup and call setupInstanceAsync for each cleaned instance
+	instances, err := d.executeInstanceCleanup(ctx, pool, conditions, "free")
+
+	// Call setupInstanceAsync for each cleaned free instance
+	for _, instance := range instances {
+		d.setupInstanceAsync(ctx, pool.Name, instance.RunnerName)
+	}
+
+	return err
+}
+
+// executeInstanceCleanup performs cleanup and returns the instances for further processing
+func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *poolEntry, conditions squirrel.Or, cleanupType string) ([]*types.Instance, error) {
+	logr := logger.FromContext(ctx).
+		WithField("driver", pool.Driver.DriverName()).
+		WithField("pool", pool.Name).
+		WithField("cleanup_type", cleanupType)
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_name, instance_node_id").ToSql()
+	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").ToSql()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	instances, err := d.instanceStore.DeleteAndReturn(ctx, deleteSQL, args...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(instances) == 0 {
-		return nil
+		return instances, nil
 	}
 
 	var instanceNames []string
-
 	for _, instance := range instances {
 		instanceNames = append(instanceNames, instance.Name)
 	}
 
-	logr.Infof("distributed dlite: purger: Terminating stale instances\n%s", instanceNames)
+	logr.Infof("distributed dlite: purger: Terminating stale %s instances\n%s", cleanupType, instanceNames)
 
 	err = pool.Driver.Destroy(ctx, instances)
 	if err != nil {
-		logr.WithError(err).Errorf("distributed dlite: failed to delete instances of pool=%q", pool.Name)
+		logr.WithError(err).Errorf("distributed dlite: failed to delete %s instances of pool=%q", cleanupType, pool.Name)
 	}
 
-	// Nothing to do here
-	// 1. Instance was not a hotpool instance, so no need to build pool
-	// 2. Instance was a hotpool instance, so it will be built by the outbox processor
-	return nil
+	return instances, nil
 }

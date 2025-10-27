@@ -334,7 +334,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 								}
 							}
 
-							err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate)
+							err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate, nil)
 							if err != nil {
 								return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
 							}
@@ -646,6 +646,7 @@ func (m *Manager) buildPool(
 		int64,
 		*types.Platform,
 	) (*types.Instance, error),
+	setupInstanceAsync func(context.Context, string, string),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
@@ -693,6 +694,10 @@ func (m *Manager) buildPool(
 			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", "", nil, nil, nil, "", "", false, 0, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
+				if setupInstanceAsync != nil {
+					logr.WithField("runner_name", m.runnerName).Infoln("build pool: creating instance asynchronously")
+					setupInstanceAsync(ctx, pool.Name, m.runnerName)
+				}
 				return
 			}
 			logr.
@@ -713,7 +718,7 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsSe
 	pool.Lock()
 	defer pool.Unlock()
 
-	return m.buildPool(ctx, pool, tlsServerName, query, m.setupInstanceWithHibernate)
+	return m.buildPool(ctx, pool, tlsServerName, query, m.setupInstanceWithHibernate, nil)
 }
 
 func (m *Manager) setupInstanceWithHibernate(
