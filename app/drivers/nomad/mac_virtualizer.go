@@ -415,7 +415,7 @@ fi
 
 // This will be responsible to copy the script from host to vm and run it
 func (mv *MacVirtualizer) getStartCloudInitScript(vmID, username, password string) string {
-    return fmt.Sprintf(`
+	return fmt.Sprintf(`
 VM_USER="%s"
 VM_PASSWORD="%s"
 
