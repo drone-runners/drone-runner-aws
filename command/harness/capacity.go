@@ -102,7 +102,6 @@ func HandleCapacityReservation(
 		}
 		selectedPool = pool
 		foundPool = true
-		_, _, _ = poolManager.Inspect(selectedPool)
 		break
 	}
 
