@@ -33,7 +33,6 @@ type (
 		poolMap                      map[string]*poolEntry
 		strategy                     Strategy
 		cleanupTimer                 *time.Ticker
-		capacityCleanupTimer         *time.Ticker
 		runnerName                   string
 		liteEnginePath               string
 		instanceStore                store.InstanceStore
@@ -452,6 +451,8 @@ func (m *Manager) getStrategy() Strategy {
 }
 
 // provisionFromPool handles provisioning for regular managers using in-memory locks
+//
+//nolint:unparam
 func (m *Manager) provisionFromPool(
 	ctx context.Context,
 	pool *poolEntry,

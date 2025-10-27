@@ -215,7 +215,6 @@ func (d *DistributedManager) provisionFromPool(
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
-
 	if reservedCapacity != nil {
 		if reservedCapacity.InstanceID != "" {
 			inst, err := d.Find(ctx, reservedCapacity.InstanceID)
