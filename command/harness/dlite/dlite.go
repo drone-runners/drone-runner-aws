@@ -208,7 +208,13 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 			c.env.Settings.PluginBinaryURI,
 			c.env.Settings.AutoInjectionBinaryURI,
 			c.env.LiteEngine.FallbackPath,
-			c.env.Settings.PluginBinaryFallbackURI, types.RunnerConfig(c.env.RunnerConfig)), outboxStore)
+			c.env.Settings.PluginBinaryFallbackURI,
+			types.RunnerConfig(c.env.RunnerConfig),
+			c.env.Settings.AnnotationsBinaryURI,
+			c.env.Settings.AnnotationsBinaryFallbackURI,
+		),
+		outboxStore,
+	)
 	c.outboxProcessor = drivers.NewOutboxProcessor(ctx,
 		c.distributedPoolManager.(*drivers.DistributedManager),
 		outboxStore, time.Duration(c.env.OutboxProcessor.PollIntervalSecs)*time.Second,

@@ -348,6 +348,8 @@ func HandleSetup(
 		WithField("selected_pool", selectedPool).
 		WithField("requested_pool", r.PoolID).
 		WithField("instance_address", instance.Address).
+		WithField("hibernated", hibernated).
+		WithField("hotpool", warmed).
 		Tracef("total init time for vm setup is %.2fs", totalInitTime.Seconds())
 	metrics.TotalVMInitDurationCount.WithLabelValues(
 		selectedPool,
