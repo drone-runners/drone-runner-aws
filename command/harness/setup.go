@@ -167,7 +167,7 @@ func HandleSetup(
 	if crs != nil {
 		capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
 		if capFindErr != nil {
-			logr.WithError(capFindErr).Error("could not find capacity reservation")
+			internalLogr.WithError(capFindErr).Error("could not find capacity reservation")
 		}
 	}
 
