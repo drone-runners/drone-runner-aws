@@ -462,7 +462,7 @@ func (d *DistributedManager) hibernate(
 
 // Instance purger for distributed dlite
 // Delete all instances irrespective of runner name
-func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, purgerTime time.Duration) error {
+func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, purgerTime time.Duration) error {
 	const minMaxAge = 5 * time.Minute
 	if maxAgeBusy < minMaxAge || maxAgeFree < minMaxAge {
 		return fmt.Errorf("distributed dlite: minimum value of max age is %.2f minutes", minMaxAge.Minutes())
@@ -506,7 +506,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 					// MatchLabels in the query params are used in a generic manner to match it against the labels stored in the instance
 					// This is similar to how K8s matchLabels and labels work.
 					for _, pool := range d.poolMap {
-						d.startInstancePurger(ctx, pool, maxAgeBusy, maxAgeFree, &queryParams)
+						d.startInstancePurger(ctx, pool, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, &queryParams)
 					}
 				}
 			}()
@@ -516,7 +516,7 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 	return nil
 }
 
-func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy, maxAgeFree time.Duration, queryParams *types.QueryParams) {
+func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy, maxAgeFree, freeCapacityMaxAge time.Duration, queryParams *types.QueryParams) {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
@@ -532,6 +532,12 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	if maxAgeFree != 0 {
 		if err := d.cleanupFreeInstances(ctx, pool, maxAgeFree, queryParams); err != nil {
 			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup free instances")
+		}
+	}
+
+	if freeCapacityMaxAge != 0 {
+		if err := d.cleanupFreeCapacity(ctx, pool, freeCapacityMaxAge); err != nil {
+			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup free capacity")
 		}
 	}
 }
@@ -607,6 +613,35 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	return err
 }
 
+func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *poolEntry, maxAgeFree time.Duration) error {
+	reservedCapacitiesForPool, err := d.capacityReservationStore.ListByPoolName(ctx, pool.Name)
+	if err != nil {
+		return fmt.Errorf("failed to list capacity reservations for pool=%q error: %w", pool.Name, err)
+	}
+
+	var capacitiesToDelete []*types.CapacityReservation
+
+	for _, capacityReservation := range reservedCapacitiesForPool {
+		inst, err := d.GetInstanceByStageID(ctx, pool.Name, capacityReservation.StageID)
+		if err != nil {
+			continue
+		}
+		if inst == nil || inst.ID == "" {
+			createdAt := time.Unix(inst.Started, 0)
+			if time.Since(createdAt) > maxAgeFree {
+				capacitiesToDelete = append(capacitiesToDelete, capacityReservation)
+			}
+		}
+	}
+
+	if len(capacitiesToDelete) == 0 {
+		return nil
+	}
+
+	d.destroyCapacityFromReservation(ctx, capacitiesToDelete)
+	return nil
+}
+
 // executeInstanceCleanup performs cleanup and returns the instances for further processing
 func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *poolEntry, conditions squirrel.Or, cleanupType string) ([]*types.Instance, error) {
 	logr := logger.FromContext(ctx).
@@ -646,4 +681,35 @@ func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *p
 	// 1. Instance was not a hotpool instance, so no need to build pool
 	// 2. Instance was a hotpool instance, so it will be built by the outbox processor
 	return instances, nil
+}
+
+func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*types.Instance) {
+	if d.capacityReservationStore != nil {
+		// traverse the instances and destroy the capacity reservation
+		for _, instance := range instances {
+			if instance.Stage != "" {
+				capacity, _ := d.capacityReservationStore.Find(ctx, instance.Stage)
+				if capacity != nil {
+					err := d.DestroyCapacity(ctx, capacity)
+					if err != nil {
+						logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
+					}
+				}
+			}
+		}
+	}
+}
+
+func (d *DistributedManager) destroyCapacityFromReservation(ctx context.Context, capacties []*types.CapacityReservation) {
+	if d.capacityReservationStore != nil {
+		// traverse the instances and destroy the capacity reservation
+		for _, capacity := range capacties {
+			if capacity != nil {
+				err := d.DestroyCapacity(ctx, capacity)
+				if err != nil {
+					logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
+				}
+			}
+		}
+	}
 }

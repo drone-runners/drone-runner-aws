@@ -254,7 +254,7 @@ func (m *Manager) Add(pools ...Pool) error {
 	return nil
 }
 
-func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, purgerTime time.Duration) error {
+func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, purgerTime time.Duration) error {
 	const minMaxAge = 5 * time.Minute
 	if maxAgeBusy < minMaxAge || maxAgeFree < minMaxAge {
 		return fmt.Errorf("minimum value of max age is %.2f minutes", minMaxAge.Minutes())
@@ -338,8 +338,6 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 								}
 							}
 
-							go m.destroyCapacity(ctx, instances)
-
 							err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate, nil)
 
 							if err != nil {
@@ -351,82 +349,6 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 					if err != nil {
 						logger.FromContext(ctx).WithError(err).
 							Errorln("purger: Failed to purge stale instances")
-					}
-				}
-			}()
-		}
-	}()
-
-	return nil
-}
-
-func (m *Manager) StartCapacityPurger(ctx context.Context, maxAgeFree time.Duration) error {
-	if m.capacityCleanupTimer != nil {
-		panic("capacity cleanup purger already started")
-	}
-
-	d := time.Duration(maxAgeFree.Minutes() * 0.9 * float64(time.Minute))
-	m.capacityCleanupTimer = time.NewTicker(d)
-
-	logrus.Infof("Instance purger started. It will run every %.2f minutes", d.Minutes())
-
-	go func() {
-		for {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						logrus.Errorf("PANIC %v\n%s", r, debug.Stack())
-					}
-				}()
-
-				select {
-				case <-ctx.Done():
-					return
-				case <-m.capacityCleanupTimer.C:
-					logrus.Traceln("Launching capacity reservation purger")
-
-					err := m.forEach(ctx,
-						m.GetTLSServerName(),
-						nil,
-						func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error {
-							logr := logger.FromContext(ctx).
-								WithField("driver", pool.Driver.DriverName()).
-								WithField("pool", pool.Name)
-							pool.Lock()
-							defer pool.Unlock()
-
-							reservedCapacitiesForPool, err := m.capacityReservationStore.ListByPoolName(ctx, pool.Name)
-							if err != nil {
-								return fmt.Errorf("failed to list capacity reservations for pool=%q error: %w", pool.Name, err)
-							}
-
-							var capacitiesToDelete []*types.CapacityReservation
-
-							for _, capacityReservation := range reservedCapacitiesForPool {
-								inst, err := m.GetInstanceByStageID(ctx, pool.Name, capacityReservation.StageID)
-								if err != nil {
-									logr.WithError(err)
-									continue
-								}
-								if inst == nil || inst.ID == "" {
-									createdAt := time.Unix(inst.Started, 0)
-									if time.Since(createdAt) > maxAgeFree {
-										capacitiesToDelete = append(capacitiesToDelete, capacityReservation)
-									}
-								}
-							}
-
-							if len(capacitiesToDelete) == 0 {
-								return nil
-							}
-
-							m.destroyCapacityFromReservation(ctx, capacitiesToDelete)
-
-							return nil
-						})
-					if err != nil {
-						logger.FromContext(ctx).WithError(err).
-							Errorln("purger: Failed to purge stale capacities")
 					}
 				}
 			}()
@@ -768,20 +690,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
@@ -1094,37 +1016,6 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 	}
 
 	return pool.Driver.Logs(ctx, instanceID)
-}
-
-func (m *Manager) destroyCapacity(ctx context.Context, instances []*types.Instance) {
-	if m.capacityReservationStore != nil {
-		// traverse the instances and destroy the capacity reservation
-		for _, instance := range instances {
-			if instance.Stage != "" {
-				capacity, _ := m.capacityReservationStore.Find(ctx, instance.Stage)
-				if capacity != nil {
-					err := m.DestroyCapacity(ctx, capacity)
-					if err != nil {
-						logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
-					}
-				}
-			}
-		}
-	}
-}
-
-func (m *Manager) destroyCapacityFromReservation(ctx context.Context, capacties []*types.CapacityReservation) {
-	if m.capacityReservationStore != nil {
-		// traverse the instances and destroy the capacity reservation
-		for _, capacity := range capacties {
-			if capacity != nil {
-				err := m.DestroyCapacity(ctx, capacity)
-				if err != nil {
-					logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
-				}
-			}
-		}
-	}
 }
 
 func (m *Manager) hibernateOrStopWithRetries(
