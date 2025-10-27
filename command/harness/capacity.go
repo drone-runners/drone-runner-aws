@@ -9,32 +9,27 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
-	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
-	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
 	"github.com/sirupsen/logrus"
 )
 
 type CapacityReservationRequest struct {
-	ID              string               `json:"id"` // stage runtime ID
-	PoolID          string               `json:"pool_id"`
-	FallbackPoolIDs []string             `json:"fallback_pool_ids"`
-	Tags            map[string]string    `json:"tags"`
-	CorrelationID   string               `json:"correlation_id"`
-	LogKey          string               `json:"log_key"`
-	Context         Context              `json:"context,omitempty"`
-	ResourceClass   string               `json:"resource_class"`
-	VMImageConfig   lespec.VMImageConfig `json:"vm_image_config"`
-	LogConfig       api.LogConfig        `json:"log_config"`
-	MtlsConfig      lespec.MtlsConfig    `json:"mtls_config"`
-	StorageConfig   types.StorageConfig  `json:"storage_config"`
-	Zone            string               `json:"zone"`
-	MachineType     string               `json:"machine_type"`
-	Timeout         int64                `json:"timeout,omitempty"`
-	Envs            map[string]string    `json:"envs,omitempty"`
+	ID                     string               `json:"id"` // stage runtime ID
+	PoolID                 string               `json:"pool_id"`
+	FallbackPoolIDs        []string             `json:"fallback_pool_ids"`
+	Tags                   map[string]string    `json:"tags"`
+	CorrelationID          string               `json:"correlation_id"`
+	LogKey                 string               `json:"log_key"`
+	Context                Context              `json:"context,omitempty"`
+	ResourceClass          string               `json:"resource_class"`
+	RequestedVMImageConfig lespec.VMImageConfig `json:"vm_image_config"`
+	StorageConfig          types.StorageConfig  `json:"storage_config"`
+	Zone                   string               `json:"zone"`
+	MachineType            string               `json:"machine_type"`
+	Timeout                int64                `json:"timeout,omitempty"`
 }
 
 // HandleCapacityReservation tries to reserve capacity for a future vm init an in any of the pools given in the
@@ -44,11 +39,9 @@ func HandleCapacityReservation(
 	ctx context.Context,
 	r *CapacityReservationRequest,
 	crs store.CapacityReservationStore,
-	globalVolumes []string,
 	poolMapByAccount map[string]map[string]string,
 	runnerName string,
 	poolManager drivers.IManager,
-	metrics *metric.Metrics,
 ) (*types.CapacityReservation, error) {
 	stageRuntimeID := r.ID
 
@@ -61,34 +54,14 @@ func HandleCapacityReservation(
 	}
 
 	// Sets up logger to stream the logs in case log config is set
-	log := logrus.New()
 	internalLog := logrus.New()
 	internalLog.SetFormatter(&logrus.JSONFormatter{})
 
-	var (
-		logr         *logrus.Entry
-		internalLogr *logrus.Entry
-	)
-	if r.LogConfig.URL == "" {
-		log.Out = os.Stdout
-		logr = log.WithField("api", "dlite:setup").WithField("correlationID", r.CorrelationID)
-	} else {
-		wc := getStreamLogger(r.LogConfig, r.MtlsConfig, r.LogKey, r.CorrelationID)
-		defer func() {
-			if err := wc.Close(); err != nil {
-				log.WithError(err).Debugln("failed to close log stream")
-			}
-		}()
+	var internalLogr *logrus.Entry
+	internalLog.SetLevel(logrus.TraceLevel)
+	internalLog.Out = os.Stdout
+	internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
 
-		log.Out = wc
-		log.SetLevel(logrus.TraceLevel)
-		internalLog.SetLevel(logrus.TraceLevel)
-		internalLog.Out = os.Stdout
-		logr = log.WithField("stage_runtime_id", stageRuntimeID)
-		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
-	}
-
-	logr = AddContext(logr, &r.Context, r.Tags)
 	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
 	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
 
@@ -117,11 +90,11 @@ func HandleCapacityReservation(
 	}
 
 	for _, p := range pools {
-		pool := fetchPool(r.LogConfig.AccountID, p, poolMapByAccount)
-		logr.WithField("pool_id", pool).Traceln("starting the capacity reservation process")
-		capacity, _, poolErr = handleCapacityReservation(ctx, logr, r, runnerName, poolManager, pool, owner)
+		pool := fetchPool(r.Context.AccountID, p, poolMapByAccount)
+		internalLogr.WithField("pool_id", pool).Traceln("starting the capacity reservation process")
+		capacity, _, poolErr = handleCapacityReservation(ctx, internalLogr, r, runnerName, poolManager, pool, owner)
 		if poolErr != nil {
-			logr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not reserve capacity")
+			internalLogr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not reserve capacity")
 			if errors.As(poolErr, &capacityUnavailableErr) {
 				capacityUnavailable = true
 			}
@@ -142,7 +115,7 @@ func HandleCapacityReservation(
 			if cerr := crs.Create(noContext, capacity); cerr != nil {
 				if capacity.InstanceID != "" {
 					if derr := poolManager.Destroy(noContext, selectedPool, capacity.InstanceID, nil, nil, capacity); derr != nil {
-						logr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
+						internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 					}
 				}
 				return nil, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
@@ -158,7 +131,7 @@ func HandleCapacityReservation(
 		return nil, fmt.Errorf("could not reserve capacity for a VM from the pool: %w", poolErr)
 	}
 
-	logr.WithField("selected_pool", selectedPool).
+	internalLogr.WithField("selected_pool", selectedPool).
 		WithField("tried_pools", pools).
 		Traceln("VM capacity reservation is complete")
 
@@ -188,16 +161,8 @@ func handleCapacityReservation(
 	}
 
 	// try to provision an instance from the pool manager.
-	// try to provision an instance from the pool manager.
 	query := &types.QueryParams{
 		RunnerName: runnerName,
-	}
-
-	shouldUseGoogleDNS := false
-	if len(r.Envs) != 0 {
-		if r.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
-			shouldUseGoogleDNS = true
-		}
 	}
 
 	_, capacityReservation, warmed, err = poolManager.Provision(
@@ -206,13 +171,13 @@ func handleCapacityReservation(
 		poolManager.GetTLSServerName(),
 		owner,
 		r.ResourceClass,
-		&r.VMImageConfig,
+		&r.RequestedVMImageConfig,
 		query,
 		nil,
 		&r.StorageConfig,
 		r.Zone,
 		r.MachineType,
-		shouldUseGoogleDNS,
+		false,
 		nil,
 		r.Timeout,
 		false,

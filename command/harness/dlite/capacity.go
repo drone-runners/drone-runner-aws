@@ -61,9 +61,9 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	poolManager := t.c.distributedPoolManager
 	capacityReservationResponse, err := harness.HandleCapacityReservation(
 		ctx, &req.CapacityReservationRequest, poolManager.GetCapacityReservationStore(),
-		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
+		t.c.env.Dlite.PoolMapByAccount.Convert(),
 		t.c.env.Runner.Name,
-		poolManager, t.c.metrics)
+		poolManager)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(true)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not reserve capacity for VM")

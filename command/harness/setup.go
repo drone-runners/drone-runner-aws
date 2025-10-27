@@ -26,21 +26,10 @@ import (
 )
 
 type SetupVMRequest struct {
-	ID                    string            `json:"id"` // stage runtime ID
-	PoolID                string            `json:"pool_id"`
-	FallbackPoolIDs       []string          `json:"fallback_pool_ids"`
-	Tags                  map[string]string `json:"tags"`
-	CorrelationID         string            `json:"correlation_id"`
-	LogKey                string            `json:"log_key"`
-	Context               Context           `json:"context,omitempty"`
-	ResourceClass         string            `json:"resource_class"`
+	CapacityReservationRequest
 	api.SetupRequest      `json:"setup_request"`
 	GitspaceAgentConfig   types.GitspaceAgentConfig `json:"gitspace_agent_config"`
-	StorageConfig         types.StorageConfig       `json:"storage_config"`
-	Zone                  string                    `json:"zone"`
-	MachineType           string                    `json:"machine_type"`
 	InstanceInfo          common.InstanceInfo       `json:"instance_info"`
-	Timeout               int64                     `json:"timeout,omitempty"`
 	IsMarkedForInfraReset bool                      `json:"is_marked_for_infra_reset,omitempty"`
 }
 
