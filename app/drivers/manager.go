@@ -631,9 +631,7 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 			return err
 		}
 	}
-
-	go m.destroyCapacity(ctx, instances)
-
+	
 	return nil
 }
 

@@ -50,7 +50,7 @@ func SetupPool(
 	freeMaxAgeDuration := time.Hour * time.Duration(freeMaxAge)
 	purgerDuration := time.Minute * time.Duration(purgerTime)
 	freeCapacityMaxAgeDuration := time.Minute * time.Duration(freeCapacityMaxAge)
-	err = poolManager.StartInstancePurger(ctx, busyMaxAgeDuration, freeMaxAgeDuration, purgerDuration)
+	err = poolManager.StartInstancePurger(ctx, busyMaxAgeDuration, freeMaxAgeDuration, freeCapacityMaxAgeDuration, purgerDuration)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("failed to start instance purger")
@@ -72,12 +72,6 @@ func SetupPool(
 		return configPool, buildPoolErr
 	}
 	logrus.Infoln("pool created")
-	err = poolManager.StartCapacityPurger(ctx, freeCapacityMaxAgeDuration)
-	if err != nil {
-		logrus.WithError(err).
-			Errorln("failed to start instance purger")
-		return configPool, err
-	}
 	return configPool, nil
 }
 

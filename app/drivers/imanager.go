@@ -19,7 +19,7 @@ type IManager interface {
 	GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error)
 	Update(ctx context.Context, instance *types.Instance) error
 	Add(pools ...Pool) error
-	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge time.Duration, purgerTime time.Duration) error
+	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, purgerTime time.Duration) error
 	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool, reservedCapacity *types.CapacityReservation, isCapacityTask bool) (*types.Instance, *types.CapacityReservation, bool, error) //nolint 	//nolint
 	Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
 	DestroyCapacity(ctx context.Context, capacityReservation *types.CapacityReservation) error
