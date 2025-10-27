@@ -220,13 +220,12 @@ func (d *DistributedManager) provisionFromPool(
 			inst, err := d.Find(ctx, reservedCapacity.InstanceID)
 			if err == nil {
 				return inst, nil, true, nil
-			} else {
-				logger.FromContext(ctx).
-					WithField("pool", poolName).
-					WithField("instance_id", inst.ID).
-					WithField("hotpool", true).
-					Warnln("provision: failed to get instance from capacity reserved warm pool")
 			}
+			logger.FromContext(ctx).
+				WithField("pool", poolName).
+				WithField("instance_id", inst.ID).
+				WithField("hotpool", true).
+				Warnln("provision: failed to get instance from capacity reserved warm pool")
 		}
 	}
 
