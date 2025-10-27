@@ -573,27 +573,9 @@ func (m *Manager) provisionFromPool(
 	}
 
 	// Destroy any capacity reserved for this pool since we are using hotpool instead
-	if reservedCapacity != nil {
-		go func() {
-			err = pool.Driver.DestroyCapacity(ctx, reservedCapacity)
-			if err != nil {
-				logger.FromContext(ctx).
-					WithField("pool", poolName).
-					WithError(err).
-					Traceln("provision: failed to destroy reserved capacity")
-			}
-			if m.capacityReservationStore != nil {
-				if err == nil {
-					if err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
-						logger.FromContext(ctx).
-							WithField("pool", poolName).
-							WithError(err).
-							Traceln("provision: failed to delete capacity reservation entity")
-					}
-				}
-			}
-		}()
-	}
+	go func() {
+		_ = m.DestroyCapacity(ctx, reservedCapacity)
+	}()
 
 	sort.Slice(free, func(i, j int) bool {
 		iTime := time.Unix(free[i].Started, 0)
@@ -623,7 +605,7 @@ func (m *Manager) provisionFromPool(
 }
 
 // Destroy destroys an instance in a pool.
-func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType, capacityReservation *types.CapacityReservation) error {
+func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("provision: pool name %q not found", poolName)
@@ -646,19 +628,39 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 		logrus.Warnf("failed to delete instance %s from store with err: %s", instance.ID, derr)
 	}
 	logrus.WithField("instance", instance.ID).Infof("instance destroyed")
+	return nil
+}
 
-	if capacityReservation != nil {
-		if capErr := pool.Driver.DestroyCapacity(ctx, capacityReservation); capErr != nil {
-			logrus.Warnf("failed to delete capacity reservation with error: %s", capErr)
-		} else if m.capacityReservationStore != nil {
-			crsErr := m.capacityReservationStore.Delete(ctx, capacityReservation.StageID)
-			if crsErr != nil {
-				logrus.Warnf("failed to delete capacity in store with error: %s", capErr)
-			}
+func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.CapacityReservation) error {
+	if reservedCapacity == nil {
+		logrus.Warnf("provision: capacity reservation not found")
+		return fmt.Errorf("provision: capacity reservation not found")
+	}
+	pool, err := m.validatePool(reservedCapacity.PoolName)
+	if err != nil {
+		logrus.Warnf("provision: pool name %q not found", reservedCapacity.PoolName)
+		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
+	}
+	if reservedCapacity.InstanceID != "" {
+		err = m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil)
+		if err != nil {
+			logrus.Warnf("failed to destroy instance %s from store with err: %s", reservedCapacity.InstanceID, err)
 		}
 	}
-
-	return nil
+	err = pool.Driver.DestroyCapacity(ctx, reservedCapacity)
+	if err != nil {
+		logger.FromContext(ctx).
+			WithField("pool", reservedCapacity.PoolName).
+			Warnln("provision: failed to destroy reserved capacity")
+	} else if m.capacityReservationStore != nil {
+		err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID)
+		if err != nil {
+			logger.FromContext(ctx).
+				WithField("pool", reservedCapacity.PoolName).
+				Warnln("provision: failed to delete capacity reservation entity")
+		}
+	}
+	return err
 }
 
 func (m *Manager) BuildPools(ctx context.Context) error {
@@ -758,20 +760,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
@@ -1086,15 +1088,9 @@ func (m *Manager) destroyCapacity(ctx context.Context, instances []*types.Instan
 			if instance.Stage != "" {
 				capacity, _ := m.capacityReservationStore.Find(ctx, instance.Stage)
 				if capacity != nil {
-					pool := m.poolMap[capacity.PoolName]
-					err := pool.Driver.DestroyCapacity(ctx, capacity)
+					err := m.DestroyCapacity(ctx, capacity)
 					if err != nil {
-						logrus.WithError(err).Errorf("failed to destroy capacity reservation of stage %s\n", capacity.StageID)
-					} else {
-						err = m.capacityReservationStore.Delete(ctx, instance.Stage)
-						if err != nil {
-							logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
-						}
+						logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
 					}
 				}
 			}
@@ -1107,15 +1103,9 @@ func (m *Manager) destroyCapacityFromReservation(ctx context.Context, capacties 
 		// traverse the instances and destroy the capacity reservation
 		for _, capacity := range capacties {
 			if capacity != nil {
-				pool := m.poolMap[capacity.PoolName]
-				err := pool.Driver.DestroyCapacity(ctx, capacity)
+				err := m.DestroyCapacity(ctx, capacity)
 				if err != nil {
-					logrus.WithError(err).Errorf("failed to destroy capacity reservation of stage %s\n", capacity.StageID)
-				} else {
-					err = m.capacityReservationStore.Delete(ctx, capacity.StageID)
-					if err != nil {
-						logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
-					}
+					logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
 				}
 			}
 		}
@@ -1139,7 +1129,7 @@ func (m *Manager) hibernateOrStopWithRetries(
 
 	shouldHibernate := m.waitForInstanceConnectivity(ctx, tlsServerName, instance.ID)
 	if !shouldHibernate {
-		if derr := m.Destroy(ctx, poolName, instance.ID, instance, nil, nil); derr != nil {
+		if derr := m.Destroy(ctx, poolName, instance.ID, instance, nil); derr != nil {
 			logrus.WithError(derr).WithField("instanceID", instance.ID).Errorln("failed to cleanup instance after connectivity failure")
 		}
 		return fmt.Errorf("hibernate: connectivity check deadline exceeded")

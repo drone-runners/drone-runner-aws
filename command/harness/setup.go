@@ -234,8 +234,11 @@ func HandleSetup(
 		_, findErr := s.Find(noContext, stageRuntimeID)
 		if findErr != nil {
 			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
-				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil, capacity); derr != nil {
+				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil); derr != nil {
 					internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
+				}
+				if derr := poolManager.DestroyCapacity(noContext, capacity); derr != nil {
+					internalLogr.WithError(derr).Errorln("failed to cleanup capacity reservation on setup failure")
 				}
 				return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
 			}
@@ -487,9 +490,13 @@ func handleSetup(
 				}
 			}
 		}
-		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil, reservedCapacity)
+		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil)
 		if err != nil {
 			ilog.WithError(err).Errorln("failed to cleanup instance on setup failure")
+		}
+		err = poolManager.DestroyCapacity(context.Background(), reservedCapacity)
+		if err != nil {
+			ilog.WithError(err).Errorln("failed to cleanup capacity reservation on setup failure")
 		}
 	}
 

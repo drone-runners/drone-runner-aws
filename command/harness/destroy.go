@@ -193,10 +193,20 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		}
 	}
 
-	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType, capacity); err != nil {
-		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+	var instDestoryErr error
+	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
+		instDestoryErr = fmt.Errorf("cannot destroy the instance: %w", err)
+	} else {
+		logr.Infoln("destroyed instance")
 	}
-	logr.Infoln("destroyed instance")
+
+	err = poolManager.DestroyCapacity(ctx, capacity)
+	if err != nil {
+		logr.WithError(err).Errorln("failed to destroy capacity reservation")
+	}
+	if instDestoryErr != nil {
+		return nil, instDestoryErr
+	}
 
 	envState().Delete(r.StageRuntimeID)
 

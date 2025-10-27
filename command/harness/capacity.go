@@ -112,10 +112,8 @@ func HandleCapacityReservation(
 		if findErr != nil {
 			capacity.StageID = stageRuntimeID
 			if cerr := crs.Create(noContext, capacity); cerr != nil {
-				if capacity.InstanceID != "" {
-					if derr := poolManager.Destroy(noContext, selectedPool, capacity.InstanceID, nil, nil, capacity); derr != nil {
-						internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
-					}
+				if derr := poolManager.DestroyCapacity(noContext, capacity); derr != nil {
+					internalLogr.WithError(derr).Errorln("failed to cleanup capacity reservation on failure")
 				}
 				return nil, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
 			}

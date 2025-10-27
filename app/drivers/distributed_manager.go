@@ -263,28 +263,9 @@ func (d *DistributedManager) provisionFromPool(
 		}
 
 		// If it's a normal provision flow, destroy reserved capacity since we have provisioned from hotpool (if any)
-		if reservedCapacity != nil {
-			go func() {
-				if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
-					logger.FromContext(ctx).
-						WithField("pool", poolName).
-						WithField("instance_id", inst.ID).
-						WithField("hotpool", true).
-						Warnln("provision: failed to destroy reserved capacity")
-				}
-				if d.capacityReservationStore != nil {
-					if err == nil {
-						if err = d.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
-							logger.FromContext(ctx).
-								WithField("pool", poolName).
-								WithField("instance_id", inst.ID).
-								WithField("hotpool", true).
-								Warnln("provision: failed to delete capacity reservation entity")
-						}
-					}
-				}
-			}()
-		}
+		go func() {
+			_ = d.DestroyCapacity(ctx, reservedCapacity)
+		}()
 
 		return inst, capacity, true, nil
 	}
