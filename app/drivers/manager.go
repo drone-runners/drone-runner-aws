@@ -339,7 +339,6 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							}
 
 							err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate, nil)
-
 							if err != nil {
 								return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
 							}
@@ -675,20 +674,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
