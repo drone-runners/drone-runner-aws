@@ -406,7 +406,7 @@ func (m *Manager) Provision(
 		return existingInstance, nil, false, gsErr
 	}
 
-	instance, capacity, hotpool, err := m.provisionFromPool(
+	instance, _, hotpool, err := m.provisionFromPool(
 		ctx,
 		pool,
 		query,
@@ -433,7 +433,7 @@ func (m *Manager) Provision(
 			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, zone, machineType, false, timeout, nil)
 		}(m.globalCtx)
 	}
-	return instance, capacity, hotpool, err
+	return instance, nil, hotpool, err
 }
 
 func (m *Manager) validatePool(poolName string) (*poolEntry, error) {
@@ -491,21 +491,12 @@ func (m *Manager) provisionFromPool(
 			return nil, nil, false, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		var capacity *types.CapacityReservation
-		inst, capacity, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTask) //nolint:lll
+		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTask) //nolint:lll
 		if err != nil {
-			if isCapacityTask {
-				return nil, nil, false, err
-			}
 			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
-		return inst, capacity, false, nil
+		return inst, nil, false, nil
 	}
-
-	// Destroy any capacity reserved for this pool since we are using hotpool instead
-	go func() {
-		_ = m.DestroyCapacity(ctx, reservedCapacity)
-	}()
 
 	sort.Slice(free, func(i, j int) bool {
 		iTime := time.Unix(free[i].Started, 0)
@@ -526,12 +517,8 @@ func (m *Manager) provisionFromPool(
 		pool.Unlock()
 		return nil, nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
-	capacity := &types.CapacityReservation{
-		InstanceID: inst.ID,
-		PoolName:   poolName,
-	}
 	pool.Unlock()
-	return inst, capacity, true, nil
+	return inst, nil, true, nil
 }
 
 // Destroy destroys an instance in a pool.
@@ -631,7 +618,7 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
