@@ -20,25 +20,27 @@ import (
 
 // Params defines parameters used to create userdata files.
 type Params struct {
-	LiteEnginePath          string
-	LiteEngineLogsPath      string
-	CACert                  string
-	TLSCert                 string
-	TLSKey                  string
-	Platform                types.Platform
-	HarnessTestBinaryURI    string
-	PluginBinaryURI         string
-	Tmate                   types.Tmate
-	IsHosted                bool
-	GitspaceAgentConfig     types.GitspaceAgentConfig
-	StorageConfig           types.StorageConfig
-	AutoInjectionBinaryURI  string
-	LiteEngineFallbackPath  string
-	PluginBinaryFallbackURI string
-	ShouldUseGoogleDNS      bool
-	DriverName              string
-	CertsDirectory          string
-	EnableC4D               bool
+	LiteEnginePath               string
+	LiteEngineLogsPath           string
+	CACert                       string
+	TLSCert                      string
+	TLSKey                       string
+	Platform                     types.Platform
+	HarnessTestBinaryURI         string
+	PluginBinaryURI              string
+	Tmate                        types.Tmate
+	IsHosted                     bool
+	GitspaceAgentConfig          types.GitspaceAgentConfig
+	StorageConfig                types.StorageConfig
+	AutoInjectionBinaryURI       string
+	LiteEngineFallbackPath       string
+	PluginBinaryFallbackURI      string
+	ShouldUseGoogleDNS           bool
+	DriverName                   string
+	CertsDirectory               string
+	EnableC4D                    bool
+	AnnotationsBinaryURI         string
+	AnnotationsBinaryFallbackURI string
 }
 
 var funcs = map[string]interface{}{

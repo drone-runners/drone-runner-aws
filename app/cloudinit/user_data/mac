@@ -20,4 +20,9 @@ wget {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /
 chmod 777 /usr/bin/plugin
 {{ end }}
 
+{{ if .AnnotationsBinaryURI }}
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/hcli || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/hcli
+chmod 755 /usr/local/bin/hcli
+{{ end }}
+
 /usr/local/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &
