@@ -103,7 +103,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", mv.getStartCloudInitScript(vm, vmImageConfig.Username, vmImageConfig.Password)},
+							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password)},
 						},
 					},
 					{
@@ -413,8 +413,10 @@ fi
 	}
 }
 
-// This will be responsible to copy the script from host to vm and run it
-func (mv *MacVirtualizer) getStartCloudInitScript(vmID, username, password string) string {
+// This will be responsible to run the cloud-init script from the mounted shared directory
+func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, username, password string) string {
+	// cloudInitScriptPath is made available inside the VM via Tart shared directory: --dir=tmp:/tmp
+	_ = cloudInitScriptPath
 	return fmt.Sprintf(`
 VM_USER="%s"
 VM_PASSWORD="%s"
@@ -422,16 +424,28 @@ VM_PASSWORD="%s"
 # Get VM IP
 VM_IP=$(/opt/homebrew/bin/tart ip %s)
 
-# SSH command using expect
+# SSH command using expect to run the cloud-init script from the mounted shared directory.
+# Works for both macOS guests (automatic mount at /Volumes/My Shared Files)
+# and Linux guests (mount virtiofs to /mnt/shared first, then execute).
 expect <<- DONE
-	set timeout 90
-    spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
+	set timeout 180
+    spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "\
+        MAC_SHARED=\"/Volumes/My Shared Files/tmp/cloud_init_%s.sh\"; \
+        LINUX_MOUNT=\"/mnt/shared\"; \
+        LINUX_SHARED=\"$LINUX_MOUNT/tmp/cloud_init_%s.sh\"; \
+        if [ -f \"$MAC_SHARED\" ]; then \
+          echo $VM_PASSWORD | sh \"$MAC_SHARED\"; \
+        else \
+          echo $VM_PASSWORD | sudo -S mkdir -p \"$LINUX_MOUNT\"; \
+          echo $VM_PASSWORD | sudo -S mount -t virtiofs com.apple.virtio-fs.automount \"$LINUX_MOUNT\" || true; \
+          echo $VM_PASSWORD | sh \"$LINUX_SHARED\"; \
+        fi"
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
     }
 DONE
-`, username, password, vmID)
+`, username, password, vmID, vmID, vmID)
 }
 
 // This will be responsible to port forward the traffic from host to VM
