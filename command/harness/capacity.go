@@ -21,7 +21,6 @@ type CapacityReservationRequest struct {
 	PoolID                 string               `json:"pool_id"`
 	FallbackPoolIDs        []string             `json:"fallback_pool_ids"`
 	Tags                   map[string]string    `json:"tags"`
-	CorrelationID          string               `json:"correlation_id"`
 	Context                Context              `json:"context,omitempty"`
 	ResourceClass          string               `json:"resource_class"`
 	RequestedVMImageConfig lespec.VMImageConfig `json:"vm_image_config"`

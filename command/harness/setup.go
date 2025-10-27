@@ -29,6 +29,7 @@ type SetupVMRequest struct {
 	CapacityReservationRequest
 	api.SetupRequest      `json:"setup_request"`
 	LogKey                string                    `json:"log_key"`
+	CorrelationID         string                    `json:"correlation_id"`
 	GitspaceAgentConfig   types.GitspaceAgentConfig `json:"gitspace_agent_config"`
 	InstanceInfo          common.InstanceInfo       `json:"instance_info"`
 	IsMarkedForInfraReset bool                      `json:"is_marked_for_infra_reset,omitempty"`
