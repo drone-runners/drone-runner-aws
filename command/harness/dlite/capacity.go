@@ -57,7 +57,6 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	accountID := harness.GetAccountID(&req.CapacityReservationRequest.Context, map[string]string{})
 
 	// Make the setup call
-	req.CapacityReservationRequest.CorrelationID = task.ID
 	poolManager := t.c.distributedPoolManager
 	capacityReservationResponse, err := harness.HandleCapacityReservation(
 		ctx, &req.CapacityReservationRequest, poolManager.GetCapacityReservationStore(),
