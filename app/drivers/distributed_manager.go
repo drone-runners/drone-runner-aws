@@ -215,6 +215,22 @@ func (d *DistributedManager) provisionFromPool(
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
+
+	if reservedCapacity != nil {
+		if reservedCapacity.InstanceID != "" {
+			inst, err := d.Find(ctx, reservedCapacity.InstanceID)
+			if err == nil {
+				return inst, nil, true, nil
+			} else {
+				logger.FromContext(ctx).
+					WithField("pool", poolName).
+					WithField("instance_id", inst.ID).
+					WithField("hotpool", true).
+					Warnln("provision: failed to get instance from capacity reserved warm pool")
+			}
+		}
+	}
+
 	allowedStates := []types.InstanceState{types.StateCreated}
 
 	// Resolve image name
@@ -246,8 +262,8 @@ func (d *DistributedManager) provisionFromPool(
 			PoolName:   poolName,
 		}
 
-		// If it's a normal provision flow, destroy reserved capacity (if any)
-		if !isCapacityTask && reservedCapacity != nil {
+		// If it's a normal provision flow, destroy reserved capacity since we have provisioned from hotpool (if any)
+		if reservedCapacity != nil {
 			go func() {
 				if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
 					logger.FromContext(ctx).

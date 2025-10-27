@@ -390,6 +390,13 @@ func handleSetup(
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
 	}
 
+	if reservedCapacity != nil {
+		if pool != reservedCapacity.PoolName {
+			// capacity has not been reserved in this pool
+			reservedCapacity = nil
+		}
+	}
+
 	stageRuntimeID := r.ID
 
 	// try to provision an instance from the pool manager.
@@ -404,35 +411,25 @@ func handleSetup(
 		}
 	}
 
-	var reservedInstance *types.Instance
-	if reservedCapacity != nil && reservedCapacity.PoolName == pool && reservedCapacity.InstanceID != "" {
-		reservedInstance, err = getInstance(ctx, reservedCapacity.PoolName, reservedCapacity.StageID, reservedCapacity.InstanceID, poolManager)
-	}
-
-	if reservedInstance != nil {
-		instance = reservedInstance
-		warmed = true
-	} else {
-		instance, _, warmed, err = poolManager.Provision(
-			ctx,
-			pool,
-			poolManager.GetTLSServerName(),
-			owner,
-			r.ResourceClass,
-			&r.VMImageConfig,
-			query,
-			&r.GitspaceAgentConfig,
-			&r.StorageConfig,
-			r.Zone,
-			r.MachineType,
-			shouldUseGoogleDNS,
-			&r.InstanceInfo,
-			r.Timeout,
-			r.IsMarkedForInfraReset,
-			reservedCapacity,
-			false,
-		)
-	}
+	instance, _, warmed, err = poolManager.Provision(
+		ctx,
+		pool,
+		poolManager.GetTLSServerName(),
+		owner,
+		r.ResourceClass,
+		&r.VMImageConfig,
+		query,
+		&r.GitspaceAgentConfig,
+		&r.StorageConfig,
+		r.Zone,
+		r.MachineType,
+		shouldUseGoogleDNS,
+		&r.InstanceInfo,
+		r.Timeout,
+		r.IsMarkedForInfraReset,
+		reservedCapacity,
+		false,
+	)
 	if err != nil {
 		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
 	}
