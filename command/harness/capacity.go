@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
@@ -41,8 +42,8 @@ func HandleCapacityReservation(
 	runnerName string,
 	poolManager drivers.IManager,
 ) (*types.CapacityReservation, error) {
+	capacityStartTime := time.Now()
 	stageRuntimeID := r.ID
-
 	if stageRuntimeID == "" {
 		return nil, ierrors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
@@ -132,6 +133,12 @@ func HandleCapacityReservation(
 
 	internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 		Traceln("Capacity reservation step completed successfully")
+
+	totalCapacityTime := time.Since(capacityStartTime)
+	internalLogr.
+		WithField("selected_pool", selectedPool).
+		WithField("requested_pool", r.PoolID).
+		Tracef("total init time for vm setup is %.2fs", totalCapacityTime.Seconds())
 
 	return capacity, nil
 }
