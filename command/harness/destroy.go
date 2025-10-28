@@ -102,6 +102,24 @@ func HandleDestroy(
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
+
+	// Declare capacity variable early and defer its destruction to ensure cleanup happens regardless of errors
+	defer func() {
+		var capacity *types.CapacityReservation
+		var err error
+		if crs != nil {
+			capacity, err = crs.Find(ctx, r.StageRuntimeID)
+			if err != nil {
+				logr.WithError(err).Errorln("failed to find capacity reservation entity")
+			}
+		}
+		if capacity != nil {
+			if err := poolManager.DestroyCapacity(ctx, capacity); err != nil {
+				logr.WithError(err).Errorln("failed to destroy capacity reservation")
+			}
+		}
+	}()
+
 	var poolID string
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
@@ -185,28 +203,10 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
 
-	var capacity *types.CapacityReservation
-	if crs != nil {
-		capacity, err = crs.Find(ctx, r.StageRuntimeID)
-		if err != nil {
-			logr.WithError(err).Errorln("failed to find capacity reservation entity")
-		}
-	}
-
-	var instDestoryErr error
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		instDestoryErr = fmt.Errorf("cannot destroy the instance: %w", err)
-	} else {
-		logr.Infoln("destroyed instance")
+		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
-
-	err = poolManager.DestroyCapacity(ctx, capacity)
-	if err != nil {
-		logr.WithError(err).Errorln("failed to destroy capacity reservation")
-	}
-	if instDestoryErr != nil {
-		return nil, instDestoryErr
-	}
+	logr.Infoln("destroyed instance")
 
 	envState().Delete(r.StageRuntimeID)
 
