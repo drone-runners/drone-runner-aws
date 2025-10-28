@@ -138,7 +138,7 @@ func HandleCapacityReservation(
 	internalLogr.
 		WithField("selected_pool", selectedPool).
 		WithField("requested_pool", r.PoolID).
-		Tracef("total init time for vm setup is %.2fs", totalCapacityTime.Seconds())
+		Tracef("total capacity reservation time for vm setup is %.2fs", totalCapacityTime.Seconds())
 
 	return capacity, nil
 }

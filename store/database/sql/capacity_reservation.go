@@ -2,7 +2,6 @@ package sql
 
 import (
 	"context"
-	"time"
 
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -27,7 +26,6 @@ func (s CapacityReservationStore) Find(_ context.Context, id string) (*types.Cap
 }
 
 func (s CapacityReservationStore) Create(_ context.Context, capacityReservation *types.CapacityReservation) error {
-	capacityReservation.CreatedAt = time.Now().Unix()
 	query, arg, err := s.db.BindNamed(capacityReservationInsert, capacityReservation)
 	if err != nil {
 		return err

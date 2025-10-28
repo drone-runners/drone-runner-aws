@@ -174,7 +174,7 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 		return fmt.Errorf("failed to delete destroyed instances from database: %w", err)
 	}
 
-	go d.destroyCapacity(ctx, instancesToDestroy)
+	d.destroyCapacity(ctx, instancesToDestroy)
 
 	return nil
 }
@@ -215,12 +215,16 @@ func (d *DistributedManager) provisionFromPool(
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
+	// check if a warm vm was already reserved
 	if reservedCapacity != nil {
 		if reservedCapacity.InstanceID != "" {
 			inst, err := d.Find(ctx, reservedCapacity.InstanceID)
 			if err == nil {
 				return inst, nil, true, nil
 			}
+			go func() {
+				_ = d.DestroyCapacity(ctx, reservedCapacity)
+			}()
 			logger.FromContext(ctx).
 				WithField("pool", poolName).
 				WithField("instance_id", inst.ID).
@@ -259,12 +263,6 @@ func (d *DistributedManager) provisionFromPool(
 			InstanceID: inst.ID,
 			PoolName:   poolName,
 		}
-
-		// If it's a normal provision flow, destroy reserved capacity since we have provisioned from hotpool (if any)
-		go func() {
-			_ = d.DestroyCapacity(ctx, reservedCapacity)
-		}()
-
 		return inst, capacity, true, nil
 	}
 
@@ -611,7 +609,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	return err
 }
 
-func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *poolEntry, maxAgeFree time.Duration) error {
+func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) error {
 	reservedCapacitiesForPool, err := d.capacityReservationStore.ListByPoolName(ctx, pool.Name)
 	if err != nil {
 		return fmt.Errorf("failed to list capacity reservations for pool=%q error: %w", pool.Name, err)
@@ -624,9 +622,9 @@ func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *pool
 		if err != nil {
 			continue
 		}
-		if inst == nil || inst.ID == "" {
-			createdAt := time.Unix(inst.Started, 0)
-			if time.Since(createdAt) > maxAgeFree {
+		if inst == nil {
+			createdAt := time.Unix(capacityReservation.CreatedAt, 0)
+			if time.Since(createdAt) > freeCapacityMaxAge {
 				capacitiesToDelete = append(capacitiesToDelete, capacityReservation)
 			}
 		}
@@ -673,11 +671,7 @@ func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *p
 		logr.WithError(err).Errorf("distributed dlite: failed to delete %s instances of pool=%q", cleanupType, pool.Name)
 	}
 
-	go d.destroyCapacity(ctx, instances)
-
-	// Nothing to do here
-	// 1. Instance was not a hotpool instance, so no need to build pool
-	// 2. Instance was a hotpool instance, so it will be built by the outbox processor
+	d.destroyCapacity(ctx, instances)
 	return instances, nil
 }
 
@@ -698,10 +692,10 @@ func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*t
 	}
 }
 
-func (d *DistributedManager) destroyCapacityFromReservation(ctx context.Context, capacties []*types.CapacityReservation) {
+func (d *DistributedManager) destroyCapacityFromReservation(ctx context.Context, capacities []*types.CapacityReservation) {
 	if d.capacityReservationStore != nil {
 		// traverse the instances and destroy the capacity reservation
-		for _, capacity := range capacties {
+		for _, capacity := range capacities {
 			if capacity != nil {
 				err := d.DestroyCapacity(ctx, capacity)
 				if err != nil {
