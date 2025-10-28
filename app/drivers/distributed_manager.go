@@ -263,6 +263,9 @@ func (d *DistributedManager) provisionFromPool(
 			InstanceID: inst.ID,
 			PoolName:   poolName,
 		}
+		go func() {
+			_ = d.DestroyCapacity(ctx, reservedCapacity)
+		}()
 		return inst, capacity, true, nil
 	}
 
