@@ -675,20 +675,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
@@ -902,9 +902,6 @@ func (m *Manager) setupInstance(
 			logrus.WithError(err).
 				Errorln("manager: failed to reserve capacity")
 			return nil, nil, err
-		}
-		if capacity != nil {
-			capacity.StageID =
 		}
 		return nil, capacity, nil
 	}
