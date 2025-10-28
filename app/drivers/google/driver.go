@@ -175,15 +175,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	}
 
 	// Generate a unique reservation name
-	reservationName := fmt.Sprintf("%s-%s-%s",
-		strings.ToLower(opts.RunnerName),
-		strings.ToLower(opts.PoolName),
-		uniuri.NewLen(8))
-	reservationName = substrSuffix(reservationName, maxInstanceNameLen)
-	if reservationName[0] == '-' {
-		reservationName = "r" + reservationName[1:]
-	}
-
+	reservationName := getInstanceName(opts.RunnerName, opts.PoolName)
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
 		WithField("reservation", reservationName).
@@ -311,6 +303,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return inst, nil
 }
 
+//nolint:gocyclo
 func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
 	// opts.Zone has highest priority
 	zone := opts.Zone
