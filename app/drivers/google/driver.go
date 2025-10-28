@@ -233,6 +233,26 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	}, nil
 }
 
+// findReservationZone finds the zone where a capacity reservation exists
+func (p *config) findReservationZone(ctx context.Context, reservationID string) (zone string, err error) {
+	logr := logger.FromContext(ctx)
+
+	for _, z := range p.zones {
+		_, err := p.service.Reservations.Get(p.projectID, z, reservationID).Context(ctx).Do()
+		if err == nil {
+			return z, nil
+		}
+		// If not found in this zone, continue to next zone
+		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+			continue
+		}
+		// For other errors, log and continue
+		logr.WithError(err).Warnf("google: error checking reservation in zone %s", z)
+	}
+
+	return "", fmt.Errorf("capacity reservation %s not found in any configured zone", reservationID)
+}
+
 // DestroyCapacity destroys capacity for a VM
 func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
 	if capacity == nil || capacity.ReservationID == "" {
@@ -247,27 +267,10 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	logr.Debugln("google: deleting capacity reservation")
 
 	// Find the zone for this reservation
-	// We need to check all configured zones since the reservation info doesn't include it
-	var zone string
-	var reservation *compute.Reservation
-	for _, z := range p.zones {
-		res, err := p.service.Reservations.Get(p.projectID, z, capacity.ReservationID).Context(ctx).Do()
-		if err == nil {
-			zone = z
-			reservation = res
-			break
-		}
-		// If not found in this zone, continue to next zone
-		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
-			continue
-		}
-		// For other errors, log and continue
-		logr.WithError(err).Warnf("google: error checking reservation in zone %s", z)
-	}
-
-	if zone == "" || reservation == nil {
+	zone, err := p.findReservationZone(ctx, capacity.ReservationID)
+	if err != nil {
 		logr.Warnln("google: capacity reservation not found in any zone")
-		return fmt.Errorf("capacity reservation %s not found", capacity.ReservationID)
+		return err
 	}
 
 	logr.WithField("zone", zone).Debugln("google: found capacity reservation")
@@ -309,10 +312,35 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 }
 
 func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
+	// opts.Zone has highest priority
 	zone := opts.Zone
+	// If capacity reservation is provided, verify it's in the zone we're using
+	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
+		reservationZone, reservationErr := p.findReservationZone(ctx, opts.CapacityReservation.ReservationID)
+		if reservationErr != nil {
+			// Error finding reservation - disable it
+			logger.FromContext(ctx).
+				WithError(reservationErr).
+				WithField("reservation", opts.CapacityReservation.ReservationID).
+				Warnln("google: capacity reservation lookup failed, proceeding without reservation")
+			opts.CapacityReservation = nil
+		} else if zone != "" && reservationZone != zone {
+			// Reservation is in different zone - disable it
+			logger.FromContext(ctx).
+				WithField("reservation", opts.CapacityReservation.ReservationID).
+				WithField("reservation_zone", reservationZone).
+				WithField("requested_zone", zone).
+				Warnln("google: capacity reservation zone mismatch, proceeding without reservation")
+			opts.CapacityReservation = nil
+		} else if reservationZone != "" {
+			zone = reservationZone
+		}
+	}
+
 	if zone == "" {
 		zone = p.RandomZone()
 	}
+
 	if opts.MachineType != "" {
 		p.size = opts.MachineType
 	}
