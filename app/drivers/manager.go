@@ -903,6 +903,9 @@ func (m *Manager) setupInstance(
 				Errorln("manager: failed to reserve capacity")
 			return nil, nil, err
 		}
+		if capacity != nil {
+			capacity.StageID =
+		}
 		return nil, capacity, nil
 	}
 
