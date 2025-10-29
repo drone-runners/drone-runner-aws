@@ -564,6 +564,10 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 			logrus.Warnf("failed to destroy instance %s from store with err: %s", reservedCapacity.InstanceID, err)
 		}
 	}
+	if reservedCapacity.ReservationID == "" {
+		// no capacity to destroy
+		return nil
+	}
 	if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
 		logger.FromContext(ctx).
 			WithField("pool", reservedCapacity.PoolName).
@@ -675,20 +679,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
