@@ -564,14 +564,14 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 			logrus.Warnf("failed to destroy instance %s from store with err: %s", reservedCapacity.InstanceID, err)
 		}
 	}
-	err = pool.Driver.DestroyCapacity(ctx, reservedCapacity)
-	if err != nil {
+	if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
 		logger.FromContext(ctx).
 			WithField("pool", reservedCapacity.PoolName).
 			Warnln("provision: failed to destroy reserved capacity")
-	} else if m.capacityReservationStore != nil {
-		err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID)
-		if err != nil {
+		return err
+	}
+	if m.capacityReservationStore != nil {
+		if err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
 			logger.FromContext(ctx).
 				WithField("pool", reservedCapacity.PoolName).
 				Warnln("provision: failed to delete capacity reservation entity")

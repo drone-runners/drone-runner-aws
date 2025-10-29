@@ -215,27 +215,47 @@ func (d *DistributedManager) provisionFromPool(
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
-	// check if a warm vm was already reserved
+	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
 		if reservedCapacity.InstanceID != "" {
 			inst, err := d.Find(ctx, reservedCapacity.InstanceID)
 			if err == nil {
 				return inst, nil, true, nil
 			}
-			go func() {
-				_ = d.DestroyCapacity(ctx, reservedCapacity)
-			}()
 			logger.FromContext(ctx).
 				WithField("pool", poolName).
-				WithField("instance_id", inst.ID).
+				WithField("instance_id", reservedCapacity.InstanceID).
 				WithField("hotpool", true).
-				Warnln("provision: failed to get instance from capacity reserved warm pool")
+				Warnln("provision: failed to get instance from reserved warm pool")
+			_ = d.DestroyCapacity(ctx, reservedCapacity)
+			reservedCapacity = nil
 		}
+
+		inst, _, err := d.setupInstance(ctx,
+			pool,
+			tlsServerName,
+			ownerID,
+			resourceClass,
+			vmImageConfig,
+			true,
+			agentConfig,
+			storageConfig,
+			zone,
+			machineType,
+			shouldUseGoogleDNS,
+			timeout,
+			nil,
+			reservedCapacity,
+			isCapacityTask,
+		)
+		if err != nil {
+			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+		}
+		return inst, nil, false, nil
 	}
 
+	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
 	allowedStates := []types.InstanceState{types.StateCreated}
-
-	// Resolve image name
 	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
 
 	// Try to find and claim a free instance atomically
@@ -250,7 +270,6 @@ func (d *DistributedManager) provisionFromPool(
 		if err = d.instanceStore.Update(ctx, inst); err != nil {
 			return nil, nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 		}
-
 		logger.FromContext(ctx).
 			WithField("pool", poolName).
 			WithField("instance_id", inst.ID).
@@ -258,18 +277,14 @@ func (d *DistributedManager) provisionFromPool(
 			Traceln("provision: claimed hotpool instance")
 
 		d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName)
-
 		capacity := &types.CapacityReservation{
 			InstanceID: inst.ID,
 			PoolName:   poolName,
 		}
-		go func() {
-			_ = d.DestroyCapacity(ctx, reservedCapacity)
-		}()
 		return inst, capacity, true, nil
 	}
 
-	// No free instances available, create a new one
+	// Case 3: No available hotpool instance → create new (shared for capacity and init tasks)
 	// In distributed mode, we don't check pool capacity limits since:
 	// 1. Pool MaxSize is typically per-runner, but we'd be checking against global counts
 	// 2. FindAndClaim already provides natural backpressure through database constraints
@@ -279,7 +294,6 @@ func (d *DistributedManager) provisionFromPool(
 		WithField("hotpool", false).
 		Traceln("provision: no hotpool instances available, creating new instance")
 
-	// Create a new instance
 	inst, capacity, err := d.setupInstance(ctx,
 		pool,
 		tlsServerName,
@@ -295,7 +309,8 @@ func (d *DistributedManager) provisionFromPool(
 		timeout,
 		nil,
 		reservedCapacity,
-		isCapacityTask)
+		isCapacityTask,
+	)
 	if err != nil {
 		if isCapacityTask {
 			return nil, nil, false, err
