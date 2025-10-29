@@ -237,7 +237,7 @@ echo "Setting tart VM config with id $VM_ID"
 
 echo "Starting tart VM with id $VM_ID"
 # Run the VM in background
-/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=tmp:/tmp "$VM_ID"
+/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=/tmp:/tmp "$VM_ID"
 
 # Wait for VM to get IP
 echo "Waiting for VM to get IP"
@@ -293,7 +293,7 @@ sleep 5
 
 echo "Re-starting tart VM with id $VM_ID"
 # Run the VM in background
-/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=tmp:/tmp "$VM_ID"
+/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=/tmp:/tmp "$VM_ID"
 
 # Remove known_hosts file to avoid too many authentication errors
 if [ -f ~/.ssh/known_hosts ]; then
@@ -425,27 +425,18 @@ VM_PASSWORD="%s"
 VM_IP=$(/opt/homebrew/bin/tart ip %s)
 
 # SSH command using expect to run the cloud-init script from the mounted shared directory.
-# Works for both macOS guests (automatic mount at /Volumes/My Shared Files)
-# and Linux guests (mount virtiofs to /mnt/shared first, then execute).
 expect <<- DONE
-	set timeout 180
+	set timeout 90
     spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "\
-        MAC_SHARED=\"/Volumes/My Shared Files/tmp/cloud_init_%s.sh\"; \
-        LINUX_MOUNT=\"/mnt/shared\"; \
-        LINUX_SHARED=\"$LINUX_MOUNT/tmp/cloud_init_%s.sh\"; \
-        if [ -f \"$MAC_SHARED\" ]; then \
-          echo $VM_PASSWORD | sh \"$MAC_SHARED\"; \
-        else \
-          echo $VM_PASSWORD | sudo -S mkdir -p \"$LINUX_MOUNT\"; \
-          echo $VM_PASSWORD | sudo -S mount -t virtiofs com.apple.virtio-fs.automount \"$LINUX_MOUNT\" || true; \
-          echo $VM_PASSWORD | sh \"$LINUX_SHARED\"; \
-        fi"
+        MAC_SHARED=\"/tmp/cloud_init_%s.sh\"; \
+        echo $VM_PASSWORD | sh \"$MAC_SHARED\"; \
+        "
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
     }
 DONE
-`, username, password, vmID, vmID, vmID)
+`, username, password, vmID, vmID)
 }
 
 // This will be responsible to port forward the traffic from host to VM
