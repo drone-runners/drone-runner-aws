@@ -283,6 +283,10 @@ func (d *DistributedManager) provisionFromPool(
 	}
 
 	// Case 3: No available hotpool instance → create new (shared for capacity and init tasks)
+	// In distributed mode, we don't check pool capacity limits since:
+	// 1. Pool MaxSize is typically per-runner, but we'd be checking against global counts
+	// 2. FindAndClaim already provides natural backpressure through database constraints
+	// 3. Infrastructure limits (cloud quotas, etc.) will provide the real boundaries
 	logger.FromContext(ctx).
 		WithField("pool", poolName).
 		WithField("hotpool", false).
