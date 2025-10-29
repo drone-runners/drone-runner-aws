@@ -427,16 +427,13 @@ VM_IP=$(/opt/homebrew/bin/tart ip %s)
 # SSH command using expect to run the cloud-init script from the mounted shared directory.
 expect <<- DONE
 	set timeout 90
-    spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "\
-        MAC_SHARED=\"/tmp/cloud_init_%s.sh\"; \
-        echo $VM_PASSWORD | sh \"$MAC_SHARED\"; \
-        "
+ spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
     }
 DONE
-`, username, password, vmID, vmID)
+`, username, password, vmID)
 }
 
 // This will be responsible to port forward the traffic from host to VM
