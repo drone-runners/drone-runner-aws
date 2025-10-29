@@ -636,10 +636,7 @@ func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *pool
 	var capacitiesToDelete []*types.CapacityReservation
 
 	for _, capacityReservation := range reservedCapacitiesForPool {
-		inst, err := d.GetInstanceByStageID(ctx, pool.Name, capacityReservation.StageID)
-		if err != nil {
-			continue
-		}
+		inst, _ := d.GetInstanceByStageID(ctx, pool.Name, capacityReservation.StageID)
 		if inst == nil {
 			createdAt := time.Unix(capacityReservation.CreatedAt, 0)
 			if time.Since(createdAt) > freeCapacityMaxAge {
