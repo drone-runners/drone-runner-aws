@@ -263,6 +263,7 @@ func (d *DistributedManager) provisionFromPool(
 		return nil, nil, false, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
 	}
 
+	// If we successfully claimed an instance, update it and return
 	if inst != nil {
 		inst.OwnerID = ownerID
 		if err = d.instanceStore.Update(ctx, inst); err != nil {
