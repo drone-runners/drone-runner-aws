@@ -79,18 +79,28 @@ func ProvideSQLOutboxStore(db *sqlx.DB) store.OutboxStore {
 	}
 }
 
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, error) {
+// ProvideSQLCapacityReservationStore provides a capacity reservation store.
+func ProvideSQLCapacityReservationStore(db *sqlx.DB) store.CapacityReservationStore {
+	switch db.DriverName() {
+	case Postgres:
+		return sql.NewCapacityReservationStore(db)
+	default:
+		return nil
+	}
+}
+
+func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, error) {
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
-		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil
 	}
 
 	db, err := ProvideSQLDatabase(driver, datasource)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), nil
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), ProvideSQLCapacityReservationStore(db), nil
 }

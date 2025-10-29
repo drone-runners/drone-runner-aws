@@ -26,21 +26,12 @@ import (
 )
 
 type SetupVMRequest struct {
-	ID                    string            `json:"id"` // stage runtime ID
-	PoolID                string            `json:"pool_id"`
-	FallbackPoolIDs       []string          `json:"fallback_pool_ids"`
-	Tags                  map[string]string `json:"tags"`
-	CorrelationID         string            `json:"correlation_id"`
-	LogKey                string            `json:"log_key"`
-	Context               Context           `json:"context,omitempty"`
-	ResourceClass         string            `json:"resource_class"`
+	CapacityReservationRequest
 	api.SetupRequest      `json:"setup_request"`
+	LogKey                string                    `json:"log_key"`
+	CorrelationID         string                    `json:"correlation_id"`
 	GitspaceAgentConfig   types.GitspaceAgentConfig `json:"gitspace_agent_config"`
-	StorageConfig         types.StorageConfig       `json:"storage_config"`
-	Zone                  string                    `json:"zone"`
-	MachineType           string                    `json:"machine_type"`
 	InstanceInfo          common.InstanceInfo       `json:"instance_info"`
-	Timeout               int64                     `json:"timeout,omitempty"`
 	IsMarkedForInfraReset bool                      `json:"is_marked_for_infra_reset,omitempty"`
 }
 
@@ -61,10 +52,13 @@ var (
 // Instead of passing in the env config, we pass in whatever is needed. This is because
 // this same code is being used in the new runner and we want to make sure nothing breaking
 // is added here which is not added in the new runner.
+//
+//nolint:gocyclo
 func HandleSetup(
 	ctx context.Context,
 	r *SetupVMRequest,
 	s store.StageOwnerStore,
+	crs store.CapacityReservationStore,
 	globalVolumes []string,
 	poolMapByAccount map[string]map[string]string,
 	runnerName string,
@@ -169,6 +163,29 @@ func HandleSetup(
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
+
+	var capacity *types.CapacityReservation
+	var capFindErr error
+	if crs != nil {
+		capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
+		if capFindErr != nil {
+			internalLogr.WithError(capFindErr).Error("could not find capacity reservation")
+		}
+	}
+
+	// if capacity was reserved in any pool then that pool should be tried first
+	if capacity != nil && capacity.PoolName != "" {
+		for i, p := range pools {
+			if p == capacity.PoolName {
+				// Move matched pool to the front
+				if i != 0 {
+					pools = append([]string{p}, append(pools[:i], pools[i+1:]...)...)
+				}
+				break
+			}
+		}
+	}
+
 	for idx, p := range pools {
 		st := time.Now()
 		if idx > 0 {
@@ -177,7 +194,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner)
+		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -221,6 +238,9 @@ func HandleSetup(
 			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
 				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil); derr != nil {
 					internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
+				}
+				if derr := poolManager.DestroyCapacity(noContext, capacity); derr != nil {
+					internalLogr.WithError(derr).Errorln("failed to cleanup capacity reservation on setup failure")
 				}
 				return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
 			}
@@ -365,10 +385,23 @@ func handleSetup(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
-) (instance *types.Instance, warmed, hibernated bool, err error) {
+	reservedCapacity *types.CapacityReservation,
+) (
+	instance *types.Instance,
+	warmed bool,
+	hibernated bool,
+	err error,
+) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
 		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
+	}
+
+	if reservedCapacity != nil {
+		if pool != reservedCapacity.PoolName {
+			// capacity has not been reserved in this pool
+			reservedCapacity = nil
+		}
 	}
 
 	stageRuntimeID := r.ID
@@ -385,7 +418,7 @@ func handleSetup(
 		}
 	}
 
-	instance, warmed, err = poolManager.Provision(
+	instance, _, warmed, err = poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
@@ -401,6 +434,8 @@ func handleSetup(
 		&r.InstanceInfo,
 		r.Timeout,
 		r.IsMarkedForInfraReset,
+		reservedCapacity,
+		false,
 	)
 	if err != nil {
 		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
@@ -413,7 +448,7 @@ func handleSetup(
 		WithField("image_name", useNonEmpty(r.VMImageConfig.ImageName, instance.Image)).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
-		// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
+	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
 	if instance.Provider == types.Google {
 		ilog.Traceln(fmt.Sprintf("creating VM instance with hardware acceleration as %t", instance.EnableNestedVirtualization))
 	}
@@ -462,6 +497,10 @@ func handleSetup(
 		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil)
 		if err != nil {
 			ilog.WithError(err).Errorln("failed to cleanup instance on setup failure")
+		}
+		err = poolManager.DestroyCapacity(context.Background(), reservedCapacity)
+		if err != nil {
+			ilog.WithError(err).Errorln("failed to cleanup capacity reservation on setup failure")
 		}
 	}
 

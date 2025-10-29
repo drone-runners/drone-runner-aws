@@ -40,6 +40,7 @@ func HandleDestroy(
 	ctx context.Context,
 	r *VMCleanupRequest,
 	s store.StageOwnerStore,
+	crs store.CapacityReservationStore,
 	enableMock bool, // only used for scale testing
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
@@ -81,7 +82,7 @@ func HandleDestroy(
 			}
 			return ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			_, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
@@ -98,9 +99,27 @@ func HandleDestroy(
 	}
 }
 
-func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, enableMock bool, mockTimeout int,
+func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
+
+	// Declare capacity variable early and defer its destruction to ensure cleanup happens regardless of errors
+	defer func() {
+		var capacity *types.CapacityReservation
+		var err error
+		if crs != nil {
+			capacity, err = crs.Find(ctx, r.StageRuntimeID)
+			if err != nil {
+				logr.WithError(err).Errorln("failed to find capacity reservation entity")
+			}
+		}
+		if capacity != nil {
+			if err := poolManager.DestroyCapacity(ctx, capacity); err != nil {
+				logr.WithError(err).Errorln("failed to destroy capacity reservation")
+			}
+		}
+	}()
+
 	var poolID string
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)

@@ -149,6 +149,7 @@ type InstanceCreateOpts struct {
 	DriverName                   string
 	Timeout                      int64
 	EnableC4D                    bool
+	CapacityReservation          *CapacityReservation
 }
 
 // Platform defines the target platform.
@@ -174,6 +175,14 @@ type QueryParams struct {
 type StageOwner struct {
 	StageID  string `db:"stage_id" json:"stage_id"`
 	PoolName string `db:"pool_name" json:"pool_name"`
+}
+
+type CapacityReservation struct {
+	StageID       string `db:"stage_id" json:"stage_id"`
+	PoolName      string `db:"pool_name" json:"pool_name"`
+	InstanceID    string `db:"instance_id" json:"instance_id"`
+	ReservationID string `db:"reservation_id" json:"reservation_id"`
+	CreatedAt     int64  `db:"created_at" json:"created_at"`
 }
 
 type GitspaceOpts struct {

@@ -12,7 +12,6 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
-	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -26,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dchest/uniuri"
+	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 )
 
 var _ drivers.Driver = (*config)(nil)
@@ -220,6 +220,16 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 		return fmt.Errorf("security group %s does not have the correct ingress rules. There is no rule for port %d", *securityGroup.GroupName, lehelper.LiteEnginePort)
 	}
 	return nil
+}
+
+// ReserveCapacity reserves capacity for a VM
+func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
+}
+
+// DestroyCapacity destroys capacity for a VM
+func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
@@ -577,7 +587,7 @@ func (p *config) Hibernate(ctx context.Context, instanceID, poolName, _ string) 
 		logr.WithError(err).
 			Errorln("aws: failed to hibernate the VM")
 		if isHibernateRetryable(err) {
-			return &itypes.RetryableError{Msg: err.Error()}
+			return &ierrors.RetryableError{Msg: err.Error()}
 		}
 		return err
 	}

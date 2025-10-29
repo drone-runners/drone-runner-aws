@@ -19,9 +19,10 @@ type IManager interface {
 	GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error)
 	Update(ctx context.Context, instance *types.Instance) error
 	Add(pools ...Pool) error
-	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree time.Duration, purgerTime time.Duration) error
-	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool) (*types.Instance, bool, error) //nolint
+	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, purgerTime time.Duration) error
+	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, VMImageConfig *spec.VMImageConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, zone, machineType string, shouldUseGoogleDNS bool, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool, reservedCapacity *types.CapacityReservation, isCapacityTask bool) (*types.Instance, *types.CapacityReservation, bool, error) //nolint 	//nolint
 	Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
+	DestroyCapacity(ctx context.Context, capacityReservation *types.CapacityReservation) error
 	BuildPools(ctx context.Context) error
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error
 	StartInstance(ctx context.Context, poolName, instanceID string, info *common.InstanceInfo) (*types.Instance, error)
@@ -30,6 +31,7 @@ type IManager interface {
 	PingDriver(ctx context.Context) error
 	GetInstanceStore() store.InstanceStore
 	GetStageOwnerStore() store.StageOwnerStore
+	GetCapacityReservationStore() store.CapacityReservationStore
 	GetTLSServerName() string
 	IsDistributed() bool
 	GetRunnerConfig() types.RunnerConfig

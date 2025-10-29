@@ -190,7 +190,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
 	logrus.Infoln("Starting postgres database")
-	instanceStore, stageOwnerStore, outboxStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
+	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 		return nil, err
@@ -200,6 +200,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 			ctx,
 			instanceStore,
 			stageOwnerStore,
+			capacityReservationStore,
 			types.Tmate(c.env.Tmate),
 			c.env.Runner.Name,
 			c.env.LiteEngine.Path,

@@ -37,6 +37,7 @@ type (
 		liteEnginePath               string
 		instanceStore                store.InstanceStore
 		stageOwnerStore              store.StageOwnerStore
+		capacityReservationStore     store.CapacityReservationStore
 		harnessTestBinaryURI         string
 		pluginBinaryURI              string
 		tmate                        types.Tmate
@@ -81,6 +82,7 @@ func NewManager(
 	globalContext context.Context,
 	instanceStore store.InstanceStore,
 	stageOwnerStore store.StageOwnerStore,
+	capacityReservationStore store.CapacityReservationStore,
 	tmate types.Tmate,
 	runnerName,
 	liteEnginePath,
@@ -96,6 +98,7 @@ func NewManager(
 		instanceStore:                instanceStore,
 		tmate:                        tmate,
 		stageOwnerStore:              stageOwnerStore,
+		capacityReservationStore:     capacityReservationStore,
 		runnerName:                   runnerName,
 		liteEnginePath:               liteEnginePath,
 		harnessTestBinaryURI:         harnessTestBinaryURI,
@@ -250,7 +253,7 @@ func (m *Manager) Add(pools ...Pool) error {
 	return nil
 }
 
-func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, purgerTime time.Duration) error {
+func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, purgerTime time.Duration) error {
 	const minMaxAge = 5 * time.Minute
 	if maxAgeBusy < minMaxAge || maxAgeFree < minMaxAge {
 		return fmt.Errorf("minimum value of max age is %.2f minutes", minMaxAge.Minutes())
@@ -371,17 +374,19 @@ func (m *Manager) Provision(
 	instanceInfo *common.InstanceInfo,
 	timeout int64,
 	isMarkedForInfraReset bool,
-) (*types.Instance, bool, error) {
+	reservedCapacity *types.CapacityReservation,
+	isCapacityTask bool,
+) (*types.Instance, *types.CapacityReservation, bool, error) {
 	pool, err := m.validatePool(poolName)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
 		if gsErr := m.validateGitspaceDriverCompatibility(pool); gsErr != nil {
-			return nil, false, gsErr
+			return nil, nil, false, gsErr
 		}
-		existingInstance, gsErr := m.processExistingInstance(
+		existingInstance, _, gsErr := m.processExistingInstance(
 			ctx,
 			pool,
 			instanceInfo,
@@ -396,10 +401,10 @@ func (m *Manager) Provision(
 			timeout,
 			isMarkedForInfraReset,
 		)
-		return existingInstance, false, gsErr
+		return existingInstance, nil, false, gsErr
 	}
 
-	instance, hotpool, err := m.provisionFromPool(
+	instance, _, hotpool, err := m.provisionFromPool(
 		ctx,
 		pool,
 		query,
@@ -414,6 +419,8 @@ func (m *Manager) Provision(
 		shouldUseGoogleDNS,
 		timeout,
 		poolName,
+		reservedCapacity,
+		isCapacityTask,
 	)
 
 	// the go routine here uses the global context because this function is called
@@ -424,7 +431,7 @@ func (m *Manager) Provision(
 			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, zone, machineType, false, timeout, nil)
 		}(m.globalCtx)
 	}
-	return instance, hotpool, err
+	return instance, nil, hotpool, err
 }
 
 func (m *Manager) validatePool(poolName string) (*poolEntry, error) {
@@ -444,6 +451,8 @@ func (m *Manager) getStrategy() Strategy {
 }
 
 // provisionFromPool handles provisioning for regular managers using in-memory locks
+//
+//nolint:unparam
 func (m *Manager) provisionFromPool(
 	ctx context.Context,
 	pool *poolEntry,
@@ -456,13 +465,15 @@ func (m *Manager) provisionFromPool(
 	shouldUseGoogleDNS bool,
 	timeout int64,
 	poolName string,
-) (*types.Instance, bool, error) {
+	reservedCapacity *types.CapacityReservation,
+	isCapacityTask bool,
+) (*types.Instance, *types.CapacityReservation, bool, error) {
 	pool.Lock()
 
 	busy, free, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		pool.Unlock()
-		return nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
+		return nil, nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
 	logger.FromContext(ctx).
@@ -477,14 +488,14 @@ func (m *Manager) provisionFromPool(
 	if len(free) == 0 {
 		pool.Unlock()
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
-			return nil, false, ErrorNoInstanceAvailable
+			return nil, nil, false, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil)
+		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTask) //nolint:lll
 		if err != nil {
-			return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
-		return inst, false, nil
+		return inst, nil, false, nil
 	}
 
 	sort.Slice(free, func(i, j int) bool {
@@ -504,10 +515,10 @@ func (m *Manager) provisionFromPool(
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
 		pool.Unlock()
-		return nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+		return nil, nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 	pool.Unlock()
-	return inst, true, nil
+	return inst, nil, true, nil
 }
 
 // Destroy destroys an instance in a pool.
@@ -535,6 +546,42 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 	}
 	logrus.WithField("instance", instance.ID).Infof("instance destroyed")
 	return nil
+}
+
+func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.CapacityReservation) error {
+	if reservedCapacity == nil {
+		logrus.Warnf("provision: capacity reservation not found")
+		return fmt.Errorf("provision: capacity reservation not found")
+	}
+	pool, err := m.validatePool(reservedCapacity.PoolName)
+	if err != nil {
+		logrus.Warnf("provision: pool name %q not found", reservedCapacity.PoolName)
+		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
+	}
+	if reservedCapacity.InstanceID != "" {
+		err = m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil)
+		if err != nil {
+			logrus.Warnf("failed to destroy instance %s from store with err: %s", reservedCapacity.InstanceID, err)
+		}
+	}
+	if reservedCapacity.ReservationID == "" {
+		// no capacity to destroy
+		return nil
+	}
+	if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
+		logger.FromContext(ctx).
+			WithField("pool", reservedCapacity.PoolName).
+			Warnln("provision: failed to destroy reserved capacity")
+		return err
+	}
+	if m.capacityReservationStore != nil {
+		if err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
+			logger.FromContext(ctx).
+				WithField("pool", reservedCapacity.PoolName).
+				Warnln("provision: failed to delete capacity reservation entity")
+		}
+	}
+	return err
 }
 
 func (m *Manager) BuildPools(ctx context.Context) error {
@@ -733,7 +780,22 @@ func (m *Manager) setupInstanceWithHibernate(
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
-	inst, err := m.setupInstance(ctx, pool, tlsServerName, ownerID, resourceClass, vmImageConfig, false, agentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, platform)
+	inst, _, err := m.setupInstance(ctx,
+		pool,
+		tlsServerName,
+		ownerID,
+		resourceClass,
+		vmImageConfig,
+		false,
+		agentConfig,
+		storageConfig,
+		zone,
+		machineType,
+		shouldUseGoogleDNS,
+		timeout,
+		platform,
+		nil,
+		false)
 	if err != nil {
 		return nil, err
 	}
@@ -758,7 +820,9 @@ func (m *Manager) setupInstance(
 	shouldUseGoogleDNS bool,
 	timeout int64,
 	platform *types.Platform,
-) (*types.Instance, error) {
+	reservedCapacity *types.CapacityReservation,
+	isCapacityTask bool,
+) (*types.Instance, *types.CapacityReservation, error) {
 	var inst *types.Instance
 	retain := "false"
 
@@ -805,10 +869,11 @@ func (m *Manager) setupInstance(
 	createOptions.MachineType = machineType
 	createOptions.DriverName = pool.Driver.DriverName()
 	createOptions.Timeout = timeout
+	createOptions.CapacityReservation = reservedCapacity
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
-		return nil, err
+		return nil, nil, err
 	}
 	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
 		createOptions.VMImageConfig = types.VMImageConfig{
@@ -833,12 +898,24 @@ func (m *Manager) setupInstance(
 		createOptions.Platform = pool.Platform
 	}
 
+	if isCapacityTask {
+		// create instance
+		var capacity *types.CapacityReservation
+		capacity, err = pool.Driver.ReserveCapacity(ctx, createOptions)
+		if err != nil {
+			logrus.WithError(err).
+				Errorln("manager: failed to reserve capacity")
+			return nil, nil, err
+		}
+		return nil, capacity, nil
+	}
+
 	// create instance
 	inst, err = pool.Driver.Create(ctx, createOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to create instance")
-		return nil, err
+		return nil, nil, err
 	}
 
 	if inuse {
@@ -850,7 +927,7 @@ func (m *Manager) setupInstance(
 	if inst.Labels == nil {
 		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
 		if marshalErr != nil {
-			return nil, fmt.Errorf("manager: could not marshal default labels, err: %w", marshalErr)
+			return nil, nil, fmt.Errorf("manager: could not marshal default labels, err: %w", marshalErr)
 		}
 		inst.Labels = labelsBytes
 	}
@@ -860,9 +937,9 @@ func (m *Manager) setupInstance(
 		logrus.WithError(err).
 			Errorln("manager: failed to store instance")
 		_ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
-		return nil, err
+		return nil, nil, err
 	}
-	return inst, nil
+	return inst, nil, nil
 }
 
 func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string, instanceInfo *common.InstanceInfo) (*types.Instance, error) {
@@ -915,6 +992,10 @@ func (m *Manager) GetInstanceStore() store.InstanceStore {
 
 func (m *Manager) GetStageOwnerStore() store.StageOwnerStore {
 	return m.stageOwnerStore
+}
+
+func (m *Manager) GetCapacityReservationStore() store.CapacityReservationStore {
+	return m.capacityReservationStore
 }
 
 func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string) (string, error) {
@@ -1199,7 +1280,7 @@ func (m *Manager) processExistingInstance(
 	zone, machineType string,
 	timeout int64,
 	isMarkedForInfraReset bool,
-) (*types.Instance, error) {
+) (*types.Instance, *types.CapacityReservation, error) {
 	if instanceInfo != nil && instanceInfo.ID != "" {
 		if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
 			logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
@@ -1222,7 +1303,7 @@ func (m *Manager) processExistingInstance(
 				inst.State = types.StateInUse
 				inst.OwnerID = ownerID
 				inst.Started = time.Now().Unix()
-				return inst, nil
+				return inst, nil, nil
 			}
 		}
 	}
@@ -1252,5 +1333,7 @@ func (m *Manager) processExistingInstance(
 		false,
 		timeout,
 		platform,
+		nil,
+		false,
 	)
 }

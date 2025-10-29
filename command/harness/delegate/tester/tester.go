@@ -107,8 +107,10 @@ func (c *command) runPipeline(id string) error {
 	mount := false
 	// setup the stage
 	setupIn := &harness.SetupVMRequest{
-		ID:     id,
-		PoolID: c.pool,
+		CapacityReservationRequest: harness.CapacityReservationRequest{
+			ID:     id,
+			PoolID: c.pool,
+		},
 		SetupRequest: api.SetupRequest{
 			MountDockerSocket: &mount,
 		},

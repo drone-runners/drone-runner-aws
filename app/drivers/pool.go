@@ -26,6 +26,8 @@ type Pool struct {
 }
 
 type Driver interface {
+	ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.CapacityReservation, err error)
+	DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error)
 	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
 	Destroy(ctx context.Context, instances []*types.Instance) (err error)
 	DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error)

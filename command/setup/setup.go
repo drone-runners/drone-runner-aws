@@ -130,7 +130,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	)
 
 	// use a single instance db, as we only need one machine
-	store, _, _, err := database.ProvideStore(database.SingleInstance, "")
+	store, _, _, _, err := database.ProvideStore(database.SingleInstance, "") //nolint:dogsled
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
@@ -155,7 +155,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("setup: unable to add pool")
 	}
 	// provision
-	instance, _, provisionErr := poolManager.Provision(ctx, testPoolName, runnerName, "drone", "", nil, nil, nil, nil, "", "", false, nil, -1, false)
+	instance, _, _, provisionErr := poolManager.Provision(ctx, testPoolName, runnerName, "drone", "", nil, nil, nil, nil, "", "", false, nil, -1, false, nil, false)
 	if provisionErr != nil {
 		consoleLogs, consoleErr := poolManager.InstanceLogs(ctx, testPoolName, instance.ID)
 		logrus.Infof("setup: instance logs for %s: %s", instance.ID, consoleLogs)

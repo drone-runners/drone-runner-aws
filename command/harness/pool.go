@@ -24,6 +24,7 @@ func SetupPool(
 	freeMaxAge int64,
 	purgerTime int64,
 	reusePool bool,
+	freeCapacityMaxAge int64,
 ) (*config.PoolFile, error) {
 	pools, err := poolfile.ProcessPool(configPool, runnerName, passwords)
 	if err != nil {
@@ -48,7 +49,8 @@ func SetupPool(
 	busyMaxAgeDuration := time.Hour * time.Duration(busyMaxAge) // includes time required to setup an instance
 	freeMaxAgeDuration := time.Hour * time.Duration(freeMaxAge)
 	purgerDuration := time.Minute * time.Duration(purgerTime)
-	err = poolManager.StartInstancePurger(ctx, busyMaxAgeDuration, freeMaxAgeDuration, purgerDuration)
+	freeCapacityMaxAgeDuration := time.Minute * time.Duration(freeCapacityMaxAge)
+	err = poolManager.StartInstancePurger(ctx, busyMaxAgeDuration, freeMaxAgeDuration, freeCapacityMaxAgeDuration, purgerDuration)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("failed to start instance purger")
@@ -84,6 +86,7 @@ func SetupPoolWithFile(
 	freeAge,
 	purgerTime int64,
 	reusePool bool,
+	freeCapacityMaxAge int64,
 ) (*config.PoolFile, error) {
 	configPool, err := config.ParseFile(poolFilePath)
 	if err != nil {
@@ -93,7 +96,7 @@ func SetupPoolWithFile(
 		return nil, err
 	}
 
-	return SetupPool(ctx, configPool, runnerName, passwords, poolManager, busyAge, freeAge, purgerTime, reusePool)
+	return SetupPool(ctx, configPool, runnerName, passwords, poolManager, busyAge, freeAge, purgerTime, reusePool, freeCapacityMaxAge)
 }
 
 func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string) (*config.PoolFile, error) {
@@ -102,7 +105,16 @@ func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager dr
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 
-	return SetupPool(ctx, configPool, env.Runner.Name, env.Passwords(), poolManager, env.Settings.BusyMaxAge, env.Settings.FreeMaxAge, env.Settings.PurgerTime, env.Settings.ReusePool)
+	return SetupPool(ctx,
+		configPool,
+		env.Runner.Name,
+		env.Passwords(),
+		poolManager,
+		env.Settings.BusyMaxAge,
+		env.Settings.FreeMaxAge,
+		env.Settings.PurgerTime,
+		env.Settings.ReusePool,
+		env.Settings.FreeCapacityMaxAgeMinutes)
 }
 
 func Cleanup(reusePool bool, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {

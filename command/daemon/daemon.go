@@ -96,7 +96,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 
-	store, _, _, err := database.ProvideStore(env.Database.Driver, env.Database.Datasource)
+	store, _, _, _, err := database.ProvideStore(env.Database.Driver, env.Database.Datasource) //nolint:dogsled
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}
@@ -135,7 +135,8 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 
 	busyMaxAge := time.Hour * time.Duration(env.Settings.BusyMaxAge) // includes time required to setup an instance
 	freeMaxAge := time.Hour * time.Duration(env.Settings.FreeMaxAge)
-	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge, busyMaxAge)
+	freeCapacityMaxAgeDuration := time.Minute * time.Duration(env.Settings.FreeCapacityMaxAgeMinutes)
+	err = poolManager.StartInstancePurger(ctx, busyMaxAge, freeMaxAge, freeCapacityMaxAgeDuration, busyMaxAge)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("delegate: failed to start instance purger")

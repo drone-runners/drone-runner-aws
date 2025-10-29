@@ -65,7 +65,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.SetupVMRequest.CorrelationID = task.ID
 	poolManager := t.c.getPoolManager(req.Distributed)
 	setupResp, selectedPoolDriver, err := harness.HandleSetup(
-		ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(),
+		ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), poolManager.GetCapacityReservationStore(),
 		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
 		t.c.env.Runner.Name, t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs,
 		poolManager, t.c.metrics)
@@ -75,7 +75,6 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
 		return
 	}
-
 	serviceStatuses := []VMServiceStatus{}
 	var status VMServiceStatus
 
