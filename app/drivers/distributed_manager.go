@@ -222,12 +222,13 @@ func (d *DistributedManager) provisionFromPool(
 			if err == nil {
 				return inst, nil, true, nil
 			}
-			go func() { _ = d.DestroyCapacity(ctx, reservedCapacity) }()
 			logger.FromContext(ctx).
 				WithField("pool", poolName).
 				WithField("instance_id", reservedCapacity.InstanceID).
 				WithField("hotpool", true).
 				Warnln("provision: failed to get instance from reserved warm pool")
+			_ = d.DestroyCapacity(ctx, reservedCapacity)
+			reservedCapacity = nil
 		}
 
 		inst, _, err := d.setupInstance(ctx,
