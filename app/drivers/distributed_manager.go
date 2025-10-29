@@ -216,7 +216,7 @@ func (d *DistributedManager) provisionFromPool(
 	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
 	// Case 1: Init task with reserved capacity
-	if !isCapacityTask && reservedCapacity != nil {
+	if reservedCapacity != nil {
 		if reservedCapacity.InstanceID != "" {
 			inst, err := d.Find(ctx, reservedCapacity.InstanceID)
 			if err == nil {
