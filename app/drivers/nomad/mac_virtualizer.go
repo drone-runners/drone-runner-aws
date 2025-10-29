@@ -424,7 +424,7 @@ VM_PASSWORD="%s"
 # Get VM IP
 VM_IP=$(/opt/homebrew/bin/tart ip %s)
 
-# SSH command using expect to run the cloud-init script from the mounted shared directory.
+# SSH command using expect
 expect <<- DONE
 	set timeout 90
  spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
