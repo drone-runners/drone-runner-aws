@@ -90,7 +90,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s; echo %s | base64 --decode >> %s; cat %s | base64 --decode | bash", startupScript, vmStartupScriptPath, encodedUserData, cloudInitScriptPath, vmStartupScriptPath)}, //nolint
+							"args":    []string{"-c", fmt.Sprintf("echo %s >> %s; echo %s | base64 --decode >> %s; sleep 300; cat %s | base64 --decode | bash", startupScript, vmStartupScriptPath, encodedUserData, cloudInitScriptPath, vmStartupScriptPath)}, //nolint
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -427,7 +427,7 @@ VM_IP=$(/opt/homebrew/bin/tart ip %s)
 # SSH command using expect
 expect <<- DONE
 	set timeout 90
- spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
+ 	spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
