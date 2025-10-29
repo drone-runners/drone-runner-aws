@@ -262,7 +262,7 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	zone, err := p.findReservationZone(ctx, capacity.ReservationID)
 	if err != nil {
 		logr.Warnln("google: capacity reservation not found in any zone")
-		return err
+		return nil
 	}
 
 	logr.WithField("zone", zone).Debugln("google: found capacity reservation")
