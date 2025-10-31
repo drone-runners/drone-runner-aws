@@ -172,7 +172,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	// Generate a unique reservation name
 	reservationName := getInstanceName(opts.RunnerName, opts.PoolName)
-	
+
 	// Determine zones to try
 	var zonesToTry []string
 	if opts.Zone != "" {
@@ -196,12 +196,12 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	logr.Debugln("google: creating capacity reservation")
 
 	var lastErr error
-	
+
 	// Try each zone until we successfully create a reservation
 	for _, zone := range zonesToTry {
 		zoneLogr := logr.WithField("zone", zone)
 		zoneLogr.Debugln("google: attempting capacity reservation in zone")
-		
+
 		// Create the reservation
 		reservation := &compute.Reservation{
 			Name: reservationName,
