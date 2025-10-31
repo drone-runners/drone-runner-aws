@@ -16,6 +16,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -164,11 +165,6 @@ func (p *config) Ping(ctx context.Context) error {
 
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	zone := opts.Zone
-	if zone == "" {
-		zone = p.RandomZone()
-	}
-
 	machineType := p.size
 	if opts.MachineType != "" {
 		machineType = opts.MachineType
@@ -176,53 +172,80 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	// Generate a unique reservation name
 	reservationName := getInstanceName(opts.RunnerName, opts.PoolName)
+	
+	// Determine zones to try
+	var zonesToTry []string
+	if opts.Zone != "" {
+		// If specific zone requested, only try that zone
+		zonesToTry = []string{opts.Zone}
+	} else {
+		// Randomize zone order to distribute load
+		zonesToTry = make([]string, len(p.zones))
+		copy(zonesToTry, p.zones)
+		rand.Shuffle(len(zonesToTry), func(i, j int) {
+			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
+		})
+	}
+
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
 		WithField("reservation", reservationName).
-		WithField("zone", zone).
 		WithField("machine_type", machineType).
 		WithField("pool", opts.PoolName)
 
 	logr.Debugln("google: creating capacity reservation")
 
-	// Create the reservation
-	reservation := &compute.Reservation{
-		Name: reservationName,
-		Zone: fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
-		SpecificReservation: &compute.AllocationSpecificSKUReservation{
-			Count: 1, // Reserve capacity for 1 VM
-			InstanceProperties: &compute.AllocationSpecificSKUAllocationReservedInstanceProperties{
-				MachineType: machineType,
+	var lastErr error
+	
+	// Try each zone until we successfully create a reservation
+	for _, zone := range zonesToTry {
+		zoneLogr := logr.WithField("zone", zone)
+		zoneLogr.Debugln("google: attempting capacity reservation in zone")
+		
+		// Create the reservation
+		reservation := &compute.Reservation{
+			Name: reservationName,
+			Zone: fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
+			SpecificReservation: &compute.AllocationSpecificSKUReservation{
+				Count: 1, // Reserve capacity for 1 VM
+				InstanceProperties: &compute.AllocationSpecificSKUAllocationReservedInstanceProperties{
+					MachineType: machineType,
+				},
 			},
-		},
-		SpecificReservationRequired: true, // Require specific reservation targeting
-		Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
+			SpecificReservationRequired: true, // Require specific reservation targeting
+			Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
+		}
+
+		// Insert the reservation
+		op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(ctx).Do()
+		if err != nil {
+			lastErr = err
+			zoneLogr.WithError(err).Warnln("google: failed to create capacity reservation in zone, trying next zone")
+			continue
+		}
+
+		// Wait for the reservation to be created
+		err = p.waitZoneOperation(ctx, op.Name, zone)
+		if err != nil {
+			lastErr = err
+			zoneLogr.WithError(err).Warnln("google: capacity reservation creation operation failed in zone, trying next zone")
+			continue
+		}
+
+		// Success!
+		zoneLogr.Infoln("google: capacity reservation created successfully")
+		return &types.CapacityReservation{
+			StageID:       "", // Will be set by the caller
+			PoolName:      opts.PoolName,
+			InstanceID:    "", // Will be set when instance is created
+			ReservationID: reservationName,
+			CreatedAt:     time.Now().Unix(),
+		}, nil
 	}
 
-	// Insert the reservation
-	op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(ctx).Do()
-	if err != nil {
-		logr.WithError(err).Errorln("google: failed to create capacity reservation")
-		return nil, fmt.Errorf("failed to create capacity reservation: %w", err)
-	}
-
-	// Wait for the reservation to be created
-	err = p.waitZoneOperation(ctx, op.Name, zone)
-	if err != nil {
-		logr.WithError(err).Errorln("google: capacity reservation creation operation failed")
-		return nil, fmt.Errorf("capacity reservation creation operation failed: %w", err)
-	}
-
-	logr.Debugln("google: capacity reservation created successfully")
-
-	// Return the capacity reservation details
-	return &types.CapacityReservation{
-		StageID:       "", // Will be set by the caller
-		PoolName:      opts.PoolName,
-		InstanceID:    "", // Will be set when instance is created
-		ReservationID: reservationName,
-		CreatedAt:     time.Now().Unix(),
-	}, nil
+	// All zones failed - treat as capacity unavailable
+	logr.WithError(lastErr).Errorln("google: capacity unavailable in all zones")
+	return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
 }
 
 // findReservationZone finds the zone where a capacity reservation exists
