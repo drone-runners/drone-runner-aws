@@ -353,7 +353,7 @@ type EnvConfig struct {
 	Nomad struct {
 		NomadToken              string        `envconfig:"NOMAD_TOKEN"`
 		ClientDisconnectTimeout time.Duration `envconfig:"NOMAD_CLIENT_DISCONNECT_TIMEOUT" default:"4m"`
-		ResourceJobTimeout      time.Duration `envconfig:"NOMAD_RESOURCE_JOB_TIMEOUT" default:"2m"`
+		ResourceJobTimeout      time.Duration `envconfig:"NOMAD_RESOURCE_JOB_TIMEOUT" default:"15s"`
 		BYOIInitTimeout         time.Duration `envconfig:"NOMAD_BYOI_INIT_TIMEOUT" default:"15m"`
 		InitTimeout             time.Duration `envconfig:"NOMAD_INIT_TIMEOUT" default:"1m"`
 		DestroyTimeout          time.Duration `envconfig:"NOMAD_DESTROY_TIMEOUT" default:"1m"`
