@@ -103,7 +103,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password)},
+							"args":    []string{"-c", mv.getStartCloudInitScript(vm, vmImageConfig.Username, vmImageConfig.Password)},
 						},
 					},
 					{
@@ -237,7 +237,7 @@ echo "Setting tart VM config with id $VM_ID"
 
 echo "Starting tart VM with id $VM_ID"
 # Run the VM in background
-/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run "$VM_ID" --no-graphics
+/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=tmp:/tmp "$VM_ID"
 
 # Wait for VM to get IP
 echo "Waiting for VM to get IP"
@@ -293,7 +293,7 @@ sleep 5
 
 echo "Re-starting tart VM with id $VM_ID"
 # Run the VM in background
-/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run "$VM_ID" --no-graphics
+/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=tmp:/tmp "$VM_ID"
 
 # Remove known_hosts file to avoid too many authentication errors
 if [ -f ~/.ssh/known_hosts ]; then
@@ -413,8 +413,9 @@ fi
 	}
 }
 
-// This will be responsible to copy the script from host to vm and run it
-func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, username, password string) string {
+// This will be responsible to run the cloud-init script from the mounted shared directory
+func (mv *MacVirtualizer) getStartCloudInitScript(vmID, username, password string) string {
+	// Executes the per-VM cloud-init script from Tart's shared directory (/Volumes/My Shared Files/tmp)
 	return fmt.Sprintf(`
 VM_USER="%s"
 VM_PASSWORD="%s"
@@ -422,25 +423,16 @@ VM_PASSWORD="%s"
 # Get VM IP
 VM_IP=$(/opt/homebrew/bin/tart ip %s)
 
-# SCP command using expect
-expect <<- DONE
-    spawn scp -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "%s" "$VM_USER@$VM_IP:/tmp/cloud_init.sh"
-    expect {
-		"*yes/no*" { send "yes\r"; exp_continue }
-        "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
-    }
-DONE
-
 # SSH command using expect
 expect <<- DONE
 	set timeout 90
-    spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /tmp/cloud_init.sh"
+ 	spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo \"$VM_PASSWORD\" | sh \"/Volumes/My Shared Files/tmp/cloud_init_%s.sh\""
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
     }
 DONE
-`, username, password, vmID, cloudInitScriptPath)
+`, username, password, vmID, vmID)
 }
 
 // This will be responsible to port forward the traffic from host to VM
