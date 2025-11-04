@@ -103,7 +103,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password)},
+							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password, vm)},
 						},
 					},
 					{
@@ -414,7 +414,7 @@ fi
 }
 
 // This will be responsible to run the cloud-init script from the mounted shared directory
-func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, username, password string) string {
+func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, username, password, vm string) string {
 	// cloudInitScriptPath is made available inside the VM via Tart shared directory: --dir=tmp:/tmp
 	_ = cloudInitScriptPath
 	return fmt.Sprintf(`
@@ -427,13 +427,13 @@ VM_IP=$(/opt/homebrew/bin/tart ip %s)
 # SSH command using expect
 expect <<- DONE
 	set timeout 90
- 	spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo $VM_PASSWORD | sh /Volumes/My\\ Shared\\ Files/tmp/cloud_init.sh"
+ 	spawn ssh -v -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "echo \"$VM_PASSWORD\" | sh \"/Volumes/My Shared Files/tmp/cloud_init_%s.sh\""
     expect {
 		"*yes/no*" { send "yes\r"; exp_continue }
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
     }
 DONE
-`, username, password, vmID)
+`, username, password, vmID, vm)
 }
 
 // This will be responsible to port forward the traffic from host to VM
