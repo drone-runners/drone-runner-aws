@@ -103,7 +103,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", mv.getStartCloudInitScript(cloudInitScriptPath, vm, vmImageConfig.Username, vmImageConfig.Password, vm)},
+							"args":    []string{"-c", mv.getStartCloudInitScript(vm, vmImageConfig.Username, vmImageConfig.Password)},
 						},
 					},
 					{
@@ -414,9 +414,8 @@ fi
 }
 
 // This will be responsible to run the cloud-init script from the mounted shared directory
-func (mv *MacVirtualizer) getStartCloudInitScript(cloudInitScriptPath, vmID, username, password, vm string) string {
-	// cloudInitScriptPath is made available inside the VM via Tart shared directory: --dir=tmp:/tmp
-	_ = cloudInitScriptPath
+func (mv *MacVirtualizer) getStartCloudInitScript(vmID, username, password string) string {
+	// Executes the per-VM cloud-init script from Tart's shared directory (/Volumes/My Shared Files/tmp)
 	return fmt.Sprintf(`
 VM_USER="%s"
 VM_PASSWORD="%s"
@@ -433,7 +432,7 @@ expect <<- DONE
         "*Password:" {send "$VM_PASSWORD\r"; exp_continue}
     }
 DONE
-`, username, password, vmID, vm)
+`, username, password, vmID, vmID)
 }
 
 // This will be responsible to port forward the traffic from host to VM
