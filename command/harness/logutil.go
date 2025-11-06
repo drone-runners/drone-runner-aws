@@ -47,23 +47,11 @@ func (f *plainFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return []byte(msg), nil
 }
 
-func useNonEmpty(imageConfigName, poolConfigImage string) string {
+func logImageOsVersionInfo(imageConfigName, imageOs string) string {
 	if imageConfigName != "" {
 		return imageConfigName
 	}
-	return lastPathSegment(poolConfigImage)
-}
-
-func lastPathSegment(s string) string {
-	if s == "" {
-		return s
-	}
-	s = strings.TrimSuffix(s, "/")
-	idx := strings.LastIndex(s, "/")
-	if idx == -1 {
-		return s
-	}
-	return s[idx+1:]
+	return imageOs + "-latest"
 }
 
 func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
@@ -75,8 +63,7 @@ func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolI
 	printKV(logr, "Machine Size", resourceClass)
 	printKV(logr, "OS", capitalize(platform.OS))
 	printKV(logr, "Arch", capitalize(platform.Arch))
-	poolImageForLog := derivePoolImageForLog(poolManager, poolID)
-	printKV(logr, "Image Version", useNonEmpty(imageVersion, poolImageForLog))
+	printKV(logr, "Image Version", logImageOsVersionInfo(imageVersion, platform.OS))
 	nvFromConfig := deriveEnableNestedVirtualization(poolManager, poolID)
 	printKV(logr, "Hardware Acceleration (Nested Virtualization)", nvFromConfig)
 }
@@ -92,36 +79,4 @@ func deriveEnableNestedVirtualization(poolManager drivers.IManager, pool string)
 		return g.EnableNestedVirtualization
 	}
 	return false
-}
-
-// derivePoolImageForLog extracts an image identifier from the pool YAML config for logging purposes.
-// It returns an empty string if the pool config is missing or does not match a known driver type.
-func derivePoolImageForLog(poolManager drivers.IManager, pool string) string {
-	spec, err := poolManager.GetPoolSpec(pool)
-	if err != nil || spec == nil {
-		return ""
-	}
-	if g, ok := spec.(*config.Google); ok {
-		return g.Image
-	}
-	if d, ok := spec.(*config.DigitalOcean); ok {
-		return d.Image
-	}
-	if az, ok := spec.(*config.Azure); ok {
-		if az.Image.Version != "" {
-			return az.Image.Version
-		} else if az.Image.SKU != "" {
-			return az.Image.SKU
-		} else if az.Image.Offer != "" {
-			return az.Image.Offer
-		}
-		return ""
-	}
-	if a, ok := spec.(*config.Amazon); ok {
-		return a.AMI
-	}
-	if n, ok := spec.(*config.Nomad); ok {
-		return n.VM.Image
-	}
-	return ""
 }
