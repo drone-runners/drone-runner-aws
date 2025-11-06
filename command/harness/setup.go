@@ -445,7 +445,7 @@ func handleSetup(
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
 		WithField("instance_name", instance.Name).
-		WithField("image_name", logImageOsVersionInfo(r.VMImageConfig.ImageName, instance.Image)).
+		WithField("image_name", logImageOsVersionInfo(r.VMImageConfig.ImageVersion, instance.Image)).
 		WithField("image_version", r.VMImageConfig.ImageVersion)
 
 	// Since we are enabling Hardware acceleration for GCP VMs so adding this log for GCP VMs only. Might be changed later.
