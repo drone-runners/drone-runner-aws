@@ -238,8 +238,12 @@ github.com/harness/godotenv/v3 v3.0.1 h1:7QPEOkpx6SLLrYRRzPBp50d6c0XIxq721iqoFxb
 github.com/harness/godotenv/v3 v3.0.1/go.mod h1:UIXXJtTM7NkSYMYknHYOO2d8BfDlAWMYZRuRsXcDDR0=
 github.com/harness/lite-engine v0.5.139 h1:p1om7Cg5uPdNf47UzwQeqgaHj7l82vEciScmX+Exx/s=
 github.com/harness/lite-engine v0.5.139/go.mod h1:dtaH9GYoJBnVVSOb6L5yJf2GJHQutOiL1nCyZA2KwJo=
+github.com/harness/lite-engine v0.5.140 h1:nUPo2gVdXeyRjn+EeGmeNp8QU9wEjYD5cElnDtHCxxE=
+github.com/harness/lite-engine v0.5.140/go.mod h1:GKqARY9I/c2ksLOg5p7XkCYBSchezVR1GWPEWEqMHbc=
 github.com/harness/ti-client v0.0.0-20250924143342-45bda4c46b0b h1:HU5ytOP0XovoEbgqLUjF2x+r/PR1bH9qC+rqwHxnJ6c=
 github.com/harness/ti-client v0.0.0-20250924143342-45bda4c46b0b/go.mod h1:dGKnH3sg7UvBL2OztrqIusmsiBknSNy1Y5+9M2J241Q=
+github.com/harness/ti-client v0.0.0-20251031062349-bf8f57b63c87 h1:POD8bo8xVJptkdnFb7nDlkgcNrFZ/kyPr4msrrmZACQ=
+github.com/harness/ti-client v0.0.0-20251031062349-bf8f57b63c87/go.mod h1:dGKnH3sg7UvBL2OztrqIusmsiBknSNy1Y5+9M2J241Q=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/cronexpr v1.1.1 h1:NJZDd87hGXjoZBdvyCF9mX4DCq5Wy7+A/w+A7q0wn6c=
