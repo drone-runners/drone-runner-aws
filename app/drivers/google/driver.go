@@ -16,7 +16,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
-	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
+	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
@@ -165,12 +165,151 @@ func (p *config) Ping(ctx context.Context) error {
 
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
+	machineType := p.size
+	if opts.MachineType != "" {
+		machineType = opts.MachineType
+	}
+
+	// Generate a unique reservation name
+	reservationName := getInstanceName(opts.RunnerName, opts.PoolName)
+
+	// Determine zones to try
+	var zonesToTry []string
+	if opts.Zone != "" {
+		// If specific zone requested, only try that zone
+		zonesToTry = []string{opts.Zone}
+	} else {
+		// Randomize zone order to distribute load
+		zonesToTry = make([]string, len(p.zones))
+		copy(zonesToTry, p.zones)
+		rand.Shuffle(len(zonesToTry), func(i, j int) {
+			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
+		})
+	}
+
+	logr := logger.FromContext(ctx).
+		WithField("cloud", types.Google).
+		WithField("reservation", reservationName).
+		WithField("machine_type", machineType).
+		WithField("pool", opts.PoolName)
+
+	logr.Debugln("google: creating capacity reservation")
+
+	var lastErr error
+
+	// Try each zone until we successfully create a reservation
+	for _, zone := range zonesToTry {
+		zoneLogr := logr.WithField("zone", zone)
+		zoneLogr.Debugln("google: attempting capacity reservation in zone")
+
+		// Create the reservation
+		reservation := &compute.Reservation{
+			Name: reservationName,
+			Zone: fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
+			SpecificReservation: &compute.AllocationSpecificSKUReservation{
+				Count: 1, // Reserve capacity for 1 VM
+				InstanceProperties: &compute.AllocationSpecificSKUAllocationReservedInstanceProperties{
+					MachineType: machineType,
+				},
+			},
+			SpecificReservationRequired: true, // Require specific reservation targeting
+			Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
+		}
+
+		// Insert the reservation
+		op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(ctx).Do()
+		if err != nil {
+			lastErr = err
+			zoneLogr.WithError(err).Warnln("google: failed to create capacity reservation in zone, trying next zone")
+			continue
+		}
+
+		// Wait for the reservation to be created
+		err = p.waitZoneOperation(ctx, op.Name, zone)
+		if err != nil {
+			lastErr = err
+			zoneLogr.WithError(err).Warnln("google: capacity reservation creation operation failed in zone, trying next zone")
+			continue
+		}
+
+		// Success!
+		zoneLogr.Infoln("google: capacity reservation created successfully")
+		return &types.CapacityReservation{
+			StageID:       "", // Will be set by the caller
+			PoolName:      opts.PoolName,
+			InstanceID:    "", // Will be set when instance is created
+			ReservationID: reservationName,
+			CreatedAt:     time.Now().Unix(),
+		}, nil
+	}
+
+	// All zones failed - treat as capacity unavailable
+	logr.WithError(lastErr).Errorln("google: capacity unavailable in all zones")
+	return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
+}
+
+// findReservationZone finds the zone where a capacity reservation exists
+func (p *config) findReservationZone(ctx context.Context, reservationID string) (zone string, err error) {
+	logr := logger.FromContext(ctx)
+
+	for _, z := range p.zones {
+		_, err := p.service.Reservations.Get(p.projectID, z, reservationID).Context(ctx).Do()
+		if err == nil {
+			return z, nil
+		}
+		// If not found in this zone, continue to next zone
+		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+			continue
+		}
+		// For other errors, log and continue
+		logr.WithError(err).Warnf("google: error checking reservation in zone %s", z)
+	}
+
+	return "", fmt.Errorf("capacity reservation %s not found in any configured zone", reservationID)
 }
 
 // DestroyCapacity destroys capacity for a VM
 func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
-	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
+	if capacity == nil || capacity.ReservationID == "" {
+		return fmt.Errorf("invalid capacity reservation: missing reservation ID")
+	}
+
+	logr := logger.FromContext(ctx).
+		WithField("cloud", types.Google).
+		WithField("reservation", capacity.ReservationID).
+		WithField("pool", capacity.PoolName)
+
+	logr.Debugln("google: deleting capacity reservation")
+
+	// Find the zone for this reservation
+	zone, err := p.findReservationZone(ctx, capacity.ReservationID)
+	if err != nil {
+		logr.Warnln("google: capacity reservation not found in any zone")
+		return nil
+	}
+
+	logr.WithField("zone", zone).Debugln("google: found capacity reservation")
+
+	// Delete the reservation
+	op, err := p.service.Reservations.Delete(p.projectID, zone, capacity.ReservationID).Context(ctx).Do()
+	if err != nil {
+		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+			logr.Warnln("google: capacity reservation already deleted")
+			return nil
+		}
+		logr.WithError(err).Errorln("google: failed to delete capacity reservation")
+		return fmt.Errorf("failed to delete capacity reservation: %w", err)
+	}
+
+	// Wait for the deletion to complete
+	err = p.waitZoneOperation(ctx, op.Name, zone)
+	if err != nil {
+		logr.WithError(err).Errorln("google: capacity reservation deletion operation failed")
+		return fmt.Errorf("capacity reservation deletion operation failed: %w", err)
+	}
+
+	logr.Debugln("google: capacity reservation deleted successfully")
+	return nil
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
@@ -187,11 +326,37 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return inst, nil
 }
 
+//nolint:gocyclo
 func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
+	// opts.Zone has highest priority
 	zone := opts.Zone
+	// If capacity reservation is provided, verify it's in the zone we're using
+	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
+		reservationZone, reservationErr := p.findReservationZone(ctx, opts.CapacityReservation.ReservationID)
+		if reservationErr != nil {
+			// Error finding reservation - disable it
+			logger.FromContext(ctx).
+				WithError(reservationErr).
+				WithField("reservation", opts.CapacityReservation.ReservationID).
+				Warnln("google: capacity reservation lookup failed, proceeding without reservation")
+			opts.CapacityReservation = nil
+		} else if zone != "" && reservationZone != zone {
+			// Reservation is in different zone - disable it
+			logger.FromContext(ctx).
+				WithField("reservation", opts.CapacityReservation.ReservationID).
+				WithField("reservation_zone", reservationZone).
+				WithField("requested_zone", zone).
+				Warnln("google: capacity reservation zone mismatch, proceeding without reservation")
+			opts.CapacityReservation = nil
+		} else if reservationZone != "" {
+			zone = reservationZone
+		}
+	}
+
 	if zone == "" {
 		zone = p.RandomZone()
 	}
+
 	if opts.MachineType != "" {
 		p.size = opts.MachineType
 	}
@@ -362,6 +527,16 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				Scopes: p.scopes,
 				Email:  p.serviceAccountEmail,
 			},
+		}
+	}
+
+	// Set reservation affinity if capacity reservation is provided
+	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
+		logr.WithField("reservation", opts.CapacityReservation.ReservationID).Debugln("google: using capacity reservation")
+		in.ReservationAffinity = &compute.ReservationAffinity{
+			ConsumeReservationType: "SPECIFIC_RESERVATION",
+			Key:                    "compute.googleapis.com/reservation-name",
+			Values:                 []string{opts.CapacityReservation.ReservationID},
 		}
 	}
 
