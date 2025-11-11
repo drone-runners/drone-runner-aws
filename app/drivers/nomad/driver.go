@@ -237,9 +237,9 @@ func (p *config) getVMImageConfig(opts *types.InstanceCreateOpts) types.VMImageC
 	return vmImageConfig
 }
 
-func (p *config) getNomadResourceAndClass(opts *types.InstanceCreateOpts) (cf.NomadResource, string, int, int, error) {
-	class := ""
-	resource := cf.NomadResource{
+func (p *config) getNomadResourceAndClass(opts *types.InstanceCreateOpts) (resource cf.NomadResource, class string, cpus int, memGB int, err error) {
+	class = ""
+	resource = cf.NomadResource{
 		MemoryGB: p.vmMemoryGB,
 		Cpus:     p.vmCpus,
 		DiskSize: p.vmDiskSize,
@@ -249,11 +249,11 @@ func (p *config) getNomadResourceAndClass(opts *types.InstanceCreateOpts) (cf.No
 			class = k
 		}
 	}
-	cpus, err := strconv.Atoi(p.vmCpus)
+	cpus, err = strconv.Atoi(p.vmCpus)
 	if err != nil {
 		return resource, class, 0, 0, errors.New("could not convert VM cpus to integer")
 	}
-	memGB, err := strconv.Atoi(p.vmMemoryGB)
+	memGB, err = strconv.Atoi(p.vmMemoryGB)
 	if err != nil {
 		return resource, class, 0, 0, errors.New("could  not convert VM memory to integer")
 	}
