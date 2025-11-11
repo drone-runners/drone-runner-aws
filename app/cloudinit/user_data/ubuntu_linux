@@ -12,7 +12,6 @@ apt:
 packages:
   - wget
   - docker-ce
-  - docker-ce-cli
 {{ end }}
 {{ if .EnableC4D }}
 # Early boot commands to detect NVMe disk
