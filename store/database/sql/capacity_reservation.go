@@ -55,6 +55,18 @@ func (s CapacityReservationStore) ListByPoolName(ctx context.Context, poolName s
 	return reservations, nil
 }
 
+func (s CapacityReservationStore) MarkForDeletion(ctx context.Context, id string, marked bool) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint
+	if _, err := tx.Exec(capacityReservationMarkForDeletion, marked, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s CapacityReservationStore) Purge(ctx context.Context) error {
 	panic("implement me")
 }
@@ -66,6 +78,7 @@ SELECT
 ,instance_id
 ,reservation_id
 ,created_at
+,marked_for_deletion
 FROM capacity_reservation
 `
 const capacityReservationInsert = `
@@ -75,12 +88,14 @@ INSERT INTO capacity_reservation (
 ,instance_id
 ,reservation_id
 ,created_at
+,marked_for_deletion
 ) values (
  :stage_id
 ,:pool_name
 ,:instance_id
 ,:reservation_id
 ,:created_at
+,:marked_for_deletion
 ) RETURNING stage_id
 `
 
@@ -94,4 +109,10 @@ WHERE stage_id = $1
 `
 const capacityReservationFindByPoolName = capacityReservationBase + `
 WHERE pool_name = $1
+`
+
+const capacityReservationMarkForDeletion = `
+UPDATE capacity_reservation
+SET marked_for_deletion = $1
+WHERE stage_id = $2
 `

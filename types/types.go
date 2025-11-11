@@ -178,11 +178,12 @@ type StageOwner struct {
 }
 
 type CapacityReservation struct {
-	StageID       string `db:"stage_id" json:"stage_id"`
-	PoolName      string `db:"pool_name" json:"pool_name"`
-	InstanceID    string `db:"instance_id" json:"instance_id"`
-	ReservationID string `db:"reservation_id" json:"reservation_id"`
-	CreatedAt     int64  `db:"created_at" json:"created_at"`
+	StageID           string `db:"stage_id" json:"stage_id"`
+	PoolName          string `db:"pool_name" json:"pool_name"`
+	InstanceID        string `db:"instance_id" json:"instance_id"`
+	ReservationID     string `db:"reservation_id" json:"reservation_id"`
+	CreatedAt         int64  `db:"created_at" json:"created_at"`
+	MarkedForDeletion bool   `db:"marked_for_deletion" json:"marked_for_deletion"`
 }
 
 type GitspaceOpts struct {

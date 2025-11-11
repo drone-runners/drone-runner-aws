@@ -558,6 +558,14 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 		logrus.Warnf("provision: pool name %q not found", reservedCapacity.PoolName)
 		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
 	}
+	if m.capacityReservationStore != nil {
+		if err := m.capacityReservationStore.MarkForDeletion(ctx, reservedCapacity.StageID, true); err != nil {
+			logger.FromContext(ctx).
+				WithField("pool", reservedCapacity.PoolName).
+				WithField("runtimeId", reservedCapacity.StageID).
+				Warnln("provision: failed to mark for deletion for capacity reservation entity")
+		}
+	}
 	if reservedCapacity.InstanceID != "" {
 		err = m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil)
 		if err != nil {
@@ -571,6 +579,7 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 	if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
 		logger.FromContext(ctx).
 			WithField("pool", reservedCapacity.PoolName).
+			WithField("runtimeId", reservedCapacity.StageID).
 			Warnln("provision: failed to destroy reserved capacity")
 		return err
 	}
@@ -578,6 +587,7 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 		if err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
 			logger.FromContext(ctx).
 				WithField("pool", reservedCapacity.PoolName).
+				WithField("runtimeId", reservedCapacity.StageID).
 				Warnln("provision: failed to delete capacity reservation entity")
 		}
 	}
