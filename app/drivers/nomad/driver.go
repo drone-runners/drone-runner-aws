@@ -391,7 +391,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 			go p.getAllocationsForJob(logr, initJobID)
 			go p.deregisterJob(logr, resourceJobId, false) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobId, initJobID, vm)
 	}
 	logr.Infoln("scheduler: successfully submitted init job, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, p.virtualizer.GetInitJobTimeout(vmImageConfig), true, []JobStatus{Dead})
@@ -401,7 +401,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 			// Destroy the VM if it's in a partially created state
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobId, initJobID, vm)
 	}
 
 	// Make sure all subtasks in the init job passed
@@ -411,7 +411,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 			go p.getAllocationsForJob(logr, initJobID)
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobId, initJobID, vm)
 	}
 	logr.Infoln("scheduler: Successfully submitted polled job")
 
@@ -421,14 +421,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer func() {
 			go p.getAllocationsForJob(logr, resourceJobId)
 		}()
-		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobID, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobId, initJobID, vm)
 	}
 	if job == nil || isTerminal(job) {
 		defer func() {
 			go p.getAllocationsForJob(logr, resourceJobId)
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobId, initJobID, vm)
 	}
 
 	return instance, nil
