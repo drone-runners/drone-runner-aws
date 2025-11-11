@@ -559,7 +559,7 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
 	}
 	if m.capacityReservationStore != nil {
-		if err := m.capacityReservationStore.MarkForDeletion(ctx, reservedCapacity.StageID, true); err != nil {
+		if err = m.capacityReservationStore.MarkForDeletion(ctx, reservedCapacity.StageID, true); err != nil {
 			logger.FromContext(ctx).
 				WithField("pool", reservedCapacity.PoolName).
 				WithField("runtimeId", reservedCapacity.StageID).
@@ -689,20 +689,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		string,
-		string,
-		bool,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*spec.VMImageConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	string,
+	string,
+	bool,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)

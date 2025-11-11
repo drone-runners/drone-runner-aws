@@ -509,7 +509,7 @@ func handleSetup(
 
 	markCapacityForDeletionFn := func() {
 		if poolManager.GetCapacityReservationStore() != nil {
-			if err := poolManager.GetCapacityReservationStore().MarkForDeletion(ctx, reservedCapacity.StageID, true); err != nil {
+			if err = poolManager.GetCapacityReservationStore().MarkForDeletion(ctx, reservedCapacity.StageID, true); err != nil {
 				logger.FromContext(ctx).
 					WithField("pool", reservedCapacity.PoolName).
 					WithField("runtimeId", reservedCapacity.StageID).
