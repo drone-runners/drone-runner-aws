@@ -237,7 +237,7 @@ func (p *config) getVMImageConfig(opts *types.InstanceCreateOpts) types.VMImageC
 	return vmImageConfig
 }
 
-func (p *config) getNomadResourceAndClass(opts *types.InstanceCreateOpts) (resource cf.NomadResource, class string, cpus int, memGB int, err error) {
+func (p *config) getNomadResourceAndClass(opts *types.InstanceCreateOpts) (resource cf.NomadResource, class string, cpus, memGB int, err error) {
 	class = ""
 	resource = cf.NomadResource{
 		MemoryGB: p.vmMemoryGB,
