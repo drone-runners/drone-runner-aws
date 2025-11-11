@@ -12,7 +12,7 @@ import (
 // initJobNoop creates a job which is targeted to a node. It doesn't create or run a VM,
 // all it does is sleep for 30 seconds (approximate time of VM creation). This job can be used for scale testing.
 func (p *config) initJobNoop(vm, nodeID string, liteEngineHostPort int) (initJob *api.Job, initjobID, initTaskGroup string) { //nolint:unparam
-	initjobID = initJobID(vm)
+	initjobID = getInitJobID(vm)
 	initTaskGroup = fmt.Sprintf("init_task_group_%s", vm)
 
 	initJob = &api.Job{
@@ -58,7 +58,7 @@ func (p *config) initJobNoop(vm, nodeID string, liteEngineHostPort int) (initJob
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
 func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount int) (job *api.Job, id string) { //nolint:unparam
-	id = resourceJobID(vm)
+	id = getResourceJobID(vm)
 	portLabel := vm
 
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
@@ -102,7 +102,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount 
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
 func (p *config) destroyJobNoop(vm, nodeID string) (job *api.Job, id string) {
-	id = destroyJobID(vm)
+	id = getDestroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
 		RTarget: nodeID,

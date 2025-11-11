@@ -160,13 +160,13 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	}
 
 	// Get the resource job ID from the VM ID stored in ReservationID
-	resourceJobId := resourceJobID(capacity.ReservationID)
+	resourceJobID := getResourceJobID(capacity.ReservationID)
 	logr := logger.FromContext(ctx).
 		WithField("reservation_id", capacity.ReservationID).
-		WithField("resource_job_id", resourceJobId)
+		WithField("resource_job_id", resourceJobID)
 
 	logr.Debugln("scheduler: destroying reserved capacity ... ")
-	err = p.deregisterJob(logr, resourceJobId, false)
+	err = p.deregisterJob(logr, resourceJobID, false)
 	if err != nil {
 		logr.WithError(err).Errorln("scheduler: could not destroy reserved capacity")
 		return err
@@ -177,7 +177,7 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 
 // createAndRunResourceJob creates and runs a resource job to reserve capacity on a node.
 // Returns the VM ID, resource job ID, and any error encountered.
-func (p *config) createAndRunResourceJob(ctx context.Context, opts *types.InstanceCreateOpts) (vm, resourceJobId string, err error) {
+func (p *config) createAndRunResourceJob(ctx context.Context, opts *types.InstanceCreateOpts) (vm, resourceJobID string, err error) {
 	vm = strings.ToLower(random(20)) //nolint:gomnd
 	_, class, cpus, memGB, err := p.getNomadResourceAndClass(opts)
 	if err != nil {
@@ -190,39 +190,39 @@ func (p *config) createAndRunResourceJob(ctx context.Context, opts *types.Instan
 	// oversubscribing the node
 	var resourceJob *api.Job
 	if p.noop {
-		resourceJob, resourceJobId = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
+		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
 	} else {
-		resourceJob, resourceJobId = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, vmImageConfig, p.virtualizer.GetHealthCheckupGenerator())
+		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, vmImageConfig, p.virtualizer.GetHealthCheckupGenerator())
 	}
 
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobId)
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
 	logr.Infoln("scheduler: finding a node which has available resources ... ")
 
 	_, _, err = p.client.Jobs().Register(resourceJob, nil)
 	if err != nil {
 		defer func() {
-			go p.getAllocationsForJob(logr, resourceJobId)
+			go p.getAllocationsForJob(logr, resourceJobID)
 		}()
 		return "", "", fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `p.nomadConfig.ResourceJobTimeout`, we fail the step
-	job, err := p.pollForJob(ctx, resourceJobId, logr, p.nomadConfig.ResourceJobTimeout, true, []JobStatus{Running, Dead})
+	job, err := p.pollForJob(ctx, resourceJobID, logr, p.nomadConfig.ResourceJobTimeout, true, []JobStatus{Running, Dead})
 	if err != nil {
 		defer func() {
-			go p.getAllocationsForJob(logr, resourceJobId)
+			go p.getAllocationsForJob(logr, resourceJobID)
 		}()
 		return "", "", fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
 	}
 
 	if job == nil || isTerminal(job) {
 		defer func() {
-			go p.getAllocationsForJob(logr, resourceJobId)
+			go p.getAllocationsForJob(logr, resourceJobID)
 		}()
 		return "", "", fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
 
-	return vm, resourceJobId, nil
+	return vm, resourceJobID, nil
 }
 
 func (p *config) getVMImageConfig(opts *types.InstanceCreateOpts) types.VMImageConfig {
@@ -284,16 +284,16 @@ func (p *config) getNomadResourceAndClass(opts *types.InstanceCreateOpts) (cf.No
 
 // Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
 // This function is idempotent - any errors in between will cleanup the created VMs.
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo,funlen
-	var vm, resourceJobId string
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
+	var vm, resourceJobID string
 	var err error
 
 	// Use existing capacity reservation if provided, otherwise create a new resource job
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
 		vm = opts.CapacityReservation.ReservationID
-		resourceJobId = resourceJobID(vm)
+		resourceJobID = getResourceJobID(vm)
 	} else {
-		vm, resourceJobId, err = p.createAndRunResourceJob(ctx, opts)
+		vm, resourceJobID, err = p.createAndRunResourceJob(ctx, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -304,15 +304,15 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, err
 	}
 
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobId)
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
 
 	vmImageConfig := p.getVMImageConfig(opts)
 
 	// get the machine details where the resource job was allocated
-	ip, id, liteEngineHostPort, gitspacesPorts, err := p.fetchMachine(logr, resourceJobId)
+	ip, id, liteEngineHostPort, gitspacesPorts, err := p.fetchMachine(logr, resourceJobID)
 	if err != nil {
 		defer func() {
-			go p.deregisterJob(logr, resourceJobId, false) //nolint:errcheck
+			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		}()
 		return nil, err
 	}
@@ -338,7 +338,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, p.userData, p.machinePassword, p.vmImage, vmImageConfig, liteEngineHostPort, resource, opts, gitspacesPortMappings, opts.Timeout) //nolint
 		if err != nil {
 			defer func() {
-				go p.deregisterJob(logr, resourceJobId, false) //nolint:errcheck
+				go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 			}()
 			return nil, err
 		}
@@ -357,7 +357,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	labelsBytes, marshalErr := json.Marshal(opts.Labels)
 	if marshalErr != nil {
 		defer func() {
-			go p.deregisterJob(logr, resourceJobId, false) //nolint:errcheck
+			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		}()
 		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
 	}
@@ -389,9 +389,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if err != nil {
 		defer func() {
 			go p.getAllocationsForJob(logr, initJobID)
-			go p.deregisterJob(logr, resourceJobId, false) //nolint:errcheck
+			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobId, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: could not register job, err: %w ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Infoln("scheduler: successfully submitted init job, started polling for job status")
 	_, err = p.pollForJob(ctx, initJobID, logr, p.virtualizer.GetInitJobTimeout(vmImageConfig), true, []JobStatus{Dead})
@@ -401,7 +401,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 			// Destroy the VM if it's in a partially created state
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobId, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 
 	// Make sure all subtasks in the init job passed
@@ -411,24 +411,24 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 			go p.getAllocationsForJob(logr, initJobID)
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobId, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
 	}
 	logr.Infoln("scheduler: Successfully submitted polled job")
 
 	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
-	job, _, err := p.client.Jobs().Info(resourceJobId, &api.QueryOptions{})
+	job, _, err := p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
 	if err != nil {
 		defer func() {
-			go p.getAllocationsForJob(logr, resourceJobId)
+			go p.getAllocationsForJob(logr, resourceJobID)
 		}()
-		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobId, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: could not query resource job, err: %w, resource_job_id: %s, init_job_id: %s, vm: %s", err, resourceJobID, initJobID, vm)
 	}
 	if job == nil || isTerminal(job) {
 		defer func() {
-			go p.getAllocationsForJob(logr, resourceJobId)
+			go p.getAllocationsForJob(logr, resourceJobID)
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobId, initJobID, vm)
+		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)
 	}
 
 	return instance, nil
@@ -457,7 +457,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
 func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, vmImageConfig types.VMImageConfig, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) { //nolint
-	id = resourceJobID(vm)
+	id = getResourceJobID(vm)
 	portLabel := vm
 
 	sleepTime := p.nomadConfig.ResourceJobTimeout + p.virtualizer.GetInitJobTimeout(vmImageConfig) + 2*time.Minute // add 2 minutes for a buffer
@@ -581,8 +581,8 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
 func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier string, destroyGenerator func(string, string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) { //nolint:lll
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("destroy_job_id", destroyJobID)
-	id = destroyJobID(vm)
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("destroy_job_id", getDestroyJobID)
+	id = getDestroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
 		RTarget: nodeID,
@@ -686,7 +686,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			job, jobID = p.destroyJob(ctx, instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator(), storageCleanupType)
 		}
 
-		resourceJobID := resourceJobID(instance.ID)
+		resourceJobID := getResourceJobID(instance.ID)
 		logr := logger.FromContext(ctx).
 			WithField("instance_id", instance.ID).
 			WithField("instance_node_id", instance.NodeID).
@@ -944,17 +944,17 @@ func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephSt
 }
 
 // generate a job ID for a destroy job
-func destroyJobID(s string) string {
+func getDestroyJobID(s string) string {
 	return fmt.Sprintf("destroy_job_%s", s)
 }
 
 // geenrate a job ID for a init job
-func initJobID(s string) string {
+func getInitJobID(s string) string {
 	return fmt.Sprintf("init_job_%s", s)
 }
 
 // generate a job ID for a resource job
-func resourceJobID(s string) string {
+func getResourceJobID(s string) string {
 	return fmt.Sprintf("init_job_resources_%s", s)
 }
 
