@@ -550,8 +550,10 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 
 func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.CapacityReservation) error {
 	if reservedCapacity == nil {
-		logrus.Warnf("provision: capacity reservation not found")
-		return fmt.Errorf("provision: capacity reservation not found")
+		return nil
+	}
+	if reservedCapacity.PoolName == "" || reservedCapacity.StageID == "" {
+		return nil
 	}
 	pool, err := m.validatePool(reservedCapacity.PoolName)
 	if err != nil {
