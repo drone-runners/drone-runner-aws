@@ -165,6 +165,8 @@ func (p *config) Ping(ctx context.Context) error {
 
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+	return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
+
 	machineType := p.size
 	if opts.MachineType != "" {
 		machineType = opts.MachineType
