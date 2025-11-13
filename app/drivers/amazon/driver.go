@@ -12,6 +12,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
+	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -224,12 +225,124 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
+	client := p.service
+
+	instanceType := p.size
+	availabilityZone := p.availabilityZone
+
+	// Use zone from opts if provided
+	if opts.Zone != "" {
+		availabilityZone = opts.Zone
+	}
+
+	logr := logger.FromContext(ctx).
+		WithField("driver", types.Amazon).
+		WithField("instance_type", instanceType).
+		WithField("availability_zone", availabilityZone).
+		WithField("pool", opts.PoolName)
+
+	logr.Debugln("amazon: creating capacity reservation")
+
+	// Determine the instance platform based on OS
+	var instancePlatform string
+	switch opts.Platform.OS {
+	case oshelp.OSWindows:
+		instancePlatform = "Windows"
+	case oshelp.OSLinux:
+		instancePlatform = "Linux/UNIX"
+	case oshelp.OSMac:
+		// AWS EC2 Mac instances use dedicated hosts and don't support capacity reservations
+		logr.Errorln("amazon: capacity reservations are not supported for macOS instances")
+		return nil, fmt.Errorf("capacity reservations are not supported for macOS instances on AWS")
+	default:
+		instancePlatform = "Linux/UNIX"
+	}
+
+	// Create the capacity reservation
+	input := &ec2.CreateCapacityReservationInput{
+		InstanceType:     aws.String(instanceType),
+		InstancePlatform: aws.String(instancePlatform),
+		AvailabilityZone: aws.String(availabilityZone),
+		InstanceCount:    aws.Int64(1),
+		EndDateType:      aws.String("unlimited"), // No end date
+		InstanceMatchCriteria: aws.String("targeted"), // Instances must explicitly target this reservation
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("capacity-reservation"),
+				Tags: []*ec2.Tag{
+					{
+						Key:   aws.String("harness-pool-name"),
+						Value: aws.String(opts.PoolName),
+					},
+					{
+						Key:   aws.String("harness-runner-name"),
+						Value: aws.String(opts.RunnerName),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := client.CreateCapacityReservationWithContext(ctx, input)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			if awsErr.Code() == "InsufficientInstanceCapacity" {
+				logr.WithError(err).Errorln("amazon: insufficient capacity available")
+				return nil, &ierrors.ErrCapacityUnavailable{Driver: p.DriverName()}
+			}
+		}
+		logr.WithError(err).Errorln("amazon: failed to create capacity reservation")
+		return nil, fmt.Errorf("failed to create capacity reservation: %w", err)
+	}
+
+	reservationID := aws.StringValue(result.CapacityReservation.CapacityReservationId)
+
+	logr.WithField("reservation_id", reservationID).Infoln("amazon: capacity reservation created successfully")
+
+	return &types.CapacityReservation{
+		StageID:       "", // Will be set by the caller
+		PoolName:      opts.PoolName,
+		InstanceID:    "", // Will be set when instance is created
+		ReservationID: reservationID,
+		CreatedAt:     time.Now().Unix(),
+	}, nil
 }
 
 // DestroyCapacity destroys capacity for a VM
 func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
-	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
+	if capacity == nil || capacity.ReservationID == "" {
+		return fmt.Errorf("invalid capacity reservation: missing reservation ID")
+	}
+
+	client := p.service
+
+	logr := logger.FromContext(ctx).
+		WithField("driver", types.Amazon).
+		WithField("reservation", capacity.ReservationID).
+		WithField("pool", capacity.PoolName)
+
+	logr.Debugln("amazon: deleting capacity reservation")
+
+	// Cancel the capacity reservation
+	input := &ec2.CancelCapacityReservationInput{
+		CapacityReservationId: aws.String(capacity.ReservationID),
+	}
+
+	_, err = client.CancelCapacityReservationWithContext(ctx, input)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			// If the reservation doesn't exist, consider it already deleted
+			if awsErr.Code() == "InvalidCapacityReservationId.NotFound" {
+				logr.Warnln("amazon: capacity reservation already deleted or not found")
+				return nil
+			}
+		}
+		logr.WithError(err).Errorln("amazon: failed to delete capacity reservation")
+		return fmt.Errorf("failed to delete capacity reservation: %w", err)
+	}
+
+	logr.Infoln("amazon: capacity reservation deleted successfully")
+	return nil
 }
 
 // Create an AWS instance for the pool, it will not perform build specific setup.
@@ -385,6 +498,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 		in.HibernationOptions = &ec2.HibernationOptionsRequest{
 			Configured: aws.Bool(true),
+		}
+	}
+
+	// Use capacity reservation if provided
+	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
+		logr.WithField("reservation_id", opts.CapacityReservation.ReservationID).
+			Debugln("amazon: using capacity reservation")
+		in.CapacityReservationSpecification = &ec2.CapacityReservationSpecification{
+			CapacityReservationTarget: &ec2.CapacityReservationTarget{
+				CapacityReservationId: aws.String(opts.CapacityReservation.ReservationID),
+			},
 		}
 	}
 
