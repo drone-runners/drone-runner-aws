@@ -549,51 +549,63 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 }
 
 func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.CapacityReservation) error {
-	if reservedCapacity == nil {
+	if reservedCapacity == nil || reservedCapacity.PoolName == "" {
 		return nil
 	}
-	if reservedCapacity.PoolName == "" || reservedCapacity.StageID == "" {
-		return nil
-	}
+
 	pool, err := m.validatePool(reservedCapacity.PoolName)
 	if err != nil {
 		logrus.Warnf("provision: pool name %q not found", reservedCapacity.PoolName)
 		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
 	}
-	if m.capacityReservationStore != nil {
-		if err = m.capacityReservationStore.MarkForDeletion(ctx, reservedCapacity.StageID, true); err != nil {
-			logger.FromContext(ctx).
-				WithField("pool", reservedCapacity.PoolName).
-				WithField("runtimeId", reservedCapacity.StageID).
-				Warnln("provision: failed to mark for deletion for capacity reservation entity")
-		}
-	}
+
+	logr := logger.FromContext(ctx).
+		WithField("pool", reservedCapacity.PoolName).
+		WithField("runtimeId", reservedCapacity.StageID)
+
+	// Mark for deletion
+	m.markCapacityReservationForDeletion(ctx, reservedCapacity.StageID, logr)
+
+	// Destroy associated instance if exists
 	if reservedCapacity.InstanceID != "" {
-		err = m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil)
-		if err != nil {
+		if err := m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil); err != nil {
 			logrus.Warnf("failed to destroy instance %s from store with err: %s", reservedCapacity.InstanceID, err)
 		}
 	}
+
+	// If no reservation ID, just delete the record and return
 	if reservedCapacity.ReservationID == "" {
-		// no capacity to destroy
+		m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, logr)
 		return nil
 	}
-	if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
-		logger.FromContext(ctx).
-			WithField("pool", reservedCapacity.PoolName).
-			WithField("runtimeId", reservedCapacity.StageID).
-			Warnln("provision: failed to destroy reserved capacity")
+
+	// Destroy the actual capacity reservation
+	if err := pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
+		logr.Warnln("provision: failed to destroy reserved capacity")
 		return err
 	}
-	if m.capacityReservationStore != nil {
-		if err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
-			logger.FromContext(ctx).
-				WithField("pool", reservedCapacity.PoolName).
-				WithField("runtimeId", reservedCapacity.StageID).
-				Warnln("provision: failed to delete capacity reservation entity")
-		}
+
+	// Delete the capacity reservation record
+	m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, logr)
+	return nil
+}
+
+func (m *Manager) markCapacityReservationForDeletion(ctx context.Context, stageID string, logr logger.Logger) {
+	if m.capacityReservationStore == nil {
+		return
 	}
-	return err
+	if err := m.capacityReservationStore.MarkForDeletion(ctx, stageID, true); err != nil {
+		logr.Warnln("provision: failed to mark for deletion for capacity reservation entity")
+	}
+}
+
+func (m *Manager) deleteCapacityReservationRecord(ctx context.Context, stageID string, logr logger.Logger) {
+	if m.capacityReservationStore == nil {
+		return
+	}
+	if err := m.capacityReservationStore.Delete(ctx, stageID); err != nil {
+		logr.Warnln("provision: failed to delete capacity reservation entity")
+	}
 }
 
 func (m *Manager) BuildPools(ctx context.Context) error {
