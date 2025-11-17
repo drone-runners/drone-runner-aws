@@ -35,6 +35,8 @@ type IManager interface {
 	GetTLSServerName() string
 	IsDistributed() bool
 	GetRunnerConfig() types.RunnerConfig
+	GetHealthCheckTimeout(os string, provider types.DriverType) time.Duration
+	GetSetupTimeout() time.Duration
 	Suspend(ctx context.Context, poolID string, instance *types.Instance) error
 	GetPoolSpec(poolName string) (interface{}, error)
 }
