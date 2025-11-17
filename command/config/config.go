@@ -344,10 +344,11 @@ type EnvConfig struct {
 	}
 
 	RunnerConfig struct {
-		HealthCheckTimeout        int64 `envconfig:"HEALTH_CHECK_TIMEOUT" default:"3"`
-		HealthCheckWindowsTimeout int64 `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5"`
-		SetupTimeout              int64 `envconfig:"SETUP_TIMEOUT" default:"30"`
-		HA                        bool  `envconfig:"DRONE_RUNNER_HA" default:"false"`
+		HealthCheckHotpoolTimeout   time.Duration `envconfig:"HEALTH_CHECK_HOTPOOL_TIMEOUT" default:"10s"`
+		HealthCheckColdstartTimeout time.Duration `envconfig:"HEALTH_CHECK_COLDSTART_TIMEOUT" default:"3m"`
+		HealthCheckWindowsTimeout   time.Duration `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5m"`
+		SetupTimeout                time.Duration `envconfig:"SETUP_TIMEOUT" default:"30s"`
+		HA                          bool          `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
 	Nomad struct {
