@@ -86,10 +86,11 @@ type Passwords struct {
 }
 
 type RunnerConfig struct {
-	HealthCheckTimeout        int64
-	HealthCheckWindowsTimeout int64
-	SetupTimeout              int64
-	HA                        bool
+	HealthCheckHotpoolTimeout   time.Duration
+	HealthCheckColdstartTimeout time.Duration
+	HealthCheckWindowsTimeout   time.Duration
+	SetupTimeout                time.Duration
+	HA                          bool
 }
 
 type NomadConfig struct {

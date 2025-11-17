@@ -497,13 +497,9 @@ func handleSetup(
 	// try the healthcheck api on the lite-engine until it responds ok
 	ilog.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
-	runnerConfig := poolManager.GetRunnerConfig()
 
-	// override the health check timeouts
-	healthCheckTimeout := time.Duration(runnerConfig.HealthCheckTimeout) * time.Minute
-	if instance.Platform.OS == "windows" {
-		healthCheckTimeout = time.Duration(runnerConfig.HealthCheckWindowsTimeout) * time.Minute
-	}
+	// Get the health check timeout based on the instance OS and provider
+	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider)
 
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
 		printError(buildLog, "Machine health check failed")
@@ -520,8 +516,7 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
-	setupTimeout := time.Duration(runnerConfig.SetupTimeout) * time.Second
-	_, err = client.RetrySetup(ctx, &r.SetupRequest, setupTimeout)
+	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
 	if err != nil {
 		printError(buildLog, "Machine setup failed")
 		go cleanUpInstanceFn(true)
