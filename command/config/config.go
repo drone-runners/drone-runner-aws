@@ -366,7 +366,6 @@ type EnvConfig struct {
 		LargeBaremetalClass     string        `envconfig:"NOMAD_LARGE_BAREMETAL_CLASS" default:"largebaremetal"`
 		GlobalAccountMac        string        `envconfig:"NOMAD_GLOBAL_ACCOUNT_MAC" default:"GLOBAL_ACCOUNT_ID_MAC"`
 		MacMachineFrequencyMhz  int           `envconfig:"NOMAD_MAC_MACHINE_FREQUENCY_MHZ" default:"3200"`
-		HealthCheckTimeout      time.Duration `envconfig:"NOMAD_HEALTH_CHECK_TIMEOUT" default:"10s"`
 	}
 
 	Dlite struct {
