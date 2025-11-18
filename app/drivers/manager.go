@@ -1188,6 +1188,26 @@ func (m *Manager) GetRunnerConfig() types.RunnerConfig {
 	return m.runnerConfig
 }
 
+// GetHealthCheckTimeout returns the appropriate health check timeout based on the OS and provider
+func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType) time.Duration {
+	// Override for Windows
+	if os == "windows" {
+		return m.runnerConfig.HealthCheckWindowsTimeout
+	}
+
+	// Use hotpool timeout for Nomad
+	if provider == types.Nomad {
+		return m.runnerConfig.HealthCheckHotpoolTimeout
+	}
+
+	return m.runnerConfig.HealthCheckColdstartTimeout
+}
+
+// GetSetupTimeout returns the setup timeout
+func (m *Manager) GetSetupTimeout() time.Duration {
+	return m.runnerConfig.SetupTimeout
+}
+
 func (m *Manager) IsDistributed() bool {
 	return false
 }
