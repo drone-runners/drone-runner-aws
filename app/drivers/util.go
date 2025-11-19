@@ -15,8 +15,8 @@ func IsHosted(ctx context.Context) bool {
 	return isHosted.(bool)
 }
 
-func ShouldPerformDNSLookup(ctx context.Context, os string) bool {
-	if strings.EqualFold(os, "windows") && IsHosted(ctx) {
+func ShouldPerformDNSLookup(ctx context.Context, os string, warmedUp bool) bool {
+	if IsHosted(ctx) && (warmedUp || strings.EqualFold(os, "windows")) {
 		return true
 	}
 	return false
