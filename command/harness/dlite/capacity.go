@@ -51,8 +51,8 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var timeout int64 = capacityTimeoutMs
-	if req.CapacityReservationRequest.HandlerTimeoutMs > 0 {
-		timeout = req.CapacityReservationRequest.HandlerTimeoutMs
+	if req.CapacityReservationRequest.ReservationTimeout > 0 {
+		timeout = req.CapacityReservationRequest.ReservationTimeout
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Millisecond)
 	defer cancel()
