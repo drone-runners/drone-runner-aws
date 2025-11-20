@@ -570,18 +570,13 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 		}
 	}
 
-	// If no reservation ID, just delete the record and return
-	if reservedCapacity.ReservationID == "" {
-		m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, logr)
-		return nil
+	if reservedCapacity.ReservationID != "" {
+		// Destroy the actual capacity reservation
+		if err := pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
+			logr.Warnln("provision: failed to destroy reserved capacity")
+			return err
+		}
 	}
-
-	// Destroy the actual capacity reservation
-	if err := pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
-		logr.Warnln("provision: failed to destroy reserved capacity")
-		return err
-	}
-
 	// Delete the capacity reservation record
 	m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, logr)
 	return nil
@@ -691,20 +686,20 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-	context.Context,
-	*poolEntry,
-	string,
-	string,
-	string,
-	*spec.VMImageConfig,
-	*types.GitspaceAgentConfig,
-	*types.StorageConfig,
-	string,
-	string,
-	bool,
-	int64,
-	*types.Platform,
-) (*types.Instance, error),
+		context.Context,
+		*poolEntry,
+		string,
+		string,
+		string,
+		*spec.VMImageConfig,
+		*types.GitspaceAgentConfig,
+		*types.StorageConfig,
+		string,
+		string,
+		bool,
+		int64,
+		*types.Platform,
+	) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)

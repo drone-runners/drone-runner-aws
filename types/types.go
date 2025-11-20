@@ -8,6 +8,7 @@ import (
 
 type InstanceState string
 type DriverType string
+type CapacityReservationState string
 
 type ContextKey string
 
@@ -21,6 +22,10 @@ func (s InstanceState) Value() (driver.Value, error) {
 }
 
 func (s DriverType) Value() (driver.Value, error) {
+	return string(s), nil
+}
+
+func (s CapacityReservationState) Value() (driver.Value, error) {
 	return string(s), nil
 }
 
@@ -42,6 +47,12 @@ const (
 	StateInUse       = InstanceState("inuse")
 	StateHibernating = InstanceState("hibernating")
 	StateTerminating = InstanceState("terminating")
+)
+
+// CapacityReservationState type enumeration.
+const (
+	CapacityReservationStateAvailable = CapacityReservationState("available")
+	CapacityReservationStateInUse     = CapacityReservationState("in_use")
 )
 
 type Instance struct {
@@ -179,12 +190,12 @@ type StageOwner struct {
 }
 
 type CapacityReservation struct {
-	StageID           string `db:"stage_id" json:"stage_id"`
-	PoolName          string `db:"pool_name" json:"pool_name"`
-	InstanceID        string `db:"instance_id" json:"instance_id"`
-	ReservationID     string `db:"reservation_id" json:"reservation_id"`
-	CreatedAt         int64  `db:"created_at" json:"created_at"`
-	MarkedForDeletion bool   `db:"marked_for_deletion" json:"marked_for_deletion"`
+	StageID          string                   `db:"stage_id" json:"stage_id"`
+	PoolName         string                   `db:"pool_name" json:"pool_name"`
+	InstanceID       string                   `db:"instance_id" json:"instance_id"`
+	ReservationID    string                   `db:"reservation_id" json:"reservation_id"`
+	CreatedAt        int64                    `db:"created_at" json:"created_at"`
+	ReservationState CapacityReservationState `db:"reservationstate" json:"reservationstate"`
 }
 
 type GitspaceOpts struct {

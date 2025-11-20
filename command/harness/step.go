@@ -82,7 +82,7 @@ func HandleStep(ctx context.Context,
 		poolID = r.InstanceInfo.PoolName
 	}
 
-	logr = logrus.WithField("pool", poolID)
+	logr = logr.WithField("pool", poolID)
 
 	ctx = logger.WithContext(ctx, logr)
 
