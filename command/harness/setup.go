@@ -507,22 +507,10 @@ func handleSetup(
 		}
 	}
 
-	markCapacityForDeletionFn := func() {
-		if poolManager.GetCapacityReservationStore() != nil {
-			if err = poolManager.GetCapacityReservationStore().MarkForDeletion(ctx, reservedCapacity.StageID, true); err != nil {
-				logger.FromContext(ctx).
-					WithField("pool", reservedCapacity.PoolName).
-					WithField("runtimeId", reservedCapacity.StageID).
-					Warnln("provision: failed to mark for deletion for capacity reservation entity")
-			}
-		}
-	}
-
 	if instance.IsHibernated {
 		ilog.Tracef("instance %s is hibernated", instance.ID)
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
-			markCapacityForDeletionFn()
 			go cleanUpInstanceFn(false)
 			return nil, false, false, fmt.Errorf("failed to start the instance up: %w", err)
 		}
@@ -534,14 +522,12 @@ func handleSetup(
 	instance.Updated = time.Now().Unix()
 	err = poolManager.Update(ctx, instance)
 	if err != nil {
-		markCapacityForDeletionFn()
 		go cleanUpInstanceFn(false)
 		return nil, false, false, fmt.Errorf("failed to tag: %w", err)
 	}
 
 	err = poolManager.SetInstanceTags(ctx, pool, instance, r.Tags)
 	if err != nil {
-		markCapacityForDeletionFn()
 		go cleanUpInstanceFn(false)
 		return nil, false, false, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
@@ -549,7 +535,6 @@ func handleSetup(
 	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port,
 		enableMock, mockTimeout)
 	if err != nil {
-		markCapacityForDeletionFn()
 		go cleanUpInstanceFn(false)
 		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
 	}
@@ -562,7 +547,6 @@ func handleSetup(
 
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
 		printError(buildLog, "Machine health check failed")
-		markCapacityForDeletionFn()
 		go cleanUpInstanceFn(true)
 		return nil, false, false, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
@@ -579,7 +563,6 @@ func handleSetup(
 	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
 	if err != nil {
 		printError(buildLog, "Machine setup failed")
-		markCapacityForDeletionFn()
 		go cleanUpInstanceFn(true)
 		return nil, false, false, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}

@@ -563,9 +563,6 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 		WithField("pool", reservedCapacity.PoolName).
 		WithField("runtimeId", reservedCapacity.StageID)
 
-	// Mark for deletion
-	m.markCapacityReservationForDeletion(ctx, reservedCapacity.StageID, logr)
-
 	// Destroy associated instance if exists
 	if reservedCapacity.InstanceID != "" {
 		if err := m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil); err != nil {
@@ -588,15 +585,6 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 	// Delete the capacity reservation record
 	m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, logr)
 	return nil
-}
-
-func (m *Manager) markCapacityReservationForDeletion(ctx context.Context, stageID string, logr logger.Logger) {
-	if m.capacityReservationStore == nil {
-		return
-	}
-	if err := m.capacityReservationStore.MarkForDeletion(ctx, stageID, true); err != nil {
-		logr.Warnln("failed to mark for deletion for capacity reservation entity")
-	}
 }
 
 func (m *Manager) deleteCapacityReservationRecord(ctx context.Context, stageID string, logr logger.Logger) {
