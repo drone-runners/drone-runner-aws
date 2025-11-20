@@ -167,6 +167,9 @@ func handleCapacityReservation(
 		RunnerName: runnerName,
 	}
 
+	timeout := time.Duration(r.HandlerTimeoutMs) * time.Millisecond
+	timeoutSeconds := int64(timeout / time.Second)
+
 	_, capacityReservation, warmed, err = poolManager.Provision(
 		ctx,
 		pool,
@@ -181,7 +184,7 @@ func handleCapacityReservation(
 		r.MachineType,
 		false,
 		nil,
-		r.HandlerTimeoutMs/1000,
+		timeoutSeconds,
 		false,
 		nil,
 		true,
