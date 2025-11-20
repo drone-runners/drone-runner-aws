@@ -28,7 +28,7 @@ type CapacityReservationRequest struct {
 	StorageConfig          types.StorageConfig  `json:"storage_config"`
 	Zone                   string               `json:"zone"`
 	MachineType            string               `json:"machine_type"`
-	HandlerTimeout         int64                `json:"timeout,omitempty"`
+	HandlerTimeoutMs       int64                `json:"timeout,omitempty"`
 }
 
 // HandleCapacityReservation tries to reserve capacity for a future vm init an in any of the pools given in the
@@ -181,7 +181,7 @@ func handleCapacityReservation(
 		r.MachineType,
 		false,
 		nil,
-		r.HandlerTimeout,
+		r.HandlerTimeoutMs/1000,
 		false,
 		nil,
 		true,
