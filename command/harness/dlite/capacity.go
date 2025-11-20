@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	capacityTimeoutSec = 10 * 60
+	capacityTimeoutMs = 2 * 60 * 1000
 )
 
 type VMCapacityTask struct {
@@ -50,8 +50,11 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httphelper.WriteBadRequest(w, err)
 		return
 	}
-	timeout := capacityTimeoutSec
-	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
+	var timeout int64 = capacityTimeoutMs
+	if req.CapacityReservationRequest.HandlerTimeout > 0 {
+		timeout = req.CapacityReservationRequest.HandlerTimeout
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 
 	accountID := harness.GetAccountID(&req.CapacityReservationRequest.Context, map[string]string{})
