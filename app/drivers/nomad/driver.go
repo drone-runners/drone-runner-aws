@@ -136,77 +136,59 @@ func (p *config) Ping(ctx context.Context) error {
 	return errors.New("could not create a client to the nomad server")
 }
 
-// ReserveCapacity reserves capacity for a VM
+// ReserveCapacity reserves capacity for a VM by creating and running a resource job
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
-	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
+	logr := logger.FromContext(ctx)
+	vm, _, err := p.createAndRunResourceJob(ctx, opts)
+	if err != nil {
+		logr.WithError(err).Errorln("scheduler: could not reserve capacity")
+		return nil, &ierrors.ErrCapacityUnavailable{Driver: p.DriverName()}
+	}
+
+	// Return capacity reservation with the VM ID in ReservationID which can be used to get resource job ID later
+	return &types.CapacityReservation{
+		ReservationID: vm,
+		PoolName:      opts.PoolName,
+		CreatedAt:     time.Now().Unix(),
+	}, nil
 }
 
-// DestroyCapacity destroys capacity for a VM
+// DestroyCapacity destroys capacity for a VM by deregistering the resource job
 func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
-	return &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}
+	if capacity == nil || capacity.ReservationID == "" {
+		return errors.New("invalid capacity reservation: missing reservation ID")
+	}
+
+	// Get the resource job ID from the VM ID stored in ReservationID
+	resourceJobID := getResourceJobID(capacity.ReservationID)
+	logr := logger.FromContext(ctx).
+		WithField("reservation_id", capacity.ReservationID).
+		WithField("resource_job_id", resourceJobID)
+
+	logr.Debugln("scheduler: destroying reserved capacity ... ")
+	err = p.deregisterJob(logr, resourceJobID, false)
+	if err != nil {
+		logr.WithError(err).Errorln("scheduler: could not destroy reserved capacity")
+		return err
+	}
+	logr.Infoln("scheduler: successfully destroyed reserved capacity")
+	return nil
 }
 
-// Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
-// This function is idempotent - any errors in between will cleanup the created VMs.
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) { //nolint:gocyclo,funlen
-	vm := strings.ToLower(random(20)) //nolint:gomnd
-	class := ""
-	for k, v := range p.enablePinning {
-		if strings.Contains(v, opts.AccountID) {
-			class = k
-		}
-	}
-	cpus, err := strconv.Atoi(p.vmCpus)
+// createAndRunResourceJob creates and runs a resource job to reserve capacity on a node.
+// Returns the VM ID, resource job ID, and any error encountered.
+func (p *config) createAndRunResourceJob(ctx context.Context, opts *types.InstanceCreateOpts) (vm, resourceJobID string, err error) {
+	vm = strings.ToLower(random(20)) //nolint:gomnd
+	_, class, cpus, memGB, err := p.getNomadResourceAndClass(opts)
 	if err != nil {
-		return nil, errors.New("could not convert VM cpus to integer")
-	}
-	memGB, err := strconv.Atoi(p.vmMemoryGB)
-	if err != nil {
-		return nil, errors.New("could  not convert VM memory to integer")
+		return "", "", err
 	}
 
-	resource := cf.NomadResource{
-		MemoryGB: p.vmMemoryGB,
-		Cpus:     p.vmCpus,
-		DiskSize: p.vmDiskSize,
-	}
-
-	if opts.ResourceClass != "" && p.resource != nil {
-		if v, ok := p.resource[opts.ResourceClass]; ok {
-			cpus, err = strconv.Atoi(v.Cpus)
-			if err != nil {
-				return nil, errors.New("could not convert VM cpus to integer")
-			}
-			memGB, err = strconv.Atoi(v.MemoryGB)
-			if err != nil {
-				return nil, errors.New("could  not convert VM memory to integer")
-			}
-			resource = v
-
-			if opts.ResourceClass == "large" || opts.ResourceClass == "xlarge" {
-				// use largebaremetal class if resource class is large or xlarge
-				class = p.nomadConfig.LargeBaremetalClass
-			}
-		}
-	}
-
-	if class == "" {
-		class = p.virtualizer.GetGlobalAccountID()
-	}
-
-	vmImageConfig := opts.VMImageConfig
-	if vmImageConfig.ImageName == "" {
-		vmImageConfig = types.VMImageConfig{
-			ImageName: p.vmImage,
-			Username:  p.username,
-			Password:  p.password,
-		}
-	}
+	vmImageConfig := p.getVMImageConfig(opts)
 
 	// Create a resource job which occupies resources until the VM is alive to avoid
 	// oversubscribing the node
 	var resourceJob *api.Job
-	var resourceJobID string
 	if p.noop {
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
 	} else {
@@ -221,7 +203,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer func() {
 			go p.getAllocationsForJob(logr, resourceJobID)
 		}()
-		return nil, fmt.Errorf("scheduler: could not register job, err: %w", err)
+		return "", "", fmt.Errorf("scheduler: could not register job, err: %w", err)
 	}
 	// If resources don't become available in `p.nomadConfig.ResourceJobTimeout`, we fail the step
 	job, err := p.pollForJob(ctx, resourceJobID, logr, p.nomadConfig.ResourceJobTimeout, true, []JobStatus{Running, Dead})
@@ -229,16 +211,102 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer func() {
 			go p.getAllocationsForJob(logr, resourceJobID)
 		}()
-		return nil, fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
+		return "", "", fmt.Errorf("scheduler: could not find a node with available resources, err: %w", err)
 	}
 
 	if job == nil || isTerminal(job) {
 		defer func() {
 			go p.getAllocationsForJob(logr, resourceJobID)
 		}()
-		return nil, fmt.Errorf("scheduler: resource job reached terminal state before starting")
+		return "", "", fmt.Errorf("scheduler: resource job reached terminal state before starting")
 	}
 	logr.Infoln("scheduler: found a node with available resources")
+
+	return vm, resourceJobID, nil
+}
+
+func (p *config) getVMImageConfig(opts *types.InstanceCreateOpts) types.VMImageConfig {
+	vmImageConfig := opts.VMImageConfig
+	if vmImageConfig.ImageName == "" {
+		vmImageConfig = types.VMImageConfig{
+			ImageName: p.vmImage,
+			Username:  p.username,
+			Password:  p.password,
+		}
+	}
+	return vmImageConfig
+}
+
+func (p *config) getNomadResourceAndClass(opts *types.InstanceCreateOpts) (resource cf.NomadResource, class string, cpus, memGB int, err error) {
+	class = ""
+	resource = cf.NomadResource{
+		MemoryGB: p.vmMemoryGB,
+		Cpus:     p.vmCpus,
+		DiskSize: p.vmDiskSize,
+	}
+	for k, v := range p.enablePinning {
+		if strings.Contains(v, opts.AccountID) {
+			class = k
+		}
+	}
+	cpus, err = strconv.Atoi(p.vmCpus)
+	if err != nil {
+		return resource, class, 0, 0, errors.New("could not convert VM cpus to integer")
+	}
+	memGB, err = strconv.Atoi(p.vmMemoryGB)
+	if err != nil {
+		return resource, class, 0, 0, errors.New("could  not convert VM memory to integer")
+	}
+
+	if opts.ResourceClass != "" && p.resource != nil {
+		if v, ok := p.resource[opts.ResourceClass]; ok {
+			cpus, err = strconv.Atoi(v.Cpus)
+			if err != nil {
+				return resource, class, 0, 0, errors.New("could not convert VM cpus to integer")
+			}
+			memGB, err = strconv.Atoi(v.MemoryGB)
+			if err != nil {
+				return resource, class, 0, 0, errors.New("could  not convert VM memory to integer")
+			}
+			resource = v
+
+			if opts.ResourceClass == "large" || opts.ResourceClass == "xlarge" {
+				// use largebaremetal class if resource class is large or xlarge
+				class = p.nomadConfig.LargeBaremetalClass
+			}
+		}
+	}
+	if class == "" {
+		class = p.virtualizer.GetGlobalAccountID()
+	}
+	return resource, class, cpus, memGB, nil
+}
+
+// Create creates a VM using port forwarding inside a bare metal machine assigned by nomad.
+// This function is idempotent - any errors in between will cleanup the created VMs.
+func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
+	var vm, resourceJobID string
+	var err error
+
+	// Use existing capacity reservation if provided, otherwise create a new resource job
+	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
+		vm = opts.CapacityReservation.ReservationID
+		resourceJobID = getResourceJobID(vm)
+	} else {
+		vm, resourceJobID, err = p.createAndRunResourceJob(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	resource, class, _, _, err := p.getNomadResourceAndClass(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
+
+	vmImageConfig := p.getVMImageConfig(opts)
 
 	// get the machine details where the resource job was allocated
 	ip, id, liteEngineHostPort, gitspacesPorts, err := p.fetchMachine(logr, resourceJobID)
@@ -348,7 +416,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	logr.Infoln("scheduler: Successfully submitted polled job")
 
 	// Check status of the resource job. If it reached a terminal state, destroy the VM and remove the resource job
-	job, _, err = p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
+	job, _, err := p.client.Jobs().Info(resourceJobID, &api.QueryOptions{})
 	if err != nil {
 		defer func() {
 			go p.getAllocationsForJob(logr, resourceJobID)
@@ -389,7 +457,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
 func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, vmImageConfig types.VMImageConfig, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) { //nolint
-	id = resourceJobID(vm)
+	id = getResourceJobID(vm)
 	portLabel := vm
 
 	sleepTime := p.nomadConfig.ResourceJobTimeout + p.virtualizer.GetInitJobTimeout(vmImageConfig) + 2*time.Minute // add 2 minutes for a buffer
@@ -513,8 +581,8 @@ func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string,
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
 func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier string, destroyGenerator func(string, string) string, storageCleanupType *storage.CleanupType) (job *api.Job, id string) { //nolint:lll
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("destroy_job_id", destroyJobID)
-	id = destroyJobID(vm)
+	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("destroy_job_id", getDestroyJobID)
+	id = getDestroyJobID(vm)
 	constraint := &api.Constraint{
 		LTarget: "${node.unique.id}",
 		RTarget: nodeID,
@@ -618,7 +686,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			job, jobID = p.destroyJob(ctx, instance.ID, instance.NodeID, instance.StorageIdentifier, p.virtualizer.GetDestroyScriptGenerator(), storageCleanupType)
 		}
 
-		resourceJobID := resourceJobID(instance.ID)
+		resourceJobID := getResourceJobID(instance.ID)
 		logr := logger.FromContext(ctx).
 			WithField("instance_id", instance.ID).
 			WithField("instance_node_id", instance.NodeID).
@@ -876,17 +944,17 @@ func (p *config) getCephStorageScriptCreateTask(cephStorageScriptEncoded, cephSt
 }
 
 // generate a job ID for a destroy job
-func destroyJobID(s string) string {
+func getDestroyJobID(s string) string {
 	return fmt.Sprintf("destroy_job_%s", s)
 }
 
 // geenrate a job ID for a init job
-func initJobID(s string) string {
+func getInitJobID(s string) string {
 	return fmt.Sprintf("init_job_%s", s)
 }
 
 // generate a job ID for a resource job
-func resourceJobID(s string) string {
+func getResourceJobID(s string) string {
 	return fmt.Sprintf("init_job_resources_%s", s)
 }
 

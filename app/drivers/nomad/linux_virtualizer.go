@@ -38,7 +38,7 @@ var funcs = map[string]interface{}{
 }
 
 func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout int64) (job *api.Job, id, group string, err error) { //nolint
-	id = initJobID(vm)
+	id = getInitJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	uData := lv.generateUserData(opts)
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
@@ -246,19 +246,21 @@ func (lv *LinuxVirtualizer) getCephStorageTask(
 
 func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) string {
 	params := &cloudinit.Params{
-		Platform:                opts.Platform,
-		CACert:                  string(opts.CACert),
-		LiteEngineLogsPath:      oshelp.GetLiteEngineLogsPath(opts.OS),
-		TLSCert:                 string(opts.TLSCert),
-		TLSKey:                  string(opts.TLSKey),
-		LiteEnginePath:          opts.LiteEnginePath,
-		HarnessTestBinaryURI:    opts.HarnessTestBinaryURI,
-		PluginBinaryURI:         opts.PluginBinaryURI,
-		Tmate:                   opts.Tmate,
-		AutoInjectionBinaryURI:  opts.AutoInjectionBinaryURI,
-		LiteEngineFallbackPath:  opts.LiteEngineFallbackPath,
-		PluginBinaryFallbackURI: opts.PluginBinaryFallbackURI,
-		DriverName:              opts.DriverName,
+		Platform:                     opts.Platform,
+		CACert:                       string(opts.CACert),
+		LiteEngineLogsPath:           oshelp.GetLiteEngineLogsPath(opts.OS),
+		TLSCert:                      string(opts.TLSCert),
+		TLSKey:                       string(opts.TLSKey),
+		LiteEnginePath:               opts.LiteEnginePath,
+		HarnessTestBinaryURI:         opts.HarnessTestBinaryURI,
+		PluginBinaryURI:              opts.PluginBinaryURI,
+		Tmate:                        opts.Tmate,
+		AutoInjectionBinaryURI:       opts.AutoInjectionBinaryURI,
+		LiteEngineFallbackPath:       opts.LiteEngineFallbackPath,
+		PluginBinaryFallbackURI:      opts.PluginBinaryFallbackURI,
+		AnnotationsBinaryURI:         opts.AnnotationsBinaryURI,
+		AnnotationsBinaryFallbackURI: opts.AnnotationsBinaryFallbackURI,
+		DriverName:                   opts.DriverName,
 	}
 	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
 		(opts.GitspaceOpts.VMInitScript != "") {
