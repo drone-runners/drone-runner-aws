@@ -1,5 +1,10 @@
 #cloud-config
-# Package installation
+# -----------------------------
+#   HARNESS HOSTED VM CLOUD-INIT
+#   Final Production Template
+#   Using hard-coded cert paths
+# -----------------------------
+
 {{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
 packages:
   - wget
@@ -13,8 +18,11 @@ packages:
   - wget
   - docker-ce=5:28.5.2-1~ubuntu.22.04~jammy
 {{ end }}
+
 {{ if .EnableC4D }}
-# Early boot commands to detect NVMe disk
+# ------------------------------------
+# NVMe SETUP (ENABLED)
+# ------------------------------------
 bootcmd:
   - mkdir -p /var/log
   - touch /var/log/nvme-setup.log
@@ -26,17 +34,14 @@ bootcmd:
     ROOT_SRC=$(findmnt -no SOURCE / || true)
     ROOT_BASE=""
     if [ -n "$ROOT_SRC" ]; then
-      # Try to get parent disk name; fallback to stripping partition suffix
       ROOT_BASE=$(lsblk -no pkname "$ROOT_SRC" 2>/dev/null || true)
       if [ -z "$ROOT_BASE" ]; then
         ROOT_BASE=$(basename "$ROOT_SRC" | sed 's/[0-9]*$//')
       fi
     fi
     echo "Root source: $ROOT_SRC, root base: $ROOT_BASE" >> /var/log/nvme-setup.log
-    # Pick the largest non-root NVMe disk
     NVME_DEV=$(lsblk -bdno NAME,TYPE,SIZE | awk -v rb="$ROOT_BASE" '$1 ~ /^nvme/ && $2=="disk" && $1 != rb {print $1, $3}' | sort -k2,2n | tail -1 | awk '{print $1}')
     if [ -z "$NVME_DEV" ]; then
-      # Fallback to first non-root NVMe if size-based selection fails
       NVME_DEV=$(lsblk -dno NAME | awk -v rb="$ROOT_BASE" '/^nvme/ && $1 != rb {print $1; exit}')
     fi
     if [ -n "$NVME_DEV" ]; then
@@ -45,240 +50,168 @@ bootcmd:
       ls -la /dev/$NVME_DEV >> /var/log/nvme-setup.log 2>&1
     else
       echo "No suitable NVME disk found (excluding root)" >> /var/log/nvme-setup.log
-      echo "Available disks:" >> /var/log/nvme-setup.log
       lsblk >> /var/log/nvme-setup.log 2>&1
     fi
 {{ else }}
-# NVME setup is disabled
+# ------------------------------------
+# NVME DISABLED (HOSTED VMS)
+# ------------------------------------
 bootcmd:
   - mkdir -p /var/log
   - touch /var/log/nvme-setup.log
   - echo "NVME setup is disabled. Skipping NVME disk detection." >> /var/log/nvme-setup.log
 {{ end }}
-# Certificate files
+
+# ------------------------------------
+# CERTIFICATES (HARD CODED PATH)
+# ------------------------------------
 write_files:
-- path: {{ .CaCertPath }}
+- path: /etc/harness/certs/ca-cert.pem
   permissions: '0600'
   encoding: b64
   content: {{ .CACert | base64 }}
-- path: {{ .CertPath }}
+
+- path: /etc/harness/certs/server-cert.pem
   permissions: '0600'
   encoding: b64
   content: {{ .TLSCert | base64 }}
-- path: {{ .KeyPath }}
+
+- path: /etc/harness/certs/server-key.pem
   permissions: '0600'
   encoding: b64
   content: {{ .TLSKey | base64 }}
-# Main runtime commands
-runcmd:
-  # Enable command tracing
-  - set -x
-  
-  # Configure DNS if needed
-  {{ if .ShouldUseGoogleDNS }}
-  - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
-  - systemctl restart systemd-resolved
-  {{ end }}
-  
-  # Open healthcheck port
-  - ufw allow 9079
-  
-  {{ if .EnableC4D }}
-  # NVMe disk setup
-  - |
-    cat > /tmp/nvme-setup.sh <<'EOS'
-    #!/usr/bin/env bash
+
+# ------------------------------------
+# SYSTEMD UNIT WITH FIXED CERT COPY
+# ------------------------------------
+- path: /etc/systemd/system/lite-engine.service
+  permissions: '0644'
+  content: |
+    [Unit]
+    Description=Harness Lite Engine
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    EnvironmentFile=-/root/.env
+    ExecStartPre=/bin/mkdir -p /tmp/certs
+    ExecStartPre=/bin/bash -c 'cp -f /etc/harness/certs/* /tmp/certs/'
+    ExecStart=/usr/bin/lite-engine server --env-file /root/.env
+    Restart=always
+    RestartSec=1
+    User=root
+
+    [Install]
+    WantedBy=multi-user.target
+
+# ------------------------------------
+# HARNESS BINARY BOOTSTRAP (ONE-SHOT)
+# ------------------------------------
+- path: /usr/local/bin/harness-bootstrap.sh
+  permissions: '0755'
+  content: |
+    #!/bin/bash
     set -euo pipefail
 
-    LOGFILE="/var/log/nvme-setup.log"
-    MOUNT_POINT="/mnt/ephemeral"
+    log() { echo "[bootstrap] $(date -u +%Y-%m-%dT%H:%M:%SZ) - $*" >&2; }
 
-    mkdir -p /var/log
-    touch "$LOGFILE"
-    # Do not overwrite if already set by bootcmd
-    [ -f /var/log/cloud-init-start.ts ] || date -u +%s > /var/log/cloud-init-start.ts
-
-    log() {
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] $@" | tee -a "$LOGFILE"
+    install_lite_engine() {
+      if [ -x /usr/bin/lite-engine ]; then return; fi
+      PRIMARY="{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}"
+      FALLBACK="{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}"
+      log "Installing lite-engine"
+      if ! wget -q "$PRIMARY" -O /usr/bin/lite-engine; then wget -q "$FALLBACK" -O /usr/bin/lite-engine; fi
+      chmod 755 /usr/bin/lite-engine
     }
 
-    step_start() {
-      STEP_NAME="$1"
-      STEP_START=$(date +%s)
-      log ">>> Starting: $STEP_NAME"
+    install_split_tests() {
+      {{ if .HarnessTestBinaryURI }}
+      wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests
+      chmod 755 /usr/bin/split_tests
+      {{ end }}
     }
 
-    step_end() {
-      STEP_END=$(date +%s)
-      DURATION=$((STEP_END - STEP_START))
-      log "<<< Finished: $STEP_NAME (Duration: ${DURATION}s)"
+    install_plugin() {
+      {{ if .PluginBinaryURI }}
+      PRIMARY="{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}"
+      FALLBACK="{{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}"
+      if ! wget -q "$PRIMARY" -O /usr/bin/plugin; then wget -q "$FALLBACK" -O /usr/bin/plugin; fi
+      chmod 755 /usr/bin/plugin
+      {{ end }}
     }
 
-    ### Step 1: Detect NVMe disk
-    step_start "Disk detection"
-    ROOT_SRC=$(findmnt -no SOURCE / || true)
-    ROOT_BASE=""
-    if [ -n "$ROOT_SRC" ]; then
-      ROOT_BASE=$(lsblk -no pkname "$ROOT_SRC" 2>/dev/null || true)
-      if [ -z "$ROOT_BASE" ]; then
-        ROOT_BASE=$(basename "$ROOT_SRC" | sed 's/[0-9]*$//')
+    install_auto_injection() {
+      {{ if .AutoInjectionBinaryURI }}
+      URL="{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection"
+      mkdir -p /tmp/harness/bin
+      wget -q "$URL" -O /usr/bin/auto-injection || wget -q "$URL" -O /usr/bin/auto-injection
+      chmod 755 /usr/bin/auto-injection
+      cp /usr/bin/auto-injection /tmp/harness/bin/auto-injection
+      {{ end }}
+    }
+
+    install_envman() {
+      {{ if eq .Platform.Arch "amd64" }}
+      if ! curl -fsSL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 -o /usr/bin/envman; then
+        curl -fsSL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 -o /usr/bin/envman
       fi
-    fi
-    log "Root source: $ROOT_SRC, root base: $ROOT_BASE"
-
-    NVME_DEV=$(lsblk -bdno NAME,TYPE,SIZE | awk -v rb="$ROOT_BASE" '$1 ~ /^nvme/ && $2=="disk" && $1 != rb {print $1, $3}' | sort -k2,2n | tail -1 | awk '{print $1}')
-    if [ -z "$NVME_DEV" ]; then
-      NVME_DEV=$(lsblk -dno NAME | awk -v rb="$ROOT_BASE" '/^nvme/ && $1 != rb {print $1; exit}')
-    fi
-
-    if [ -n "${NVME_DEV:-}" ]; then
-      DEV_PATH="/dev/$NVME_DEV"
-      echo "$DEV_PATH" > /etc/nvme_device_path
-      log "Selected NVMe disk: $DEV_PATH"
-    else
-      log "No suitable NVME disk found (excluding root)"
-      exit 1
-    fi
-    step_end "Disk detection"
-
-    ### Step 2: Format disk (always fresh)
-    step_start "Formatting disk"
-    mkfs.ext4 -F "$DEV_PATH" | tee -a "$LOGFILE"
-    step_end "Formatting disk"
-
-    ### Step 3: Mount disk
-    step_start "Mounting disk"
-    mkdir -p "$MOUNT_POINT"
-    mount "$DEV_PATH" "$MOUNT_POINT"
-
-    # Get UUID for fstab
-    UUID=$(blkid -s UUID -o value "$DEV_PATH")
-    if ! grep -q "$UUID" /etc/fstab; then
-      echo "UUID=$UUID  $MOUNT_POINT  ext4  defaults,nofail  0 2" >> /etc/fstab
-      log "Added $MOUNT_POINT mount to /etc/fstab (UUID=$UUID)"
-    fi
-    step_end "Mounting disk"
-
-    ### Step 4: Bind mounts for critical directories
-    for dir in /tmp /harness; do
-      step_start "Bind-mounting $dir"
-
-      target="$MOUNT_POINT/$(basename "$dir")"
-      [ ! -d "$dir" ] && { log "Creating $dir"; mkdir -p "$dir"; chmod 755 "$dir"; }
-      mkdir -p "$target"
-
-      if [ "$(ls -A "$dir" 2>/dev/null)" ]; then
-        log "Copying content from $dir to $target..."
-        cp -a "$dir/"* "$target/" 2>/dev/null || log "Warning: Some files could not be copied"
-      else
-        log "$dir is empty, nothing to copy"
-      fi
-
-      umount "$dir" 2>/dev/null || true
-      mount --bind "$target" "$dir" || log "Failed to bind mount $dir"
-
-      # Ensure persistence
-      if ! grep -qE "[[:space:]]$dir[[:space:]]" /etc/fstab; then
-        echo "$target  $dir  none  bind  0 0" >> /etc/fstab
-        log "Added bind mount for $dir -> $target in /etc/fstab"
-      fi
-
-      step_end "Bind-mounting $dir"
-    done
-
-    ### Step 5: Verify mounts
-    step_start "Verifying mounts"
-    mount | grep -E "$UUID|$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a "$LOGFILE" || true
-    df -h | grep -E "$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a "$LOGFILE" || true
-    step_end "Verifying mounts"
-
-    log "Setup complete. All mounts will persist across reboot."
-    EOS
-    chmod +x /tmp/nvme-setup.sh
-    /tmp/nvme-setup.sh
-  {{ else }}
-  # NVME setup is disabled
-  - |
-    # Define logging function
-    log_echo() {
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] $@" | tee -a /var/log/nvme-setup.log
+      chmod 755 /usr/bin/envman
+      {{ end }}
     }
-    log_echo "NVME setup is disabled in configuration. Skipping NVME disk setup."
-  {{ end }}
-  
-  # Download and install lite-engine
-  - |
-    (/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from primary URL.") || \
-    (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from fallback URL.")
-  - chmod 777 /usr/bin/lite-engine
-  
-  # Download and install split_tests if needed
-  {{ if .HarnessTestBinaryURI }}
-  - wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests
-  - chmod 777 /usr/bin/split_tests
-  {{ end }}
-  
-  # Download and install plugin if needed
-  {{ if .PluginBinaryURI }}
-  - |
-    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from primary URL.") || \
-    (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from fallback URL.")
-  - chmod 777 /usr/bin/plugin
-  {{ end }}
-  
-  # Download and install auto-injection if needed
-  {{ if .AutoInjectionBinaryURI }}
-  - |
-    mkdir -p /tmp/harness/bin
-    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || \
-    wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection
-  - chmod 777 /usr/bin/auto-injection
-  - |
-    cp /usr/bin/auto-injection /tmp/harness/bin/auto-injection
-  - chmod 777 /tmp/harness/bin/auto-injection
-  {{ end }}
-  
-  # Download and install envman for amd64 architecture
-  {{ if eq .Platform.Arch "amd64" }}
-  - |
-    (curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || \
-    (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
-  - chmod 777 /usr/bin/envman
-  {{ end }}
 
-  # Download and install annotations CLI if configured
-  {{ if .AnnotationsBinaryURI }}
-  - |
-    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli && echo "Successfully downloaded annotations CLI from primary URL.") {{ if .AnnotationsBinaryFallbackURI }} || \
-    (echo "Primary URL failed for annotations CLI. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli && echo "Successfully downloaded annotations CLI from fallback URL."){{ end }}
-  - chmod 755 /usr/bin/hcli
-  {{ end }}
-  
-  # Setup environment and start lite-engine
-  - touch /root/.env
-  - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
-  - echo "CLOUD_DRIVER={{ .DriverName }}" >> /root/.env
-  - /usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &
-  
-  # Setup tmate if enabled
-  {{ if .Tmate.Enabled }}
-  - mkdir /addon
-  {{ if eq .Platform.Arch "amd64" }}
-  - |
-    (wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
-    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
-  - tar -xf /addon/tmate.xz -C /addon/
-  - chmod 777 /addon/tmate-1.0-static-linux-amd64/tmate
-  - mv /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
-  - rm -rf /addon/tmate-1.0-static-linux-amd64/
-  {{ else if eq .Platform.Arch "arm64" }}
-  - |
-    (wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
-    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
-  - tar -xf /addon/tmate.xz -C /addon/
-  - chmod 777 /addon/tmate-1.0-static-linux-arm64v8/tmate
-  - mv /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
-  - rm -rf /addon/tmate-1.0-static-linux-arm64v8/
-  {{ end }}
-  - rm -rf /addon/tmate.xz
-  {{ end }}
+    install_hcli() {
+      {{ if .AnnotationsBinaryURI }}
+      PRIMARY="{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}"
+      FALLBACK="{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}"
+      wget -q "$PRIMARY" -O /usr/bin/hcli || wget -q "$FALLBACK" -O /usr/bin/hcli
+      chmod 755 /usr/bin/hcli
+      {{ end }}
+    }
+
+    install_tmate() {
+      {{ if .Tmate.Enabled }}
+      mkdir -p /addon
+      {{ if eq .Platform.Arch "amd64" }}
+      PRIMARY="https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz"
+      FALLBACK="https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz"
+      wget -nv "$PRIMARY" -O /addon/tmate.xz || wget -nv "$FALLBACK" -O /addon/tmate.xz
+      tar -xf /addon/tmate.xz -C /addon/
+      chmod 755 /addon/tmate-1.0-static-linux-amd64/tmate
+      mv /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
+      rm -rf /addon/tmate-1.0-static-linux-amd64
+      rm -f /addon/tmate.xz
+      {{ end }}
+      {{ end }}
+    }
+
+    setup_env() {
+      touch /root/.env
+      grep -q CLOUD_DRIVER= /root/.env || echo "CLOUD_DRIVER={{ .DriverName }}" >> /root/.env
+    }
+
+    main() {
+      log "Bootstrap starting"
+      install_lite_engine
+      install_split_tests
+      install_plugin
+      install_auto_injection
+      install_envman
+      install_hcli
+      install_tmate
+      setup_env
+
+      systemctl daemon-reload
+      systemctl enable --now lite-engine.service
+
+      echo "READY" > /var/log/cloud-init-complete
+      log "Bootstrap complete"
+    }
+
+    main
+
+# ------------------------------------
+# RUN BOOTSTRAP ON FIRST BOOT
+# ------------------------------------
+runcmd:
+  - set -x
+  - [ cloud-init-per, once, harness-bootstrap, /usr/local/bin/harness-bootstrap.sh ]
