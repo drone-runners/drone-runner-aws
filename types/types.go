@@ -195,7 +195,7 @@ type CapacityReservation struct {
 	InstanceID       string                   `db:"instance_id" json:"instance_id"`
 	ReservationID    string                   `db:"reservation_id" json:"reservation_id"`
 	CreatedAt        int64                    `db:"created_at" json:"created_at"`
-	ReservationState CapacityReservationState `db:"reservationstate" json:"reservationstate"`
+	ReservationState CapacityReservationState `db:"reservation_state" json:"reservation_state"`
 }
 
 type GitspaceOpts struct {
