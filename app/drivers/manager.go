@@ -549,39 +549,46 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 }
 
 func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.CapacityReservation) error {
-	if reservedCapacity == nil {
-		logrus.Warnf("provision: capacity reservation not found")
-		return fmt.Errorf("provision: capacity reservation not found")
+	if reservedCapacity == nil || reservedCapacity.PoolName == "" {
+		return nil
 	}
+
 	pool, err := m.validatePool(reservedCapacity.PoolName)
 	if err != nil {
 		logrus.Warnf("provision: pool name %q not found", reservedCapacity.PoolName)
 		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
 	}
+
+	logr := logger.FromContext(ctx).
+		WithField("pool", reservedCapacity.PoolName).
+		WithField("runtimeId", reservedCapacity.StageID)
+
+	// Destroy associated instance if exists
 	if reservedCapacity.InstanceID != "" {
-		err = m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil)
-		if err != nil {
+		if err := m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil); err != nil {
 			logrus.Warnf("failed to destroy instance %s from store with err: %s", reservedCapacity.InstanceID, err)
 		}
 	}
-	if reservedCapacity.ReservationID == "" {
-		// no capacity to destroy
-		return nil
-	}
-	if err = pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
-		logger.FromContext(ctx).
-			WithField("pool", reservedCapacity.PoolName).
-			Warnln("provision: failed to destroy reserved capacity")
-		return err
-	}
-	if m.capacityReservationStore != nil {
-		if err = m.capacityReservationStore.Delete(ctx, reservedCapacity.StageID); err != nil {
-			logger.FromContext(ctx).
-				WithField("pool", reservedCapacity.PoolName).
-				Warnln("provision: failed to delete capacity reservation entity")
+
+	if reservedCapacity.ReservationID != "" {
+		// Destroy the actual capacity reservation
+		if err := pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
+			logr.Warnln("provision: failed to destroy reserved capacity")
+			return err
 		}
 	}
-	return err
+	// Delete the capacity reservation record
+	m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, logr)
+	return nil
+}
+
+func (m *Manager) deleteCapacityReservationRecord(ctx context.Context, stageID string, logr logger.Logger) {
+	if m.capacityReservationStore == nil {
+		return
+	}
+	if err := m.capacityReservationStore.Delete(ctx, stageID); err != nil {
+		logr.Warnln("failed to delete capacity reservation entity")
+	}
 }
 
 func (m *Manager) BuildPools(ctx context.Context) error {
@@ -1186,6 +1193,26 @@ func (m *Manager) GetTLSServerName() string {
 
 func (m *Manager) GetRunnerConfig() types.RunnerConfig {
 	return m.runnerConfig
+}
+
+// GetHealthCheckTimeout returns the appropriate health check timeout based on the OS and provider
+func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType) time.Duration {
+	// Override for Windows
+	if os == "windows" {
+		return m.runnerConfig.HealthCheckWindowsTimeout
+	}
+
+	// Use hotpool timeout for Nomad
+	if provider == types.Nomad {
+		return m.runnerConfig.HealthCheckHotpoolTimeout
+	}
+
+	return m.runnerConfig.HealthCheckColdstartTimeout
+}
+
+// GetSetupTimeout returns the setup timeout
+func (m *Manager) GetSetupTimeout() time.Duration {
+	return m.runnerConfig.SetupTimeout
 }
 
 func (m *Manager) IsDistributed() bool {

@@ -159,17 +159,31 @@ func HandleSetup(
 		WithField("os", platform.OS).
 		WithField("arch", platform.Arch)
 
-	logRequestedMachine(logr, poolManager, r.PoolID, &platform, r.ResourceClass, r.VMImageConfig.ImageVersion)
+	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), &platform, r.ResourceClass, r.VMImageConfig.ImageVersion)
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
 
 	var capacity *types.CapacityReservation
-	var capFindErr error
 	if crs != nil {
+		var capFindErr error
 		capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
+
+		// Early exit if capacity not found or invalid
 		if capFindErr != nil {
 			internalLogr.WithError(capFindErr).Error("could not find capacity reservation")
+			capacity = nil
+		} else if capacity == nil || capacity.PoolName == "" {
+			capacity = nil
+		} else if capacity.ReservationState != types.CapacityReservationStateCreated {
+			internalLogr.WithField("current_state", capacity.ReservationState).Warn("capacity reservation is not in available state")
+			capacity = nil
+		} else {
+			// Mark capacity as in use
+			if err := crs.UpdateState(ctx, capacity.StageID, types.CapacityReservationStateInUse); err != nil {
+				internalLogr.WithError(err).Error("could not update capacity reservation state to in_use")
+				capacity = nil
+			}
 		}
 	}
 
@@ -538,13 +552,9 @@ func handleSetup(
 	// try the healthcheck api on the lite-engine until it responds ok
 	ilog.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
-	runnerConfig := poolManager.GetRunnerConfig()
 
-	// override the health check timeouts
-	healthCheckTimeout := time.Duration(runnerConfig.HealthCheckTimeout) * time.Minute
-	if instance.Platform.OS == "windows" {
-		healthCheckTimeout = time.Duration(runnerConfig.HealthCheckWindowsTimeout) * time.Minute
-	}
+	// Get the health check timeout based on the instance OS and provider
+	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider)
 
 	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
 		printError(buildLog, "Machine health check failed")
@@ -561,8 +571,7 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
-	setupTimeout := time.Duration(runnerConfig.SetupTimeout) * time.Second
-	_, err = client.RetrySetup(ctx, &r.SetupRequest, setupTimeout)
+	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
 	if err != nil {
 		printError(buildLog, "Machine setup failed")
 		go cleanUpInstanceFn(true)

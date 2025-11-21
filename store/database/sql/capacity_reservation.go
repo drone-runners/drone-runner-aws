@@ -59,6 +59,18 @@ func (s CapacityReservationStore) Purge(ctx context.Context) error {
 	panic("implement me")
 }
 
+func (s CapacityReservationStore) UpdateState(ctx context.Context, stageID string, state types.CapacityReservationState) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint
+	if _, err := tx.Exec(capacityReservationUpdateState, state, stageID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 const capacityReservationBase = `
 SELECT
  stage_id
@@ -66,6 +78,7 @@ SELECT
 ,instance_id
 ,reservation_id
 ,created_at
+,reservation_state
 FROM capacity_reservation
 `
 const capacityReservationInsert = `
@@ -75,12 +88,14 @@ INSERT INTO capacity_reservation (
 ,instance_id
 ,reservation_id
 ,created_at
+,reservation_state
 ) values (
  :stage_id
 ,:pool_name
 ,:instance_id
 ,:reservation_id
 ,:created_at
+,:reservation_state
 ) RETURNING stage_id
 `
 
@@ -94,4 +109,10 @@ WHERE stage_id = $1
 `
 const capacityReservationFindByPoolName = capacityReservationBase + `
 WHERE pool_name = $1
+`
+
+const capacityReservationUpdateState = `
+UPDATE capacity_reservation
+SET reservation_state = $1
+WHERE stage_id = $2
 `
