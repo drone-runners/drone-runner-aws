@@ -180,6 +180,18 @@ write_files:
       mv /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
       rm -rf /addon/tmate-1.0-static-linux-amd64
       rm -f /addon/tmate.xz
+
+      {{ else if eq .Platform.Arch "arm64" }}
+
+      PRIMARY="https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz"
+      FALLBACK="https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz"
+
+      wget -nv "$PRIMARY" -O /addon/tmate.xz || wget -nv "$FALLBACK" -O /addon/tmate.xz
+      tar -xf /addon/tmate.xz -C /addon/
+      chmod 755 /addon/tmate-1.0-static-linux-arm64v8/tmate
+      mv /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate
+      rm -rf /addon/tmate-1.0-static-linux-arm64v8
+      rm -f /addon/tmate.xz
       {{ end }}
       {{ end }}
     }
