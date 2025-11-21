@@ -288,8 +288,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	var vm, resourceJobID string
 	var err error
 
+	logr := logger.FromContext(ctx)
+
 	// Use existing capacity reservation if provided, otherwise create a new resource job
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
+		logr.WithField("reservation", opts.CapacityReservation.ReservationID).Debugln("nomad: using capacity reservation")
 		vm = opts.CapacityReservation.ReservationID
 		resourceJobID = getResourceJobID(vm)
 	} else {
@@ -304,7 +307,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, err
 	}
 
-	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
+	logr = logr.WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
 
 	vmImageConfig := p.getVMImageConfig(opts)
 
