@@ -175,7 +175,7 @@ func HandleSetup(
 			capacity = nil
 		} else if capacity == nil || capacity.PoolName == "" {
 			capacity = nil
-		} else if capacity.ReservationState != types.CapacityReservationStateAvailable {
+		} else if capacity.ReservationState != types.CapacityReservationStateCreated {
 			internalLogr.WithField("current_state", capacity.ReservationState).Warn("capacity reservation is not in available state")
 			capacity = nil
 		} else {

@@ -51,8 +51,8 @@ const (
 
 // CapacityReservationState type enumeration.
 const (
-	CapacityReservationStateAvailable = CapacityReservationState("available")
-	CapacityReservationStateInUse     = CapacityReservationState("in_use")
+	CapacityReservationStateCreated = CapacityReservationState("created")
+	CapacityReservationStateInUse   = CapacityReservationState("inuse")
 )
 
 type Instance struct {
