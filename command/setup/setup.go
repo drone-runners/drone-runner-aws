@@ -197,7 +197,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 
 	// try the healthcheck api on the lite-engine until it responds ok
 	logrus.Traceln("setup: running healthcheck and waiting for an ok response")
-	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS)
+	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS, false)
 
 	healthResponse, healthErr := leClient.RetryHealth(ctx, healthCheckWait, performDNSLookup)
 	if healthErr != nil {
