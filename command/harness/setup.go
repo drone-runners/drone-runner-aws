@@ -165,11 +165,25 @@ func HandleSetup(
 	setupTime := time.Duration(0)
 
 	var capacity *types.CapacityReservation
-	var capFindErr error
 	if crs != nil {
+		var capFindErr error
 		capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
+
+		// Early exit if capacity not found or invalid
 		if capFindErr != nil {
 			internalLogr.WithError(capFindErr).Error("could not find capacity reservation")
+			capacity = nil
+		} else if capacity == nil || capacity.PoolName == "" {
+			capacity = nil
+		} else if capacity.ReservationState != types.CapacityReservationStateCreated {
+			internalLogr.WithField("current_state", capacity.ReservationState).Warn("capacity reservation is not in available state")
+			capacity = nil
+		} else {
+			// Mark capacity as in use
+			if err := crs.UpdateState(ctx, capacity.StageID, types.CapacityReservationStateInUse); err != nil {
+				internalLogr.WithError(err).Error("could not update capacity reservation state to in_use")
+				capacity = nil
+			}
 		}
 	}
 

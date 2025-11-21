@@ -110,6 +110,7 @@ func HandleCapacityReservation(
 		_, findErr := crs.Find(noContext, stageRuntimeID)
 		if findErr != nil {
 			capacity.StageID = stageRuntimeID
+			capacity.ReservationState = types.CapacityReservationStateCreated
 			if cerr := crs.Create(noContext, capacity); cerr != nil {
 				if derr := poolManager.DestroyCapacity(noContext, capacity); derr != nil {
 					internalLogr.WithError(derr).Errorln("failed to cleanup capacity reservation on failure")
