@@ -12,6 +12,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
+	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -140,41 +141,6 @@ func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
 
-// getInstancePlatformFromAMI queries AWS to get the platform type for an AMI
-func (p *config) getInstancePlatformFromAMI(ctx context.Context, amiID string) (string, error) {
-	client := p.service
-
-	input := &ec2.DescribeImagesInput{
-		ImageIds: []*string{aws.String(amiID)},
-	}
-
-	result, err := client.DescribeImagesWithContext(ctx, input)
-	if err != nil {
-		return "", fmt.Errorf("failed to describe AMI %s: %w", amiID, err)
-	}
-
-	if len(result.Images) == 0 {
-		return "", fmt.Errorf("AMI %s not found", amiID)
-	}
-
-	image := result.Images[0]
-
-	// AWS AMI PlatformDetails field contains the exact value needed for InstancePlatform
-	// Examples: "Linux/UNIX", "Red Hat Enterprise Linux", "SUSE Linux", "Windows", "Ubuntu Pro"
-	// See: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateCapacityReservation.html
-	if image.PlatformDetails != nil {
-		return *image.PlatformDetails, nil
-	}
-
-	// Fallback: If PlatformDetails is not available, check the older Platform field
-	if image.Platform != nil && *image.Platform == "windows" {
-		return "Windows", nil
-	}
-
-	// Final fallback to Linux/UNIX (should rarely happen with modern AMIs)
-	return "Linux/UNIX", nil
-}
-
 // Ping checks that we can log into EC2, and the regions respond
 func (p *config) Ping(ctx context.Context) error {
 	client := p.service
@@ -271,21 +237,26 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	logr.Debugln("amazon: creating capacity reservation")
 
-	// Resolve the AMI to get accurate platform information
-	resolvedAMI, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve AMI: %w", err)
+	// Determine instance platform based on OS
+	// Note: The most accurate method would be to query the AMI's PlatformDetails field via DescribeImages API,
+	// which provides exact platform strings like "Red Hat Enterprise Linux", "SUSE Linux", "Ubuntu Pro", etc.
+	// However, we use opts.Platform.OS directly to avoid an extra API call. This works for Linux/UNIX and Windows.
+	// If we start supporting other platforms like Red Hat Enterprise Linux or SUSE Linux, we should query the AMI.
+	// See supported platforms: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-capacity-reservations.html
+	var instancePlatform string
+	switch opts.Platform.OS {
+	case oshelp.OSWindows:
+		instancePlatform = "Windows"
+	case oshelp.OSLinux:
+		instancePlatform = "Linux/UNIX"
+	case oshelp.OSMac:
+		logr.Errorln("amazon: capacity reservations are not supported for macOS instances")
+		return nil, fmt.Errorf("capacity reservations are not supported for macOS instances on AWS")
+	default:
+		instancePlatform = "Linux/UNIX"
 	}
 
-	logr = logr.WithField("ami", resolvedAMI)
-
-	// Get the instance platform from the AMI metadata
-	instancePlatform, err := p.getInstancePlatformFromAMI(ctx, resolvedAMI)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get instance platform: %w", err)
-	}
-
-	logr.WithField("platform", instancePlatform).Debugln("amazon: resolved instance platform from AMI")
+	logr.WithField("platform", instancePlatform).Debugln("amazon: using platform for capacity reservation")
 
 	// Create the capacity reservation
 	input := &ec2.CreateCapacityReservationInput{
@@ -322,7 +293,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	return &types.CapacityReservation{
 		StageID:       "", // Will be set by the caller
 		PoolName:      opts.PoolName,
-		InstanceID:    "", // Will be set when instance is created
+		InstanceID:    "",
 		ReservationID: reservationID,
 		CreatedAt:     time.Now().Unix(),
 	}, nil
