@@ -258,18 +258,15 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
 	client := p.service
 
-	instanceType := p.size
-	availabilityZone := p.availabilityZone
-
-	// Use zone from opts if provided
-	if opts.Zone != "" {
-		availabilityZone = opts.Zone
+	// Configure dynamic fields (zone, machine type, etc.)
+	if err := p.configureDynamicFields(opts); err != nil {
+		return nil, fmt.Errorf("failed to configure dynamic fields: %w", err)
 	}
 
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
-		WithField("instance_type", instanceType).
-		WithField("availability_zone", availabilityZone).
+		WithField("instance_type", p.size).
+		WithField("availability_zone", p.availabilityZone).
 		WithField("pool", opts.PoolName)
 
 	logr.Debugln("amazon: creating capacity reservation")
@@ -292,9 +289,9 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	// Create the capacity reservation
 	input := &ec2.CreateCapacityReservationInput{
-		InstanceType:          aws.String(instanceType),
+		InstanceType:          aws.String(p.size),
 		InstancePlatform:      aws.String(instancePlatform),
-		AvailabilityZone:      aws.String(availabilityZone),
+		AvailabilityZone:      aws.String(p.availabilityZone),
 		InstanceCount:         aws.Int64(1),
 		EndDateType:           aws.String("unlimited"), // No end date
 		InstanceMatchCriteria: aws.String("targeted"),  // Instances must explicitly target this reservation
