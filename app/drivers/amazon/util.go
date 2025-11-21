@@ -6,6 +6,7 @@ package amazon
 
 import (
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -22,6 +23,18 @@ func convertTags(in map[string]string) []*ec2.Tag {
 		})
 	}
 	return out
+}
+
+// buildHarnessTags creates common harness tags from InstanceCreateOpts
+func buildHarnessTags(opts *types.InstanceCreateOpts) map[string]string {
+	return map[string]string{
+		"harness-account-id":     opts.AccountID,
+		"harness-pool-name":      opts.PoolName,
+		"harness-runner-name":    opts.RunnerName,
+		"harness-resource-class": opts.ResourceClass,
+		"harness-platform-os":    opts.Platform.OS,
+		"harness-platform-arch":  opts.Platform.Arch,
+	}
 }
 
 // helper function returns the base temporary directory based on the target platform.

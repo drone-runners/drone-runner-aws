@@ -301,16 +301,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String("capacity-reservation"),
-				Tags: []*ec2.Tag{
-					{
-						Key:   aws.String("harness-pool-name"),
-						Value: aws.String(opts.PoolName),
-					},
-					{
-						Key:   aws.String("harness-runner-name"),
-						Value: aws.String(opts.RunnerName),
-					},
-				},
+				Tags:         convertTags(buildHarnessTags(opts)),
 			},
 		},
 	}
@@ -403,15 +394,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("hibernate", p.CanHibernate())
 
 	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
-	var tags = map[string]string{
-		"Name":                   name,
-		"harness-account-id":     opts.AccountID,
-		"harness-pool-name":      opts.PoolName,
-		"harness-runner-name":    opts.RunnerName,
-		"harness-resource-class": opts.ResourceClass,
-		"harness-platform-os":    opts.Platform.OS,
-		"harness-platform-arch":  opts.Platform.Arch,
-	}
+
+	// Start with common harness tags
+	tags := buildHarnessTags(opts)
+	// Add instance-specific Name tag
+	tags["Name"] = name
 
 	var volumeTags = map[string]string{}
 	// add user defined tags
