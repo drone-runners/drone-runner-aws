@@ -12,7 +12,6 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
-	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -73,8 +72,9 @@ type config struct {
 }
 
 const (
-	tagRetries      = 3
-	tagRetrySleepMs = 1000
+	tagRetries               = 3
+	tagRetrySleepMs          = 1000
+	defaultSecurityGroupName = "harness-runner"
 )
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -140,9 +140,40 @@ func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
 
-const (
-	defaultSecurityGroupName = "harness-runner"
-)
+// getInstancePlatformFromAMI queries AWS to get the platform type for an AMI
+func (p *config) getInstancePlatformFromAMI(ctx context.Context, amiID string) (string, error) {
+	client := p.service
+
+	input := &ec2.DescribeImagesInput{
+		ImageIds: []*string{aws.String(amiID)},
+	}
+
+	result, err := client.DescribeImagesWithContext(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to describe AMI %s: %w", amiID, err)
+	}
+
+	if len(result.Images) == 0 {
+		return "", fmt.Errorf("AMI %s not found", amiID)
+	}
+
+	image := result.Images[0]
+
+	// AWS AMI PlatformDetails field contains the exact value needed for InstancePlatform
+	// Examples: "Linux/UNIX", "Red Hat Enterprise Linux", "SUSE Linux", "Windows", "Ubuntu Pro"
+	// See: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateCapacityReservation.html
+	if image.PlatformDetails != nil {
+		return *image.PlatformDetails, nil
+	}
+
+	// Fallback: If PlatformDetails is not available, check the older Platform field
+	if image.Platform != nil && *image.Platform == "windows" {
+		return "Windows", nil
+	}
+
+	// Final fallback to Linux/UNIX (should rarely happen with modern AMIs)
+	return "Linux/UNIX", nil
+}
 
 // Ping checks that we can log into EC2, and the regions respond
 func (p *config) Ping(ctx context.Context) error {
@@ -243,29 +274,30 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	logr.Debugln("amazon: creating capacity reservation")
 
-	// Determine the instance platform based on OS
-	var instancePlatform string
-	switch opts.Platform.OS {
-	case oshelp.OSWindows:
-		instancePlatform = "Windows"
-	case oshelp.OSLinux:
-		instancePlatform = "Linux/UNIX"
-	case oshelp.OSMac:
-		// AWS EC2 Mac instances use dedicated hosts and don't support capacity reservations
-		logr.Errorln("amazon: capacity reservations are not supported for macOS instances")
-		return nil, fmt.Errorf("capacity reservations are not supported for macOS instances on AWS")
-	default:
-		instancePlatform = "Linux/UNIX"
+	// Resolve the AMI to get accurate platform information
+	resolvedAMI, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve AMI: %w", err)
 	}
+
+	logr = logr.WithField("ami", resolvedAMI)
+
+	// Get the instance platform from the AMI metadata
+	instancePlatform, err := p.getInstancePlatformFromAMI(ctx, resolvedAMI)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance platform: %w", err)
+	}
+
+	logr.WithField("platform", instancePlatform).Debugln("amazon: resolved instance platform from AMI")
 
 	// Create the capacity reservation
 	input := &ec2.CreateCapacityReservationInput{
-		InstanceType:     aws.String(instanceType),
-		InstancePlatform: aws.String(instancePlatform),
-		AvailabilityZone: aws.String(availabilityZone),
-		InstanceCount:    aws.Int64(1),
-		EndDateType:      aws.String("unlimited"), // No end date
-		InstanceMatchCriteria: aws.String("targeted"), // Instances must explicitly target this reservation
+		InstanceType:          aws.String(instanceType),
+		InstancePlatform:      aws.String(instancePlatform),
+		AvailabilityZone:      aws.String(availabilityZone),
+		InstanceCount:         aws.Int64(1),
+		EndDateType:           aws.String("unlimited"), // No end date
+		InstanceMatchCriteria: aws.String("targeted"),  // Instances must explicitly target this reservation
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String("capacity-reservation"),
@@ -292,7 +324,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 			}
 		}
 		logr.WithError(err).Errorln("amazon: failed to create capacity reservation")
-		return nil, fmt.Errorf("failed to create capacity reservation: %w", err)
+		return nil, &ierrors.ErrCapacityUnavailable{Driver: p.DriverName()}
 	}
 
 	reservationID := aws.StringValue(result.CapacityReservation.CapacityReservationId)

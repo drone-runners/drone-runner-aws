@@ -109,12 +109,11 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		var err error
 		if crs != nil {
 			capacity, err = crs.Find(ctx, r.StageRuntimeID)
-			if err != nil {
-				logr.WithError(err).Errorln("failed to find capacity reservation entity")
+			if err == nil {
+				if err := poolManager.DestroyCapacity(ctx, capacity); err != nil {
+					logr.WithError(err).Errorln("failed to destroy capacity reservation")
+				}
 			}
-		}
-		if err := poolManager.DestroyCapacity(ctx, capacity); err != nil {
-			logr.WithError(err).Errorln("failed to destroy capacity reservation")
 		}
 	}()
 
