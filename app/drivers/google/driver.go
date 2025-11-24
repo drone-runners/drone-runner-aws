@@ -414,8 +414,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	enableNestedVirtualization := false
-	if opts.Platform.OS == oshelp.OSLinux && opts.Platform.Arch == oshelp.ArchAMD64 {
+	enableNestedVirtualization := opts.NestedVirtualization
+	if !enableNestedVirtualization && opts.Platform.OS == oshelp.OSLinux && opts.Platform.Arch == oshelp.ArchAMD64 {
 		enableNestedVirtualization = p.enableNestedVirtualization
 	}
 	advancedMachineFeatures := &compute.AdvancedMachineFeatures{
