@@ -177,14 +177,17 @@ type Platform struct {
 }
 
 type QueryParams struct {
-	Status      InstanceState
-	Stage       string
-	Platform    *Platform
-	RunnerName  string
-	MatchLabels map[string]string
-	PoolName    string
-	InstanceID  string
-	ImageName   string
+	Status               InstanceState
+	Stage                string
+	Platform             *Platform
+	RunnerName           string
+	MatchLabels          map[string]string
+	PoolName             string
+	InstanceID           string
+	ImageName            string
+	MachineType          string
+	Zone                 string
+	NestedVirtualization bool
 }
 
 type StageOwner struct {

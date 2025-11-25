@@ -260,7 +260,12 @@ func (d *DistributedManager) provisionFromPool(
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
 	allowedStates := []types.InstanceState{types.StateCreated}
-	queryParams := &types.QueryParams{PoolName: poolName}
+	queryParams := &types.QueryParams{
+		PoolName:             poolName,
+		MachineType:          machineConfig.MachineType,
+		Zone:                 machineConfig.Zone,
+		NestedVirtualization: machineConfig.NestedVirtualization,
+	}
 	if machineConfig.VMImageConfig != nil {
 		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
 		queryParams.ImageName = fullyQualifiedImageName
