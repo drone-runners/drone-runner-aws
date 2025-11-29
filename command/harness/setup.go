@@ -432,19 +432,23 @@ func handleSetup(
 		}
 	}
 
+	machineConfig := &types.MachineConfig{
+		VMImageConfig:      &r.VMImageConfig,
+		Zone:               r.Zone,
+		MachineType:        r.MachineType,
+		ShouldUseGoogleDNS: shouldUseGoogleDNS,
+	}
+
 	instance, _, warmed, err = poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
 		owner,
 		r.ResourceClass,
-		&r.VMImageConfig,
+		machineConfig,
 		query,
 		&r.GitspaceAgentConfig,
 		&r.StorageConfig,
-		r.Zone,
-		r.MachineType,
-		shouldUseGoogleDNS,
 		&r.InstanceInfo,
 		r.Timeout,
 		r.IsMarkedForInfraReset,

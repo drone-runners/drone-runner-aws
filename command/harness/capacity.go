@@ -171,19 +171,22 @@ func handleCapacityReservation(
 	timeout := time.Duration(r.ReservationTimeout) * time.Millisecond
 	timeoutSeconds := int64(timeout / time.Second)
 
+	machineConfig := &types.MachineConfig{
+		VMImageConfig: &r.RequestedVMImageConfig,
+		Zone:          r.Zone,
+		MachineType:   r.MachineType,
+	}
+
 	_, capacityReservation, warmed, err = poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
 		owner,
 		r.ResourceClass,
-		&r.RequestedVMImageConfig,
+		machineConfig,
 		query,
 		nil,
 		&r.StorageConfig,
-		r.Zone,
-		r.MachineType,
-		false,
 		nil,
 		timeoutSeconds,
 		false,

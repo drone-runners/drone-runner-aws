@@ -3,6 +3,7 @@ package drivers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -14,7 +15,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
-	"github.com/harness/lite-engine/engine/spec"
 
 	"github.com/sirupsen/logrus"
 )
@@ -41,13 +41,10 @@ func (d *DistributedManager) Provision(
 	serverName,
 	ownerID,
 	resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone string,
-	machineType string,
-	shouldUseGoogleDNS bool,
 	instanceInfo *common.InstanceInfo,
 	timeout int64,
 	isMarkedForInfraReset bool,
@@ -64,12 +61,9 @@ func (d *DistributedManager) Provision(
 		serverName,
 		ownerID,
 		resourceClass,
-		vmImageConfig,
+		machineConfig,
 		gitspaceAgentConfig,
 		storageConfig,
-		zone,
-		machineType,
-		shouldUseGoogleDNS,
 		timeout,
 		poolName,
 		reservedCapacity,
@@ -200,16 +194,60 @@ func (d *DistributedManager) IsDistributed() bool {
 	return true
 }
 
+// provisionFromReservedCapacity handles provisioning when reserved capacity is available
+func (d *DistributedManager) provisionFromReservedCapacity(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName, ownerID, resourceClass string,
+	machineConfig *types.MachineConfig,
+	agentConfig *types.GitspaceAgentConfig,
+	storageConfig *types.StorageConfig,
+	timeout int64,
+	poolName string,
+	reservedCapacity *types.CapacityReservation,
+	isCapacityTask bool,
+) (*types.Instance, *types.CapacityReservation, bool, error) {
+	if reservedCapacity.InstanceID != "" {
+		inst, err := d.Find(ctx, reservedCapacity.InstanceID)
+		if err == nil {
+			return inst, nil, true, nil
+		}
+		logger.FromContext(ctx).
+			WithField("pool", poolName).
+			WithField("instance_id", reservedCapacity.InstanceID).
+			WithField("hotpool", true).
+			Warnln("provision: failed to get instance from reserved warm pool")
+		_ = d.DestroyCapacity(ctx, reservedCapacity)
+		reservedCapacity = nil
+	}
+	inst, _, err := d.setupInstance(ctx,
+		pool,
+		tlsServerName,
+		ownerID,
+		resourceClass,
+		machineConfig,
+		true,
+		agentConfig,
+		storageConfig,
+		timeout,
+		nil,
+		reservedCapacity,
+		isCapacityTask,
+	)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+	}
+	return inst, nil, false, nil
+}
+
 // provisionFromPool overrides the Manager's provisionFromPool method to use FindAndClaim for distributed coordination
 func (d *DistributedManager) provisionFromPool(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
 	timeout int64,
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
@@ -217,49 +255,24 @@ func (d *DistributedManager) provisionFromPool(
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
 	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
-		if reservedCapacity.InstanceID != "" {
-			inst, err := d.Find(ctx, reservedCapacity.InstanceID)
-			if err == nil {
-				return inst, nil, true, nil
-			}
-			logger.FromContext(ctx).
-				WithField("pool", poolName).
-				WithField("instance_id", reservedCapacity.InstanceID).
-				WithField("hotpool", true).
-				Warnln("provision: failed to get instance from reserved warm pool")
-			_ = d.DestroyCapacity(ctx, reservedCapacity)
-			reservedCapacity = nil
-		}
-
-		inst, _, err := d.setupInstance(ctx,
-			pool,
-			tlsServerName,
-			ownerID,
-			resourceClass,
-			vmImageConfig,
-			true,
-			agentConfig,
-			storageConfig,
-			zone,
-			machineType,
-			shouldUseGoogleDNS,
-			timeout,
-			nil,
-			reservedCapacity,
-			isCapacityTask,
-		)
-		if err != nil {
-			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
-		}
-		return inst, nil, false, nil
+		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 	}
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
 	allowedStates := []types.InstanceState{types.StateCreated}
-	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
+	queryParams := &types.QueryParams{
+		PoolName:             poolName,
+		MachineType:          machineConfig.MachineType,
+		Zone:                 machineConfig.Zone,
+		NestedVirtualization: machineConfig.NestedVirtualization,
+	}
+	if machineConfig.VMImageConfig != nil {
+		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
+		queryParams.ImageName = fullyQualifiedImageName
+	}
 
 	// Try to find and claim a free instance atomically
-	inst, err := d.instanceStore.FindAndClaim(ctx, &types.QueryParams{PoolName: poolName, ImageName: fullyQualifiedImageName}, types.StateInUse, allowedStates, true)
+	inst, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, nil, false, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
 	}
@@ -276,7 +289,13 @@ func (d *DistributedManager) provisionFromPool(
 			WithField("hotpool", true).
 			Traceln("provision: claimed hotpool instance")
 
-		d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName)
+		d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
+			ImageName:            inst.Image,
+			NestedVirtualization: inst.EnableNestedVirtualization,
+			MachineType:          inst.Size,
+			Hibernate:            inst.IsHibernated,
+			Zone:                 inst.Zone,
+		})
 		capacity := &types.CapacityReservation{
 			InstanceID: inst.ID,
 			PoolName:   poolName,
@@ -299,13 +318,10 @@ func (d *DistributedManager) provisionFromPool(
 		tlsServerName,
 		ownerID,
 		resourceClass,
-		vmImageConfig,
+		machineConfig,
 		true,
 		agentConfig,
 		storageConfig,
-		zone,
-		machineType,
-		shouldUseGoogleDNS,
 		timeout,
 		nil,
 		reservedCapacity,
@@ -322,18 +338,31 @@ func (d *DistributedManager) provisionFromPool(
 
 // setupInstanceAsync creates an outbox job for setting up the instance
 func (d *DistributedManager) setupInstanceAsync(
-	ctx context.Context, poolName, runnerName string,
+	ctx context.Context, poolName, runnerName string, params *types.SetupInstanceParams,
 ) {
 	if poolName == "" || runnerName == "" {
 		logger.FromContext(ctx).Errorln("setupInstanceAsync: pool or runner name is empty")
 		return
 	}
+
+	var jobParams *json.RawMessage
+	if params != nil {
+		// Marshal params to JSON
+		paramsJSON, err := json.Marshal(params)
+		if err != nil {
+			logger.FromContext(ctx).WithError(err).Errorln("setupInstanceAsync: failed to marshal params")
+			return
+		}
+		rawMsg := json.RawMessage(paramsJSON)
+		jobParams = &rawMsg
+	}
+
 	// Create outbox job
 	job := &types.OutboxJob{
 		PoolName:   poolName,
 		RunnerName: runnerName,
 		JobType:    types.OutboxJobTypeSetupInstance,
-		JobParams:  nil, // TODO: add job params in future if needed
+		JobParams:  jobParams,
 		Status:     types.OutboxJobStatusPending,
 	}
 
@@ -354,11 +383,9 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
@@ -367,13 +394,10 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 		tlsServerName,
 		ownerID,
 		resourceClass,
-		vmImageConfig,
+		machineConfig,
 		false,
 		agentConfig,
 		storageConfig,
-		zone,
-		machineType,
-		shouldUseGoogleDNS,
 		timeout,
 		platform,
 		nil,
@@ -387,7 +411,11 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 				logrus.WithField("panic", r).Errorln("panic in hibernate goroutine")
 			}
 		}()
-		err = d.hibernate(context.Background(), pool.Name, tlsServerName, inst)
+		shouldHibernate := false
+		if machineConfig != nil && machineConfig.Hibernate {
+			shouldHibernate = true
+		}
+		err = d.hibernate(context.Background(), pool.Name, tlsServerName, inst, shouldHibernate)
 		if err != nil {
 			logrus.WithError(err).Errorln("failed to hibernate the vm")
 		}
@@ -400,13 +428,14 @@ func (d *DistributedManager) hibernate(
 	ctx context.Context,
 	poolName, tlsServerName string,
 	instance *types.Instance,
+	shouldHibernate bool,
 ) error {
 	pool := d.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if !pool.Driver.CanHibernate() {
+	if !shouldHibernate && !pool.Driver.CanHibernate() {
 		return nil
 	}
 
@@ -621,7 +650,11 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 
 	// Call setupInstanceAsync for each cleaned free instance
 	for _, instance := range instances {
-		d.setupInstanceAsync(ctx, pool.Name, instance.RunnerName)
+		d.setupInstanceAsync(ctx, pool.Name, instance.RunnerName, &types.SetupInstanceParams{
+			ImageName:            instance.Image,
+			NestedVirtualization: instance.EnableNestedVirtualization,
+			MachineType:          instance.Size,
+		})
 	}
 
 	return err

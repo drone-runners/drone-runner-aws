@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"time"
+
+	"github.com/harness/lite-engine/engine/spec"
 )
 
 type InstanceState string
@@ -162,6 +164,7 @@ type InstanceCreateOpts struct {
 	Timeout                      int64
 	EnableC4D                    bool
 	CapacityReservation          *CapacityReservation
+	NestedVirtualization         bool
 }
 
 // Platform defines the target platform.
@@ -174,14 +177,17 @@ type Platform struct {
 }
 
 type QueryParams struct {
-	Status      InstanceState
-	Stage       string
-	Platform    *Platform
-	RunnerName  string
-	MatchLabels map[string]string
-	PoolName    string
-	InstanceID  string
-	ImageName   string
+	Status               InstanceState
+	Stage                string
+	Platform             *Platform
+	RunnerName           string
+	MatchLabels          map[string]string
+	PoolName             string
+	InstanceID           string
+	ImageName            string
+	MachineType          string
+	Zone                 string
+	NestedVirtualization bool
 }
 
 type StageOwner struct {
@@ -273,4 +279,24 @@ type OutboxJob struct {
 	Status       OutboxJobStatus  `db:"status" json:"status"`
 	ErrorMessage *string          `db:"error_message" json:"error_message"`
 	RetryCount   int              `db:"retry_count" json:"retry_count"`
+}
+
+// SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
+type SetupInstanceParams struct {
+	ImageName            string `json:"image_name,omitempty"`
+	NestedVirtualization bool   `json:"nested_virtualization,omitempty"`
+	MachineType          string `json:"machine_type,omitempty"`
+	Hibernate            bool   `json:"hibernate,omitempty"`
+	Zone                 string `json:"zone,omitempty"`
+	// Add more fields as needed in the future
+}
+
+// MachineConfig contains machine-level configuration properties
+type MachineConfig struct {
+	VMImageConfig        *spec.VMImageConfig
+	Zone                 string
+	MachineType          string
+	ShouldUseGoogleDNS   bool
+	NestedVirtualization bool
+	Hibernate            bool
 }
