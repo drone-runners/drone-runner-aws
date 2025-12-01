@@ -2,11 +2,13 @@ package drivers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
+	"github.com/harness/lite-engine/engine/spec"
 	"github.com/sirupsen/logrus"
 )
 
@@ -194,19 +196,40 @@ func (p *OutboxProcessor) processSetupInstanceJob(job *types.OutboxJob) error {
 		return fmt.Errorf("pool not found: %s", job.PoolName)
 	}
 
-	// Setup instance with default values for now
+	// Parse job params
+	var params *types.SetupInstanceParams
+	var machineConfig *types.MachineConfig
+	if job.JobParams != nil {
+		params = &types.SetupInstanceParams{}
+		if err := json.Unmarshal(*job.JobParams, params); err != nil {
+			return fmt.Errorf("failed to unmarshal job params: %w", err)
+		}
+		machineConfig = &types.MachineConfig{
+			Zone:                 params.Zone,
+			MachineType:          params.MachineType,
+			NestedVirtualization: params.NestedVirtualization,
+			Hibernate:            params.Hibernate,
+			ShouldUseGoogleDNS:   false, // TODO: remove this once google dns is enabled globally
+		}
+
+		// Create MachineConfig if ImageName is provided
+		if params.ImageName != "" {
+			machineConfig.VMImageConfig = &spec.VMImageConfig{
+				ImageName: params.ImageName,
+			}
+		}
+	}
+
+	// Setup instance with values from job params
 	_, err := p.manager.setupInstanceWithHibernate(
 		p.ctx,
 		pool,
 		p.manager.GetTLSServerName(),
 		"",
 		"",
+		machineConfig,
 		nil,
 		nil,
-		nil,
-		"",
-		"",
-		false,
 		-1,
 		nil,
 	)

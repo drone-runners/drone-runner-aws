@@ -19,7 +19,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	lehttp "github.com/harness/lite-engine/cli/client"
-	"github.com/harness/lite-engine/engine/spec"
 	"github.com/pkg/errors"
 
 	"github.com/sirupsen/logrus"
@@ -364,13 +363,10 @@ func (m *Manager) Provision(
 	serverName,
 	ownerID,
 	resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone string,
-	machineType string,
-	shouldUseGoogleDNS bool,
 	instanceInfo *common.InstanceInfo,
 	timeout int64,
 	isMarkedForInfraReset bool,
@@ -393,11 +389,9 @@ func (m *Manager) Provision(
 			serverName,
 			ownerID,
 			resourceClass,
-			vmImageConfig,
+			machineConfig,
 			gitspaceAgentConfig,
 			storageConfig,
-			zone,
-			machineType,
 			timeout,
 			isMarkedForInfraReset,
 		)
@@ -411,12 +405,9 @@ func (m *Manager) Provision(
 		serverName,
 		ownerID,
 		resourceClass,
-		vmImageConfig,
+		machineConfig,
 		gitspaceAgentConfig,
 		storageConfig,
-		zone,
-		machineType,
-		shouldUseGoogleDNS,
 		timeout,
 		poolName,
 		reservedCapacity,
@@ -428,7 +419,7 @@ func (m *Manager) Provision(
 	// TODO: Move to outbox
 	if hotpool {
 		go func(ctx context.Context) {
-			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, zone, machineType, false, timeout, nil)
+			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, timeout, nil)
 		}(m.globalCtx)
 	}
 	return instance, nil, hotpool, err
@@ -458,11 +449,9 @@ func (m *Manager) provisionFromPool(
 	pool *poolEntry,
 	query *types.QueryParams,
 	serverName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
 	timeout int64,
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
@@ -491,7 +480,7 @@ func (m *Manager) provisionFromPool(
 			return nil, nil, false, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, vmImageConfig, true, gitspaceAgentConfig, storageConfig, zone, machineType, shouldUseGoogleDNS, timeout, nil, reservedCapacity, isCapacityTask) //nolint:lll
+		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, machineConfig, true, gitspaceAgentConfig, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
 		if err != nil {
 			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -691,16 +680,13 @@ func (m *Manager) buildPool(
 		string,
 		string,
 		string,
-		*spec.VMImageConfig,
+		*types.MachineConfig,
 		*types.GitspaceAgentConfig,
 		*types.StorageConfig,
-		string,
-		string,
-		bool,
 		int64,
 		*types.Platform,
 	) (*types.Instance, error),
-	setupInstanceAsync func(context.Context, string, string),
+	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
@@ -745,12 +731,12 @@ func (m *Manager) buildPool(
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", "", nil, nil, nil, "", "", false, 0, nil)
+			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", "", nil, nil, nil, 0, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				if setupInstanceAsync != nil {
 					logr.WithField("runner_name", m.runnerName).Infoln("build pool: creating instance asynchronously")
-					setupInstanceAsync(ctx, pool.Name, m.runnerName)
+					setupInstanceAsync(ctx, pool.Name, m.runnerName, nil)
 				}
 				return
 			}
@@ -779,11 +765,9 @@ func (m *Manager) setupInstanceWithHibernate(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
 	timeout int64,
 	platform *types.Platform,
 ) (*types.Instance, error) {
@@ -792,13 +776,10 @@ func (m *Manager) setupInstanceWithHibernate(
 		tlsServerName,
 		ownerID,
 		resourceClass,
-		vmImageConfig,
+		machineConfig,
 		false,
 		agentConfig,
 		storageConfig,
-		zone,
-		machineType,
-		shouldUseGoogleDNS,
 		timeout,
 		platform,
 		nil,
@@ -819,12 +800,10 @@ func (m *Manager) setupInstance(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	inuse bool,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone, machineType string,
-	shouldUseGoogleDNS bool,
 	timeout int64,
 	platform *types.Platform,
 	reservedCapacity *types.CapacityReservation,
@@ -847,7 +826,28 @@ func (m *Manager) setupInstance(
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
-	createOptions.ShouldUseGoogleDNS = shouldUseGoogleDNS
+	if machineConfig != nil {
+		createOptions.ShouldUseGoogleDNS = machineConfig.ShouldUseGoogleDNS
+		createOptions.Zone = machineConfig.Zone
+		createOptions.MachineType = machineConfig.MachineType
+		createOptions.NestedVirtualization = machineConfig.NestedVirtualization
+		if machineConfig.VMImageConfig != nil && machineConfig.VMImageConfig.ImageName != "" {
+			createOptions.VMImageConfig = types.VMImageConfig{
+				ImageName:    machineConfig.VMImageConfig.ImageName,
+				Username:     machineConfig.VMImageConfig.Username,
+				Password:     machineConfig.VMImageConfig.Password,
+				ImageVersion: machineConfig.VMImageConfig.ImageVersion,
+			}
+
+			if machineConfig.VMImageConfig.Auth != nil {
+				createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
+					Registry: machineConfig.VMImageConfig.Auth.Address,
+					Username: machineConfig.VMImageConfig.Auth.Username,
+					Password: machineConfig.VMImageConfig.Auth.Password,
+				}
+			}
+		}
+	}
 	if storageConfig != nil {
 		createOptions.StorageOpts = types.StorageOpts{
 			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
@@ -872,8 +872,6 @@ func (m *Manager) setupInstance(
 		retain = "true"
 	}
 	createOptions.Labels = map[string]string{"retain": retain}
-	createOptions.Zone = zone
-	createOptions.MachineType = machineType
 	createOptions.DriverName = pool.Driver.DriverName()
 	createOptions.Timeout = timeout
 	createOptions.CapacityReservation = reservedCapacity
@@ -881,22 +879,6 @@ func (m *Manager) setupInstance(
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
 		return nil, nil, err
-	}
-	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
-		createOptions.VMImageConfig = types.VMImageConfig{
-			ImageName:    vmImageConfig.ImageName,
-			Username:     vmImageConfig.Username,
-			Password:     vmImageConfig.Password,
-			ImageVersion: vmImageConfig.ImageVersion,
-		}
-
-		if vmImageConfig.Auth != nil {
-			createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
-				Registry: vmImageConfig.Auth.Address,
-				Username: vmImageConfig.Auth.Username,
-				Password: vmImageConfig.Auth.Password,
-			}
-		}
 	}
 
 	if platform != nil {
@@ -1301,10 +1283,9 @@ func (m *Manager) processExistingInstance(
 	pool *poolEntry,
 	instanceInfo *common.InstanceInfo,
 	serverName, ownerID, resourceClass string,
-	vmImageConfig *spec.VMImageConfig,
+	machineConfig *types.MachineConfig,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	zone, machineType string,
 	timeout int64,
 	isMarkedForInfraReset bool,
 ) (*types.Instance, *types.CapacityReservation, error) {
@@ -1351,13 +1332,10 @@ func (m *Manager) processExistingInstance(
 		serverName,
 		ownerID,
 		resourceClass,
-		vmImageConfig,
+		machineConfig,
 		true,
 		gitspaceAgentConfig,
 		storageConfig,
-		zone,
-		machineType,
-		false,
 		timeout,
 		platform,
 		nil,
