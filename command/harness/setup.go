@@ -433,10 +433,11 @@ func handleSetup(
 	}
 
 	machineConfig := &types.MachineConfig{
-		VMImageConfig:      &r.VMImageConfig,
-		Zone:               r.Zone,
-		MachineType:        r.MachineType,
-		ShouldUseGoogleDNS: shouldUseGoogleDNS,
+		VMImageConfig:        &r.VMImageConfig,
+		Zone:                 r.Zone,
+		MachineType:          r.MachineType,
+		ShouldUseGoogleDNS:   shouldUseGoogleDNS,
+		NestedVirtualization: r.NestedVirtualization,
 	}
 
 	instance, _, warmed, err = poolManager.Provision(

@@ -209,7 +209,7 @@ func (p *OutboxProcessor) processSetupInstanceJob(job *types.OutboxJob) error {
 			MachineType:          params.MachineType,
 			NestedVirtualization: params.NestedVirtualization,
 			Hibernate:            params.Hibernate,
-			ShouldUseGoogleDNS:   false, // TODO: remove this once google dns is enabled globally
+			ShouldUseGoogleDNS:   true, // TODO: remove this once google dns is enabled globally
 		}
 
 		// Create MachineConfig if ImageName is provided
