@@ -158,7 +158,6 @@ type InstanceCreateOpts struct {
 	MachineType                  string
 	LiteEngineFallbackPath       string
 	PluginBinaryFallbackURI      string
-	ShouldUseGoogleDNS           bool
 	VMImageConfig                VMImageConfig
 	DriverName                   string
 	Timeout                      int64
@@ -296,7 +295,6 @@ type MachineConfig struct {
 	VMImageConfig        *spec.VMImageConfig
 	Zone                 string
 	MachineType          string
-	ShouldUseGoogleDNS   bool
 	NestedVirtualization bool
 	Hibernate            bool
 }
