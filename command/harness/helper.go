@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"context"
 	"hash/fnv"
 	"path/filepath"
 	"strconv"
@@ -18,7 +19,7 @@ import (
 func getStreamLogger(cfg leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, correlationID string) *lelivelog.Writer {
 	client := lestream.NewHTTPClient(cfg.URL, cfg.AccountID,
 		cfg.Token, cfg.IndirectUpload, false, mtlsConfig.ClientCert, mtlsConfig.ClientCertKey)
-	wc := lelivelog.New(client, logKey, correlationID, nil, true, cfg.TrimNewLineSuffix, cfg.SkipOpeningStream, cfg.SkipClosingStream)
+	wc := lelivelog.New(context.Background(), client, logKey, correlationID, nil, true, cfg.TrimNewLineSuffix, cfg.SkipOpeningStream, cfg.SkipClosingStream)
 	go func() {
 		if err := wc.Open(); err != nil {
 			logrus.WithError(err).Debugln("failed to open log stream")
