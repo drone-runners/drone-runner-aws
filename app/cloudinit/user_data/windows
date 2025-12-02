@@ -53,17 +53,72 @@ fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 echo "CLOUD_DRIVER={{ .DriverName }}" >> "C:\Program Files\lite-engine\.env"
 
 {{ if .AnnotationsBinaryURI }}
-$primaryAnnotationsUrl = "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
-$secondaryAnnotationsUrl = "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
-$outputFile = "C:\Program Files\lite-engine\hcli.exe"
+# Create shared volume directory (lite-engine uses c:\tmp\engine for Windows)
+echo "[DRONE][ANNOTATIONS] Starting annotations CLI setup for Windows"
+echo "[DRONE][ANNOTATIONS] Platform: {{ .Platform.OS }}-{{ .Platform.Arch }}"
+echo "[DRONE][ANNOTATIONS] Creating shared volume directory: c:\tmp\engine"
 
 try {
-    echo "[DRONE] Downloading annotations CLI from primary URL"
-    Invoke-WebRequest -Uri $primaryAnnotationsUrl -OutFile $outputFile
+    New-Item -ItemType Directory -Force -Path "c:\tmp\engine" | Out-Null
+    echo "[DRONE][ANNOTATIONS] Successfully created directory: c:\tmp\engine"
 } catch {
-    echo "[DRONE] Primary URL failed for annotations CLI, attempting to download from secondary URL"
-    Invoke-WebRequest -Uri $secondaryAnnotationsUrl -OutFile $outputFile
+    echo "[DRONE][ANNOTATIONS][ERROR] Failed to create directory c:\tmp\engine: $_"
+    echo "[DRONE][ANNOTATIONS][ERROR] This will cause annotations to fail!"
 }
+
+# Verify directory exists
+if (Test-Path "c:\tmp\engine") {
+    echo "[DRONE][ANNOTATIONS] Verified: c:\tmp\engine exists"
+} else {
+    echo "[DRONE][ANNOTATIONS][ERROR] Directory c:\tmp\engine does NOT exist after creation!"
+}
+
+$primaryAnnotationsUrl = "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$secondaryAnnotationsUrl = "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$outputFile = "c:\tmp\engine\hcli.exe"
+
+echo "[DRONE][ANNOTATIONS] Primary URL: $primaryAnnotationsUrl"
+echo "[DRONE][ANNOTATIONS] Fallback URL: $secondaryAnnotationsUrl"
+echo "[DRONE][ANNOTATIONS] Target file: $outputFile"
+
+try {
+    echo "[DRONE][ANNOTATIONS] Attempting download from primary URL..."
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $primaryAnnotationsUrl -OutFile $outputFile -ErrorAction Stop
+    echo "[DRONE][ANNOTATIONS] Successfully downloaded from primary URL"
+} catch {
+    echo "[DRONE][ANNOTATIONS][WARN] Primary URL failed: $_"
+    echo "[DRONE][ANNOTATIONS] Attempting download from fallback URL..."
+    try {
+        Invoke-WebRequest -Uri $secondaryAnnotationsUrl -OutFile $outputFile -ErrorAction Stop
+        echo "[DRONE][ANNOTATIONS] Successfully downloaded from fallback URL"
+    } catch {
+        echo "[DRONE][ANNOTATIONS][ERROR] Both URLs failed! Error: $_"
+        echo "[DRONE][ANNOTATIONS][ERROR] Annotations will NOT work!"
+    }
+}
+
+# Verify binary exists and get details
+if (Test-Path $outputFile) {
+    $fileInfo = Get-Item $outputFile
+    echo "[DRONE][ANNOTATIONS] SUCCESS: hcli binary downloaded"
+    echo "[DRONE][ANNOTATIONS] File path: $($fileInfo.FullName)"
+    echo "[DRONE][ANNOTATIONS] File size: $($fileInfo.Length) bytes"
+    echo "[DRONE][ANNOTATIONS] Last modified: $($fileInfo.LastWriteTime)"
+    
+    # Test if binary is executable
+    try {
+        $testOutput = & $outputFile --version 2>&1
+        echo "[DRONE][ANNOTATIONS] Binary test: $testOutput"
+    } catch {
+        echo "[DRONE][ANNOTATIONS][WARN] Could not execute binary (this may be OK if binary requires args): $_"
+    }
+} else {
+    echo "[DRONE][ANNOTATIONS][ERROR] CRITICAL: hcli.exe does NOT exist at $outputFile"
+    echo "[DRONE][ANNOTATIONS][ERROR] Annotations WILL FAIL!"
+}
+
+echo "[DRONE][ANNOTATIONS] CloudInit annotations setup complete"
 {{ end }}
 
 $primaryLiteEngineUrl = "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
