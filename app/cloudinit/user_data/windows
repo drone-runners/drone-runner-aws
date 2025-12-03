@@ -54,20 +54,15 @@ fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 echo "CLOUD_DRIVER={{ .DriverName }}" >> "C:\Program Files\lite-engine\.env"
 
 {{ if .AnnotationsBinaryURI }}
-# Download hcli (annotations CLI) to C:\Program Files\lite-engine
-# - CONTAINERLESS: Already in PATH (C:\Program Files\lite-engine is added to PATH above)
 $primaryAnnotationsUrl = "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $secondaryAnnotationsUrl = "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $hcliPath = "C:\Program Files\lite-engine\hcli.exe"
 
 try {
-    echo "[DRONE] Downloading annotations CLI"
     Invoke-WebRequest -Uri $primaryAnnotationsUrl -OutFile $hcliPath -ErrorAction Stop
-    echo "[DRONE] Annotations CLI downloaded successfully"
 } catch {
     try {
         Invoke-WebRequest -Uri $secondaryAnnotationsUrl -OutFile $hcliPath -ErrorAction Stop
-        echo "[DRONE] Annotations CLI downloaded from fallback URL"
     } catch {
         echo "[DRONE] WARNING: Failed to download annotations CLI"
     }
