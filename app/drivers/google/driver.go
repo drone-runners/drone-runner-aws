@@ -374,8 +374,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("pool", opts.PoolName).
 		WithField("zone", zone).
 		WithField("image", image).
-		WithField("size", p.size).
-		WithField("google_dns", opts.ShouldUseGoogleDNS)
+		WithField("size", p.size)
 
 	// create the instance
 

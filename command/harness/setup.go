@@ -425,18 +425,10 @@ func handleSetup(
 		RunnerName: runnerName,
 	}
 
-	shouldUseGoogleDNS := false
-	if len(r.SetupRequest.Envs) != 0 {
-		if r.SetupRequest.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
-			shouldUseGoogleDNS = true
-		}
-	}
-
 	machineConfig := &types.MachineConfig{
 		VMImageConfig:        &r.VMImageConfig,
 		Zone:                 r.Zone,
 		MachineType:          r.MachineType,
-		ShouldUseGoogleDNS:   shouldUseGoogleDNS,
 		NestedVirtualization: r.NestedVirtualization,
 	}
 

@@ -827,7 +827,6 @@ func (m *Manager) setupInstance(
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
 	if machineConfig != nil {
-		createOptions.ShouldUseGoogleDNS = machineConfig.ShouldUseGoogleDNS
 		createOptions.Zone = machineConfig.Zone
 		createOptions.MachineType = machineConfig.MachineType
 		createOptions.NestedVirtualization = machineConfig.NestedVirtualization

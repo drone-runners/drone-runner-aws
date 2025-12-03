@@ -35,7 +35,6 @@ type Params struct {
 	AutoInjectionBinaryURI       string
 	LiteEngineFallbackPath       string
 	PluginBinaryFallbackURI      string
-	ShouldUseGoogleDNS           bool
 	DriverName                   string
 	CertsDirectory               string
 	EnableC4D                    bool
