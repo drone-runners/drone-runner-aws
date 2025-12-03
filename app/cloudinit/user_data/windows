@@ -44,10 +44,11 @@ try {
     Invoke-WebRequest -Uri $secondaryPluginUrl -OutFile $outputFile
 }
 
-$env:Path = 'C:\Program Files\lite-engine;' + $env:Path
-
 # Refresh the PSEnviroment
 refreshenv
+
+# This adds lite-engine directory to PATH so hcli is discoverable
+$env:Path = 'C:\Program Files\lite-engine;' + $env:Path
 
 fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 echo "CLOUD_DRIVER={{ .DriverName }}" >> "C:\Program Files\lite-engine\.env"
@@ -55,14 +56,16 @@ echo "CLOUD_DRIVER={{ .DriverName }}" >> "C:\Program Files\lite-engine\.env"
 {{ if .AnnotationsBinaryURI }}
 $primaryAnnotationsUrl = "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $secondaryAnnotationsUrl = "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
-$outputFile = "C:\Program Files\lite-engine\hcli.exe"
+$hcliPath = "C:\Program Files\lite-engine\hcli.exe"
 
 try {
-    echo "[DRONE] Downloading annotations CLI from primary URL"
-    Invoke-WebRequest -Uri $primaryAnnotationsUrl -OutFile $outputFile
+    Invoke-WebRequest -Uri $primaryAnnotationsUrl -OutFile $hcliPath -ErrorAction Stop
 } catch {
-    echo "[DRONE] Primary URL failed for annotations CLI, attempting to download from secondary URL"
-    Invoke-WebRequest -Uri $secondaryAnnotationsUrl -OutFile $outputFile
+    try {
+        Invoke-WebRequest -Uri $secondaryAnnotationsUrl -OutFile $hcliPath -ErrorAction Stop
+    } catch {
+        echo "[DRONE] WARNING: Failed to download annotations CLI"
+    }
 }
 {{ end }}
 
