@@ -54,32 +54,24 @@ fsutil file createnew "C:\Program Files\lite-engine\.env" 0
 echo "CLOUD_DRIVER={{ .DriverName }}" >> "C:\Program Files\lite-engine\.env"
 
 {{ if .AnnotationsBinaryURI }}
-# Download hcli (annotations CLI)
-# For CONTAINERLESS: Downloaded to C:\Program Files\lite-engine (already in PATH)
-# For CONTAINERS: Also copied to shared volume so it's accessible inside containers
+# Download hcli (annotations CLI) to C:\Program Files\lite-engine
+# - CONTAINERLESS: C:\Program Files\lite-engine is already in PATH (set above)
+# - CONTAINERS: lite-engine directly mounts this file to C:\Windows\hcli.exe (in default PATH)
 $primaryAnnotationsUrl = "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $secondaryAnnotationsUrl = "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
-$hcliProgramFiles = "C:\Program Files\lite-engine\hcli.exe"
+$hcliPath = "C:\Program Files\lite-engine\hcli.exe"
 
 try {
     echo "[DRONE] Downloading annotations CLI"
-    Invoke-WebRequest -Uri $primaryAnnotationsUrl -OutFile $hcliProgramFiles -ErrorAction Stop
-    echo "[DRONE] Annotations CLI downloaded to Program Files"
+    Invoke-WebRequest -Uri $primaryAnnotationsUrl -OutFile $hcliPath -ErrorAction Stop
+    echo "[DRONE] Annotations CLI downloaded successfully"
 } catch {
     try {
-        Invoke-WebRequest -Uri $secondaryAnnotationsUrl -OutFile $hcliProgramFiles -ErrorAction Stop
+        Invoke-WebRequest -Uri $secondaryAnnotationsUrl -OutFile $hcliPath -ErrorAction Stop
         echo "[DRONE] Annotations CLI downloaded from fallback URL"
     } catch {
         echo "[DRONE] WARNING: Failed to download annotations CLI"
     }
-}
-
-# Create shared volume directory and copy hcli there for container access
-# Containers mount c:\tmp\engine as the shared volume
-if (Test-Path $hcliProgramFiles) {
-    New-Item -ItemType Directory -Force -Path "c:\tmp\engine" | Out-Null
-    Copy-Item $hcliProgramFiles -Destination "c:\tmp\engine\hcli.exe" -Force
-    echo "[DRONE] Annotations CLI copied to shared volume for container access"
 }
 {{ end }}
 
