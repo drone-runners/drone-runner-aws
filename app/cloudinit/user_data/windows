@@ -56,7 +56,6 @@ echo "CLOUD_DRIVER={{ .DriverName }}" >> "C:\Program Files\lite-engine\.env"
 {{ if .AnnotationsBinaryURI }}
 # Download hcli (annotations CLI) to C:\Program Files\lite-engine
 # - CONTAINERLESS: Already in PATH (C:\Program Files\lite-engine is added to PATH above)
-# - CONTAINERS: lite-engine mounts this directory to C:\harness\lite-engine and adds to PATH
 $primaryAnnotationsUrl = "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $secondaryAnnotationsUrl = "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $hcliPath = "C:\Program Files\lite-engine\hcli.exe"
