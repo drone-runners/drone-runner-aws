@@ -209,6 +209,7 @@ func (p *OutboxProcessor) processSetupInstanceJob(job *types.OutboxJob) error {
 			MachineType:          params.MachineType,
 			NestedVirtualization: params.NestedVirtualization,
 			Hibernate:            params.Hibernate,
+			VariantID:            params.VariantID,
 		}
 
 		// Create MachineConfig if ImageName is provided
