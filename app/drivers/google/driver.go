@@ -581,7 +581,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
-	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization)
+	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, image)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to map VM to instance")
 		return nil, err
@@ -901,7 +901,7 @@ func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, disk
 	})
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool) (types.Instance, error) {
+func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool, image string) (types.Instance, error) {
 	network := vm.NetworkInterfaces[0]
 	instanceIP := ""
 	if p.privateIP {
@@ -926,7 +926,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		Provider:                   types.Google, // this is driver, though its the old legacy name of provider
 		State:                      types.StateCreated,
 		Pool:                       opts.PoolName,
-		Image:                      p.image,
+		Image:                      image,
 		Zone:                       zone,
 		Size:                       p.size,
 		Platform:                   opts.Platform,

@@ -295,6 +295,7 @@ func (d *DistributedManager) provisionFromPool(
 			MachineType:          inst.Size,
 			Hibernate:            inst.IsHibernated,
 			Zone:                 inst.Zone,
+			VariantID:            inst.VariantID,
 		})
 		capacity := &types.CapacityReservation{
 			InstanceID: inst.ID,
