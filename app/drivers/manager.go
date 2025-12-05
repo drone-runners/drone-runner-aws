@@ -691,7 +691,7 @@ func (m *Manager) buildPool(
 ) error {
 	// Check if pool has variants
 	if len(pool.PoolVariants) > 0 {
-		return m.buildPoolWithVariants(ctx, pool, tlsServerName, query, setupInstanceWithHibernate, setupInstanceAsync)
+		return m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync)
 	}
 
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
@@ -766,7 +766,6 @@ func (m *Manager) buildPoolWithVariants(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName string,
-	query *types.QueryParams,
 	setupInstanceWithHibernate func(
 		context.Context,
 		*poolEntry,
