@@ -839,7 +839,7 @@ func (m *Manager) buildPoolWithVariants(
 	return nil
 }
 
-// setupInstanceParamsToMachineConfig converts SetupInstanceParams to MachineConfig.
+// converts SetupInstanceParams to MachineConfig.
 func (m *Manager) setupInstanceParamsToMachineConfig(params *types.SetupInstanceParams) *types.MachineConfig {
 	if params == nil {
 		return nil
