@@ -758,10 +758,7 @@ func (m *Manager) buildPool(
 			WithField("pool", pool.Name)
 		logr.Infoln("build pool: building variant pools")
 
-		err := m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync)
-		if err != nil {
-			return fmt.Errorf("failed to build variant pools: %w", err)
-		}
+		m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync)
 	}
 
 	return nil
@@ -786,7 +783,7 @@ func (m *Manager) buildPoolWithVariants(
 		*types.Platform,
 	) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
-) error {
+) {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
@@ -842,8 +839,6 @@ func (m *Manager) buildPoolWithVariants(
 
 		wg.Wait()
 	}
-
-	return nil
 }
 
 // converts SetupInstanceParams to MachineConfig.
