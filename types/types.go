@@ -85,7 +85,7 @@ type Instance struct {
 	StorageIdentifier          string      `db:"instance_storage_identifier" json:"storage_identifier"`
 	Labels                     []byte      `db:"instance_labels" json:"instance_labels"`
 	EnableNestedVirtualization bool        `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
-	VariantID                  int         `db:"variant_id" json:"variant_id"`
+	VariantID                  string      `db:"variant_id" json:"variant_id"`
 }
 
 // Passwords holds sensitive data.
@@ -288,7 +288,7 @@ type SetupInstanceParams struct {
 	MachineType          string `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
 	Hibernate            bool   `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
 	Zone                 string `json:"zone,omitempty" yaml:"zone,omitempty"`
-	VariantID            int    `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	VariantID            string `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
 	// Add more fields as needed in the future
 }
 
@@ -299,7 +299,7 @@ type MachineConfig struct {
 	MachineType          string
 	NestedVirtualization bool
 	Hibernate            bool
-	VariantID            int `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	VariantID            string `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
 }
 
 type PoolVariant struct {

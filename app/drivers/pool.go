@@ -24,7 +24,7 @@ type Pool struct {
 	// Spec stores only the provider-specific spec from the pool YAML (e.g., *config.Google, *config.Amazon, etc.).
 	Spec interface{}
 	// variant specific data
-	VariantID    int
+	VariantID    string
 	PoolVariants []types.PoolVariant
 }
 

@@ -655,6 +655,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 			ImageName:            instance.Image,
 			NestedVirtualization: instance.EnableNestedVirtualization,
 			MachineType:          instance.Size,
+			VariantID:            instance.VariantID,
 		})
 	}
 

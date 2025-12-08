@@ -29,7 +29,7 @@ type (
 		Limit     int                 `json:"limit"`
 		Platform  types.Platform      `json:"platform,omitempty" yaml:"platform,omitempty"`
 		Spec      interface{}         `json:"spec,omitempty"`
-		VariantID int                 `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
 		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
 	}
 

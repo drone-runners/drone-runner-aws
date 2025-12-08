@@ -689,11 +689,6 @@ func (m *Manager) buildPool(
 	) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
 ) error {
-	// Check if pool has variants
-	if len(pool.PoolVariants) > 0 {
-		return m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync)
-	}
-
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
@@ -756,6 +751,18 @@ func (m *Manager) buildPool(
 	}
 
 	wg.Wait()
+
+	// Building pool variants if present
+	if len(pool.PoolVariants) > 0 {
+		logr := logger.FromContext(ctx).
+			WithField("pool", pool.Name)
+		logr.Infoln("build pool: building variant pools")
+
+		err := m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync)
+		if err != nil {
+			return fmt.Errorf("failed to build variant pools: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -1021,9 +1028,11 @@ func (m *Manager) setupInstance(
 
 	inst.RunnerName = m.runnerName
 
-	// Set VariantID from machineConfig (0 for non-variant instances)
-	if machineConfig != nil {
+	// Set VariantID from machineConfig ("default" for non-variant instances)
+	if machineConfig != nil && machineConfig.VariantID != "" {
 		inst.VariantID = machineConfig.VariantID
+	} else {
+		inst.VariantID = "default"
 	}
 
 	if inst.Labels == nil {

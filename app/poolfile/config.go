@@ -373,11 +373,12 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 		MaxSize:      instance.Limit,
 		MinSize:      instance.Pool,
 		Platform:     instance.Platform,
+		Spec:         instance.Spec,
 		VariantID:    instance.VariantID,
 		PoolVariants: instance.Variants,
 	}
 	// Preserve only the provider-specific spec for later retrieval.
-	pool.Spec = instance.Spec
+
 	return pool
 }
 
