@@ -754,11 +754,8 @@ func (m *Manager) buildPool(
 
 	// Building pool variants if present
 	if len(pool.PoolVariants) > 0 {
-		logr := logger.FromContext(ctx).
-			WithField("pool", pool.Name)
 		logr.Infoln("build pool: building variant pools")
-
-		m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync)
+		m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync, logr)
 	}
 
 	return nil
@@ -783,11 +780,8 @@ func (m *Manager) buildPoolWithVariants(
 		*types.Platform,
 	) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
+	logr logger.Logger,
 ) {
-	logr := logger.FromContext(ctx).
-		WithField("driver", pool.Driver.DriverName()).
-		WithField("pool", pool.Name)
-
 	// Process each variant and create instances
 	for idx, variant := range pool.PoolVariants {
 		// Get variant params (VariantID should already be set from YAML through embedding)
@@ -796,18 +790,18 @@ func (m *Manager) buildPoolWithVariants(
 		// Convert SetupInstanceParams to MachineConfig
 		variantConfig := m.setupInstanceParamsToMachineConfig(&variantParams)
 
-		variantLogr := logr.
+		logr = logr.
 			WithField("variant_id", variantParams.VariantID).
 			WithField("variant_index", idx)
 
 		// Use variant's pool size (number of instances to create)
 		instanceCount := variant.Pool
 		if instanceCount <= 0 {
-			variantLogr.Debugln("build pool with variants: skipping variant with pool size 0")
+			logr.Infoln("build pool with variants: skipping variant with pool size 0")
 			continue
 		}
 
-		variantLogr.
+		logr.
 			WithField("instance_count", instanceCount).
 			Infoln("build pool with variants: creating instances for variant")
 
@@ -834,7 +828,7 @@ func (m *Manager) buildPoolWithVariants(
 					WithField("name", inst.Name).
 					WithField("variant_id", machineConfig.VariantID).
 					Infoln("build pool with variants: created new instance")
-			}(ctx, variantLogr, &variantParams, variantConfig)
+			}(ctx, logr, &variantParams, variantConfig)
 		}
 
 		wg.Wait()
