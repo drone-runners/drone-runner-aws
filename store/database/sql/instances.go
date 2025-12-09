@@ -220,7 +220,7 @@ RETURNING %s
 		&dst.OSName, &dst.Stage, &dst.CAKey, &dst.CACert, &dst.TLSKey,
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
-		&dst.EnableNestedVirtualization, &dst.RunnerName,
+		&dst.EnableNestedVirtualization, &dst.RunnerName, &dst.VariantID,
 	)
 	if err != nil {
 		return nil, err
@@ -268,6 +268,7 @@ const instanceColumns = `
 ,instance_labels
 ,enable_nested_virtualization
 ,runner_name
+,variant_id
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -307,6 +308,7 @@ INSERT INTO instances (
 ,instance_storage_identifier
 ,instance_labels
 ,enable_nested_virtualization
+,variant_id
 ) values (
  :instance_id
 ,:instance_node_id
@@ -338,6 +340,7 @@ INSERT INTO instances (
 ,:instance_storage_identifier
 ,:instance_labels
 ,:enable_nested_virtualization
+,:variant_id
 ) RETURNING instance_id
 `
 
