@@ -28,7 +28,6 @@ type CapacityReservationRequest struct {
 	RequestedVMImageConfig lespec.VMImageConfig `json:"vm_image_config"`
 	StorageConfig          types.StorageConfig  `json:"storage_config"`
 	Zone                   string               `json:"zone"`
-	MachineType            string               `json:"machine_type"`
 	NestedVirtualization   bool                 `json:"nested_virtualization"`
 	ReservationTimeout     int64                `json:"timeout,omitempty"`
 }
@@ -175,7 +174,6 @@ func handleCapacityReservation(
 
 	machineConfig := &types.MachineConfig{
 		VMImageConfig:        &r.RequestedVMImageConfig,
-		MachineType:          r.MachineType,
 		NestedVirtualization: r.NestedVirtualization,
 	}
 	if r.Zone != "" {

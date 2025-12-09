@@ -428,7 +428,6 @@ func handleSetup(
 
 	machineConfig := &types.MachineConfig{
 		VMImageConfig:        &r.VMImageConfig,
-		MachineType:          r.MachineType,
 		NestedVirtualization: r.NestedVirtualization,
 	}
 	if r.Zone != "" {

@@ -31,7 +31,8 @@ const (
 
 // ProcessPool processes the pool file and returns a list of pools.
 // Passwords are not present in the pool file and passed separately for security reasons.
-func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.Passwords) ([]drivers.Pool, error) { //nolint
+// DriverSettings contains driver-specific configuration from environment variables.
+func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.Passwords, driverSettings types.DriverSettings) ([]drivers.Pool, error) { //nolint
 	var pools = []drivers.Pool{}
 
 	for i := range poolFile.Instances {
@@ -118,6 +119,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				amazon.WithHibernate(a.Hibernate),
 				amazon.WithZoneDetails(a.ZoneDetails),
 				amazon.WithEnableC4D(a.EnableC4D),
+				amazon.WithResourceClassMachineTypes(driverSettings.AmazonResourceClassMachineTypes),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
@@ -197,6 +199,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				}),
 				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
 				google.WithEnableC4D(g.EnableC4D),
+				google.WithResourceClassMachineTypes(driverSettings.GoogleResourceClassMachineTypes),
 			)
 			if err != nil {
 				return nil, err
