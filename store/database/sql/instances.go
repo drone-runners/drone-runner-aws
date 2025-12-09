@@ -158,10 +158,6 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_size": params.MachineType})
 	}
 
-	if params.Zone != "" {
-		subQuery = subQuery.Where(squirrel.Eq{"instance_zone": params.Zone})
-	}
-
 	if params.NestedVirtualization {
 		subQuery = subQuery.Where(squirrel.Eq{"enable_nested_virtualization": true})
 	}

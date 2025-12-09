@@ -176,9 +176,13 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	// Determine zones to try
 	var zonesToTry []string
-	if opts.Zone != "" {
-		// If specific zone requested, only try that zone
-		zonesToTry = []string{opts.Zone}
+	if len(opts.Zones) > 0 {
+		// If specific zones requested, only try those zones
+		zonesToTry = make([]string, len(opts.Zones))
+		copy(zonesToTry, opts.Zones)
+		rand.Shuffle(len(zonesToTry), func(i, j int) {
+			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
+		})
 	} else {
 		// Randomize zone order to distribute load
 		zonesToTry = make([]string, len(p.zones))
@@ -329,8 +333,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 //nolint:gocyclo
 func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
-	// opts.Zone has highest priority
-	zone := opts.Zone
+	// opts.Zones has highest priority - pick the first zone if specified
+	var zone string
+	if len(opts.Zones) > 0 {
+		zone = opts.Zones[0]
+	}
 	// If capacity reservation is provided, verify it's in the zone we're using
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
 		reservationZone, reservationErr := p.findReservationZone(ctx, opts.CapacityReservation.ReservationID)

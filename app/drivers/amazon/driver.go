@@ -768,10 +768,10 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, poolName s
 }
 
 func (p *config) configureDynamicFields(opts *types.InstanceCreateOpts) error {
-	if opts.Zone != "" {
-		p.availabilityZone = opts.Zone
+	if len(opts.Zones) > 0 {
+		p.availabilityZone = opts.Zones[0]
 		for _, zoneDetail := range p.zoneDetails {
-			if zoneDetail.AvailabilityZone == opts.Zone {
+			if zoneDetail.AvailabilityZone == opts.Zones[0] {
 				p.subnet = zoneDetail.SubnetID
 			}
 		}

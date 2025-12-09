@@ -843,7 +843,7 @@ func (m *Manager) setupInstanceParamsToMachineConfig(params *types.SetupInstance
 	}
 
 	machineConfig := &types.MachineConfig{
-		Zone:                 params.Zone,
+		Zones:                params.Zones,
 		MachineType:          params.MachineType,
 		NestedVirtualization: params.NestedVirtualization,
 		Hibernate:            params.Hibernate,
@@ -932,7 +932,7 @@ func (m *Manager) setupInstance(
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
 	if machineConfig != nil {
-		createOptions.Zone = machineConfig.Zone
+		createOptions.Zones = machineConfig.Zones
 		createOptions.MachineType = machineConfig.MachineType
 		createOptions.NestedVirtualization = machineConfig.NestedVirtualization
 		if machineConfig.VMImageConfig != nil && machineConfig.VMImageConfig.ImageName != "" {

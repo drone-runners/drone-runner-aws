@@ -264,7 +264,6 @@ func (d *DistributedManager) provisionFromPool(
 	queryParams := &types.QueryParams{
 		PoolName:             poolName,
 		MachineType:          machineConfig.MachineType,
-		Zone:                 machineConfig.Zone,
 		NestedVirtualization: machineConfig.NestedVirtualization,
 	}
 	if machineConfig.VMImageConfig != nil {
@@ -295,7 +294,7 @@ func (d *DistributedManager) provisionFromPool(
 			NestedVirtualization: inst.EnableNestedVirtualization,
 			MachineType:          inst.Size,
 			Hibernate:            inst.IsHibernated,
-			Zone:                 inst.Zone,
+			Zones:                []string{inst.Zone},
 			VariantID:            inst.VariantID,
 		})
 		capacity := &types.CapacityReservation{
@@ -657,6 +656,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 			NestedVirtualization: instance.EnableNestedVirtualization,
 			MachineType:          instance.Size,
 			VariantID:            instance.VariantID,
+			Zones:                []string{instance.Zone},
 		})
 	}
 

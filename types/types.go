@@ -155,7 +155,7 @@ type InstanceCreateOpts struct {
 	AnnotationsBinaryURI         string
 	AnnotationsBinaryFallbackURI string
 	Labels                       map[string]string
-	Zone                         string
+	Zones                        []string
 	MachineType                  string
 	LiteEngineFallbackPath       string
 	PluginBinaryFallbackURI      string
@@ -186,7 +186,6 @@ type QueryParams struct {
 	InstanceID           string
 	ImageName            string
 	MachineType          string
-	Zone                 string
 	NestedVirtualization bool
 }
 
@@ -283,19 +282,19 @@ type OutboxJob struct {
 
 // SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
 type SetupInstanceParams struct {
-	ImageName            string `json:"image_name,omitempty" yaml:"image_name,omitempty"`
-	NestedVirtualization bool   `json:"nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-	MachineType          string `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-	Hibernate            bool   `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
-	Zone                 string `json:"zone,omitempty" yaml:"zone,omitempty"`
-	VariantID            string `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	ImageName            string   `json:"image_name,omitempty" yaml:"image_name,omitempty"`
+	NestedVirtualization bool     `json:"nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+	MachineType          string   `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+	Hibernate            bool     `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
+	Zones                []string `json:"zones,omitempty" yaml:"zones,omitempty"`
+	VariantID            string   `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
 	// Add more fields as needed in the future
 }
 
 // MachineConfig contains machine-level configuration properties
 type MachineConfig struct {
 	VMImageConfig        *spec.VMImageConfig
-	Zone                 string
+	Zones                []string
 	MachineType          string
 	NestedVirtualization bool
 	Hibernate            bool

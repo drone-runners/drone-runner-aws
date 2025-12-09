@@ -175,9 +175,11 @@ func handleCapacityReservation(
 
 	machineConfig := &types.MachineConfig{
 		VMImageConfig:        &r.RequestedVMImageConfig,
-		Zone:                 r.Zone,
 		MachineType:          r.MachineType,
 		NestedVirtualization: r.NestedVirtualization,
+	}
+	if r.Zone != "" {
+		machineConfig.Zones = []string{r.Zone}
 	}
 
 	_, capacityReservation, warmed, err = poolManager.Provision(
