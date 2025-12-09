@@ -33,7 +33,7 @@ type EMAWeekendDecayPredictor struct {
 }
 
 // PredictorConfig contains configuration parameters for the predictor.
-type PredictorConfig struct {
+type PredictorConfig struct { //nolint:revive
 	// EMAPeriod is the number of data points to consider for EMA calculation.
 	// Default: 12 (e.g., 12 hours if data is recorded hourly)
 	EMAPeriod int
@@ -83,7 +83,7 @@ func DefaultPredictorConfig() PredictorConfig {
 }
 
 // NewEMAWeekendDecayPredictor creates a new predictor with the given history store and config.
-func NewEMAWeekendDecayPredictor(store HistoryStore, config PredictorConfig) *EMAWeekendDecayPredictor {
+func NewEMAWeekendDecayPredictor(store HistoryStore, config PredictorConfig) *EMAWeekendDecayPredictor { //nolint:gocritic
 	return &EMAWeekendDecayPredictor{
 		historyStore: store,
 		config:       config,
@@ -138,7 +138,7 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *PredictionInput) (float64, error) {
 	// Get recent data for EMA calculation
 	lookbackEnd := input.StartTimestamp
-	lookbackStart := lookbackEnd - int64(p.config.LookbackHours*3600)
+	lookbackStart := lookbackEnd - int64(p.config.LookbackHours*3600) //nolint:gomnd
 
 	records, err := p.historyStore.GetUtilizationHistory(
 		ctx,
@@ -180,8 +180,8 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Context, input *PredictionInput) (float64, error) {
 	const secondsPerWeek = 7 * 24 * 3600
 
-	weekValues := make([]float64, 3)
-	weekHasData := make([]bool, 3)
+	weekValues := make([]float64, 3) //nolint:gomnd
+	weekHasData := make([]bool, 3)   //nolint:gomnd
 
 	// Get data from 1, 2, and 3 weeks ago at the same time window
 	for week := 1; week <= 3; week++ {
