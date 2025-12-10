@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/jmoiron/sqlx"
+
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/jmoiron/sqlx"
 )
 
 // Ensure OutboxStore implements store.OutboxStore interface.

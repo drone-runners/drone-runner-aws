@@ -8,13 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone/runner-go/logger"
+	lespec "github.com/harness/lite-engine/engine/spec"
+	"github.com/sirupsen/logrus"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
-	lespec "github.com/harness/lite-engine/engine/spec"
-	"github.com/sirupsen/logrus"
 )
 
 type CapacityReservationRequest struct {

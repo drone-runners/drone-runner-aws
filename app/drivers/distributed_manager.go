@@ -11,10 +11,11 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
+	"github.com/drone/runner-go/logger"
+
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
 
 	"github.com/sirupsen/logrus"
 )

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/harness/lite-engine/api"
+	lehttp "github.com/harness/lite-engine/cli/client"
+
 	"github.com/drone-runners/drone-runner-aws/app/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/harness/lite-engine/api"
-	lehttp "github.com/harness/lite-engine/cli/client"
 )
 
 const (

@@ -13,13 +13,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone/runner-go/logger"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
 
 	"github.com/dchest/uniuri"
 	"github.com/google/uuid"
@@ -1122,7 +1123,7 @@ func (p *config) GetFullyQualifiedImage(ctx context.Context, config *types.VMIma
 func getInstanceName(runner, pool string) string {
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
-	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd
+	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:mnd
 	trimmedName := substrSuffix(name, maxInstanceNameLen)
 	if trimmedName[0] == '-' {
 		trimmedName = "d" + trimmedName[1:]

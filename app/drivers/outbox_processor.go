@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/store"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/engine/spec"
 	"github.com/sirupsen/logrus"
+
+	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // OutboxProcessor processes outbox jobs

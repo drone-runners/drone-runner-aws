@@ -7,10 +7,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/client"
 	"github.com/wings-software/dlite/httphelper"
+
+	"github.com/drone-runners/drone-runner-aws/command/harness"
 )
 
 const (

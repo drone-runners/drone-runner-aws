@@ -8,12 +8,13 @@ import (
 	"path"
 	"testing"
 
+	"github.com/drone/drone-go/drone"
+	"github.com/drone/runner-go/manifest"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/drone-go/drone"
-	"github.com/drone/runner-go/manifest"
 )
 
 func TestLint(t *testing.T) {

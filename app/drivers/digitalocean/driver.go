@@ -6,12 +6,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/drone/runner-go/logger"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
 
 	"github.com/dchest/uniuri"
 	"github.com/digitalocean/godo"
@@ -96,7 +97,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("pool", opts.PoolName).
 		WithField("image", p.image).
 		WithField("hibernate", p.CanHibernate())
-	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
+	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:mnd
 	logr.Infof("digitalocean: creating instance %s", name)
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)

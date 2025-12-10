@@ -7,13 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/google/uuid"
 	"github.com/harness/lite-engine/api"
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
+
+	"github.com/drone-runners/drone-runner-aws/command/harness"
 )
 
 const (

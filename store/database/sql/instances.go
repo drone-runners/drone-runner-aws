@@ -194,7 +194,7 @@ func (s InstanceStore) FindAndClaim(
 	cleanColumns = strings.TrimSpace(cleanColumns)
 
 	// --- Build final CTE UPDATE SQL ---
-	//nolint: gosec,gomnd
+	//nolint: gosec,mnd
 	finalSQL := fmt.Sprintf(`
 WITH candidate AS (
     %s

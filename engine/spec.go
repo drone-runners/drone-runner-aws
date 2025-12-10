@@ -5,9 +5,10 @@
 package engine
 
 import (
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/pipeline/runtime"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	lespec "github.com/harness/lite-engine/engine/spec"
 )

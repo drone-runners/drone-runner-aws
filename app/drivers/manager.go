@@ -10,6 +10,11 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/drone/runner-go/logger"
+	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/harness/lite-engine/engine/spec"
+	"github.com/pkg/errors"
+
 	"github.com/drone-runners/drone-runner-aws/app/certs"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -17,10 +22,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
-	lehttp "github.com/harness/lite-engine/cli/client"
-	"github.com/harness/lite-engine/engine/spec"
-	"github.com/pkg/errors"
 
 	"github.com/sirupsen/logrus"
 )

@@ -3,9 +3,10 @@ package nomad
 import (
 	"time"
 
+	"github.com/hashicorp/nomad/api"
+
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/hashicorp/nomad/api"
 )
 
 type Virtualizer interface {

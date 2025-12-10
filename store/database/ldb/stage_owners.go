@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/gob"
 
+	"github.com/syndtr/goleveldb/leveldb"
+
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var _ store.StageOwnerStore = (*StageOwnerStore)(nil)
