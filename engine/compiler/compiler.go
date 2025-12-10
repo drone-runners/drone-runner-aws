@@ -9,12 +9,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/drone/drone-go/drone"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/encoder"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone/drone-go/drone"
 
 	"github.com/drone/runner-go/clone"
 	"github.com/drone/runner-go/environ"
@@ -62,7 +63,7 @@ type (
 		// Volumes provides a set of volumes that should be mounted to each pipeline container
 		Volumes []string
 
-		// Tmate provides global configration options for tmate live debugging.
+		// Tmate provides global configuration options for tmate live debugging.
 		Tmate
 	}
 )

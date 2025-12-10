@@ -8,13 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drone/runner-go/logger"
+	lespec "github.com/harness/lite-engine/engine/spec"
+	"github.com/sirupsen/logrus"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
-	lespec "github.com/harness/lite-engine/engine/spec"
-	"github.com/sirupsen/logrus"
 )
 
 type CapacityReservationRequest struct {
@@ -28,6 +29,7 @@ type CapacityReservationRequest struct {
 	StorageConfig          types.StorageConfig  `json:"storage_config"`
 	Zone                   string               `json:"zone"`
 	MachineType            string               `json:"machine_type"`
+	NestedVirtualization   bool                 `json:"nested_virtualization"`
 	ReservationTimeout     int64                `json:"timeout,omitempty"`
 }
 
@@ -172,9 +174,10 @@ func handleCapacityReservation(
 	timeoutSeconds := int64(timeout / time.Second)
 
 	machineConfig := &types.MachineConfig{
-		VMImageConfig: &r.RequestedVMImageConfig,
-		Zone:          r.Zone,
-		MachineType:   r.MachineType,
+		VMImageConfig:        &r.RequestedVMImageConfig,
+		Zone:                 r.Zone,
+		MachineType:          r.MachineType,
+		NestedVirtualization: r.NestedVirtualization,
 	}
 
 	_, capacityReservation, warmed, err = poolManager.Provision(

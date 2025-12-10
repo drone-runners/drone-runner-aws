@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/store"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/harness/lite-engine/engine/spec"
 	"github.com/sirupsen/logrus"
+
+	"github.com/drone-runners/drone-runner-aws/store"
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // OutboxProcessor processes outbox jobs
@@ -209,7 +210,7 @@ func (p *OutboxProcessor) processSetupInstanceJob(job *types.OutboxJob) error {
 			MachineType:          params.MachineType,
 			NestedVirtualization: params.NestedVirtualization,
 			Hibernate:            params.Hibernate,
-			ShouldUseGoogleDNS:   false, // TODO: remove this once google dns is enabled globally
+			VariantID:            params.VariantID,
 		}
 
 		// Create MachineConfig if ImageName is provided

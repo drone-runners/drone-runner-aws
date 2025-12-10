@@ -9,12 +9,13 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/hashicorp/nomad/api"
+
 	"github.com/drone-runners/drone-runner-aws/app/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/hashicorp/nomad/api"
 )
 
 //go:embed gitspace/scripts/provision_ceph_storage.sh

@@ -10,11 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/drone/drone-go/drone"
+	"github.com/drone/runner-go/manifest"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone/drone-go/drone"
-	"github.com/drone/runner-go/manifest"
 )
 
 // ErrDuplicateStepName is returned when two Pipeline steps

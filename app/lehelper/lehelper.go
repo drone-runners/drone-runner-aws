@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/harness/lite-engine/api"
+	lehttp "github.com/harness/lite-engine/cli/client"
+
 	"github.com/drone-runners/drone-runner-aws/app/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/harness/lite-engine/api"
-	lehttp "github.com/harness/lite-engine/cli/client"
 )
 
 const (
@@ -30,7 +31,6 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		AutoInjectionBinaryURI:       opts.AutoInjectionBinaryURI,
 		LiteEngineFallbackPath:       opts.LiteEngineFallbackPath,
 		PluginBinaryFallbackURI:      opts.PluginBinaryFallbackURI,
-		ShouldUseGoogleDNS:           opts.ShouldUseGoogleDNS,
 		DriverName:                   opts.DriverName,
 		EnableC4D:                    opts.EnableC4D,
 		AnnotationsBinaryURI:         opts.AnnotationsBinaryURI,

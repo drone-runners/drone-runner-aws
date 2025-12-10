@@ -11,13 +11,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/drone-runners/drone-runner-aws/app/drivers"
-	"github.com/drone-runners/drone-runner-aws/app/poolfile"
-	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/command/internal"
-	"github.com/drone-runners/drone-runner-aws/engine/compiler"
-	"github.com/drone-runners/drone-runner-aws/engine/linter"
-	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone/envsubst"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/environ/provider"
@@ -25,6 +18,14 @@ import (
 	"github.com/drone/runner-go/pipeline/runtime"
 	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
+
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
+	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/command/internal"
+	"github.com/drone-runners/drone-runner-aws/engine/compiler"
+	"github.com/drone-runners/drone-runner-aws/engine/linter"
+	"github.com/drone-runners/drone-runner-aws/engine/resource"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"

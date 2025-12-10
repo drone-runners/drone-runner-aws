@@ -10,6 +10,11 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/drone/runner-go/logger"
+	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/harness/lite-engine/engine/spec"
+	"github.com/pkg/errors"
+
 	"github.com/drone-runners/drone-runner-aws/app/certs"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -17,9 +22,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
-	lehttp "github.com/harness/lite-engine/cli/client"
-	"github.com/pkg/errors"
 
 	"github.com/sirupsen/logrus"
 )
@@ -751,7 +753,110 @@ func (m *Manager) buildPool(
 
 	wg.Wait()
 
+	// Building pool variants if present
+	if len(pool.PoolVariants) > 0 {
+		logr.Infoln("build pool: building variant pools")
+		m.buildPoolWithVariants(ctx, pool, tlsServerName, setupInstanceWithHibernate, setupInstanceAsync, logr)
+	}
+
 	return nil
+}
+
+// buildPoolWithVariants builds pool instances for each variant configuration.
+// Simply creates the number of instances specified in variant.Pool without checking DB.
+func (m *Manager) buildPoolWithVariants(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName string,
+	setupInstanceWithHibernate func(
+		context.Context,
+		*poolEntry,
+		string,
+		string,
+		string,
+		*types.MachineConfig,
+		*types.GitspaceAgentConfig,
+		*types.StorageConfig,
+		int64,
+		*types.Platform,
+	) (*types.Instance, error),
+	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
+	logr logger.Logger,
+) {
+	// Process each variant and create instances
+	for idx, variant := range pool.PoolVariants {
+		// Get variant params (VariantID should already be set from YAML through embedding)
+		variantParams := variant.SetupInstanceParams
+
+		// Convert SetupInstanceParams to MachineConfig
+		variantConfig := m.setupInstanceParamsToMachineConfig(&variantParams)
+
+		logr = logr.
+			WithField("variant_id", variantParams.VariantID).
+			WithField("variant_index", idx)
+
+		// Use variant's pool size (number of instances to create)
+		instanceCount := variant.Pool
+		if instanceCount <= 0 {
+			logr.Infoln("build pool with variants: skipping variant with pool size 0")
+			continue
+		}
+
+		logr.
+			WithField("instance_count", instanceCount).
+			Infoln("build pool with variants: creating instances for variant")
+
+		// Create instances for this variant
+		wg := &sync.WaitGroup{}
+		wg.Add(instanceCount)
+
+		for i := 0; i < instanceCount; i++ {
+			go func(ctx context.Context, logr logger.Logger, variantParams *types.SetupInstanceParams, machineConfig *types.MachineConfig) {
+				defer wg.Done()
+
+				inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", "", machineConfig, nil, nil, 0, nil)
+				if err != nil {
+					logr.WithError(err).Errorln("build pool with variants: failed to create instance")
+					if setupInstanceAsync != nil {
+						logr.WithField("runner_name", m.runnerName).Infoln("build pool with variants: creating instance asynchronously")
+						setupInstanceAsync(ctx, pool.Name, m.runnerName, variantParams)
+					}
+					return
+				}
+				logr.
+					WithField("pool", pool.Name).
+					WithField("id", inst.ID).
+					WithField("name", inst.Name).
+					WithField("variant_id", machineConfig.VariantID).
+					Infoln("build pool with variants: created new instance")
+			}(ctx, logr, &variantParams, variantConfig)
+		}
+
+		wg.Wait()
+	}
+}
+
+// converts SetupInstanceParams to MachineConfig.
+func (m *Manager) setupInstanceParamsToMachineConfig(params *types.SetupInstanceParams) *types.MachineConfig {
+	if params == nil {
+		return nil
+	}
+
+	machineConfig := &types.MachineConfig{
+		Zone:                 params.Zone,
+		MachineType:          params.MachineType,
+		NestedVirtualization: params.NestedVirtualization,
+		Hibernate:            params.Hibernate,
+		VariantID:            params.VariantID,
+	}
+
+	if params.ImageName != "" {
+		machineConfig.VMImageConfig = &spec.VMImageConfig{
+			ImageName: params.ImageName,
+		}
+	}
+
+	return machineConfig
 }
 
 func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsServerName string, query *types.QueryParams) error {
@@ -827,7 +932,6 @@ func (m *Manager) setupInstance(
 	createOptions.AccountID = ownerID
 	createOptions.ResourceClass = resourceClass
 	if machineConfig != nil {
-		createOptions.ShouldUseGoogleDNS = machineConfig.ShouldUseGoogleDNS
 		createOptions.Zone = machineConfig.Zone
 		createOptions.MachineType = machineConfig.MachineType
 		createOptions.NestedVirtualization = machineConfig.NestedVirtualization
@@ -913,6 +1017,14 @@ func (m *Manager) setupInstance(
 	}
 
 	inst.RunnerName = m.runnerName
+
+	// Set VariantID from machineConfig ("default" for non-variant instances)
+	if machineConfig != nil && machineConfig.VariantID != "" {
+		inst.VariantID = machineConfig.VariantID
+	} else {
+		inst.VariantID = "default"
+	}
+
 	if inst.Labels == nil {
 		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
 		if marshalErr != nil {

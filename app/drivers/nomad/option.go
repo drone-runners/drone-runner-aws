@@ -3,8 +3,9 @@ package nomad
 import (
 	"os"
 
-	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/sirupsen/logrus"
+
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 )
 
 type Option func(*config)

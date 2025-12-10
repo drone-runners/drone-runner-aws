@@ -6,10 +6,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hashicorp/nomad/api"
+
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/hashicorp/nomad/api"
 )
 
 const lockFunction = `

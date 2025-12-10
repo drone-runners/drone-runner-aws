@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/drivers/amazon"
 	"github.com/drone-runners/drone-runner-aws/app/drivers/anka"
@@ -20,8 +23,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -368,14 +369,17 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 	}
 
 	pool = drivers.Pool{
-		RunnerName: runnerName,
-		Name:       instance.Name,
-		MaxSize:    instance.Limit,
-		MinSize:    instance.Pool,
-		Platform:   instance.Platform,
+		RunnerName:   runnerName,
+		Name:         instance.Name,
+		MaxSize:      instance.Limit,
+		MinSize:      instance.Pool,
+		Platform:     instance.Platform,
+		Spec:         instance.Spec,
+		VariantID:    instance.VariantID,
+		PoolVariants: instance.Variants,
 	}
 	// Preserve only the provider-specific spec for later retrieval.
-	pool.Spec = instance.Spec
+
 	return pool
 }
 

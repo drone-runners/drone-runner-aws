@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/harness/lite-engine/api"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
@@ -15,7 +17,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/harness/lite-engine/api"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/pkg/errors"
@@ -169,20 +170,20 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		}
 		if resp != nil && resp.OSStats != nil {
 			var cpuGe50, cpuGe70, cpuGe90, memGe50, memGe70, memGe90 bool
-			if resp.OSStats.MaxCPUUsagePct >= 50.0 { //nolint:gomnd
+			if resp.OSStats.MaxCPUUsagePct >= 50.0 { //nolint:mnd
 				cpuGe50 = true
-				if resp.OSStats.MaxCPUUsagePct >= 70.0 { //nolint:gomnd
+				if resp.OSStats.MaxCPUUsagePct >= 70.0 { //nolint:mnd
 					cpuGe70 = true
-					if resp.OSStats.MaxCPUUsagePct >= 90.0 { //nolint:gomnd
+					if resp.OSStats.MaxCPUUsagePct >= 90.0 { //nolint:mnd
 						cpuGe90 = true
 					}
 				}
 			}
-			if resp.OSStats.MaxMemUsagePct >= 50.0 { //nolint:gomnd
+			if resp.OSStats.MaxMemUsagePct >= 50.0 { //nolint:mnd
 				memGe50 = true
-				if resp.OSStats.MaxMemUsagePct >= 70.0 { //nolint:gomnd
+				if resp.OSStats.MaxMemUsagePct >= 70.0 { //nolint:mnd
 					memGe70 = true
-					if resp.OSStats.MaxMemUsagePct >= 90.0 { //nolint:gomnd
+					if resp.OSStats.MaxMemUsagePct >= 90.0 { //nolint:mnd
 						memGe90 = true
 					}
 				}

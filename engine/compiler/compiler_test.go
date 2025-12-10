@@ -12,13 +12,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/drone-runners/drone-runner-aws/app/drivers"
-	"github.com/drone-runners/drone-runner-aws/app/oshelp"
-	"github.com/drone-runners/drone-runner-aws/app/poolfile"
-	"github.com/drone-runners/drone-runner-aws/command/config"
-	"github.com/drone-runners/drone-runner-aws/engine"
-	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/runner-go/environ/provider"
 	"github.com/drone/runner-go/manifest"
@@ -26,6 +19,14 @@ import (
 	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 	lespec "github.com/harness/lite-engine/engine/spec"
+
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/app/poolfile"
+	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/engine"
+	"github.com/drone-runners/drone-runner-aws/engine/resource"
+	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -158,7 +159,7 @@ func TestCompile_Secrets(t *testing.T) {
 	})
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf(diff)
+		t.Errorf("%s", diff)
 	}
 }
 

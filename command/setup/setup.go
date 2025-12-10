@@ -10,14 +10,15 @@ import (
 	"os"
 	"time"
 
+	"github.com/drone/runner-go/client"
+	"github.com/drone/runner-go/logger"
+	"github.com/drone/signal"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/drone/runner-go/client"
-	"github.com/drone/runner-go/logger"
-	"github.com/drone/signal"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"

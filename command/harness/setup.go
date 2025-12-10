@@ -12,15 +12,16 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/metric"
 
+	"github.com/drone/runner-go/logger"
+	"github.com/harness/lite-engine/api"
+	lespec "github.com/harness/lite-engine/engine/spec"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
-	"github.com/harness/lite-engine/api"
-	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/sirupsen/logrus"
 )
@@ -425,18 +426,11 @@ func handleSetup(
 		RunnerName: runnerName,
 	}
 
-	shouldUseGoogleDNS := false
-	if len(r.SetupRequest.Envs) != 0 {
-		if r.SetupRequest.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
-			shouldUseGoogleDNS = true
-		}
-	}
-
 	machineConfig := &types.MachineConfig{
-		VMImageConfig:      &r.VMImageConfig,
-		Zone:               r.Zone,
-		MachineType:        r.MachineType,
-		ShouldUseGoogleDNS: shouldUseGoogleDNS,
+		VMImageConfig:        &r.VMImageConfig,
+		Zone:                 r.Zone,
+		MachineType:          r.MachineType,
+		NestedVirtualization: r.NestedVirtualization,
 	}
 
 	instance, _, warmed, err = poolManager.Provision(

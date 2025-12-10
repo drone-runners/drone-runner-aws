@@ -9,9 +9,10 @@ import (
 
 	lespec "github.com/harness/lite-engine/engine/spec"
 
+	"github.com/drone/runner-go/manifest"
+
 	"github.com/drone-runners/drone-runner-aws/engine"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
-	"github.com/drone/runner-go/manifest"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

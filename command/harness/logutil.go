@@ -5,10 +5,11 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/sirupsen/logrus"
 )
 
 const (

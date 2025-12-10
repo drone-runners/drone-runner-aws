@@ -13,13 +13,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/drone/runner-go/logger"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
 
 	"github.com/dchest/uniuri"
 	"github.com/google/uuid"
@@ -356,9 +357,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if zone == "" {
 		zone = p.RandomZone()
 	}
-
+	machineType := p.size
 	if opts.MachineType != "" {
-		p.size = opts.MachineType
+		machineType = opts.MachineType
 	}
 
 	// getImage returns the image to use for this instance creation
@@ -374,8 +375,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("pool", opts.PoolName).
 		WithField("zone", zone).
 		WithField("image", image).
-		WithField("size", p.size).
-		WithField("google_dns", opts.ShouldUseGoogleDNS)
+		WithField("size", machineType)
 
 	// create the instance
 
@@ -450,7 +450,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		Name:           name,
 		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
 		MinCpuPlatform: "Automatic",
-		MachineType:    fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.projectID, zone, p.size),
+		MachineType:    fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.projectID, zone, machineType),
 		Metadata: &compute.Metadata{
 			Items: []*compute.MetadataItems{
 				{
@@ -582,7 +582,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
-	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization)
+	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, image, machineType)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to map VM to instance")
 		return nil, err
@@ -902,7 +902,7 @@ func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, disk
 	})
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool) (types.Instance, error) {
+func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool, image, machineType string) (types.Instance, error) {
 	network := vm.NetworkInterfaces[0]
 	instanceIP := ""
 	if p.privateIP {
@@ -927,9 +927,9 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		Provider:                   types.Google, // this is driver, though its the old legacy name of provider
 		State:                      types.StateCreated,
 		Pool:                       opts.PoolName,
-		Image:                      p.image,
+		Image:                      image,
 		Zone:                       zone,
-		Size:                       p.size,
+		Size:                       machineType,
 		Platform:                   opts.Platform,
 		Address:                    instanceIP,
 		CACert:                     opts.CACert,
@@ -1123,7 +1123,7 @@ func (p *config) GetFullyQualifiedImage(ctx context.Context, config *types.VMIma
 func getInstanceName(runner, pool string) string {
 	namePrefix := strings.ReplaceAll(runner, " ", "")
 	randStr, _ := randStringRunes(randStrLen)
-	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:gomnd
+	name := strings.ToLower(fmt.Sprintf("%s-%s-%s-%s", namePrefix, pool, uniuri.NewLen(8), randStr)) //nolint:mnd
 	trimmedName := substrSuffix(name, maxInstanceNameLen)
 	if trimmedName[0] == '-' {
 		trimmedName = "d" + trimmedName[1:]

@@ -1,0 +1,2 @@
+ALTER TABLE instances ADD COLUMN IF NOT EXISTS variant_id VARCHAR(250) NOT NULL DEFAULT 'default';
+
