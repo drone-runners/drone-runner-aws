@@ -6,6 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/harness/lite-engine/api"
+	lespec "github.com/harness/lite-engine/engine/spec"
+	"github.com/harness/lite-engine/logger"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
@@ -16,9 +20,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/harness/lite-engine/api"
-	lespec "github.com/harness/lite-engine/engine/spec"
-	"github.com/harness/lite-engine/logger"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"

@@ -1,9 +1,10 @@
 package dlite
 
 import (
+	"github.com/harness/lite-engine/api"
+
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/harness/lite-engine/api"
 )
 
 type VMTaskExecutionResponse struct {

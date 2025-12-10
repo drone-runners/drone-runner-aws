@@ -9,9 +9,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/harness/lite-engine/api"
 	"github.com/sirupsen/logrus"
+
+	"github.com/drone-runners/drone-runner-aws/command/harness"
 )
 
 type CleanupRequest struct {

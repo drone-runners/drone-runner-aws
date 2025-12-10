@@ -5,8 +5,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/drone-runners/drone-runner-aws/command/harness"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"

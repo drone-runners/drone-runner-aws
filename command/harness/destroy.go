@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/harness/lite-engine/api"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
@@ -15,7 +17,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/harness/lite-engine/api"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/pkg/errors"

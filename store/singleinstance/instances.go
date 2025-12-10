@@ -5,8 +5,9 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/types"
 
-	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/jmoiron/sqlx"
+
+	"github.com/drone-runners/drone-runner-aws/store"
 )
 
 var (

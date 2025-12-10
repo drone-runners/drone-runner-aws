@@ -8,6 +8,16 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 
+	loghistory "github.com/drone/runner-go/logger/history"
+	"github.com/drone/runner-go/server"
+	"github.com/drone/signal"
+	"github.com/go-chi/chi/v5"
+	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
+	"github.com/wings-software/dlite/httphelper"
+	"golang.org/x/sync/errgroup"
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/httprender"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
@@ -18,15 +28,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	loghistory "github.com/drone/runner-go/logger/history"
-	"github.com/drone/runner-go/server"
-	"github.com/drone/signal"
-	"github.com/go-chi/chi/v5"
-	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
-	"github.com/wings-software/dlite/httphelper"
-	"golang.org/x/sync/errgroup"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type delegateCommand struct {

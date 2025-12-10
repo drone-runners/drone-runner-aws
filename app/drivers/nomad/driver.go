@@ -13,15 +13,16 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/drone/runner-go/logger"
+	"github.com/hashicorp/nomad/api"
+	"golang.org/x/exp/slices"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/logger"
-	"github.com/hashicorp/nomad/api"
-	"golang.org/x/exp/slices"
 )
 
 var _ drivers.Driver = (*config)(nil)

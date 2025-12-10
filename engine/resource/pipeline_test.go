@@ -7,9 +7,10 @@ package resource
 import (
 	"testing"
 
+	"github.com/drone/runner-go/manifest"
+
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
-	"github.com/drone/runner-go/manifest"
 
 	"github.com/google/go-cmp/cmp"
 )

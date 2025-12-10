@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/harness/lite-engine/api"
+	"github.com/harness/lite-engine/logger"
+	"github.com/sirupsen/logrus"
+
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
-	"github.com/harness/lite-engine/api"
-	"github.com/harness/lite-engine/logger"
-	"github.com/sirupsen/logrus"
 )
 
 const suspendTimeout = 5 * time.Minute

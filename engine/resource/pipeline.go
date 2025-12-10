@@ -5,8 +5,9 @@
 package resource
 
 import (
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/manifest"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 var (

@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"os"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone/runner-go/logger"
 	"github.com/sirupsen/logrus"
+
+	"github.com/drone-runners/drone-runner-aws/command/config"
 )
 
 // Get stackdriver to display logs correctly

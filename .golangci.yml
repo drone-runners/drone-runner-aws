@@ -139,4 +139,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/golangci/golangci-lint
+        - github.com/drone-runners/drone-runner-aws
