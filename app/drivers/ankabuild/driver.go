@@ -65,7 +65,7 @@ func (c *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
-	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
+	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:mnd
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.AnkaBuild).
 		WithField("name", machineName).

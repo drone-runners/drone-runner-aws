@@ -130,7 +130,7 @@ func (c *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	sanitizedRunnerName := strings.ReplaceAll(opts.RunnerName, " ", "-")
 	sanitizedPoolName := strings.ReplaceAll(opts.PoolName, " ", "-")
-	var name = fmt.Sprintf("%s-%s-%s", sanitizedRunnerName, sanitizedPoolName, uniuri.NewLen(8)) //nolint:gomnd
+	var name = fmt.Sprintf("%s-%s-%s", sanitizedRunnerName, sanitizedPoolName, uniuri.NewLen(8)) //nolint:mnd
 	vnetName := fmt.Sprintf("%s-vnet", name)
 	subnetName := fmt.Sprintf("%s-subnet", name)
 	publicIPName := fmt.Sprintf("%s-publicip", name)

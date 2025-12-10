@@ -158,7 +158,7 @@ func TestCompile_Secrets(t *testing.T) {
 	})
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf(diff)
+		t.Errorf("%s", diff)
 	}
 }
 

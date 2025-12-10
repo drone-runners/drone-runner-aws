@@ -110,7 +110,7 @@ func (p *config) destroyJobNoop(vm, nodeID string) (job *api.Job, id string) {
 	}
 	job = &api.Job{
 		ID:   &id,
-		Name: stringToPtr(random(20)), //nolint:gomnd
+		Name: stringToPtr(random(20)), //nolint:mnd
 
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},

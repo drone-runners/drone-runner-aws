@@ -96,7 +96,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("pool", opts.PoolName).
 		WithField("image", p.image).
 		WithField("hibernate", p.CanHibernate())
-	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
+	var name = fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:mnd
 	logr.Infof("digitalocean: creating instance %s", name)
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)

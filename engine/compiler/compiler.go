@@ -62,7 +62,7 @@ type (
 		// Volumes provides a set of volumes that should be mounted to each pipeline container
 		Volumes []string
 
-		// Tmate provides global configration options for tmate live debugging.
+		// Tmate provides global configuration options for tmate live debugging.
 		Tmate
 	}
 )

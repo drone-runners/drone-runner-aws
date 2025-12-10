@@ -82,7 +82,7 @@ func (c *HTTPClient) do(ctx context.Context, path, method string, in, out interf
 		defer func() {
 			// drain the response body so we can reuse
 			// this connection.
-			if _, cerr := io.Copy(io.Discard, io.LimitReader(res.Body, 4096)); cerr != nil { //nolint:gomnd
+			if _, cerr := io.Copy(io.Discard, io.LimitReader(res.Body, 4096)); cerr != nil { //nolint:mnd
 				logrus.WithError(cerr).Errorln("failed to drain response body")
 			}
 			res.Body.Close()
@@ -105,7 +105,7 @@ func (c *HTTPClient) do(ctx context.Context, path, method string, in, out interf
 		return res, err
 	}
 
-	if res.StatusCode > 299 { //nolint:gomnd
+	if res.StatusCode > 299 { //nolint:mnd
 		// if the response body includes an error message
 		// we should return the error string.
 		if len(body) != 0 {

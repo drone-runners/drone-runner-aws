@@ -91,7 +91,7 @@ func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImage
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
-	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:gomnd
+	machineName := fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8)) //nolint:mnd
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Anka).

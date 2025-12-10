@@ -121,5 +121,5 @@ func GetEntrypoint(pipelineOS string) []string {
 
 // Random generator function
 var Random = func() string {
-	return "drone-" + uniuri.NewLen(20) //nolint:gomnd
+	return "drone-" + uniuri.NewLen(20) //nolint:mnd
 }

@@ -178,7 +178,7 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 // createAndRunResourceJob creates and runs a resource job to reserve capacity on a node.
 // Returns the VM ID, resource job ID, and any error encountered.
 func (p *config) createAndRunResourceJob(ctx context.Context, opts *types.InstanceCreateOpts) (vm, resourceJobID string, err error) {
-	vm = strings.ToLower(random(20)) //nolint:gomnd
+	vm = strings.ToLower(random(20)) //nolint:mnd
 	_, class, cpus, memGB, err := p.getNomadResourceAndClass(opts)
 	if err != nil {
 		return "", "", err
@@ -605,7 +605,7 @@ func (p *config) destroyJob(ctx context.Context, vm, nodeID, storageIdentifier s
 	}
 	job = &api.Job{
 		ID:   &id,
-		Name: stringToPtr(random(20)), //nolint:gomnd
+		Name: stringToPtr(random(20)), //nolint:mnd
 
 		Type:        stringToPtr("batch"),
 		Datacenters: []string{"dc1"},
@@ -653,7 +653,7 @@ func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.Cl
 	sb := &strings.Builder{}
 	storageIdentifierSplit := strings.Split(storageIdentifier, "/")
 
-	if len(storageIdentifierSplit) != 2 { //nolint:gomnd
+	if len(storageIdentifierSplit) != 2 { //nolint:mnd
 		return "", "", fmt.Errorf("scheduler: could not parse storage identifier %s", storageIdentifier)
 	}
 	params := struct {

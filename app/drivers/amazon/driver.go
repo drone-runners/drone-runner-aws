@@ -1128,5 +1128,5 @@ func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
 	if gitspaceConfigIdentifier != "" {
 		return gitspaceConfigIdentifier
 	}
-	return fmt.Sprintf("%s-%s-%s", runner, pool, uniuri.NewLen(8)) //nolint:gomnd
+	return fmt.Sprintf("%s-%s-%s", runner, pool, uniuri.NewLen(8)) //nolint:mnd
 }

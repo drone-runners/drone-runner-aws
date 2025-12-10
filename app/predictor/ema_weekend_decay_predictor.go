@@ -138,7 +138,7 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *PredictionInput) (float64, error) {
 	// Get recent data for EMA calculation
 	lookbackEnd := input.StartTimestamp
-	lookbackStart := lookbackEnd - int64(p.config.LookbackHours*3600) //nolint:gomnd
+	lookbackStart := lookbackEnd - int64(p.config.LookbackHours*3600) //nolint:mnd
 
 	records, err := p.historyStore.GetUtilizationHistory(
 		ctx,
@@ -180,8 +180,8 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Context, input *PredictionInput) (float64, error) {
 	const secondsPerWeek = 7 * 24 * 3600
 
-	weekValues := make([]float64, 3) //nolint:gomnd
-	weekHasData := make([]bool, 3)   //nolint:gomnd
+	weekValues := make([]float64, 3) //nolint:mnd
+	weekHasData := make([]bool, 3)   //nolint:mnd
 
 	// Get data from 1, 2, and 3 weeks ago at the same time window
 	for week := 1; week <= 3; week++ {
