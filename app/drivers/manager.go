@@ -721,7 +721,7 @@ func (m *Manager) buildPool(
 		}
 	}
 
-	if shouldCreate <= 0 {
+	if shouldCreate < 0 {
 		return nil
 	}
 
