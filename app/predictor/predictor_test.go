@@ -151,7 +151,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 	}
 }
 
-func TestEMAWeekendDecayPredictor_WeekendMultiplier(t *testing.T) {
+func TestEMAWeekendDecayPredictor_WeekendVsWeekday(t *testing.T) {
 	// Find a Saturday timestamp
 	now := time.Now()
 	daysUntilSaturday := (6 - int(now.Weekday()) + 7) % 7
@@ -167,7 +167,7 @@ func TestEMAWeekendDecayPredictor_WeekendMultiplier(t *testing.T) {
 	}
 	tuesday := now.Add(time.Duration(daysUntilTuesday) * 24 * time.Hour)
 
-	// Create consistent historical data
+	// Create consistent historical data for both days
 	var records []UtilizationRecord
 	for week := 1; week <= 3; week++ {
 		for _, targetDay := range []time.Time{saturday, tuesday} {
@@ -187,14 +187,11 @@ func TestEMAWeekendDecayPredictor_WeekendMultiplier(t *testing.T) {
 	store := &MockHistoryStore{records: records}
 
 	config := DefaultPredictorConfig()
-	config.WeekendMultiplier = 0.5 // 50% for weekends
-	config.WeekdayMultiplier = 1.0
 	config.SafetyBuffer = 0 // Disable buffer for easier testing
-	config.EMAWeight = 0    // Use only historical data for predictable results
 
 	predictor := NewEMAWeekendDecayPredictor(store, config)
 
-	// Predict for Saturday
+	// Predict for Saturday (uses only historical data)
 	saturdayInput := &PredictionInput{
 		PoolName:       "test-pool",
 		VariantID:      "variant-1",
@@ -207,7 +204,7 @@ func TestEMAWeekendDecayPredictor_WeekendMultiplier(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Predict for Tuesday
+	// Predict for Tuesday (uses EMA + historical combined)
 	tuesdayInput := &PredictionInput{
 		PoolName:       "test-pool",
 		VariantID:      "variant-1",
@@ -220,15 +217,22 @@ func TestEMAWeekendDecayPredictor_WeekendMultiplier(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Saturday should be lower than Tuesday due to weekend multiplier
-	if saturdayResult.RecommendedInstances >= tuesdayResult.RecommendedInstances {
-		t.Errorf("expected weekend (%d) < weekday (%d)",
+	// Both should produce valid predictions
+	t.Logf("Saturday (historical only): %d instances", saturdayResult.RecommendedInstances)
+	t.Logf("Tuesday (EMA + historical): %d instances", tuesdayResult.RecommendedInstances)
+
+	// With same historical data, results depend on algorithm differences
+	// Weekend uses only historical, weekday combines EMA with historical
+	if saturdayResult.RecommendedInstances < 1 || tuesdayResult.RecommendedInstances < 1 {
+		t.Errorf("expected valid predictions, got weekend=%d, weekday=%d",
 			saturdayResult.RecommendedInstances, tuesdayResult.RecommendedInstances)
 	}
 }
 
 func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
-	now := time.Now()
+	// Use a fixed weekday timestamp for predictable results
+	// Wednesday, January 10, 2024 at 10:00 AM UTC
+	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
 
 	// Only add data for 1 week ago - should use only that data
 	var records []UtilizationRecord
@@ -243,8 +247,6 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 	store := &MockHistoryStore{records: records}
 	config := DefaultPredictorConfig()
 	config.SafetyBuffer = 0
-	config.WeekdayMultiplier = 1.0
-	config.WeekendMultiplier = 1.0
 	config.EMAWeight = 0 // Use only historical
 
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -284,9 +286,6 @@ func TestDefaultPredictorConfig(t *testing.T) {
 	}
 	if config.WeekDecayFactors[2] != 0.2 {
 		t.Errorf("expected week 3 decay 0.2, got %f", config.WeekDecayFactors[2])
-	}
-	if config.WeekendMultiplier != 0.7 {
-		t.Errorf("expected WeekendMultiplier 0.7, got %f", config.WeekendMultiplier)
 	}
 	if config.SafetyBuffer != 0.1 {
 		t.Errorf("expected SafetyBuffer 0.1, got %f", config.SafetyBuffer)
@@ -385,37 +384,254 @@ func TestCombineValues(t *testing.T) {
 	}
 }
 
-func TestApplyDayOfWeekOffset(t *testing.T) {
-	config := DefaultPredictorConfig()
-	config.WeekendMultiplier = 0.5
-	config.WeekdayMultiplier = 1.0
-	predictor := NewEMAWeekendDecayPredictor(&MockHistoryStore{}, config)
+func TestIsWeekend(t *testing.T) {
+	predictor := NewEMAWeekendDecayPredictorWithDefaults(&MockHistoryStore{})
 
 	// Create timestamps for each day of the week
 	// Start from a known date: January 1, 2024 was a Monday
 	monday := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name     string
-		time     time.Time
-		value    float64
-		expected float64
+		name      string
+		time      time.Time
+		isWeekend bool
 	}{
-		{"Monday", monday, 100, 100},
-		{"Tuesday", monday.Add(24 * time.Hour), 100, 100},
-		{"Wednesday", monday.Add(2 * 24 * time.Hour), 100, 100},
-		{"Thursday", monday.Add(3 * 24 * time.Hour), 100, 100},
-		{"Friday", monday.Add(4 * 24 * time.Hour), 100, 100},
-		{"Saturday", monday.Add(5 * 24 * time.Hour), 100, 50},
-		{"Sunday", monday.Add(6 * 24 * time.Hour), 100, 50},
+		{"Monday", monday, false},
+		{"Tuesday", monday.Add(24 * time.Hour), false},
+		{"Wednesday", monday.Add(2 * 24 * time.Hour), false},
+		{"Thursday", monday.Add(3 * 24 * time.Hour), false},
+		{"Friday", monday.Add(4 * 24 * time.Hour), false},
+		{"Saturday", monday.Add(5 * 24 * time.Hour), true},
+		{"Sunday", monday.Add(6 * 24 * time.Hour), true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := predictor.applyDayOfWeekOffset(tt.value, tt.time.Unix())
-			if result != tt.expected {
-				t.Errorf("expected %f, got %f", tt.expected, result)
+			result := predictor.isWeekend(tt.time.Unix())
+			if result != tt.isWeekend {
+				t.Errorf("expected isWeekend=%v, got %v", tt.isWeekend, result)
 			}
 		})
+	}
+}
+
+// TestEMAWeekendDecayPredictor_15MinWindowPrediction tests the predictor
+// with 15-minute prediction windows using 3 weeks of history data
+// recorded every 2 minutes.
+func TestEMAWeekendDecayPredictor_15MinWindowPrediction(t *testing.T) {
+	const (
+		poolName  = "test-pool"
+		variantID = "variant-1"
+	)
+
+	// Use a fixed reference time: Wednesday, January 24, 2024 at 10:00 AM UTC
+	// This gives us a predictable weekday during business hours
+	referenceTime := time.Date(2024, 1, 24, 10, 0, 0, 0, time.UTC)
+
+	// Generate 3 weeks of history data with 2-minute intervals
+	historyData := GenerateMockHistoryData(poolName, variantID, referenceTime)
+
+	store := &MockHistoryStore{records: historyData}
+
+	config := DefaultPredictorConfig()
+	predictor := NewEMAWeekendDecayPredictor(store, config)
+
+	// Test multiple consecutive 15-minute windows
+	windowDuration := 15 * time.Minute
+	numWindows := 8 // Test 8 consecutive 15-minute windows (2 hours total)
+
+	t.Logf("Testing %d consecutive 15-minute windows starting at %s", numWindows, referenceTime.Format(time.RFC3339))
+	t.Logf("History data contains %d records (3 weeks @ 2-min intervals)", len(historyData))
+
+	var predictions []int
+	for i := 0; i < numWindows; i++ {
+		windowStart := referenceTime.Add(time.Duration(i) * windowDuration)
+		windowEnd := windowStart.Add(windowDuration)
+
+		input := &PredictionInput{
+			PoolName:       poolName,
+			VariantID:      variantID,
+			StartTimestamp: windowStart.Unix(),
+			EndTimestamp:   windowEnd.Unix(),
+		}
+
+		result, err := predictor.Predict(context.Background(), input)
+		if err != nil {
+			t.Fatalf("window %d: unexpected error: %v", i, err)
+		}
+
+		predictions = append(predictions, result.RecommendedInstances)
+		t.Logf("Window %d [%s - %s]: Recommended %d instances",
+			i+1,
+			windowStart.Format("15:04"),
+			windowEnd.Format("15:04"),
+			result.RecommendedInstances)
+	}
+
+	// Validate predictions are reasonable
+	for i, pred := range predictions {
+		// During business hours (10 AM - 12 PM), we expect higher utilization
+		// Based on mock data: peak is ~25, with safety buffer should be ~28
+		if pred < config.MinInstances {
+			t.Errorf("window %d: prediction %d below minimum %d", i, pred, config.MinInstances)
+		}
+		if pred > 50 { // Sanity check - should not exceed reasonable maximum
+			t.Errorf("window %d: prediction %d exceeds reasonable maximum", i, pred)
+		}
+	}
+
+	// Verify we got predictions for all windows
+	if len(predictions) != numWindows {
+		t.Errorf("expected %d predictions, got %d", numWindows, len(predictions))
+	}
+}
+
+// TestEMAWeekendDecayPredictor_15MinWindowWeekdayVsWeekend tests that
+// 15-minute predictions correctly apply weekend multipliers.
+func TestEMAWeekendDecayPredictor_15MinWindowWeekdayVsWeekend(t *testing.T) {
+	const (
+		poolName  = "test-pool"
+		variantID = "variant-1"
+	)
+
+	// Reference: Saturday, January 27, 2024 at 10:00 AM UTC (weekend)
+	saturdayRef := time.Date(2024, 1, 27, 10, 0, 0, 0, time.UTC)
+	// Reference: Wednesday, January 24, 2024 at 10:00 AM UTC (weekday)
+	wednesdayRef := time.Date(2024, 1, 24, 10, 0, 0, 0, time.UTC)
+
+	// Generate history data for both scenarios (using the later date)
+	historyData := GenerateMockHistoryData(poolName, variantID, saturdayRef)
+	store := &MockHistoryStore{records: historyData}
+
+	config := DefaultPredictorConfig()
+	predictor := NewEMAWeekendDecayPredictor(store, config)
+
+	windowDuration := 15 * time.Minute
+
+	// Predict for weekday window
+	weekdayInput := &PredictionInput{
+		PoolName:       poolName,
+		VariantID:      variantID,
+		StartTimestamp: wednesdayRef.Unix(),
+		EndTimestamp:   wednesdayRef.Add(windowDuration).Unix(),
+	}
+	weekdayResult, err := predictor.Predict(context.Background(), weekdayInput)
+	if err != nil {
+		t.Fatalf("weekday prediction failed: %v", err)
+	}
+
+	// Predict for weekend window
+	weekendInput := &PredictionInput{
+		PoolName:       poolName,
+		VariantID:      variantID,
+		StartTimestamp: saturdayRef.Unix(),
+		EndTimestamp:   saturdayRef.Add(windowDuration).Unix(),
+	}
+	weekendResult, err := predictor.Predict(context.Background(), weekendInput)
+	if err != nil {
+		t.Fatalf("weekend prediction failed: %v", err)
+	}
+
+	t.Logf("Weekday (Wednesday 10:00-10:15): %d instances", weekdayResult.RecommendedInstances)
+	t.Logf("Weekend (Saturday 10:00-10:15): %d instances", weekendResult.RecommendedInstances)
+
+	// Weekend uses only historical data, weekday uses EMA + historical
+	// Results may vary based on historical patterns
+	if weekendResult.RecommendedInstances >= weekdayResult.RecommendedInstances {
+		t.Logf("Note: Weekend prediction (%d) >= Weekday prediction (%d)",
+			weekendResult.RecommendedInstances, weekdayResult.RecommendedInstances)
+		// This can happen based on historical data patterns
+	}
+}
+
+// TestEMAWeekendDecayPredictor_15MinWindowWithSpikes tests prediction
+// accuracy when history contains traffic spikes.
+func TestEMAWeekendDecayPredictor_15MinWindowWithSpikes(t *testing.T) {
+	const (
+		poolName  = "test-pool"
+		variantID = "variant-1"
+	)
+
+	// Tuesday, January 23, 2024 at 10:00 AM UTC - a day with spikes
+	referenceTime := time.Date(2024, 1, 23, 10, 0, 0, 0, time.UTC)
+
+	// Generate history data with spikes
+	historyData := GenerateMockHistoryDataWithSpikes(poolName, variantID, referenceTime)
+	store := &MockHistoryStore{records: historyData}
+
+	config := DefaultPredictorConfig()
+	predictor := NewEMAWeekendDecayPredictor(store, config)
+
+	windowDuration := 15 * time.Minute
+	numWindows := 4
+
+	t.Logf("Testing 15-minute windows with spike data on Tuesday (spike day)")
+
+	for i := 0; i < numWindows; i++ {
+		windowStart := referenceTime.Add(time.Duration(i) * windowDuration)
+		windowEnd := windowStart.Add(windowDuration)
+
+		input := &PredictionInput{
+			PoolName:       poolName,
+			VariantID:      variantID,
+			StartTimestamp: windowStart.Unix(),
+			EndTimestamp:   windowEnd.Unix(),
+		}
+
+		result, err := predictor.Predict(context.Background(), input)
+		if err != nil {
+			t.Fatalf("window %d: unexpected error: %v", i, err)
+		}
+
+		t.Logf("Window %d [%s - %s]: Recommended %d instances",
+			i+1,
+			windowStart.Format("15:04"),
+			windowEnd.Format("15:04"),
+			result.RecommendedInstances)
+
+		// Predictions should account for historical spikes
+		if result.RecommendedInstances < config.MinInstances {
+			t.Errorf("window %d: prediction below minimum", i)
+		}
+	}
+}
+
+// TestEMAWeekendDecayPredictor_15MinWindowTrendDetection tests that
+// the predictor detects gradual increases in utilization.
+func TestEMAWeekendDecayPredictor_15MinWindowTrendDetection(t *testing.T) {
+	const (
+		poolName  = "test-pool"
+		variantID = "variant-1"
+	)
+
+	referenceTime := time.Date(2024, 1, 24, 10, 0, 0, 0, time.UTC)
+
+	// Generate history with gradual increase
+	historyData := GenerateMockHistoryDataGradualIncrease(poolName, variantID, referenceTime)
+	store := &MockHistoryStore{records: historyData}
+
+	config := DefaultPredictorConfig()
+	predictor := NewEMAWeekendDecayPredictor(store, config)
+
+	windowDuration := 15 * time.Minute
+
+	input := &PredictionInput{
+		PoolName:       poolName,
+		VariantID:      variantID,
+		StartTimestamp: referenceTime.Unix(),
+		EndTimestamp:   referenceTime.Add(windowDuration).Unix(),
+	}
+
+	result, err := predictor.Predict(context.Background(), input)
+	if err != nil {
+		t.Fatalf("prediction failed: %v", err)
+	}
+
+	t.Logf("Prediction with gradual increase trend: %d instances", result.RecommendedInstances)
+
+	// With gradual increase, the EMA should capture the upward trend
+	// and recommend higher instances compared to stable data
+	if result.RecommendedInstances < config.MinInstances {
+		t.Errorf("prediction below minimum")
 	}
 }

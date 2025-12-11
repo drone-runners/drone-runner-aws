@@ -47,14 +47,6 @@ type PredictorConfig struct { //nolint:revive
 	// Default: [0.5, 0.3, 0.2]
 	WeekDecayFactors [3]float64
 
-	// WeekendMultiplier adjusts predictions for weekends.
-	// Values < 1.0 reduce weekend predictions. Default: 0.7
-	WeekendMultiplier float64
-
-	// WeekdayMultiplier adjusts predictions for weekdays.
-	// Default: 1.0
-	WeekdayMultiplier float64
-
 	// SafetyBuffer is a percentage buffer added to predictions (e.g., 0.1 = 10%).
 	// Default: 0.1
 	SafetyBuffer float64
@@ -71,14 +63,12 @@ type PredictorConfig struct { //nolint:revive
 // DefaultPredictorConfig returns a PredictorConfig with sensible defaults.
 func DefaultPredictorConfig() PredictorConfig {
 	return PredictorConfig{
-		EMAPeriod:         12,
-		EMAWeight:         0.4,
-		WeekDecayFactors:  [3]float64{0.5, 0.3, 0.2},
-		WeekendMultiplier: 0.7,
-		WeekdayMultiplier: 1.0,
-		SafetyBuffer:      0.1,
-		MinInstances:      1,
-		LookbackHours:     24,
+		EMAPeriod:        12,
+		EMAWeight:        0.4,
+		WeekDecayFactors: [3]float64{0.5, 0.3, 0.2},
+		SafetyBuffer:     0.1,
+		MinInstances:     1,
+		LookbackHours:    24,
 	}
 }
 
@@ -102,28 +92,35 @@ func (p *EMAWeekendDecayPredictor) Name() string {
 
 // Predict calculates the recommended number of instances using the combined algorithm.
 func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *PredictionInput) (*PredictionResult, error) {
-	// Step 1: Calculate EMA from recent data
-	emaValue, err := p.calculateEMA(ctx, input)
-	if err != nil {
-		return nil, err
-	}
+	// Check if target time is a weekend
+	isWeekend := p.isWeekend(input.StartTimestamp)
 
-	// Step 2: Calculate 3-week historical average with decay
+	// Step 1: Calculate 3-week historical average with decay (always needed)
 	historicalValue, err := p.calculateHistoricalWithDecay(ctx, input)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 3: Combine EMA and historical values
-	combinedValue := p.combineValues(emaValue, historicalValue)
+	var baseValue float64
 
-	// Step 4: Apply weekend/weekday offset
-	adjustedValue := p.applyDayOfWeekOffset(combinedValue, input.StartTimestamp)
+	if isWeekend {
+		// For weekends: rely only on 3-week historical decay
+		baseValue = historicalValue
+	} else {
+		// For weekdays: use EMA from last 5 weekdays combined with historical
+		emaValue, err := p.calculateEMA(ctx, input)
+		if err != nil {
+			return nil, err
+		}
 
-	// Step 5: Apply safety buffer
-	finalValue := adjustedValue * (1.0 + p.config.SafetyBuffer)
+		// Combine EMA and historical values
+		baseValue = p.combineValues(emaValue, historicalValue)
+	}
 
-	// Step 6: Round up and ensure minimum
+	// Step 2: Apply safety buffer
+	finalValue := baseValue * (1.0 + p.config.SafetyBuffer)
+
+	// Step 3: Round up and ensure minimum
 	recommendedInstances := int(math.Ceil(finalValue))
 	if recommendedInstances < p.config.MinInstances {
 		recommendedInstances = p.config.MinInstances
@@ -134,11 +131,14 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 	}, nil
 }
 
-// calculateEMA computes the Exponential Moving Average from recent utilization data.
+// calculateEMA computes the Exponential Moving Average from the last 5 weekdays' data.
+// This function is only called for weekday predictions.
 func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *PredictionInput) (float64, error) {
-	// Get recent data for EMA calculation
+	// Look back 9 days to ensure we capture at least 5 weekdays
+	// (worst case: if today is Monday, we need Mon-Fri of last week + some of this week)
+	const maxLookbackDays = 9
 	lookbackEnd := input.StartTimestamp
-	lookbackStart := lookbackEnd - int64(p.config.LookbackHours*3600) //nolint:mnd
+	lookbackStart := lookbackEnd - int64(maxLookbackDays*24*3600)
 
 	records, err := p.historyStore.GetUtilizationHistory(
 		ctx,
@@ -155,25 +155,97 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 		return 0, nil
 	}
 
+	// Filter out weekend records - only keep weekday data
+	weekdayRecords := p.filterWeekdayRecords(records)
+
+	if len(weekdayRecords) == 0 {
+		return 0, nil
+	}
+
 	// Sort records by timestamp (oldest first)
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].RecordedAt < records[j].RecordedAt
+	sort.Slice(weekdayRecords, func(i, j int) bool {
+		return weekdayRecords[i].RecordedAt < weekdayRecords[j].RecordedAt
 	})
+
+	// Keep only records from the last 5 weekdays
+	weekdayRecords = p.filterLast5Weekdays(weekdayRecords)
+
+	if len(weekdayRecords) == 0 {
+		return 0, nil
+	}
 
 	// Calculate EMA
 	// Alpha (smoothing factor) = 2 / (period + 1)
 	alpha := 2.0 / float64(p.config.EMAPeriod+1)
 
 	// Initialize EMA with the first value
-	ema := float64(records[0].InUseInstances)
+	ema := float64(weekdayRecords[0].InUseInstances)
 
 	// Calculate EMA iteratively
-	for i := 1; i < len(records); i++ {
-		currentValue := float64(records[i].InUseInstances)
+	for i := 1; i < len(weekdayRecords); i++ {
+		currentValue := float64(weekdayRecords[i].InUseInstances)
 		ema = alpha*currentValue + (1-alpha)*ema
 	}
 
 	return ema, nil
+}
+
+// filterWeekdayRecords removes weekend records from the slice.
+func (p *EMAWeekendDecayPredictor) filterWeekdayRecords(records []UtilizationRecord) []UtilizationRecord {
+	result := make([]UtilizationRecord, 0, len(records))
+	for _, record := range records {
+		if !p.isWeekend(record.RecordedAt) {
+			result = append(result, record)
+		}
+	}
+	return result
+}
+
+// filterLast5Weekdays keeps only records from the last 5 distinct weekdays.
+func (p *EMAWeekendDecayPredictor) filterLast5Weekdays(records []UtilizationRecord) []UtilizationRecord {
+	if len(records) == 0 {
+		return records
+	}
+
+	// Records are sorted oldest first, so we traverse from the end to find the last 5 weekdays
+	// First, identify the distinct weekday dates (ignoring time)
+	distinctDays := make(map[string]bool)
+	var cutoffTimestamp int64
+
+	// Traverse from newest to oldest
+	for i := len(records) - 1; i >= 0; i-- {
+		t := time.Unix(records[i].RecordedAt, 0).UTC()
+		dayKey := t.Format("2006-01-02") // YYYY-MM-DD format
+
+		if !distinctDays[dayKey] {
+			distinctDays[dayKey] = true
+			if len(distinctDays) == 5 { //nolint:mnd
+				cutoffTimestamp = records[i].RecordedAt
+				break
+			}
+		}
+	}
+
+	// If we found 5 days, filter records from cutoff onwards
+	if cutoffTimestamp > 0 {
+		result := make([]UtilizationRecord, 0)
+		for _, record := range records {
+			if record.RecordedAt >= cutoffTimestamp {
+				result = append(result, record)
+			}
+		}
+		return result
+	}
+
+	// If we don't have 5 distinct days, return all records
+	return records
+}
+
+// isWeekend returns true if the given timestamp falls on a Saturday or Sunday.
+func (p *EMAWeekendDecayPredictor) isWeekend(timestamp int64) bool {
+	t := time.Unix(timestamp, 0).UTC()
+	weekday := t.Weekday()
+	return weekday == time.Saturday || weekday == time.Sunday
 }
 
 // calculateHistoricalWithDecay computes the weighted average from 1, 2, and 3 weeks ago.
@@ -260,17 +332,4 @@ func (p *EMAWeekendDecayPredictor) combineValues(emaValue, historicalValue float
 	// Combine using configured weights
 	// EMAWeight determines how much we trust recent trends vs historical patterns
 	return p.config.EMAWeight*emaValue + (1-p.config.EMAWeight)*historicalValue
-}
-
-// applyDayOfWeekOffset adjusts the prediction based on whether the target time is a weekend or weekday.
-func (p *EMAWeekendDecayPredictor) applyDayOfWeekOffset(value float64, timestamp int64) float64 {
-	t := time.Unix(timestamp, 0).UTC()
-	weekday := t.Weekday()
-
-	// Saturday (6) or Sunday (0) = weekend
-	if weekday == time.Saturday || weekday == time.Sunday {
-		return value * p.config.WeekendMultiplier
-	}
-
-	return value * p.config.WeekdayMultiplier
 }
