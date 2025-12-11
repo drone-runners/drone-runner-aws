@@ -118,7 +118,7 @@ func GenerateMockHistoryDataGradualIncrease(pool, variantID string, referenceTim
 		daysSinceStart := t.Sub(threeWeeksAgo).Hours() / 24
 
 		// Add 1 instance per 3 days of progression (gradual increase)
-		increase := int(daysSinceStart / 3) //nolint:gomnd
+		increase := int(daysSinceStart / 3) //nolint:mnd
 		records[i].InUseInstances += increase
 	}
 
