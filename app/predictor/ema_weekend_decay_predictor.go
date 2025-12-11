@@ -138,7 +138,7 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 	// (worst case: if today is Monday, we need Mon-Fri of last week + some of this week)
 	const maxLookbackDays = 9
 	lookbackEnd := input.StartTimestamp
-	lookbackStart := lookbackEnd - int64(maxLookbackDays*24*3600)
+	lookbackStart := lookbackEnd - int64(maxLookbackDays*24*3600) //nolint:mnd
 
 	records, err := p.historyStore.GetUtilizationHistory(
 		ctx,
