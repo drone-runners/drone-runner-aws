@@ -316,15 +316,17 @@ type EnvConfig struct {
 	}
 
 	Google struct {
-		ProjectID string `envconfig:"GOOGLE_PROJECT_ID"`
-		JSONPath  string `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`
-		Zone      string `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
+		ProjectID                 string            `envconfig:"GOOGLE_PROJECT_ID"`
+		JSONPath                  string            `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`
+		Zone                      string            `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
+		ResourceClassMachineTypes map[string]string `envconfig:"GOOGLE_RESOURCE_CLASS_MACHINE_TYPES"`
 	}
 
 	Amazon struct {
-		AccessKeyID     string `envconfig:"AMAZON_ACCESS_KEY_ID"`
-		AccessKeySecret string `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
-		SessionToken    string `envconfig:"AMAZON_SESSION_TOKEN"`
+		AccessKeyID               string            `envconfig:"AMAZON_ACCESS_KEY_ID"`
+		AccessKeySecret           string            `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
+		SessionToken              string            `envconfig:"AMAZON_SESSION_TOKEN"`
+		ResourceClassMachineTypes map[string]string `envconfig:"AMAZON_RESOURCE_CLASS_MACHINE_TYPES"`
 	}
 
 	Limit struct {
@@ -472,6 +474,16 @@ func (c EnvConfig) Passwords() types.Passwords {
 		AWSAccessKeyID:     c.Amazon.AccessKeyID,
 		AWSAccessKeySecret: c.Amazon.AccessKeySecret,
 		AWSSessionToken:    c.Amazon.SessionToken,
+	}
+}
+
+// DriverSettings returns driver-specific configuration settings.
+//
+//nolint:gocritic
+func (c EnvConfig) DriverSettings() types.DriverSettings {
+	return types.DriverSettings{
+		GoogleResourceClassMachineTypes: c.Google.ResourceClassMachineTypes,
+		AmazonResourceClassMachineTypes: c.Amazon.ResourceClassMachineTypes,
 	}
 }
 

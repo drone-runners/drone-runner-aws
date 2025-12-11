@@ -85,6 +85,9 @@ type config struct {
 	labels                     map[string]string
 	enableNestedVirtualization bool
 	enableC4D                  bool
+
+	// Resource class to machine type mapping
+	resourceClassMachineTypes map[string]string
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -176,17 +179,19 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	// Determine zones to try
 	var zonesToTry []string
-	if opts.Zone != "" {
-		// If specific zone requested, only try that zone
-		zonesToTry = []string{opts.Zone}
+	if len(opts.Zones) > 0 {
+		// If specific zones requested, only try those zones
+		zonesToTry = make([]string, len(opts.Zones))
+		copy(zonesToTry, opts.Zones)
 	} else {
 		// Randomize zone order to distribute load
 		zonesToTry = make([]string, len(p.zones))
 		copy(zonesToTry, p.zones)
-		rand.Shuffle(len(zonesToTry), func(i, j int) {
-			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
-		})
 	}
+
+	rand.Shuffle(len(zonesToTry), func(i, j int) {
+		zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
+	})
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -329,8 +334,11 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 //nolint:gocyclo
 func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
-	// opts.Zone has highest priority
-	zone := opts.Zone
+	// opts.Zones has highest priority - pick the first zone if specified
+	var zone string
+	if len(opts.Zones) > 0 {
+		zone = opts.Zones[0]
+	}
 	// If capacity reservation is provided, verify it's in the zone we're using
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
 		reservationZone, reservationErr := p.findReservationZone(ctx, opts.CapacityReservation.ReservationID)
@@ -1179,4 +1187,32 @@ func (p *config) buildLabelsWithGitspace(opts *types.InstanceCreateOpts) map[str
 	}
 
 	return labels
+}
+
+// GetMachineType returns the machine type for the given resource class.
+// If resourceClass is empty or mapping doesn't exist, returns the default machine type.
+func (p *config) GetMachineType(ctx context.Context, resourceClass string) string {
+	// If resourceClass is empty, return the default machine type
+	if resourceClass == "" {
+		return p.size
+	}
+
+	logr := logger.FromContext(ctx).
+		WithField("resource_class", resourceClass).
+		WithField("machine_type", p.size)
+
+	// If no mapping is configured, return the default machine type
+	if len(p.resourceClassMachineTypes) == 0 {
+		logr.Warnln("google: no resource class to machine type mapping configured, using default machine type")
+		return p.size
+	}
+
+	// Look up the machine type for the resource class
+	if machineType, ok := p.resourceClassMachineTypes[resourceClass]; ok {
+		return machineType
+	}
+
+	// Mapping doesn't exist for this resource class, log and return default
+	logr.Warnln("google: resource class mapping not found, using default machine type")
+	return p.size
 }

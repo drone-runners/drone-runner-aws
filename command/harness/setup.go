@@ -428,9 +428,10 @@ func handleSetup(
 
 	machineConfig := &types.MachineConfig{
 		VMImageConfig:        &r.VMImageConfig,
-		Zone:                 r.Zone,
-		MachineType:          r.MachineType,
 		NestedVirtualization: r.NestedVirtualization,
+	}
+	if r.Zone != "" {
+		machineConfig.Zones = []string{r.Zone}
 	}
 
 	instance, _, warmed, err = poolManager.Provision(

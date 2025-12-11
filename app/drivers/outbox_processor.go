@@ -206,11 +206,11 @@ func (p *OutboxProcessor) processSetupInstanceJob(job *types.OutboxJob) error {
 			return fmt.Errorf("failed to unmarshal job params: %w", err)
 		}
 		machineConfig = &types.MachineConfig{
-			Zone:                 params.Zone,
 			MachineType:          params.MachineType,
 			NestedVirtualization: params.NestedVirtualization,
 			Hibernate:            params.Hibernate,
 			VariantID:            params.VariantID,
+			Zones:                params.Zones,
 		}
 
 		// Create MachineConfig if ImageName is provided
