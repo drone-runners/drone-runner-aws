@@ -38,12 +38,12 @@ The predictor combines **two signals** with different logic for weekdays vs week
               │                    └────────┬─────────┘
               │                             │
               ▼                             │
-   ┌────────────────────────┐              │
-   │calculateHistoricalWith │              │
-   │         Decay          │              │
-   └───────────┬────────────┘              │
-               │                           │
-               └───────────┬───────────────┘
+   ┌────────────────────────┐               │
+   │calculateHistoricalWith │               │
+   │         Decay          │               │
+   └───────────┬────────────┘               │
+               │                            │
+               └───────────┬──────────────--┘
                            ▼
                   × Safety Buffer (1.1)
                            │
