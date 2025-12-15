@@ -186,7 +186,7 @@ func testCompile(t *testing.T, source, golden string) *engine.Spec {
 		return nil
 	}
 
-	pools, err := poolfile.ProcessPool(poolFile, "runner", types.Passwords{})
+	pools, err := poolfile.ProcessPool(poolFile, "runner", types.Passwords{}, types.DriverSettings{})
 	if err != nil {
 		t.Errorf("unable to process pool file: %s", err)
 		return nil

@@ -398,3 +398,8 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 		Port:         lehelper.LiteEnginePort,
 	}
 }
+
+// GetMachineType returns the default machine type as Azure does not support resource class to machine type mapping.
+func (c *config) GetMachineType(_ context.Context, _ string) string {
+	return c.size
+}

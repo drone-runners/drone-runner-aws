@@ -259,12 +259,13 @@ func (d *DistributedManager) provisionFromPool(
 		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 	}
 
+	machineConfig.MachineType = pool.Driver.GetMachineType(ctx, resourceClass)
+
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
 	allowedStates := []types.InstanceState{types.StateCreated}
 	queryParams := &types.QueryParams{
 		PoolName:             poolName,
 		MachineType:          machineConfig.MachineType,
-		Zone:                 machineConfig.Zone,
 		NestedVirtualization: machineConfig.NestedVirtualization,
 	}
 	if machineConfig.VMImageConfig != nil {
@@ -295,7 +296,7 @@ func (d *DistributedManager) provisionFromPool(
 			NestedVirtualization: inst.EnableNestedVirtualization,
 			MachineType:          inst.Size,
 			Hibernate:            inst.IsHibernated,
-			Zone:                 inst.Zone,
+			Zones:                []string{inst.Zone},
 			VariantID:            inst.VariantID,
 		})
 		capacity := &types.CapacityReservation{
@@ -657,6 +658,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 			NestedVirtualization: instance.EnableNestedVirtualization,
 			MachineType:          instance.Size,
 			VariantID:            instance.VariantID,
+			Zones:                []string{instance.Zone},
 		})
 	}
 

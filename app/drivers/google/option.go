@@ -235,3 +235,11 @@ func WithEnableC4D(enableC4D bool) Option {
 		p.enableC4D = enableC4D
 	}
 }
+
+// WithResourceClassMachineTypes sets the mapping from resource class to machine type.
+// This allows deriving the machine type from the resource class specified in the request.
+func WithResourceClassMachineTypes(mapping map[string]string) Option {
+	return func(p *config) {
+		p.resourceClassMachineTypes = mapping
+	}
+}
