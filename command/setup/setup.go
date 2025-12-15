@@ -144,7 +144,7 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			Fatalln("Unable to load pool file, or use an in memory pool")
 	}
 	// process the pool file
-	pools, processErr := poolfile.ProcessPool(configPool, runnerName, env.Passwords())
+	pools, processErr := poolfile.ProcessPool(configPool, runnerName, env.Passwords(), env.DriverSettings())
 	if processErr != nil {
 		logrus.WithError(processErr).
 			Fatalln("setup: unable to process pool file")
