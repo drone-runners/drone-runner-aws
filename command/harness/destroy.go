@@ -30,6 +30,7 @@ type VMCleanupRequest struct {
 	PoolID             string              `json:"pool_id"`
 	StageRuntimeID     string              `json:"stage_runtime_id"`
 	LogKey             string              `json:"log_key,omitempty"`
+	LELogKey           string              `json:"le_log_key,omitempty"` // Lite-engine binary log key
 	Distributed        bool                `json:"distributed,omitempty"`
 	Context            Context             `json:"context,omitempty"`
 	StorageCleanupType storage.CleanupType `json:"storage_cleanup_type,omitempty"`
@@ -155,6 +156,16 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_name", inst.Name)
 
 	logr.Traceln("invoking lite engine cleanup")
+	
+	// Close the lite-engine log stream before destroying the instance
+	// This ensures the stream is properly closed and uploaded
+	if r.LELogKey != "" {
+		logr.WithField("le_log_key", r.LELogKey).Traceln("closing lite-engine log stream")
+		GetStreamManager().CloseStream(r.StageRuntimeID)
+		// Give the stream a moment to flush and close properly
+		time.Sleep(2 * time.Second)
+	}
+	
 	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, enableMock, mockTimeout)
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
