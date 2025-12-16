@@ -20,7 +20,9 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	"github.com/harness/lite-engine/api"
-	lespec "github.com/harness/lite-engine/engine/spec"
+	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/harness/lite-engine/engine/spec"
+	"github.com/harness/lite-engine/internal/safego"
 
 	"github.com/sirupsen/logrus"
 )
@@ -562,6 +564,20 @@ func handleSetup(
 	printOK(buildLog, "Machine health check passed")
 	internalLogr.Infoln("Machine health check passed")
 
+	// Start streaming lite-engine binary logs if log config and LE log key are provided
+	if r.SetupRequest.LogConfig.URL != "" && r.SetupRequest.LELogKey != "" {
+		streamCtx, streamCancel := context.WithCancel(context.Background())
+		
+		// Register the stream cancel function so it can be properly closed during destroy
+		GetStreamManager().RegisterStream(stageRuntimeID, streamCancel)
+		
+		// Use safego to ensure panic recovery and proper logging
+		safego.WithContext(streamCtx, "stream-lite-engine-logs", func(ctx context.Context) {
+			streamLiteEngineLogs(ctx, client, r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig,
+				r.SetupRequest.LELogKey, r.CorrelationID, ilog)
+		})
+	}
+
 	// Currently m1 architecture does not enable nested virtualisation, so we disable docker.
 	if instance.Platform.OS == oshelp.OSMac {
 		b := false
@@ -576,4 +592,76 @@ func handleSetup(
 	}
 
 	return instance, warmed, hibernated, nil
+}
+
+// streamLiteEngineLogs streams the lite-engine binary logs to remote log service
+func streamLiteEngineLogs(
+	ctx context.Context,
+	leClient lehttp.Client,
+	logConfig api.LogConfig,
+	mtlsConfig spec.MtlsConfig,
+	logKey string,
+	correlationID string,
+	logger *logrus.Entry,
+) {
+	// Note: Panic recovery is handled by safego.WithContext wrapper
+	
+	// Create stream logger for lite-engine binary logs
+	streamLogger := getStreamLogger(logConfig, mtlsConfig, logKey, correlationID)
+	defer func() {
+		if err := streamLogger.Close(); err != nil {
+			logger.WithError(err).Debugln("failed to close lite-engine log stream")
+		}
+	}()
+
+	// Poll and stream lite-engine logs
+	offset := int64(0)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	consecutiveErrors := 0
+	const maxConsecutiveErrors = 5
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Traceln("stopping lite-engine log streaming due to context cancellation")
+			return
+		case <-ticker.C:
+			// Call lite-engine API to get log content
+			logContent, newOffset, err := leClient.GetEngineLogs(ctx, offset)
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+				consecutiveErrors++
+				logger.WithError(err).
+					WithField("consecutive_errors", consecutiveErrors).
+					Traceln("failed to fetch lite-engine logs")
+				
+				// Stop streaming after too many consecutive errors
+				if consecutiveErrors >= maxConsecutiveErrors {
+					logger.WithError(err).
+						Errorln("stopping lite-engine log streaming after too many consecutive errors")
+					return
+				}
+				continue
+			}
+
+			// Reset error counter on success
+			consecutiveErrors = 0
+
+			if len(logContent) > 0 {
+				// Write to stream
+				if _, writeErr := streamLogger.Write(logContent); writeErr != nil {
+					logger.WithError(writeErr).Errorln("failed to write lite-engine logs to stream")
+					return
+				}
+				offset = newOffset
+				logger.WithField("bytes_written", len(logContent)).
+					WithField("new_offset", newOffset).
+					Traceln("streamed lite-engine logs")
+			}
+		}
+	}
 }
