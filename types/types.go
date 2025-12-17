@@ -106,11 +106,12 @@ type DriverSettings struct {
 }
 
 type RunnerConfig struct {
-	HealthCheckHotpoolTimeout   time.Duration
-	HealthCheckColdstartTimeout time.Duration
-	HealthCheckWindowsTimeout   time.Duration
-	SetupTimeout                time.Duration
-	HA                          bool
+	HealthCheckHotpoolTimeout       time.Duration
+	HealthCheckColdstartTimeout     time.Duration
+	HealthCheckWindowsTimeout       time.Duration
+	HealthCheckConnectivityDuration time.Duration
+	SetupTimeout                    time.Duration
+	HA                              bool
 }
 
 type NomadConfig struct {

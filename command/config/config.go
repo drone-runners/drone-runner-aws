@@ -348,11 +348,12 @@ type EnvConfig struct {
 	}
 
 	RunnerConfig struct {
-		HealthCheckHotpoolTimeout   time.Duration `envconfig:"HEALTH_CHECK_HOTPOOL_TIMEOUT" default:"10s"`
-		HealthCheckColdstartTimeout time.Duration `envconfig:"HEALTH_CHECK_COLDSTART_TIMEOUT" default:"3m"`
-		HealthCheckWindowsTimeout   time.Duration `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5m"`
-		SetupTimeout                time.Duration `envconfig:"SETUP_TIMEOUT" default:"30s"`
-		HA                          bool          `envconfig:"DRONE_RUNNER_HA" default:"false"`
+		HealthCheckHotpoolTimeout       time.Duration `envconfig:"HEALTH_CHECK_HOTPOOL_TIMEOUT" default:"10s"`
+		HealthCheckColdstartTimeout     time.Duration `envconfig:"HEALTH_CHECK_COLDSTART_TIMEOUT" default:"3m"`
+		HealthCheckWindowsTimeout       time.Duration `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5m"`
+		HealthCheckConnectivityDuration time.Duration `envconfig:"HEALTH_CHECK_CONNECTIVITY_DURATION" default:"3s"`
+		SetupTimeout                    time.Duration `envconfig:"SETUP_TIMEOUT" default:"30s"`
+		HA                              bool          `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
 	Nomad struct {
@@ -408,8 +409,8 @@ type EnvConfig struct {
 	}
 
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.145/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.145/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.146/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.146/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}

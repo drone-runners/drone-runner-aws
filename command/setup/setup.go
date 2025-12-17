@@ -19,6 +19,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/harness/lite-engine/api"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -200,7 +201,10 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 	logrus.Traceln("setup: running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS, false)
 
-	healthResponse, healthErr := leClient.RetryHealth(ctx, healthCheckWait, performDNSLookup)
+	healthResponse, healthErr := leClient.RetryHealth(ctx, &api.HealthRequest{
+		PerformDNSLookup: performDNSLookup,
+		Timeout:          healthCheckWait,
+	})
 	if healthErr != nil {
 		cleanErr := poolManager.Destroy(ctx, testPoolName, instance.ID, instance, nil)
 		logrus.WithError(err).Errorln("failed health check with instance")
