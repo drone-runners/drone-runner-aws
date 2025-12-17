@@ -16,7 +16,6 @@ import (
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
-	"github.com/harness/lite-engine/api"
 	leapi "github.com/harness/lite-engine/api"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
@@ -112,7 +111,7 @@ func (e *Engine) Setup(ctx context.Context, specv runtime.Spec) error {
 	logr.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS, false)
 
-	healthResponse, err := client.RetryHealth(ctx, &api.HealthRequest{
+	healthResponse, err := client.RetryHealth(ctx, &leapi.HealthRequest{
 		PerformDNSLookup: performDNSLookup,
 		Timeout:          timeoutSetup,
 	})

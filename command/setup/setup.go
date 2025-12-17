@@ -19,8 +19,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/store/database"
-	"github.com/harness/lite-engine/api"
 
+	"github.com/harness/lite-engine/api"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
