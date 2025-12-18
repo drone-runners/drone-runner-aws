@@ -11,6 +11,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/drone/runner-go/logger"
+	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
 	"github.com/harness/lite-engine/engine/spec"
 	"github.com/pkg/errors"
@@ -1266,7 +1267,10 @@ func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, 
 		return errors.Wrap(err, "failed to create client")
 	}
 
-	response, err := client.Health(ctx, false)
+	response, err := client.Health(ctx, &api.HealthRequest{
+		PerformDNSLookup:                true,
+		HealthCheckConnectivityDuration: m.GetHealthCheckConnectivityDuration(),
+	})
 	if err != nil {
 		return err
 	}
@@ -1302,6 +1306,11 @@ func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType) ti
 	}
 
 	return m.runnerConfig.HealthCheckColdstartTimeout
+}
+
+// GetHealthCheckDuration returns the health check duration
+func (m *Manager) GetHealthCheckConnectivityDuration() time.Duration {
+	return m.runnerConfig.HealthCheckConnectivityDuration
 }
 
 // GetSetupTimeout returns the setup timeout

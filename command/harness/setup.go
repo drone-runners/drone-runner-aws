@@ -555,7 +555,11 @@ func handleSetup(
 	// Get the health check timeout based on the instance OS and provider
 	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider)
 
-	if _, err = client.RetryHealth(ctx, healthCheckTimeout, performDNSLookup); err != nil {
+	if _, err = client.RetryHealth(ctx, &api.HealthRequest{
+		PerformDNSLookup:                performDNSLookup,
+		Timeout:                         healthCheckTimeout,
+		HealthCheckConnectivityDuration: poolManager.GetHealthCheckConnectivityDuration(),
+	}); err != nil {
 		printError(buildLog, "Machine health check failed")
 		go cleanUpInstanceFn(true)
 		return nil, false, false, fmt.Errorf("failed to call lite-engine retry health: %w", err)
