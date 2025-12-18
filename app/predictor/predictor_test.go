@@ -4,15 +4,17 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // MockHistoryStore is a mock implementation of HistoryStore for testing.
 type MockHistoryStore struct {
-	records []UtilizationRecord
+	records []types.UtilizationRecord
 }
 
-func (m *MockHistoryStore) GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]UtilizationRecord, error) {
-	var result []UtilizationRecord
+func (m *MockHistoryStore) GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error) {
+	var result []types.UtilizationRecord
 	for _, r := range m.records {
 		if r.Pool == pool && r.VariantID == variantID &&
 			r.RecordedAt >= startTime && r.RecordedAt <= endTime {
@@ -31,7 +33,7 @@ func TestEMAWeekendDecayPredictor_Name(t *testing.T) {
 }
 
 func TestEMAWeekendDecayPredictor_Predict_EmptyHistory(t *testing.T) {
-	store := &MockHistoryStore{records: []UtilizationRecord{}}
+	store := &MockHistoryStore{records: []types.UtilizationRecord{}}
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(store)
 
 	input := &PredictionInput{
@@ -55,9 +57,9 @@ func TestEMAWeekendDecayPredictor_Predict_EmptyHistory(t *testing.T) {
 func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
 	now := time.Now()
 	// Create hourly data for the past 24 hours with varying utilization
-	var records []UtilizationRecord
+	var records []types.UtilizationRecord
 	for i := 24; i > 0; i-- {
-		records = append(records, UtilizationRecord{
+		records = append(records, types.UtilizationRecord{
 			Pool:           "test-pool",
 			VariantID:      "variant-1",
 			InUseInstances: 10 + (i % 5), // Values between 10-14
@@ -88,11 +90,11 @@ func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
 
 func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 	now := time.Now()
-	var records []UtilizationRecord
+	var records []types.UtilizationRecord
 
 	// Recent data (past 24 hours) - 10 instances avg
 	for i := 24; i > 0; i-- {
-		records = append(records, UtilizationRecord{
+		records = append(records, types.UtilizationRecord{
 			Pool:           "test-pool",
 			VariantID:      "variant-1",
 			InUseInstances: 10,
@@ -102,7 +104,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 
 	// 1 week ago data - 20 instances (peak)
 	week1Ago := now.Add(-7 * 24 * time.Hour)
-	records = append(records, UtilizationRecord{
+	records = append(records, types.UtilizationRecord{
 		Pool:           "test-pool",
 		VariantID:      "variant-1",
 		InUseInstances: 20,
@@ -111,7 +113,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 
 	// 2 weeks ago data - 15 instances
 	week2Ago := now.Add(-14 * 24 * time.Hour)
-	records = append(records, UtilizationRecord{
+	records = append(records, types.UtilizationRecord{
 		Pool:           "test-pool",
 		VariantID:      "variant-1",
 		InUseInstances: 15,
@@ -120,7 +122,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 
 	// 3 weeks ago data - 12 instances
 	week3Ago := now.Add(-21 * 24 * time.Hour)
-	records = append(records, UtilizationRecord{
+	records = append(records, types.UtilizationRecord{
 		Pool:           "test-pool",
 		VariantID:      "variant-1",
 		InUseInstances: 12,
@@ -168,13 +170,13 @@ func TestEMAWeekendDecayPredictor_WeekendVsWeekday(t *testing.T) {
 	tuesday := now.Add(time.Duration(daysUntilTuesday) * 24 * time.Hour)
 
 	// Create consistent historical data for both days
-	var records []UtilizationRecord
+	var records []types.UtilizationRecord
 	for week := 1; week <= 3; week++ {
 		for _, targetDay := range []time.Time{saturday, tuesday} {
 			historicalTime := targetDay.Add(-time.Duration(week) * 7 * 24 * time.Hour)
 			// Add data around the target time
 			for i := -12; i <= 12; i++ {
-				records = append(records, UtilizationRecord{
+				records = append(records, types.UtilizationRecord{
 					Pool:           "test-pool",
 					VariantID:      "variant-1",
 					InUseInstances: 100,
@@ -235,9 +237,9 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
 
 	// Only add data for 1 week ago - should use only that data
-	var records []UtilizationRecord
+	var records []types.UtilizationRecord
 	week1Ago := now.Add(-7 * 24 * time.Hour)
-	records = append(records, UtilizationRecord{
+	records = append(records, types.UtilizationRecord{
 		Pool:           "test-pool",
 		VariantID:      "variant-1",
 		InUseInstances: 50,
@@ -300,24 +302,24 @@ func TestCalculatePeakUtilization(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		records  []UtilizationRecord
+		records  []types.UtilizationRecord
 		expected float64
 	}{
 		{
 			name:     "empty records",
-			records:  []UtilizationRecord{},
+			records:  []types.UtilizationRecord{},
 			expected: 0,
 		},
 		{
 			name: "single record",
-			records: []UtilizationRecord{
+			records: []types.UtilizationRecord{
 				{InUseInstances: 10},
 			},
 			expected: 10,
 		},
 		{
 			name: "multiple records - find peak",
-			records: []UtilizationRecord{
+			records: []types.UtilizationRecord{
 				{InUseInstances: 5},
 				{InUseInstances: 15},
 				{InUseInstances: 10},

@@ -57,3 +57,7 @@ func (s InstanceStore) Purge(ctx context.Context) error {
 func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
 	panic("implement me")
 }
+
+func (s InstanceStore) CountGroupBy(ctx context.Context, params *types.QueryParams, groupByField string) (map[string]int, error) {
+	return make(map[string]int), nil
+}

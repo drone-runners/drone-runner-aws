@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -106,6 +107,47 @@ func (s InstanceStore) Purge(ctx context.Context) error {
 
 func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
 	panic("implement me")
+}
+
+func (s InstanceStore) CountGroupBy(ctx context.Context, params *types.QueryParams, groupByField string) (map[string]int, error) {
+	counts := make(map[string]int)
+
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	defer iter.Release()
+
+	for iter.Next() {
+		inst := new(types.Instance)
+		if err := gob.NewDecoder(bytes.NewReader(iter.Value())).Decode(inst); err != nil {
+			return nil, err
+		}
+
+		if !s.satisfy(inst, params.PoolName, params) {
+			continue
+		}
+
+		var groupKey string
+		switch groupByField {
+		case "variant_id":
+			groupKey = inst.VariantID
+		case "pool":
+			groupKey = inst.Pool
+		case "state":
+			groupKey = string(inst.State)
+		case "runner":
+			groupKey = inst.RunnerName
+		case "stage":
+			groupKey = inst.Stage
+		default:
+			return nil, fmt.Errorf("invalid group by field: %s", groupByField)
+		}
+		counts[groupKey]++
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, err
+	}
+
+	return counts, nil
 }
 
 func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {

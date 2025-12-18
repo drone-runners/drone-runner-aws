@@ -357,3 +357,60 @@ SET
  ,instance_started  = :instance_started
 WHERE instance_id   = :instance_id
 `
+
+// instanceFieldToColumn maps logical field names to database column names.
+var instanceFieldToColumn = map[string]string{
+	"variant_id": "instance_variant_id",
+	"pool":       "instance_pool",
+	"state":      "instance_state",
+	"runner":     "runner_name",
+	"stage":      "instance_stage",
+}
+
+func (s InstanceStore) CountGroupBy(ctx context.Context, params *types.QueryParams, groupByField string) (map[string]int, error) {
+	column, ok := instanceFieldToColumn[groupByField]
+	if !ok {
+		return nil, fmt.Errorf("invalid group by field: %s", groupByField)
+	}
+
+	stmt := builder.Select(fmt.Sprintf("COALESCE(%s, '') as group_key", column), "COUNT(*) as count").
+		From("instances").
+		GroupBy(column)
+
+	if params != nil {
+		if params.PoolName != "" {
+			stmt = stmt.Where(squirrel.Eq{"instance_pool": params.PoolName})
+		}
+		if params.Status != "" {
+			stmt = stmt.Where(squirrel.Eq{"instance_state": params.Status})
+		}
+		if params.RunnerName != "" {
+			stmt = stmt.Where(squirrel.Eq{"runner_name": params.RunnerName})
+		}
+		if params.Stage != "" {
+			stmt = stmt.Where(squirrel.Eq{"instance_stage": params.Stage})
+		}
+	}
+
+	query, args, err := stmt.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build count query: %w", err)
+	}
+
+	type groupCount struct {
+		GroupKey string `db:"group_key"`
+		Count    int    `db:"count"`
+	}
+
+	var results []groupCount
+	if err := s.db.SelectContext(ctx, &results, query, args...); err != nil {
+		return nil, fmt.Errorf("failed to count instances: %w", err)
+	}
+
+	counts := make(map[string]int)
+	for _, r := range results {
+		counts[r.GroupKey] = r.Count
+	}
+
+	return counts, nil
+}

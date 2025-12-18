@@ -146,6 +146,15 @@ func (m *Manager) Count() int {
 	return len(m.poolMap)
 }
 
+// GetPoolNames returns the names of all pools in the manager.
+func (m *Manager) GetPoolNames() []string {
+	names := make([]string, 0, len(m.poolMap))
+	for name := range m.poolMap {
+		names = append(names, name)
+	}
+	return names
+}
+
 func (m *Manager) MatchPoolNameFromPlatform(requested *types.Platform) string {
 	for _, pool := range m.poolMap {
 		if pool.Platform.OS == requested.OS && pool.Platform.Arch == requested.Arch {

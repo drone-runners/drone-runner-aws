@@ -390,6 +390,12 @@ type EnvConfig struct {
 		BatchSize         int `envconfig:"DLITE_OUTBOXER_BATCH_SIZE" default:"20"`
 	}
 
+	SchedulerJobs struct {
+		UtilizationTrackerIntervalSecs int `envconfig:"DLITE_UTILIZATION_TRACKER_INTERVAL_SECS" default:"30"`
+		HistoryCleanupIntervalHours    int `envconfig:"DLITE_HISTORY_CLEANUP_INTERVAL_HOURS" default:"24"`
+		HistoryRetentionDays           int `envconfig:"DLITE_HISTORY_RETENTION_DAYS" default:"60"`
+	}
+
 	Settings struct {
 		ReusePool                    bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge                   int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`

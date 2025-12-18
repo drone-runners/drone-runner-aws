@@ -14,6 +14,7 @@ type IManager interface {
 	Inspect(name string) (platform types.Platform, rootDir, driver string)
 	List(ctx context.Context, pool string, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error)
 	Exists(name string) bool
+	GetPoolNames() []string
 	Find(ctx context.Context, instanceID string) (*types.Instance, error)
 	GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error)
 	Update(ctx context.Context, instance *types.Instance) error
