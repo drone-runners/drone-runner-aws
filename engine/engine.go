@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone/runner-go/environ"
 	"github.com/drone/runner-go/logger"
 	"github.com/drone/runner-go/pipeline/runtime"
@@ -21,6 +20,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/command/config"
 )
 
 var (
