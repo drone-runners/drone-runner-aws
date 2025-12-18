@@ -391,10 +391,14 @@ type EnvConfig struct {
 		BatchSize         int `envconfig:"DLITE_OUTBOXER_BATCH_SIZE" default:"20"`
 	}
 
-	SchedulerJobs struct {
-		UtilizationTrackerIntervalSecs int `envconfig:"DLITE_UTILIZATION_TRACKER_INTERVAL_SECS" default:"30"`
-		HistoryCleanupIntervalHours    int `envconfig:"DLITE_HISTORY_CLEANUP_INTERVAL_HOURS" default:"24"`
-		HistoryRetentionDays           int `envconfig:"DLITE_HISTORY_RETENTION_DAYS" default:"60"`
+	Scheduler struct {
+		UtilizationTracker struct {
+			IntervalSecs int `envconfig:"DLITE_SCHEDULER_UTILIZATION_TRACKER_INTERVAL_SECS" default:"30"`
+		}
+		HistoryCleanup struct {
+			IntervalHours int `envconfig:"DLITE_SCHEDULER_HISTORY_CLEANUP_INTERVAL_HOURS" default:"24"`
+			RetentionDays int `envconfig:"DLITE_SCHEDULER_HISTORY_CLEANUP_RETENTION_DAYS" default:"60"`
+		}
 	}
 
 	Settings struct {

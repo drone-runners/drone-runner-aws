@@ -240,14 +240,14 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 		utilizationTrackerJob := jobs.NewUtilizationTrackerJob(
 			c.distributedPoolManager,
 			utilizationHistoryStore,
-			time.Duration(c.env.SchedulerJobs.UtilizationTrackerIntervalSecs)*time.Second,
+			time.Duration(c.env.Scheduler.UtilizationTracker.IntervalSecs)*time.Second,
 		)
 		c.scheduler.Register(utilizationTrackerJob)
 
 		historyCleanupJob := jobs.NewHistoryCleanupJob(
 			utilizationHistoryStore,
-			time.Duration(c.env.SchedulerJobs.HistoryCleanupIntervalHours)*time.Hour,
-			time.Duration(c.env.SchedulerJobs.HistoryRetentionDays)*24*time.Hour,
+			time.Duration(c.env.Scheduler.HistoryCleanup.IntervalHours)*time.Hour,
+			time.Duration(c.env.Scheduler.HistoryCleanup.RetentionDays)*24*time.Hour,
 		)
 		c.scheduler.Register(historyCleanupJob)
 	}
