@@ -59,5 +59,5 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 }
 
 func (s InstanceStore) CountGroupBy(ctx context.Context, params *types.QueryParams, groupByField string) (map[string]int, error) {
-	return make(map[string]int), nil
+	panic("implement me")
 }
