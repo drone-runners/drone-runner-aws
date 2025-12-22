@@ -236,7 +236,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 	// Initialize scheduler and register jobs
 	c.scheduler = scheduler.New(ctx)
 
-	if utilizationHistoryStore != nil && instanceStore != nil {
+	if instanceStore != nil && utilizationHistoryStore != nil {
 		utilizationTrackerJob := jobs.NewUtilizationTrackerJob(
 			instanceStore,
 			utilizationHistoryStore,
