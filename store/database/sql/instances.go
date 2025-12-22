@@ -358,38 +358,17 @@ SET
 WHERE instance_id   = :instance_id
 `
 
-// instanceFieldToColumn maps logical field names to database column names.
-var instanceFieldToColumn = map[string]string{
-	"variant_id": "variant_id",
-	"pool":       "instance_pool",
-	"state":      "instance_state",
-	"runner":     "runner_name",
-	"stage":      "instance_stage",
-}
+// CountByPoolAndVariant returns instance counts grouped by pool and variant_id.
+func (s InstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
+	stmt := builder.Select(
+		"COALESCE(instance_pool, '') as pool",
+		"COALESCE(variant_id, '') as variant_id",
+		"COUNT(*) as count",
+	).From("instances").
+		GroupBy("instance_pool", "variant_id")
 
-func (s InstanceStore) CountGroupBy(ctx context.Context, params *types.QueryParams, groupByField string) (map[string]int, error) {
-	column, ok := instanceFieldToColumn[groupByField]
-	if !ok {
-		return nil, fmt.Errorf("invalid group by field: %s", groupByField)
-	}
-
-	stmt := builder.Select(fmt.Sprintf("COALESCE(%s, '') as group_key", column), "COUNT(*) as count").
-		From("instances").
-		GroupBy(column)
-
-	if params != nil {
-		if params.PoolName != "" {
-			stmt = stmt.Where(squirrel.Eq{"instance_pool": params.PoolName})
-		}
-		if params.Status != "" {
-			stmt = stmt.Where(squirrel.Eq{"instance_state": params.Status})
-		}
-		if params.RunnerName != "" {
-			stmt = stmt.Where(squirrel.Eq{"runner_name": params.RunnerName})
-		}
-		if params.Stage != "" {
-			stmt = stmt.Where(squirrel.Eq{"instance_stage": params.Stage})
-		}
+	if status != "" {
+		stmt = stmt.Where(squirrel.Eq{"instance_state": status})
 	}
 
 	query, args, err := stmt.ToSql()
@@ -397,19 +376,24 @@ func (s InstanceStore) CountGroupBy(ctx context.Context, params *types.QueryPara
 		return nil, fmt.Errorf("failed to build count query: %w", err)
 	}
 
-	type groupCount struct {
-		GroupKey string `db:"group_key"`
-		Count    int    `db:"count"`
+	type result struct {
+		Pool      string `db:"pool"`
+		VariantID string `db:"variant_id"`
+		Count     int    `db:"count"`
 	}
 
-	var results []groupCount
+	var results []result
 	if err := s.db.SelectContext(ctx, &results, query, args...); err != nil {
 		return nil, fmt.Errorf("failed to count instances: %w", err)
 	}
 
-	counts := make(map[string]int)
+	// Build nested map: pool -> variant_id -> count
+	counts := make(map[string]map[string]int)
 	for _, r := range results {
-		counts[r.GroupKey] = r.Count
+		if counts[r.Pool] == nil {
+			counts[r.Pool] = make(map[string]int)
+		}
+		counts[r.Pool][r.VariantID] = r.Count
 	}
 
 	return counts, nil

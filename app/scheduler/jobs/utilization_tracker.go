@@ -52,54 +52,38 @@ func (j *UtilizationTrackerJob) RunOnStart() bool {
 
 // Execute records the current utilization for all pools.
 func (j *UtilizationTrackerJob) Execute(ctx context.Context) error {
-	poolNames := j.manager.GetPoolNames()
 	now := time.Now().Unix()
 
-	for _, poolName := range poolNames {
-		if err := j.recordPoolUtilization(ctx, poolName, now); err != nil {
-			logrus.WithError(err).WithField("pool", poolName).
-				Errorln("failed to record pool utilization")
-		}
-	}
-
-	return nil
-}
-
-// recordPoolUtilization records utilization for a specific pool.
-func (j *UtilizationTrackerJob) recordPoolUtilization(ctx context.Context, poolName string, timestamp int64) error {
-	// Get counts grouped by variant ID directly from the database
-	params := &types.QueryParams{
-		PoolName: poolName,
-		Status:   types.StateInUse,
-	}
-	variantCounts, err := j.manager.GetInstanceStore().CountGroupBy(ctx, params, "variant_id")
+	// Single DB call for all pools and variants
+	counts, err := j.manager.GetInstanceStore().CountByPoolAndVariant(ctx, types.StateInUse)
 	if err != nil {
 		return err
 	}
 
-	// Record utilization for each variant
-	for variantID, count := range variantCounts {
-		record := &types.UtilizationRecord{
-			Pool:           poolName,
-			VariantID:      variantID,
-			InUseInstances: count,
-			RecordedAt:     timestamp,
-		}
+	for poolName, variantCounts := range counts {
+		for variantID, count := range variantCounts {
+			record := &types.UtilizationRecord{
+				Pool:           poolName,
+				VariantID:      variantID,
+				InUseInstances: count,
+				RecordedAt:     now,
+			}
 
-		if err := j.historyStore.Create(ctx, record); err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{
+			if err := j.historyStore.Create(ctx, record); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"pool":       poolName,
+					"variant_id": variantID,
+					"count":      count,
+				}).Errorln("failed to create utilization record")
+				continue
+			}
+
+			logrus.WithFields(logrus.Fields{
 				"pool":       poolName,
 				"variant_id": variantID,
 				"count":      count,
-			}).Errorln("failed to create utilization record")
-			continue
+			}).Debugln("recorded utilization")
 		}
-
-		logrus.WithFields(logrus.Fields{
-			"pool":       poolName,
-			"variant_id": variantID,
-			"count":      count,
-		}).Debugln("recorded utilization")
 	}
 
 	return nil

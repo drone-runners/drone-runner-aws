@@ -140,7 +140,7 @@ func (s *Scheduler) startJob(job Job) {
 
 		// Run immediately if configured
 		if job.RunOnStart() {
-			s.executeJob(jobCtx, job)
+			s.executeJobWithTimeout(jobCtx, job)
 		}
 
 		for {
@@ -148,10 +148,18 @@ func (s *Scheduler) startJob(job Job) {
 			case <-jobCtx.Done():
 				return
 			case <-ticker.C:
-				s.executeJob(jobCtx, job)
+				s.executeJobWithTimeout(jobCtx, job)
 			}
 		}
 	}()
+}
+
+// executeJobWithTimeout runs a job with a timeout based on the job's interval.
+func (s *Scheduler) executeJobWithTimeout(ctx context.Context, job Job) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, job.Interval())
+	defer cancel()
+
+	s.executeJob(timeoutCtx, job)
 }
 
 // executeJob runs a job and logs any errors.

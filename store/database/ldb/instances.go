@@ -108,7 +108,7 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 	panic("implement me")
 }
 
-func (s InstanceStore) CountGroupBy(ctx context.Context, params *types.QueryParams, groupByField string) (map[string]int, error) {
+func (s InstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
 	panic("implement me")
 }
 
