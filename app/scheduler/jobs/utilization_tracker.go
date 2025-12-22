@@ -77,11 +77,6 @@ func (j *UtilizationTrackerJob) recordPoolUtilization(ctx context.Context, poolN
 		return err
 	}
 
-	// If no variants found, record a zero count for the pool with empty variant
-	if len(variantCounts) == 0 {
-		variantCounts[""] = 0
-	}
-
 	// Record utilization for each variant
 	for variantID, count := range variantCounts {
 		record := &types.UtilizationRecord{
