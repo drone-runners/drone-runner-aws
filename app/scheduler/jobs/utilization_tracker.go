@@ -6,7 +6,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -17,21 +16,21 @@ const (
 
 // UtilizationTrackerJob tracks instance utilization history at regular intervals.
 type UtilizationTrackerJob struct {
-	manager      drivers.IManager
-	historyStore store.UtilizationHistoryStore
-	interval     time.Duration
+	instanceStore store.InstanceStore
+	historyStore  store.UtilizationHistoryStore
+	interval      time.Duration
 }
 
 // NewUtilizationTrackerJob creates a new UtilizationTrackerJob.
 func NewUtilizationTrackerJob(
-	manager drivers.IManager,
+	instanceStore store.InstanceStore,
 	historyStore store.UtilizationHistoryStore,
 	interval time.Duration,
 ) *UtilizationTrackerJob {
 	return &UtilizationTrackerJob{
-		manager:      manager,
-		historyStore: historyStore,
-		interval:     interval,
+		instanceStore: instanceStore,
+		historyStore:  historyStore,
+		interval:      interval,
 	}
 }
 
@@ -55,7 +54,7 @@ func (j *UtilizationTrackerJob) Execute(ctx context.Context) error {
 	now := time.Now().Unix()
 
 	// Single DB call for all pools and variants
-	counts, err := j.manager.GetInstanceStore().CountByPoolAndVariant(ctx, types.StateInUse)
+	counts, err := j.instanceStore.CountByPoolAndVariant(ctx, types.StateInUse)
 	if err != nil {
 		return err
 	}
