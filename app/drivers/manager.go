@@ -147,15 +147,6 @@ func (m *Manager) Count() int {
 	return len(m.poolMap)
 }
 
-// GetPoolNames returns the names of all pools in the manager.
-func (m *Manager) GetPoolNames() []string {
-	names := make([]string, 0, len(m.poolMap))
-	for name := range m.poolMap {
-		names = append(names, name)
-	}
-	return names
-}
-
 func (m *Manager) MatchPoolNameFromPlatform(requested *types.Platform) string {
 	for _, pool := range m.poolMap {
 		if pool.Platform.OS == requested.OS && pool.Platform.Arch == requested.Arch {
@@ -687,17 +678,17 @@ func (m *Manager) buildPool(
 	tlsServerName string,
 	query *types.QueryParams,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*types.MachineConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*types.MachineConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
 ) error {
 	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
@@ -779,17 +770,17 @@ func (m *Manager) buildPoolWithVariants(
 	pool *poolEntry,
 	tlsServerName string,
 	setupInstanceWithHibernate func(
-		context.Context,
-		*poolEntry,
-		string,
-		string,
-		string,
-		*types.MachineConfig,
-		*types.GitspaceAgentConfig,
-		*types.StorageConfig,
-		int64,
-		*types.Platform,
-	) (*types.Instance, error),
+	context.Context,
+	*poolEntry,
+	string,
+	string,
+	string,
+	*types.MachineConfig,
+	*types.GitspaceAgentConfig,
+	*types.StorageConfig,
+	int64,
+	*types.Platform,
+) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
 	logr logger.Logger,
 ) {
