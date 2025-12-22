@@ -360,7 +360,7 @@ WHERE instance_id   = :instance_id
 
 // instanceFieldToColumn maps logical field names to database column names.
 var instanceFieldToColumn = map[string]string{
-	"variant_id": "instance_variant_id",
+	"variant_id": "variant_id",
 	"pool":       "instance_pool",
 	"state":      "instance_state",
 	"runner":     "runner_name",
