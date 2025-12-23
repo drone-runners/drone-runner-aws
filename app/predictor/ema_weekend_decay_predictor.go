@@ -120,112 +120,71 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 
 // calculateEMA computes the Exponential Moving Average from the last 5 weekdays' data.
 // This function is only called for weekday predictions.
+// It fetches only the same time window from each past weekday to minimize data retrieval.
 func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *PredictionInput) (float64, error) {
-	// Look back 9 days to ensure we capture at least 5 weekdays
-	// (worst case: if today is Monday, we need Mon-Fri of last week + some of this week)
-	const maxLookbackDays = 9
-	lookbackEnd := input.StartTimestamp
-	lookbackStart := lookbackEnd - int64(maxLookbackDays*24*3600) //nolint:mnd
-
-	records, err := p.historyStore.GetUtilizationHistory(
-		ctx,
-		input.PoolName,
-		input.VariantID,
-		lookbackStart,
-		lookbackEnd,
+	const (
+		maxLookbackDays = 9 // Look back up to 9 days to ensure we capture at least 5 weekdays
+		targetWeekdays  = 5
+		secondsPerDay   = 24 * 3600
 	)
-	if err != nil {
-		return 0, err
+
+	// Calculate the window duration to apply to each past day
+	windowDuration := input.EndTimestamp - input.StartTimestamp
+
+	// Collect records from the last 5 weekdays, fetching only the same time window
+	var allRecords []types.UtilizationRecord
+	weekdaysFound := 0
+
+	for daysBack := 1; daysBack <= maxLookbackDays && weekdaysFound < targetWeekdays; daysBack++ {
+		offset := int64(daysBack * secondsPerDay)
+		historicalStart := input.StartTimestamp - offset
+		historicalEnd := historicalStart + windowDuration
+
+		// Skip weekends
+		if p.isWeekend(historicalStart) {
+			continue
+		}
+
+		records, err := p.historyStore.GetUtilizationHistory(
+			ctx,
+			input.PoolName,
+			input.VariantID,
+			historicalStart,
+			historicalEnd,
+		)
+		if err != nil {
+			return 0, err
+		}
+
+		if len(records) > 0 {
+			allRecords = append(allRecords, records...)
+			weekdaysFound++
+		}
 	}
 
-	if len(records) == 0 {
+	if len(allRecords) == 0 {
 		return 0, nil
 	}
 
-	// Filter out weekend records - only keep weekday data
-	weekdayRecords := p.filterWeekdayRecords(records)
-
-	if len(weekdayRecords) == 0 {
-		return 0, nil
-	}
-
-	// Sort records by timestamp (oldest first)
-	sort.Slice(weekdayRecords, func(i, j int) bool {
-		return weekdayRecords[i].RecordedAt < weekdayRecords[j].RecordedAt
+	// Sort records by timestamp (oldest first) for proper EMA calculation
+	sort.Slice(allRecords, func(i, j int) bool {
+		return allRecords[i].RecordedAt < allRecords[j].RecordedAt
 	})
-
-	// Keep only records from the last 5 weekdays
-	weekdayRecords = p.filterLast5Weekdays(weekdayRecords)
-
-	if len(weekdayRecords) == 0 {
-		return 0, nil
-	}
 
 	// Calculate EMA
 	// Alpha (smoothing factor) = 2 / (period + 1)
 	alpha := 2.0 / float64(p.config.EMAPeriod+1)
 
 	// Initialize EMA with the first value
-	ema := float64(weekdayRecords[0].InUseInstances)
+	ema := float64(allRecords[0].InUseInstances)
 
 	// Calculate EMA iteratively
-	for i := 1; i < len(weekdayRecords); i++ {
-		currentValue := float64(weekdayRecords[i].InUseInstances)
+	for i := 1; i < len(allRecords); i++ {
+		currentValue := float64(allRecords[i].InUseInstances)
 		ema = alpha*currentValue + (1-alpha)*ema
 	}
 
 	return ema, nil
-}
-
-// filterWeekdayRecords removes weekend records from the slice.
-func (p *EMAWeekendDecayPredictor) filterWeekdayRecords(records []types.UtilizationRecord) []types.UtilizationRecord {
-	result := make([]types.UtilizationRecord, 0, len(records))
-	for _, record := range records {
-		if !p.isWeekend(record.RecordedAt) {
-			result = append(result, record)
-		}
-	}
-	return result
-}
-
-// filterLast5Weekdays keeps only records from the last 5 distinct weekdays.
-func (p *EMAWeekendDecayPredictor) filterLast5Weekdays(records []types.UtilizationRecord) []types.UtilizationRecord {
-	if len(records) == 0 {
-		return records
-	}
-
-	// Records are sorted oldest first, so we traverse from the end to find the last 5 weekdays
-	// First, identify the distinct weekday dates (ignoring time)
-	distinctDays := make(map[string]bool)
-	var cutoffTimestamp int64
-
-	// Traverse from newest to oldest
-	for i := len(records) - 1; i >= 0; i-- {
-		t := time.Unix(records[i].RecordedAt, 0).UTC()
-		dayKey := t.Format("2006-01-02") // YYYY-MM-DD format
-
-		if !distinctDays[dayKey] {
-			distinctDays[dayKey] = true
-			if len(distinctDays) == 5 { //nolint:mnd
-				cutoffTimestamp = records[i].RecordedAt
-				break
-			}
-		}
-	}
-
-	// If we found 5 days, filter records from cutoff onwards
-	if cutoffTimestamp > 0 {
-		result := make([]types.UtilizationRecord, 0)
-		for _, record := range records {
-			if record.RecordedAt >= cutoffTimestamp {
-				result = append(result, record)
-			}
-		}
-		return result
-	}
-
-	// If we don't have 5 distinct days, return all records
-	return records
 }
 
 // isWeekend returns true if the given timestamp falls on a Saturday or Sunday.
