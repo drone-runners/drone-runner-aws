@@ -22,17 +22,6 @@ func (m *MockHistoryStore) Create(ctx context.Context, record *types.Utilization
 	return nil
 }
 
-func (m *MockHistoryStore) GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error) {
-	var result []types.UtilizationRecord
-	for _, r := range m.records {
-		if r.Pool == pool && r.VariantID == variantID &&
-			r.RecordedAt >= startTime && r.RecordedAt <= endTime {
-			result = append(result, r)
-		}
-	}
-	return result, nil
-}
-
 func (m *MockHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
 	var remaining []types.UtilizationRecord
 	var deleted int64
@@ -45,6 +34,21 @@ func (m *MockHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64)
 	}
 	m.records = remaining
 	return deleted, nil
+}
+
+func (m *MockHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool, variantID string, ranges []store.TimeRange) ([][]types.UtilizationRecord, error) {
+	result := make([][]types.UtilizationRecord, len(ranges))
+	for i, r := range ranges {
+		var records []types.UtilizationRecord
+		for _, rec := range m.records {
+			if rec.Pool == pool && rec.VariantID == variantID &&
+				rec.RecordedAt >= r.StartTime && rec.RecordedAt <= r.EndTime {
+				records = append(records, rec)
+			}
+		}
+		result[i] = records
+	}
+	return result, nil
 }
 
 func TestEMAWeekendDecayPredictor_Name(t *testing.T) {

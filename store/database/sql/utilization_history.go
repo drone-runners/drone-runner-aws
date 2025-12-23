@@ -45,39 +45,6 @@ func (s *UtilizationHistoryStore) Create(ctx context.Context, record *types.Util
 	return nil
 }
 
-func (s *UtilizationHistoryStore) GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error) {
-	query := squirrel.Select(
-		"id",
-		"pool_name",
-		"variant_id",
-		"in_use_instances",
-		"recorded_at",
-	).
-		From("instance_utilization_history").
-		Where(squirrel.Eq{"pool_name": pool}).
-		Where(squirrel.GtOrEq{"recorded_at": startTime}).
-		Where(squirrel.LtOrEq{"recorded_at": endTime}).
-		OrderBy("recorded_at ASC").
-		RunWith(s.db).
-		PlaceholderFormat(squirrel.Dollar)
-
-	if variantID != "" {
-		query = query.Where(squirrel.Eq{"variant_id": variantID})
-	}
-
-	sql, args, err := query.ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("error building query: %w", err)
-	}
-
-	var records []types.UtilizationRecord
-	if err := s.db.SelectContext(ctx, &records, sql, args...); err != nil {
-		return nil, fmt.Errorf("error fetching utilization history: %w", err)
-	}
-
-	return records, nil
-}
-
 func (s *UtilizationHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
 	query := squirrel.Delete("instance_utilization_history").
 		Where(squirrel.Lt{"recorded_at": timestamp}).
@@ -90,4 +57,82 @@ func (s *UtilizationHistoryStore) DeleteOlderThan(ctx context.Context, timestamp
 	}
 
 	return result.RowsAffected()
+}
+
+// utilizationRecordWithRangeIdx is used internally to track which time range a record belongs to.
+type utilizationRecordWithRangeIdx struct {
+	types.UtilizationRecord
+	RangeIdx int `db:"range_idx"`
+}
+
+func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
+	ctx context.Context,
+	pool, variantID string,
+	ranges []store.TimeRange,
+) ([][]types.UtilizationRecord, error) {
+	if len(ranges) == 0 {
+		return nil, nil
+	}
+
+	// Build UNION ALL query to fetch all ranges in one round trip
+	// Each sub-query adds a range_idx to identify which range the record belongs to
+	var unionParts []string
+	var allArgs []interface{}
+	argIdx := 1
+
+	for i, r := range ranges {
+		var subQuery string
+		if variantID != "" {
+			subQuery = fmt.Sprintf(
+				"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
+					"FROM instance_utilization_history "+
+					"WHERE pool_name = $%d AND variant_id = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
+				i, argIdx, argIdx+1, argIdx+2, argIdx+3,
+			)
+			allArgs = append(allArgs, pool, variantID, r.StartTime, r.EndTime)
+			argIdx += 4
+		} else {
+			subQuery = fmt.Sprintf(
+				"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
+					"FROM instance_utilization_history "+
+					"WHERE pool_name = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
+				i, argIdx, argIdx+1, argIdx+2,
+			)
+			allArgs = append(allArgs, pool, r.StartTime, r.EndTime)
+			argIdx += 3
+		}
+		unionParts = append(unionParts, "("+subQuery+")")
+	}
+
+	fullQuery := fmt.Sprintf("%s ORDER BY range_idx, recorded_at ASC", joinWithUnionAll(unionParts))
+
+	var records []utilizationRecordWithRangeIdx
+	if err := s.db.SelectContext(ctx, &records, fullQuery, allArgs...); err != nil {
+		return nil, fmt.Errorf("error fetching utilization history batch: %w", err)
+	}
+
+	// Group records by range index
+	result := make([][]types.UtilizationRecord, len(ranges))
+	for i := range result {
+		result[i] = []types.UtilizationRecord{}
+	}
+
+	for _, rec := range records {
+		if rec.RangeIdx >= 0 && rec.RangeIdx < len(ranges) {
+			result[rec.RangeIdx] = append(result[rec.RangeIdx], rec.UtilizationRecord)
+		}
+	}
+
+	return result, nil
+}
+
+func joinWithUnionAll(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	result := parts[0]
+	for i := 1; i < len(parts); i++ {
+		result += " UNION ALL " + parts[i]
+	}
+	return result
 }

@@ -41,8 +41,16 @@ type CapacityReservationStore interface {
 	UpdateState(ctx context.Context, stageID string, state types.CapacityReservationState) error
 }
 
+// TimeRange represents a time window for querying utilization history.
+type TimeRange struct {
+	StartTime int64
+	EndTime   int64
+}
+
 type UtilizationHistoryStore interface {
 	Create(ctx context.Context, record *types.UtilizationRecord) error
-	GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error)
+	// GetUtilizationHistoryBatch fetches records for multiple time ranges in a single query.
+	// Returns a slice of record slices, where each inner slice corresponds to the time range at the same index.
+	GetUtilizationHistoryBatch(ctx context.Context, pool, variantID string, ranges []TimeRange) ([][]types.UtilizationRecord, error)
 	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 }

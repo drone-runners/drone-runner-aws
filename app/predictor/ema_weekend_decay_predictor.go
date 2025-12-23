@@ -120,7 +120,7 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 
 // calculateEMA computes the Exponential Moving Average from the last 5 weekdays' data.
 // This function is only called for weekday predictions.
-// It fetches only the same time window from each past weekday to minimize data retrieval.
+// It fetches only the same time window from each past weekday using a single batch query.
 func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *PredictionInput) (float64, error) {
 	const (
 		maxLookbackDays = 9 // Look back up to 9 days to ensure we capture at least 5 weekdays
@@ -131,11 +131,9 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 	// Calculate the window duration to apply to each past day
 	windowDuration := input.EndTimestamp - input.StartTimestamp
 
-	// Collect records from the last 5 weekdays, fetching only the same time window
-	var allRecords []types.UtilizationRecord
-	weekdaysFound := 0
-
-	for daysBack := 1; daysBack <= maxLookbackDays && weekdaysFound < targetWeekdays; daysBack++ {
+	// Build time ranges for the last 5 weekdays
+	var ranges []store.TimeRange
+	for daysBack := 1; daysBack <= maxLookbackDays && len(ranges) < targetWeekdays; daysBack++ {
 		offset := int64(daysBack * secondsPerDay)
 		historicalStart := input.StartTimestamp - offset
 		historicalEnd := historicalStart + windowDuration
@@ -145,21 +143,31 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 			continue
 		}
 
-		records, err := p.historyStore.GetUtilizationHistory(
-			ctx,
-			input.PoolName,
-			input.VariantID,
-			historicalStart,
-			historicalEnd,
-		)
-		if err != nil {
-			return 0, err
-		}
+		ranges = append(ranges, store.TimeRange{
+			StartTime: historicalStart,
+			EndTime:   historicalEnd,
+		})
+	}
 
-		if len(records) > 0 {
-			allRecords = append(allRecords, records...)
-			weekdaysFound++
-		}
+	if len(ranges) == 0 {
+		return 0, nil
+	}
+
+	// Fetch all time ranges in a single batch query
+	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
+		ctx,
+		input.PoolName,
+		input.VariantID,
+		ranges,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	// Flatten all records (they're already sorted by time within the batch query)
+	var allRecords []types.UtilizationRecord
+	for _, records := range batchResults {
+		allRecords = append(allRecords, records...)
 	}
 
 	if len(allRecords) == 0 {
@@ -195,43 +203,40 @@ func (p *EMAWeekendDecayPredictor) isWeekend(timestamp int64) bool {
 }
 
 // calculateHistoricalWithDecay computes the weighted average from 1, 2, and 3 weeks ago.
+// It fetches all 3 weeks of data in a single batch query.
 func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Context, input *PredictionInput) (float64, error) {
 	const secondsPerWeek = 7 * 24 * 3600
 
-	weekValues := make([]float64, 3) //nolint:mnd
-	weekHasData := make([]bool, 3)   //nolint:mnd
-
-	// Get data from 1, 2, and 3 weeks ago at the same time window
+	// Build time ranges for 1, 2, and 3 weeks ago
+	ranges := make([]store.TimeRange, 3) //nolint:mnd
 	for week := 1; week <= 3; week++ {
 		offset := int64(week * secondsPerWeek)
-		historicalStart := input.StartTimestamp - offset
-		historicalEnd := input.EndTimestamp - offset
-
-		records, err := p.historyStore.GetUtilizationHistory(
-			ctx,
-			input.PoolName,
-			input.VariantID,
-			historicalStart,
-			historicalEnd,
-		)
-		if err != nil {
-			return 0, err
+		ranges[week-1] = store.TimeRange{
+			StartTime: input.StartTimestamp - offset,
+			EndTime:   input.EndTimestamp - offset,
 		}
+	}
 
-		if len(records) > 0 {
-			weekValues[week-1] = p.calculatePeakUtilization(records)
-			weekHasData[week-1] = true
-		}
+	// Fetch all 3 weeks in a single batch query
+	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
+		ctx,
+		input.PoolName,
+		input.VariantID,
+		ranges,
+	)
+	if err != nil {
+		return 0, err
 	}
 
 	// Calculate weighted average with decay factors
 	totalWeight := 0.0
 	weightedSum := 0.0
 
-	for i := 0; i < 3; i++ {
-		if weekHasData[i] {
+	for i, records := range batchResults {
+		if len(records) > 0 {
+			peakValue := p.calculatePeakUtilization(records)
 			weight := p.config.WeekDecayFactors[i]
-			weightedSum += weekValues[i] * weight
+			weightedSum += peakValue * weight
 			totalWeight += weight
 		}
 	}
