@@ -12,6 +12,8 @@ import (
 	"github.com/wings-software/dlite/router"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/scheduler"
+	"github.com/drone-runners/drone-runner-aws/app/scheduler/jobs"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/drone-runners/drone-runner-aws/metric"
@@ -33,6 +35,7 @@ type dliteCommand struct {
 	distributedPoolManager drivers.IManager
 	metrics                *metric.Metrics
 	outboxProcessor        *drivers.OutboxProcessor
+	scheduler              *scheduler.Scheduler
 }
 
 func RegisterDlite(app *kingpin.Application) {
@@ -142,6 +145,9 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	}
 
 	c.outboxProcessor.Start()
+	if c.scheduler != nil {
+		c.scheduler.Start()
+	}
 
 	var g errgroup.Group
 
@@ -154,6 +160,9 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 	g.Go(func() error {
 		<-ctx.Done()
 		c.outboxProcessor.Stop()
+		if c.scheduler != nil {
+			c.scheduler.Stop()
+		}
 		return nil
 	})
 
@@ -191,7 +200,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
 	logrus.Infoln("Starting postgres database")
-	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
+	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 		return nil, err
@@ -223,6 +232,26 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 		c.env.OutboxProcessor.MaxRetries,
 		c.env.OutboxProcessor.BatchSize,
 	)
+
+	// Initialize scheduler and register jobs
+	c.scheduler = scheduler.New(ctx)
+
+	if instanceStore != nil && utilizationHistoryStore != nil {
+		utilizationTrackerJob := jobs.NewUtilizationTrackerJob(
+			instanceStore,
+			utilizationHistoryStore,
+			time.Duration(c.env.Scheduler.UtilizationTracker.IntervalSecs)*time.Second,
+		)
+		c.scheduler.Register(utilizationTrackerJob)
+
+		historyCleanupJob := jobs.NewHistoryCleanupJob(
+			utilizationHistoryStore,
+			time.Duration(c.env.Scheduler.HistoryCleanup.IntervalHours)*time.Hour,
+			time.Duration(c.env.Scheduler.HistoryCleanup.RetentionDays)*24*time.Hour,
+		)
+		c.scheduler.Register(historyCleanupJob)
+	}
+
 	poolConfig, err := harness.SetupPoolWithEnv(ctx, &c.env, c.distributedPoolManager, c.poolFile)
 	if err != nil {
 		logrus.WithError(err).Error("could not setup distributed pool")

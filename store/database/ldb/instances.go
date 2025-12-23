@@ -108,6 +108,10 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 	panic("implement me")
 }
 
+func (s InstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
+	panic("implement me")
+}
+
 func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
 	log := logrus.New()
 	if pool == "" {

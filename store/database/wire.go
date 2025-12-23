@@ -90,18 +90,29 @@ func ProvideSQLCapacityReservationStore(db *sqlx.DB) store.CapacityReservationSt
 	}
 }
 
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, error) {
+// ProvideSQLUtilizationHistoryStore provides a utilization history store.
+func ProvideSQLUtilizationHistoryStore(db *sqlx.DB) store.UtilizationHistoryStore {
+	switch db.DriverName() {
+	case Postgres:
+		return sql.NewUtilizationHistoryStore(db)
+	default:
+		return nil
+	}
+}
+
+//nolint:gocritic
+func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) {
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
-		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil, nil
 	}
 
 	db, err := ProvideSQLDatabase(driver, datasource)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), ProvideSQLCapacityReservationStore(db), nil
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), ProvideSQLCapacityReservationStore(db), ProvideSQLUtilizationHistoryStore(db), nil
 }

@@ -57,3 +57,7 @@ func (s InstanceStore) Purge(ctx context.Context) error {
 func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
 	panic("implement me")
 }
+
+func (s InstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
+	panic("implement me")
+}

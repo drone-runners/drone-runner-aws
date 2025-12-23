@@ -2,6 +2,8 @@ package predictor
 
 import (
 	"time"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // GenerateMockHistoryData creates 3 weeks of utilization history data
@@ -9,8 +11,8 @@ import (
 // - Higher utilization during weekday business hours (9 AM - 6 PM UTC)
 // - Lower utilization during nights and weekends
 // - Some variance to simulate real-world fluctuations
-func GenerateMockHistoryData(pool, variantID string, referenceTime time.Time) []UtilizationRecord {
-	var records []UtilizationRecord
+func GenerateMockHistoryData(pool, variantID string, referenceTime time.Time) []types.UtilizationRecord {
+	var records []types.UtilizationRecord
 
 	const (
 		recordInterval   = 2 * time.Minute // Record every 2 minutes
@@ -69,7 +71,7 @@ func GenerateMockHistoryData(pool, variantID string, referenceTime time.Time) []
 			instances = 1
 		}
 
-		records = append(records, UtilizationRecord{
+		records = append(records, types.UtilizationRecord{
 			Pool:           pool,
 			VariantID:      variantID,
 			InUseInstances: instances,
@@ -82,7 +84,7 @@ func GenerateMockHistoryData(pool, variantID string, referenceTime time.Time) []
 
 // GenerateMockHistoryDataWithSpikes creates 3 weeks of utilization history
 // with occasional traffic spikes to test predictor's handling of anomalies.
-func GenerateMockHistoryDataWithSpikes(pool, variantID string, referenceTime time.Time) []UtilizationRecord {
+func GenerateMockHistoryDataWithSpikes(pool, variantID string, referenceTime time.Time) []types.UtilizationRecord {
 	records := GenerateMockHistoryData(pool, variantID, referenceTime)
 
 	// Add spikes at specific times (simulating deployments or traffic bursts)
@@ -106,7 +108,7 @@ func GenerateMockHistoryDataWithSpikes(pool, variantID string, referenceTime tim
 
 // GenerateMockHistoryDataGradualIncrease creates 3 weeks of data with a
 // gradual increase trend to test predictor's trend detection.
-func GenerateMockHistoryDataGradualIncrease(pool, variantID string, referenceTime time.Time) []UtilizationRecord {
+func GenerateMockHistoryDataGradualIncrease(pool, variantID string, referenceTime time.Time) []types.UtilizationRecord {
 	records := GenerateMockHistoryData(pool, variantID, referenceTime)
 
 	threeWeeksAgo := referenceTime.Add(-3 * 7 * 24 * time.Hour)

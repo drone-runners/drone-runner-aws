@@ -16,6 +16,7 @@ type InstanceStore interface {
 	Purge(context.Context) error
 	DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error)
 	FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error)
+	CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error)
 }
 
 type StageOwnerStore interface {
@@ -38,4 +39,10 @@ type CapacityReservationStore interface {
 	Delete(context.Context, string) error
 	ListByPoolName(ctx context.Context, poolName string) ([]*types.CapacityReservation, error)
 	UpdateState(ctx context.Context, stageID string, state types.CapacityReservationState) error
+}
+
+type UtilizationHistoryStore interface {
+	Create(ctx context.Context, record *types.UtilizationRecord) error
+	GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error)
+	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 }

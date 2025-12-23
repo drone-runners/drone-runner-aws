@@ -5,22 +5,16 @@ import (
 	"math"
 	"sort"
 	"time"
-)
 
-// UtilizationRecord represents a single record from the instance_utilization_history table.
-type UtilizationRecord struct {
-	Pool           string
-	VariantID      string
-	InUseInstances int
-	RecordedAt     int64 // Unix timestamp
-}
+	"github.com/drone-runners/drone-runner-aws/types"
+)
 
 // HistoryStore defines the interface for fetching utilization history data.
 // This interface should be implemented by the database layer.
 type HistoryStore interface {
 	// GetUtilizationHistory retrieves utilization records for a given pool and variant
 	// within the specified time range.
-	GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]UtilizationRecord, error)
+	GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error)
 }
 
 // EMAWeekendDecayPredictor implements the Predictor interface using a combination of:
@@ -191,8 +185,8 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 }
 
 // filterWeekdayRecords removes weekend records from the slice.
-func (p *EMAWeekendDecayPredictor) filterWeekdayRecords(records []UtilizationRecord) []UtilizationRecord {
-	result := make([]UtilizationRecord, 0, len(records))
+func (p *EMAWeekendDecayPredictor) filterWeekdayRecords(records []types.UtilizationRecord) []types.UtilizationRecord {
+	result := make([]types.UtilizationRecord, 0, len(records))
 	for _, record := range records {
 		if !p.isWeekend(record.RecordedAt) {
 			result = append(result, record)
@@ -202,7 +196,7 @@ func (p *EMAWeekendDecayPredictor) filterWeekdayRecords(records []UtilizationRec
 }
 
 // filterLast5Weekdays keeps only records from the last 5 distinct weekdays.
-func (p *EMAWeekendDecayPredictor) filterLast5Weekdays(records []UtilizationRecord) []UtilizationRecord {
+func (p *EMAWeekendDecayPredictor) filterLast5Weekdays(records []types.UtilizationRecord) []types.UtilizationRecord {
 	if len(records) == 0 {
 		return records
 	}
@@ -228,7 +222,7 @@ func (p *EMAWeekendDecayPredictor) filterLast5Weekdays(records []UtilizationReco
 
 	// If we found 5 days, filter records from cutoff onwards
 	if cutoffTimestamp > 0 {
-		result := make([]UtilizationRecord, 0)
+		result := make([]types.UtilizationRecord, 0)
 		for _, record := range records {
 			if record.RecordedAt >= cutoffTimestamp {
 				result = append(result, record)
@@ -299,7 +293,7 @@ func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Cont
 
 // calculatePeakUtilization returns the peak (maximum) utilization from a set of records.
 // Using peak instead of average provides a safety margin for capacity planning.
-func (p *EMAWeekendDecayPredictor) calculatePeakUtilization(records []UtilizationRecord) float64 {
+func (p *EMAWeekendDecayPredictor) calculatePeakUtilization(records []types.UtilizationRecord) float64 {
 	if len(records) == 0 {
 		return 0
 	}
