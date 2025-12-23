@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS instance_utilization_history (
     id SERIAL PRIMARY KEY,
     pool_name VARCHAR(255) NOT NULL,
-    variant_id VARCHAR(255) NOT NULL DEFAULT '',
+    variant_id VARCHAR(255) NOT NULL DEFAULT 'default',
     in_use_instances INTEGER NOT NULL DEFAULT 0,
     recorded_at BIGINT NOT NULL
 );
