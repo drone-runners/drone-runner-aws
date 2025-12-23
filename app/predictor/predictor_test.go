@@ -456,7 +456,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowPrediction(t *testing.T) {
 	// Generate 3 weeks of history data with 2-minute intervals
 	historyData := GenerateMockHistoryData(poolName, variantID, referenceTime)
 
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -526,7 +526,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowWeekdayVsWeekend(t *testing.T) {
 
 	// Generate history data for both scenarios (using the later date)
 	historyData := GenerateMockHistoryData(poolName, variantID, saturdayRef)
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -582,7 +582,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowWithSpikes(t *testing.T) {
 
 	// Generate history data with spikes
 	historyData := GenerateMockHistoryDataWithSpikes(poolName, variantID, referenceTime)
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -633,7 +633,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowTrendDetection(t *testing.T) {
 
 	// Generate history with gradual increase
 	historyData := GenerateMockHistoryDataGradualIncrease(poolName, variantID, referenceTime)
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
