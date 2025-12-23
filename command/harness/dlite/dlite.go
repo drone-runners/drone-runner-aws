@@ -244,7 +244,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 
 	outboxCleanupJob := jobs.NewOutboxCleanupJob(
 		outboxProcessor,
-		1*time.Hour, // nolint:mnd
+		1*time.Hour, //nolint:mnd
 	)
 	c.scheduler.Register(outboxCleanupJob)
 

@@ -90,7 +90,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
 		})
 	}
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(store)
 
 	input := &PredictionInput{
@@ -152,7 +152,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 		RecordedAt:     week3Ago.Unix(),
 	})
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(store)
 
 	input := &PredictionInput{
@@ -209,7 +209,7 @@ func TestEMAWeekendDecayPredictor_WeekendVsWeekday(t *testing.T) {
 		}
 	}
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	config.SafetyBuffer = 0 // Disable buffer for easier testing
@@ -269,7 +269,7 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 		RecordedAt:     week1Ago.Unix(),
 	})
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 	config := DefaultPredictorConfig()
 	config.SafetyBuffer = 0
 	config.EMAWeight = 0 // Use only historical
