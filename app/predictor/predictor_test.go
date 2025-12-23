@@ -56,7 +56,7 @@ func TestEMAWeekendDecayPredictor_Name(t *testing.T) {
 }
 
 func TestEMAWeekendDecayPredictor_Predict_EmptyHistory(t *testing.T) {
-	store := &MockHistoryStore{records: []types.UtilizationRecord{}}
+	store := &MockHistoryStore{records: []types.UtilizationRecord{}} //nolint:gocritic
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(store)
 
 	input := &PredictionInput{
