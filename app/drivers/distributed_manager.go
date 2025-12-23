@@ -195,6 +195,37 @@ func (d *DistributedManager) IsDistributed() bool {
 	return true
 }
 
+// GetRunnerName returns the runner name.
+func (d *DistributedManager) GetRunnerName() string {
+	return d.runnerName
+}
+
+// SetupInstanceForPool sets up an instance for the given pool with the specified configuration.
+// This method implements the jobs.InstanceSetupManager interface.
+func (d *DistributedManager) SetupInstanceForPool(
+	ctx context.Context,
+	poolName string,
+	machineConfig *types.MachineConfig,
+) (*types.Instance, error) {
+	pool, ok := d.poolMap[poolName]
+	if !ok {
+		return nil, fmt.Errorf("pool not found: %s", poolName)
+	}
+
+	return d.setupInstanceWithHibernate(
+		ctx,
+		pool,
+		d.GetTLSServerName(),
+		"",
+		"",
+		machineConfig,
+		nil,
+		nil,
+		-1,
+		nil,
+	)
+}
+
 // provisionFromReservedCapacity handles provisioning when reserved capacity is available
 func (d *DistributedManager) provisionFromReservedCapacity(
 	ctx context.Context,

@@ -5,12 +5,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
-// MockHistoryStore is a mock implementation of HistoryStore for testing.
+// Ensure MockHistoryStore implements store.UtilizationHistoryStore
+var _ store.UtilizationHistoryStore = (*MockHistoryStore)(nil)
+
+// MockHistoryStore is a mock implementation of store.UtilizationHistoryStore for testing.
 type MockHistoryStore struct {
 	records []types.UtilizationRecord
+}
+
+func (m *MockHistoryStore) Create(ctx context.Context, record *types.UtilizationRecord) error {
+	m.records = append(m.records, *record)
+	return nil
 }
 
 func (m *MockHistoryStore) GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error) {
@@ -22,6 +31,20 @@ func (m *MockHistoryStore) GetUtilizationHistory(ctx context.Context, pool, vari
 		}
 	}
 	return result, nil
+}
+
+func (m *MockHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
+	var remaining []types.UtilizationRecord
+	var deleted int64
+	for _, r := range m.records {
+		if r.RecordedAt >= timestamp {
+			remaining = append(remaining, r)
+		} else {
+			deleted++
+		}
+	}
+	m.records = remaining
+	return deleted, nil
 }
 
 func TestEMAWeekendDecayPredictor_Name(t *testing.T) {

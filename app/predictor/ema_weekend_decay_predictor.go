@@ -6,23 +6,16 @@ import (
 	"sort"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
-
-// HistoryStore defines the interface for fetching utilization history data.
-// This interface should be implemented by the database layer.
-type HistoryStore interface {
-	// GetUtilizationHistory retrieves utilization records for a given pool and variant
-	// within the specified time range.
-	GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error)
-}
 
 // EMAWeekendDecayPredictor implements the Predictor interface using a combination of:
 // - Exponential Moving Average (EMA) for recent trend analysis
 // - Weekend Offset adjustment for day-of-week patterns
 // - 3 Week Historical Offset with Decay for seasonal patterns
 type EMAWeekendDecayPredictor struct {
-	historyStore HistoryStore
+	historyStore store.UtilizationHistoryStore
 	config       PredictorConfig
 }
 
@@ -67,16 +60,16 @@ func DefaultPredictorConfig() PredictorConfig {
 }
 
 // NewEMAWeekendDecayPredictor creates a new predictor with the given history store and config.
-func NewEMAWeekendDecayPredictor(store HistoryStore, config PredictorConfig) *EMAWeekendDecayPredictor { //nolint:gocritic
+func NewEMAWeekendDecayPredictor(historyStore store.UtilizationHistoryStore, config PredictorConfig) *EMAWeekendDecayPredictor { //nolint:gocritic
 	return &EMAWeekendDecayPredictor{
-		historyStore: store,
+		historyStore: historyStore,
 		config:       config,
 	}
 }
 
 // NewEMAWeekendDecayPredictorWithDefaults creates a new predictor with default configuration.
-func NewEMAWeekendDecayPredictorWithDefaults(store HistoryStore) *EMAWeekendDecayPredictor {
-	return NewEMAWeekendDecayPredictor(store, DefaultPredictorConfig())
+func NewEMAWeekendDecayPredictorWithDefaults(historyStore store.UtilizationHistoryStore) *EMAWeekendDecayPredictor {
+	return NewEMAWeekendDecayPredictor(historyStore, DefaultPredictorConfig())
 }
 
 // Name returns the name of this predictor implementation.
