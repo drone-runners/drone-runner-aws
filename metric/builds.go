@@ -27,6 +27,12 @@ type Metrics struct {
 	CPUPercentile            *prometheus.HistogramVec
 	MemoryPercentile         *prometheus.HistogramVec
 
+	CapacityReservationCount                *prometheus.CounterVec
+	CapacityReservationDurationCount        *prometheus.HistogramVec
+	CapacityReservationPerPoolDurationCount *prometheus.HistogramVec
+	CapacityReservationFallbackCount        *prometheus.CounterVec
+	CapacityReservationFailedCount          *prometheus.CounterVec
+
 	stores []*Store
 }
 
@@ -339,6 +345,63 @@ func TotalVMInitDurationCount() *prometheus.HistogramVec {
 	)
 }
 
+// CapacityReservationDurationCount provides metrics for total time needed to complete a capacity reservation
+func CapacityReservationDurationCount() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_capacity_reservation_duration_seconds",
+			Help:    "Total time needed to successfully reserve capacity",
+			Buckets: []float64{0.5, 1, 2, 5, 10, 30, 60, 120, 300},
+		},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id"},
+	)
+}
+
+// CapacityReservationPerPoolDurationCount provides metrics for time needed to reserve capacity per pool
+func CapacityReservationPerPoolDurationCount() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_capacity_reservation_per_pool_duration_seconds",
+			Help:    "Time needed to reserve capacity in a specific pool",
+			Buckets: []float64{0.5, 1, 2, 5, 10, 30, 60, 120, 300},
+		},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id"},
+	)
+}
+
+// CapacityReservationFallbackCount provides metrics for number of fallbacks during capacity reservation
+func CapacityReservationFallbackCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "harness_ci_capacity_reservation_fallbacks_total",
+			Help: "Total number of fallbacks triggered during capacity reservation",
+		},
+		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id"},
+	)
+}
+
+// CapacityReservationFailedCount provides metrics for failed capacity reservations per pool
+func CapacityReservationFailedCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "harness_ci_capacity_reservation_errors_total",
+			Help: "Total number of capacity reservation failures per pool",
+		},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id"},
+	)
+}
+
+// CapacityReservationCount provides metrics for total number of capacity reservations (failed + successful)
+func CapacityReservationCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "harness_ci_capacity_reservation_total",
+			Help: "Total number of completed capacity reservations (failed + successful)",
+		},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id"},
+	)
+}
+
 func RegisterMetrics() *Metrics {
 	buildCount := BuildCount()
 	failedBuildCount := FailedBuildCount()
@@ -351,18 +414,28 @@ func RegisterMetrics() *Metrics {
 	cpuPercentile := CPUPercentile()
 	memoryPercentile := MemoryPercentile()
 	errorCount := ErrorCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount) //nolint:lll
+	capacityReservationCount := CapacityReservationCount()
+	capacityReservationDurationCount := CapacityReservationDurationCount()
+	capacityReservationPerPoolDurationCount := CapacityReservationPerPoolDurationCount()
+	capacityReservationFallbackCount := CapacityReservationFallbackCount()
+	capacityReservationFailedCount := CapacityReservationFailedCount()
+	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount, capacityReservationCount, capacityReservationDurationCount, capacityReservationPerPoolDurationCount, capacityReservationFallbackCount, capacityReservationFailedCount) //nolint:lll
 	return &Metrics{
-		BuildCount:               buildCount,
-		FailedCount:              failedBuildCount,
-		RunningCount:             runningCount,
-		RunningPerAccountCount:   runningPerAccountCount,
-		PoolFallbackCount:        poolFallbackCount,
-		WaitDurationCount:        waitDurationCount,
-		TotalVMInitDurationCount: totalVMInitDurationCount,
-		MemoryPercentile:         memoryPercentile,
-		CPUPercentile:            cpuPercentile,
-		ErrorCount:               errorCount,
-		WarmPoolCount:            warmPoolCount,
+		BuildCount:                              buildCount,
+		FailedCount:                             failedBuildCount,
+		RunningCount:                            runningCount,
+		RunningPerAccountCount:                  runningPerAccountCount,
+		PoolFallbackCount:                       poolFallbackCount,
+		WaitDurationCount:                       waitDurationCount,
+		TotalVMInitDurationCount:                totalVMInitDurationCount,
+		MemoryPercentile:                        memoryPercentile,
+		CPUPercentile:                           cpuPercentile,
+		ErrorCount:                              errorCount,
+		WarmPoolCount:                           warmPoolCount,
+		CapacityReservationCount:                capacityReservationCount,
+		CapacityReservationDurationCount:        capacityReservationDurationCount,
+		CapacityReservationPerPoolDurationCount: capacityReservationPerPoolDurationCount,
+		CapacityReservationFallbackCount:        capacityReservationFallbackCount,
+		CapacityReservationFailedCount:          capacityReservationFailedCount,
 	}
 }

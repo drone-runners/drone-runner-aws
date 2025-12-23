@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -42,6 +44,7 @@ func HandleCapacityReservation(
 	poolMapByAccount map[string]map[string]string,
 	runnerName string,
 	poolManager drivers.IManager,
+	metrics *metric.Metrics,
 ) (*types.CapacityReservation, error) {
 	capacityStartTime := time.Now()
 	stageRuntimeID := r.ID
@@ -75,9 +78,9 @@ func HandleCapacityReservation(
 
 	var (
 		foundPool bool
+		fallback  bool
+		owner     string
 	)
-
-	var owner string
 
 	capacityUnavailable := false
 	var capacityUnavailableErr *ierrors.ErrCapacityUnavailable
@@ -89,12 +92,36 @@ func HandleCapacityReservation(
 		owner = GetAccountID(&r.Context, r.Tags)
 	}
 
-	for _, p := range pools {
+	platform, _, driver := poolManager.Inspect(r.PoolID)
+
+	for idx, p := range pools {
+		poolStartTime := time.Now()
+		if idx > 0 {
+			fallback = true
+		}
 		pool := fetchPool(r.Context.AccountID, p, poolMapByAccount)
+		_, _, poolDriver := poolManager.Inspect(p)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the capacity reservation process")
 		capacity, _, poolErr = handleCapacityReservation(ctx, internalLogr, r, runnerName, poolManager, pool, owner)
+		poolDuration := time.Since(poolStartTime)
+		metrics.CapacityReservationPerPoolDurationCount.WithLabelValues(
+			pool,
+			platform.OS,
+			platform.Arch,
+			poolDriver,
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+		).Observe(poolDuration.Seconds())
 		if poolErr != nil {
 			internalLogr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not reserve capacity")
+			metrics.CapacityReservationFailedCount.WithLabelValues(
+				pool,
+				platform.OS,
+				platform.Arch,
+				poolDriver,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+			).Inc()
 			if errors.As(poolErr, &capacityUnavailableErr) {
 				capacityUnavailable = true
 			}
@@ -119,9 +146,39 @@ func HandleCapacityReservation(
 				return nil, fmt.Errorf("could not create capacity reservation entity: %w", cerr)
 			}
 		}
+		if fallback {
+			metrics.CapacityReservationFallbackCount.WithLabelValues(
+				r.PoolID,
+				platform.OS,
+				platform.Arch,
+				driver,
+				metric.True,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+			).Inc()
+		}
 	} else {
+		metrics.CapacityReservationCount.WithLabelValues(
+			r.PoolID,
+			platform.OS,
+			platform.Arch,
+			driver,
+			strconv.FormatBool(poolManager.IsDistributed()),
+			owner,
+		).Inc()
 		internalLogr.WithField("stage_runtime_id", stageRuntimeID).
 			Errorln("Capacity Reservation failed")
+		if fallback {
+			metrics.CapacityReservationFallbackCount.WithLabelValues(
+				r.PoolID,
+				platform.OS,
+				platform.Arch,
+				driver,
+				metric.False,
+				strconv.FormatBool(poolManager.IsDistributed()),
+				owner,
+			).Inc()
+		}
 		// If atleast one pool failed only with capacity unavailable then its not an actual failure
 		if capacityUnavailable {
 			return nil, nil
@@ -141,6 +198,26 @@ func HandleCapacityReservation(
 		WithField("selected_pool", selectedPool).
 		WithField("requested_pool", r.PoolID).
 		Tracef("total capacity reservation time for vm setup is %.2fs", totalCapacityTime.Seconds())
+
+	_, _, selectedPoolDriver := poolManager.Inspect(selectedPool)
+	metrics.CapacityReservationDurationCount.WithLabelValues(
+		selectedPool,
+		platform.OS,
+		platform.Arch,
+		selectedPoolDriver,
+		metric.ConvertBool(fallback),
+		strconv.FormatBool(poolManager.IsDistributed()),
+		owner,
+	).Observe(totalCapacityTime.Seconds())
+
+	metrics.CapacityReservationCount.WithLabelValues(
+		selectedPool,
+		platform.OS,
+		platform.Arch,
+		selectedPoolDriver,
+		strconv.FormatBool(poolManager.IsDistributed()),
+		owner,
+	).Inc()
 
 	return capacity, nil
 }
