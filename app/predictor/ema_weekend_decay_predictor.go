@@ -211,7 +211,7 @@ func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Cont
 	ranges := make([]store.TimeRange, 3) //nolint:mnd
 	for week := 1; week <= 3; week++ {
 		offset := int64(week * secondsPerWeek)
-		ranges[week-1] = store.TimeRange{
+		ranges[week-1] = store.TimeRange{ //nolint:gosec
 			StartTime: input.StartTimestamp - offset,
 			EndTime:   input.EndTimestamp - offset,
 		}

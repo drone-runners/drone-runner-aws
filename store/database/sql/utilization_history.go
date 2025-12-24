@@ -83,6 +83,7 @@ func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	for i, r := range ranges {
 		var subQuery string
 		if variantID != "" {
+			//nolint:mnd
 			subQuery = fmt.Sprintf(
 				"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
 					"FROM instance_utilization_history "+
@@ -92,6 +93,7 @@ func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 			allArgs = append(allArgs, pool, variantID, r.StartTime, r.EndTime)
 			argIdx += 4
 		} else {
+			//nolint:mnd
 			subQuery = fmt.Sprintf(
 				"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
 					"FROM instance_utilization_history "+
