@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/harness/lite-engine/engine/spec"
@@ -57,45 +58,55 @@ func (p *OutboxProcessor) ProcessPendingJobs(ctx context.Context) error {
 		return nil // No pending jobs found
 	}
 
-	// Process each job
+	// Process jobs in parallel
+	var wg sync.WaitGroup
 	for _, job := range jobs {
-		if job.RetryCount > p.maxRetries {
-			// Delete the job after max retries
-			if err := p.outboxStore.Delete(ctx, job.ID); err != nil {
-				logrus.WithError(err).WithFields(logrus.Fields{
-					"job_id":      job.ID,
-					"pool_name":   job.PoolName,
-					"runner_name": p.manager.GetRunnerName(),
-				}).Errorln("failed to delete job after max retries")
-			} else {
-				logrus.WithFields(logrus.Fields{
-					"job_id":      job.ID,
-					"pool_name":   job.PoolName,
-					"runner_name": p.manager.GetRunnerName(),
-				}).Infoln("deleted job after max retries")
-			}
-			continue
-		}
+		wg.Add(1)
+		go func(job *types.OutboxJob) {
+			defer wg.Done()
+			p.processJobWithRetry(ctx, job)
+		}(job)
+	}
+	wg.Wait()
 
-		if err := p.processJob(ctx, job); err != nil {
+	return nil
+}
+
+// processJobWithRetry handles job processing with retry logic
+func (p *OutboxProcessor) processJobWithRetry(ctx context.Context, job *types.OutboxJob) {
+	if job.RetryCount > p.maxRetries {
+		// Delete the job after max retries
+		if err := p.outboxStore.Delete(ctx, job.ID); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"job_id":      job.ID,
 				"pool_name":   job.PoolName,
 				"runner_name": p.manager.GetRunnerName(),
-			}).Errorln("failed to process job")
-			// Update the job to pending with the error message
-			if updateErr := p.outboxStore.UpdateStatus(ctx, job.ID, types.OutboxJobStatusPending, err.Error()); updateErr != nil {
-				logrus.WithError(updateErr).WithFields(logrus.Fields{
-					"job_id":      job.ID,
-					"pool_name":   job.PoolName,
-					"runner_name": p.manager.GetRunnerName(),
-				}).Errorln("failed to update job error message")
-			}
-			continue
+			}).Errorln("failed to delete job after max retries")
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"job_id":      job.ID,
+				"pool_name":   job.PoolName,
+				"runner_name": p.manager.GetRunnerName(),
+			}).Infoln("deleted job after max retries")
 		}
+		return
 	}
 
-	return nil
+	if err := p.processJob(ctx, job); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"job_id":      job.ID,
+			"pool_name":   job.PoolName,
+			"runner_name": p.manager.GetRunnerName(),
+		}).Errorln("failed to process job")
+		// Update the job to pending with the error message
+		if updateErr := p.outboxStore.UpdateStatus(ctx, job.ID, types.OutboxJobStatusPending, err.Error()); updateErr != nil {
+			logrus.WithError(updateErr).WithFields(logrus.Fields{
+				"job_id":      job.ID,
+				"pool_name":   job.PoolName,
+				"runner_name": p.manager.GetRunnerName(),
+			}).Errorln("failed to update job error message")
+		}
+	}
 }
 
 // processJob processes a single outbox job
