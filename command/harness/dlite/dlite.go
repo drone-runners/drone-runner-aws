@@ -199,6 +199,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 			Ctx:      ctx,
 			Env:      &c.env,
 			PoolFile: c.poolFile,
+			Metrics:  c.metrics,
 		},
 	)
 	if err != nil {

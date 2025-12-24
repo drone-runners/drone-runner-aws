@@ -399,6 +399,11 @@ type EnvConfig struct {
 			IntervalHours int `envconfig:"DLITE_SCHEDULER_HISTORY_CLEANUP_INTERVAL_HOURS" default:"24"`
 			RetentionDays int `envconfig:"DLITE_SCHEDULER_HISTORY_CLEANUP_RETENTION_DAYS" default:"60"`
 		}
+		Scaler struct {
+			Enabled            bool `envconfig:"DLITE_SCHEDULER_SCALER_ENABLED" default:"false"`
+			WindowDurationMins int  `envconfig:"DLITE_SCHEDULER_SCALER_WINDOW_DURATION_MINS" default:"30"`
+			LeadTimeMins       int  `envconfig:"DLITE_SCHEDULER_SCALER_LEAD_TIME_MINS" default:"5"`
+		}
 	}
 
 	Settings struct {

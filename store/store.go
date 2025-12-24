@@ -27,10 +27,15 @@ type StageOwnerStore interface {
 
 type OutboxStore interface {
 	Create(context.Context, *types.OutboxJob) error
-	FindAndClaimPending(context.Context, string, []types.OutboxJobType, int, time.Duration) ([]*types.OutboxJob, error)
+	// FindAndClaimPending finds and claims pending jobs.
+	// If runnerName is non-empty, only jobs matching that runner_name are returned.
+	// If runnerName is empty, only jobs with empty runner_name are returned (global jobs).
+	FindAndClaimPending(ctx context.Context, runnerName string, jobTypes []types.OutboxJobType, limit int, retryInterval time.Duration) ([]*types.OutboxJob, error)
 	UpdateStatus(context.Context, int64, types.OutboxJobStatus, string) error
 	Delete(context.Context, int64) error
 	DeleteOlderThan(context.Context, int64) (int64, error)
+	// FindScaleJobForWindow checks if a scale job already exists for the given pool and window
+	FindScaleJobForWindow(ctx context.Context, poolName string, windowStart int64) (*types.OutboxJob, error)
 }
 
 type CapacityReservationStore interface {

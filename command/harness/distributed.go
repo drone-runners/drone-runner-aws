@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/predictor"
 	"github.com/drone-runners/drone-runner-aws/app/scheduler"
 	"github.com/drone-runners/drone-runner-aws/app/scheduler/jobs"
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -31,6 +32,7 @@ type DistributedSetupConfig struct {
 	Ctx      context.Context
 	Env      *config.EnvConfig
 	PoolFile string
+	Metrics  *metric.Metrics
 }
 
 // SetupDistributedMode initializes the distributed pool manager, scheduler, and all related components.
@@ -117,6 +119,54 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 		return nil, err
 	}
 
+	// Register scaler if enabled and we have the necessary stores
+	if instanceStore != nil && utilizationHistoryStore != nil {
+		scalerConfig := types.ScalerConfig{
+			Enabled:        cfg.Env.Scheduler.Scaler.Enabled,
+			WindowDuration: time.Duration(cfg.Env.Scheduler.Scaler.WindowDurationMins) * time.Minute,
+			LeadTime:       time.Duration(cfg.Env.Scheduler.Scaler.LeadTimeMins) * time.Minute,
+		}
+
+		// Build scalable pools from pool config
+		scalablePools := buildScalablePools(poolConfig)
+
+		// Create predictor
+		pred := predictor.NewEMAWeekendDecayPredictor(
+			utilizationHistoryStore,
+			predictor.DefaultPredictorConfig(),
+		)
+
+		// Create scaler
+		scaler := jobs.NewScaler(
+			poolManager,
+			pred,
+			instanceStore,
+			outboxStore,
+			scalerConfig,
+			scalablePools,
+			cfg.Metrics,
+		)
+
+		// Set scaler on outbox processor
+		outboxProcessor.SetScaler(scaler)
+
+		// Create and register scaler trigger job
+		scalerTriggerJob := jobs.NewScalerTriggerJob(
+			outboxStore,
+			scalerConfig,
+			cfg.Env.Runner.Name,
+			scalablePools,
+		)
+		sched.Register(scalerTriggerJob)
+
+		logrus.WithFields(logrus.Fields{
+			"enabled":         scalerConfig.Enabled,
+			"window_duration": scalerConfig.WindowDuration,
+			"lead_time":       scalerConfig.LeadTime,
+			"pools":           len(scalablePools),
+		}).Infoln("scaler registered")
+	}
+
 	return &DistributedSetupResult{
 		PoolManager:              poolManager,
 		InstanceStore:            instanceStore,
@@ -140,4 +190,35 @@ func RegisterDistributedMetrics(ctx context.Context, metrics *metric.Metrics, re
 	})
 	metrics.UpdateRunningCount(ctx)
 	metrics.UpdateWarmPoolCount(ctx)
+}
+
+// buildScalablePools converts pool configuration to scalable pool definitions.
+func buildScalablePools(poolConfig *config.PoolFile) []jobs.ScalablePool {
+	var scalablePools []jobs.ScalablePool
+
+	for _, instance := range poolConfig.Instances {
+		pool := jobs.ScalablePool{
+			Name:    instance.Name,
+			MinSize: instance.Pool, // Pool field represents min size
+		}
+
+		// Add variants if any
+		for _, variant := range instance.Variants {
+			pool.Variants = append(pool.Variants, jobs.ScalableVariant{
+				MinSize: variant.Pool, // Pool field represents min size for variant
+				Params: types.SetupInstanceParams{
+					VariantID:            variant.VariantID,
+					ImageName:            variant.ImageName,
+					MachineType:          variant.MachineType,
+					NestedVirtualization: variant.NestedVirtualization,
+					Hibernate:            variant.Hibernate,
+					Zones:                variant.Zones,
+				},
+			})
+		}
+
+		scalablePools = append(scalablePools, pool)
+	}
+
+	return scalablePools
 }
