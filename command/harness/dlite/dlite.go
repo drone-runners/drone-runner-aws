@@ -34,7 +34,6 @@ type dliteCommand struct {
 	poolManager            drivers.IManager
 	distributedPoolManager drivers.IManager
 	metrics                *metric.Metrics
-	outboxProcessor        *drivers.OutboxProcessor
 	scheduler              *scheduler.Scheduler
 }
 
@@ -144,7 +143,6 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	c.outboxProcessor.Start()
 	if c.scheduler != nil {
 		c.scheduler.Start()
 	}
@@ -159,7 +157,6 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		c.outboxProcessor.Stop()
 		if c.scheduler != nil {
 			c.scheduler.Stop()
 		}
@@ -225,16 +222,31 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFi
 		),
 		outboxStore,
 	)
-	c.outboxProcessor = drivers.NewOutboxProcessor(ctx,
-		c.distributedPoolManager.(*drivers.DistributedManager),
-		outboxStore, time.Duration(c.env.OutboxProcessor.PollIntervalSecs)*time.Second,
+
+	// Initialize scheduler and register jobs
+	c.scheduler = scheduler.New(ctx)
+
+	// Register outbox processor jobs
+	distributedManager := c.distributedPoolManager.(*drivers.DistributedManager)
+	outboxProcessor := jobs.NewOutboxProcessor(
+		distributedManager,
+		outboxStore,
 		time.Duration(c.env.OutboxProcessor.RetryIntervalSecs)*time.Second,
 		c.env.OutboxProcessor.MaxRetries,
 		c.env.OutboxProcessor.BatchSize,
 	)
 
-	// Initialize scheduler and register jobs
-	c.scheduler = scheduler.New(ctx)
+	outboxProcessorJob := jobs.NewOutboxProcessorJob(
+		outboxProcessor,
+		time.Duration(c.env.OutboxProcessor.PollIntervalSecs)*time.Second,
+	)
+	c.scheduler.Register(outboxProcessorJob)
+
+	outboxCleanupJob := jobs.NewOutboxCleanupJob(
+		outboxProcessor,
+		1*time.Hour, //nolint:mnd
+	)
+	c.scheduler.Register(outboxCleanupJob)
 
 	if instanceStore != nil && utilizationHistoryStore != nil {
 		utilizationTrackerJob := jobs.NewUtilizationTrackerJob(

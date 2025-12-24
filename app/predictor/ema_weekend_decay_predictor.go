@@ -6,23 +6,16 @@ import (
 	"sort"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
-
-// HistoryStore defines the interface for fetching utilization history data.
-// This interface should be implemented by the database layer.
-type HistoryStore interface {
-	// GetUtilizationHistory retrieves utilization records for a given pool and variant
-	// within the specified time range.
-	GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error)
-}
 
 // EMAWeekendDecayPredictor implements the Predictor interface using a combination of:
 // - Exponential Moving Average (EMA) for recent trend analysis
 // - Weekend Offset adjustment for day-of-week patterns
 // - 3 Week Historical Offset with Decay for seasonal patterns
 type EMAWeekendDecayPredictor struct {
-	historyStore HistoryStore
+	historyStore store.UtilizationHistoryStore
 	config       PredictorConfig
 }
 
@@ -67,16 +60,16 @@ func DefaultPredictorConfig() PredictorConfig {
 }
 
 // NewEMAWeekendDecayPredictor creates a new predictor with the given history store and config.
-func NewEMAWeekendDecayPredictor(store HistoryStore, config PredictorConfig) *EMAWeekendDecayPredictor { //nolint:gocritic
+func NewEMAWeekendDecayPredictor(historyStore store.UtilizationHistoryStore, config PredictorConfig) *EMAWeekendDecayPredictor { //nolint:gocritic
 	return &EMAWeekendDecayPredictor{
-		historyStore: store,
+		historyStore: historyStore,
 		config:       config,
 	}
 }
 
 // NewEMAWeekendDecayPredictorWithDefaults creates a new predictor with default configuration.
-func NewEMAWeekendDecayPredictorWithDefaults(store HistoryStore) *EMAWeekendDecayPredictor {
-	return NewEMAWeekendDecayPredictor(store, DefaultPredictorConfig())
+func NewEMAWeekendDecayPredictorWithDefaults(historyStore store.UtilizationHistoryStore) *EMAWeekendDecayPredictor {
+	return NewEMAWeekendDecayPredictor(historyStore, DefaultPredictorConfig())
 }
 
 // Name returns the name of this predictor implementation.
@@ -127,112 +120,79 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 
 // calculateEMA computes the Exponential Moving Average from the last 5 weekdays' data.
 // This function is only called for weekday predictions.
+// It fetches only the same time window from each past weekday using a single batch query.
 func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *PredictionInput) (float64, error) {
-	// Look back 9 days to ensure we capture at least 5 weekdays
-	// (worst case: if today is Monday, we need Mon-Fri of last week + some of this week)
-	const maxLookbackDays = 9
-	lookbackEnd := input.StartTimestamp
-	lookbackStart := lookbackEnd - int64(maxLookbackDays*24*3600) //nolint:mnd
+	const (
+		maxLookbackDays = 9 // Look back up to 9 days to ensure we capture at least 5 weekdays
+		targetWeekdays  = 5
+		secondsPerDay   = 24 * 3600
+	)
 
-	records, err := p.historyStore.GetUtilizationHistory(
+	// Calculate the window duration to apply to each past day
+	windowDuration := input.EndTimestamp - input.StartTimestamp
+
+	// Build time ranges for the last 5 weekdays
+	var ranges []store.TimeRange
+	for daysBack := 1; daysBack <= maxLookbackDays && len(ranges) < targetWeekdays; daysBack++ {
+		offset := int64(daysBack * secondsPerDay)
+		historicalStart := input.StartTimestamp - offset
+		historicalEnd := historicalStart + windowDuration
+
+		// Skip weekends
+		if p.isWeekend(historicalStart) {
+			continue
+		}
+
+		ranges = append(ranges, store.TimeRange{
+			StartTime: historicalStart,
+			EndTime:   historicalEnd,
+		})
+	}
+
+	if len(ranges) == 0 {
+		return 0, nil
+	}
+
+	// Fetch all time ranges in a single batch query
+	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
 		ctx,
 		input.PoolName,
 		input.VariantID,
-		lookbackStart,
-		lookbackEnd,
+		ranges,
 	)
 	if err != nil {
 		return 0, err
 	}
 
-	if len(records) == 0 {
+	// Flatten all records (they're already sorted by time within the batch query)
+	var allRecords []types.UtilizationRecord
+	for _, records := range batchResults {
+		allRecords = append(allRecords, records...)
+	}
+
+	if len(allRecords) == 0 {
 		return 0, nil
 	}
 
-	// Filter out weekend records - only keep weekday data
-	weekdayRecords := p.filterWeekdayRecords(records)
-
-	if len(weekdayRecords) == 0 {
-		return 0, nil
-	}
-
-	// Sort records by timestamp (oldest first)
-	sort.Slice(weekdayRecords, func(i, j int) bool {
-		return weekdayRecords[i].RecordedAt < weekdayRecords[j].RecordedAt
+	// Sort records by timestamp (oldest first) for proper EMA calculation
+	sort.Slice(allRecords, func(i, j int) bool {
+		return allRecords[i].RecordedAt < allRecords[j].RecordedAt
 	})
-
-	// Keep only records from the last 5 weekdays
-	weekdayRecords = p.filterLast5Weekdays(weekdayRecords)
-
-	if len(weekdayRecords) == 0 {
-		return 0, nil
-	}
 
 	// Calculate EMA
 	// Alpha (smoothing factor) = 2 / (period + 1)
 	alpha := 2.0 / float64(p.config.EMAPeriod+1)
 
 	// Initialize EMA with the first value
-	ema := float64(weekdayRecords[0].InUseInstances)
+	ema := float64(allRecords[0].InUseInstances)
 
 	// Calculate EMA iteratively
-	for i := 1; i < len(weekdayRecords); i++ {
-		currentValue := float64(weekdayRecords[i].InUseInstances)
+	for i := 1; i < len(allRecords); i++ {
+		currentValue := float64(allRecords[i].InUseInstances)
 		ema = alpha*currentValue + (1-alpha)*ema
 	}
 
 	return ema, nil
-}
-
-// filterWeekdayRecords removes weekend records from the slice.
-func (p *EMAWeekendDecayPredictor) filterWeekdayRecords(records []types.UtilizationRecord) []types.UtilizationRecord {
-	result := make([]types.UtilizationRecord, 0, len(records))
-	for _, record := range records {
-		if !p.isWeekend(record.RecordedAt) {
-			result = append(result, record)
-		}
-	}
-	return result
-}
-
-// filterLast5Weekdays keeps only records from the last 5 distinct weekdays.
-func (p *EMAWeekendDecayPredictor) filterLast5Weekdays(records []types.UtilizationRecord) []types.UtilizationRecord {
-	if len(records) == 0 {
-		return records
-	}
-
-	// Records are sorted oldest first, so we traverse from the end to find the last 5 weekdays
-	// First, identify the distinct weekday dates (ignoring time)
-	distinctDays := make(map[string]bool)
-	var cutoffTimestamp int64
-
-	// Traverse from newest to oldest
-	for i := len(records) - 1; i >= 0; i-- {
-		t := time.Unix(records[i].RecordedAt, 0).UTC()
-		dayKey := t.Format("2006-01-02") // YYYY-MM-DD format
-
-		if !distinctDays[dayKey] {
-			distinctDays[dayKey] = true
-			if len(distinctDays) == 5 { //nolint:mnd
-				cutoffTimestamp = records[i].RecordedAt
-				break
-			}
-		}
-	}
-
-	// If we found 5 days, filter records from cutoff onwards
-	if cutoffTimestamp > 0 {
-		result := make([]types.UtilizationRecord, 0)
-		for _, record := range records {
-			if record.RecordedAt >= cutoffTimestamp {
-				result = append(result, record)
-			}
-		}
-		return result
-	}
-
-	// If we don't have 5 distinct days, return all records
-	return records
 }
 
 // isWeekend returns true if the given timestamp falls on a Saturday or Sunday.
@@ -243,43 +203,40 @@ func (p *EMAWeekendDecayPredictor) isWeekend(timestamp int64) bool {
 }
 
 // calculateHistoricalWithDecay computes the weighted average from 1, 2, and 3 weeks ago.
+// It fetches all 3 weeks of data in a single batch query.
 func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Context, input *PredictionInput) (float64, error) {
 	const secondsPerWeek = 7 * 24 * 3600
 
-	weekValues := make([]float64, 3) //nolint:mnd
-	weekHasData := make([]bool, 3)   //nolint:mnd
-
-	// Get data from 1, 2, and 3 weeks ago at the same time window
+	// Build time ranges for 1, 2, and 3 weeks ago
+	ranges := make([]store.TimeRange, 3) //nolint:mnd
 	for week := 1; week <= 3; week++ {
 		offset := int64(week * secondsPerWeek)
-		historicalStart := input.StartTimestamp - offset
-		historicalEnd := input.EndTimestamp - offset
-
-		records, err := p.historyStore.GetUtilizationHistory(
-			ctx,
-			input.PoolName,
-			input.VariantID,
-			historicalStart,
-			historicalEnd,
-		)
-		if err != nil {
-			return 0, err
+		ranges[week-1] = store.TimeRange{ //nolint:gosec
+			StartTime: input.StartTimestamp - offset,
+			EndTime:   input.EndTimestamp - offset,
 		}
+	}
 
-		if len(records) > 0 {
-			weekValues[week-1] = p.calculatePeakUtilization(records)
-			weekHasData[week-1] = true
-		}
+	// Fetch all 3 weeks in a single batch query
+	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
+		ctx,
+		input.PoolName,
+		input.VariantID,
+		ranges,
+	)
+	if err != nil {
+		return 0, err
 	}
 
 	// Calculate weighted average with decay factors
 	totalWeight := 0.0
 	weightedSum := 0.0
 
-	for i := 0; i < 3; i++ {
-		if weekHasData[i] {
+	for i, records := range batchResults {
+		if len(records) > 0 {
+			peakValue := p.calculatePeakUtilization(records)
 			weight := p.config.WeekDecayFactors[i]
-			weightedSum += weekValues[i] * weight
+			weightedSum += peakValue * weight
 			totalWeight += weight
 		}
 	}

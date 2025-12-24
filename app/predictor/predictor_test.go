@@ -5,21 +5,48 @@ import (
 	"testing"
 	"time"
 
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
-// MockHistoryStore is a mock implementation of HistoryStore for testing.
+// Ensure MockHistoryStore implements store.UtilizationHistoryStore
+var _ store.UtilizationHistoryStore = (*MockHistoryStore)(nil)
+
+// MockHistoryStore is a mock implementation of store.UtilizationHistoryStore for testing.
 type MockHistoryStore struct {
 	records []types.UtilizationRecord
 }
 
-func (m *MockHistoryStore) GetUtilizationHistory(ctx context.Context, pool, variantID string, startTime, endTime int64) ([]types.UtilizationRecord, error) {
-	var result []types.UtilizationRecord
+func (m *MockHistoryStore) Create(ctx context.Context, record *types.UtilizationRecord) error {
+	m.records = append(m.records, *record)
+	return nil
+}
+
+func (m *MockHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
+	var remaining []types.UtilizationRecord
+	var deleted int64
 	for _, r := range m.records {
-		if r.Pool == pool && r.VariantID == variantID &&
-			r.RecordedAt >= startTime && r.RecordedAt <= endTime {
-			result = append(result, r)
+		if r.RecordedAt >= timestamp {
+			remaining = append(remaining, r)
+		} else {
+			deleted++
 		}
+	}
+	m.records = remaining
+	return deleted, nil
+}
+
+func (m *MockHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool, variantID string, ranges []store.TimeRange) ([][]types.UtilizationRecord, error) {
+	result := make([][]types.UtilizationRecord, len(ranges))
+	for i, r := range ranges {
+		var records []types.UtilizationRecord
+		for _, rec := range m.records {
+			if rec.Pool == pool && rec.VariantID == variantID &&
+				rec.RecordedAt >= r.StartTime && rec.RecordedAt <= r.EndTime {
+				records = append(records, rec)
+			}
+		}
+		result[i] = records
 	}
 	return result, nil
 }
@@ -33,7 +60,7 @@ func TestEMAWeekendDecayPredictor_Name(t *testing.T) {
 }
 
 func TestEMAWeekendDecayPredictor_Predict_EmptyHistory(t *testing.T) {
-	store := &MockHistoryStore{records: []types.UtilizationRecord{}}
+	store := &MockHistoryStore{records: []types.UtilizationRecord{}} //nolint:gocritic
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(store)
 
 	input := &PredictionInput{
@@ -67,7 +94,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
 		})
 	}
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(store)
 
 	input := &PredictionInput{
@@ -129,7 +156,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 		RecordedAt:     week3Ago.Unix(),
 	})
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(store)
 
 	input := &PredictionInput{
@@ -186,7 +213,7 @@ func TestEMAWeekendDecayPredictor_WeekendVsWeekday(t *testing.T) {
 		}
 	}
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	config.SafetyBuffer = 0 // Disable buffer for easier testing
@@ -246,7 +273,7 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 		RecordedAt:     week1Ago.Unix(),
 	})
 
-	store := &MockHistoryStore{records: records}
+	store := &MockHistoryStore{records: records} //nolint:gocritic
 	config := DefaultPredictorConfig()
 	config.SafetyBuffer = 0
 	config.EMAWeight = 0 // Use only historical
@@ -433,7 +460,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowPrediction(t *testing.T) {
 	// Generate 3 weeks of history data with 2-minute intervals
 	historyData := GenerateMockHistoryData(poolName, variantID, referenceTime)
 
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -503,7 +530,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowWeekdayVsWeekend(t *testing.T) {
 
 	// Generate history data for both scenarios (using the later date)
 	historyData := GenerateMockHistoryData(poolName, variantID, saturdayRef)
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -559,7 +586,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowWithSpikes(t *testing.T) {
 
 	// Generate history data with spikes
 	historyData := GenerateMockHistoryDataWithSpikes(poolName, variantID, referenceTime)
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -610,7 +637,7 @@ func TestEMAWeekendDecayPredictor_15MinWindowTrendDetection(t *testing.T) {
 
 	// Generate history with gradual increase
 	historyData := GenerateMockHistoryDataGradualIncrease(poolName, variantID, referenceTime)
-	store := &MockHistoryStore{records: historyData}
+	store := &MockHistoryStore{records: historyData} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
 	predictor := NewEMAWeekendDecayPredictor(store, config)
