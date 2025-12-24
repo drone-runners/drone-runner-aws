@@ -81,28 +81,15 @@ func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	argIdx := 1
 
 	for i, r := range ranges {
-		var subQuery string
-		if variantID != "" {
-			//nolint:mnd
-			subQuery = fmt.Sprintf(
-				"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
-					"FROM instance_utilization_history "+
-					"WHERE pool_name = $%d AND variant_id = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
-				i, argIdx, argIdx+1, argIdx+2, argIdx+3,
-			)
-			allArgs = append(allArgs, pool, variantID, r.StartTime, r.EndTime)
-			argIdx += 4
-		} else {
-			//nolint:mnd
-			subQuery = fmt.Sprintf(
-				"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
-					"FROM instance_utilization_history "+
-					"WHERE pool_name = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
-				i, argIdx, argIdx+1, argIdx+2,
-			)
-			allArgs = append(allArgs, pool, r.StartTime, r.EndTime)
-			argIdx += 3
-		}
+		//nolint:mnd
+		subQuery := fmt.Sprintf(
+			"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
+				"FROM instance_utilization_history "+
+				"WHERE pool_name = $%d AND variant_id = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
+			i, argIdx, argIdx+1, argIdx+2, argIdx+3,
+		)
+		allArgs = append(allArgs, pool, variantID, r.StartTime, r.EndTime)
+		argIdx += 4
 		unionParts = append(unionParts, "("+subQuery+")")
 	}
 
