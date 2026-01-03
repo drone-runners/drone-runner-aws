@@ -250,6 +250,11 @@ type VMImageConfig struct {
 	Username     string
 	Password     string
 	VMImageAuth  VMImageAuth
+	// IsCustomImage indicates this is a BYOI (Bring Your Own Image) custom image.
+	// This is a metadata flag for tracking/tagging purposes. Cloud-init still downloads
+	// all binaries as usual since customers don't pre-install Harness binaries in their
+	// custom images. Authentication uses the same mTLS mechanism as standard Harness Cloud images.
+	IsCustomImage bool
 }
 
 type VMImageAuth struct {

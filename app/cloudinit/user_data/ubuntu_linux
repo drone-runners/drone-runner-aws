@@ -205,6 +205,7 @@ runcmd:
   {{ end }}
   
   # Download and install lite-engine
+  # Note: For BYOI custom images, we still download binaries as usual - customers don't pre-install them
   - |
     (/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from primary URL.") || \
     (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from fallback URL.")
