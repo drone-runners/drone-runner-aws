@@ -187,7 +187,9 @@ func (s *Scaler) scaleVariant(
 	}).Infoln("scaler: calculated scaling delta")
 
 	// Record metrics
-	s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID).Set(float64(prediction.RecommendedInstances))
+	if s.metrics != nil {
+		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID).Set(float64(prediction.RecommendedInstances))
+	}
 
 	if delta > 0 {
 		// Scale up: create instances

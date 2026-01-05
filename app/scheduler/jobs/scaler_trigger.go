@@ -66,7 +66,7 @@ func (j *ScalerTriggerJob) Timeout() time.Duration {
 
 // RunOnStart returns true - check immediately on start.
 func (j *ScalerTriggerJob) RunOnStart() bool {
-	return false
+	return true
 }
 
 // Execute checks if it's time to create scale jobs for the upcoming window.

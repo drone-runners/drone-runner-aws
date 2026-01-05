@@ -489,8 +489,9 @@ func TestScaler_ScaleUp(t *testing.T) {
 		if job.PoolName != "pool-1" {
 			t.Errorf("expected pool name 'pool-1', got %q", job.PoolName)
 		}
-		if job.RunnerName != "test-runner" {
-			t.Errorf("expected runner name 'test-runner', got %q", job.RunnerName)
+		// RunnerName is intentionally left empty so any runner can process the job
+		if job.RunnerName != "" {
+			t.Errorf("expected runner name to be empty (so any runner can process), got %q", job.RunnerName)
 		}
 	}
 }
