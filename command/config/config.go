@@ -386,9 +386,9 @@ type EnvConfig struct {
 
 	OutboxProcessor struct {
 		PollIntervalSecs  int `envconfig:"DLITE_OUTBOXER_POLL_INTERVAL_SECS" default:"30"`
-		RetryIntervalSecs int `envconfig:"DLITE_OUTBOXER_RETRY_INTERVAL_SECS" default:"300"`
-		MaxRetries        int `envconfig:"DLITE_OUTBOXER_MAX_RETRIES" default:"25"`
-		BatchSize         int `envconfig:"DLITE_OUTBOXER_BATCH_SIZE" default:"20"`
+		RetryIntervalSecs int `envconfig:"DLITE_OUTBOXER_RETRY_INTERVAL_SECS" default:"180"`
+		MaxRetries        int `envconfig:"DLITE_OUTBOXER_MAX_RETRIES" default:"3"`
+		BatchSize         int `envconfig:"DLITE_OUTBOXER_BATCH_SIZE" default:"30"`
 	}
 
 	Scheduler struct {
@@ -402,7 +402,7 @@ type EnvConfig struct {
 		Scaler struct {
 			Enabled            bool `envconfig:"DLITE_SCHEDULER_SCALER_ENABLED" default:"false"`
 			WindowDurationMins int  `envconfig:"DLITE_SCHEDULER_SCALER_WINDOW_DURATION_MINS" default:"30"`
-			LeadTimeMins       int  `envconfig:"DLITE_SCHEDULER_SCALER_LEAD_TIME_MINS" default:"5"`
+			LeadTimeMins       int  `envconfig:"DLITE_SCHEDULER_SCALER_LEAD_TIME_MINS" default:"10"`
 		}
 	}
 
