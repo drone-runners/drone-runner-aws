@@ -280,7 +280,7 @@ func (j *OutboxProcessorJob) Interval() time.Duration {
 }
 
 // Timeout returns the maximum duration for job execution.
-// This allows the job to run longer than its interval without being cancelled.
+// This allows the job to run longer than its interval without being canceled.
 func (j *OutboxProcessorJob) Timeout() time.Duration {
 	return OutboxProcessorJobTimeout
 }

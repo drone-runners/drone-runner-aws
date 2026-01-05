@@ -101,7 +101,10 @@ func (m *MockInstanceStore) DeleteAndReturn(ctx context.Context, query string, a
 	return nil, nil
 }
 
-func (m *MockInstanceStore) FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error) {
+func (m *MockInstanceStore) FindAndClaim(
+	ctx context.Context, params *types.QueryParams, newState types.InstanceState,
+	allowedStates []types.InstanceState, updateStartTime bool,
+) (*types.Instance, error) {
 	return nil, nil
 }
 

@@ -104,9 +104,7 @@ func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, wi
 		return fmt.Errorf("scaler: failed to get free instance counts: %w", err)
 	}
 
-	if err := s.scalePoolInternal(ctx, *targetPool, windowStart, windowEnd, freeCountsByPoolVariant); err != nil {
-		return fmt.Errorf("scaler: failed to scale pool %s: %w", poolName, err)
-	}
+	s.scalePoolInternal(ctx, *targetPool, windowStart, windowEnd, freeCountsByPoolVariant)
 
 	logrus.WithField("pool", poolName).Infoln("scaler: scaling operation completed for pool")
 	return nil
@@ -118,7 +116,7 @@ func (s *Scaler) scalePoolInternal(
 	pool ScalablePool,
 	windowStart, windowEnd int64,
 	freeCountsByVariant map[string]int,
-) error {
+) {
 	logr := logrus.WithField("pool", pool.Name)
 
 	// Scale the default variant (pool itself)
@@ -134,8 +132,6 @@ func (s *Scaler) scalePoolInternal(
 				Errorln("scaler: failed to scale variant")
 		}
 	}
-
-	return nil
 }
 
 // scaleVariant scales a single variant within a pool.
@@ -193,14 +189,10 @@ func (s *Scaler) scaleVariant(
 
 	if delta > 0 {
 		// Scale up: create instances
-		if err := s.scaleUp(ctx, pool, variantID, params, delta); err != nil {
-			return fmt.Errorf("failed to scale up: %w", err)
-		}
+		s.scaleUp(ctx, pool, variantID, params, delta)
 	} else if delta < 0 {
 		// Scale down: destroy excess instances
-		if err := s.scaleDown(ctx, pool.Name, variantID, -delta); err != nil {
-			return fmt.Errorf("failed to scale down: %w", err)
-		}
+		s.scaleDown(ctx, pool.Name, variantID, -delta)
 	}
 
 	return nil
@@ -213,7 +205,7 @@ func (s *Scaler) scaleUp(
 	variantID string,
 	params *types.SetupInstanceParams,
 	count int,
-) error {
+) {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       pool.Name,
 		"variant_id": variantID,
@@ -259,8 +251,6 @@ func (s *Scaler) scaleUp(
 		successCount++
 		logr.WithField("job_id", job.ID).Debugln("scaler: created setup instance job")
 	}
-
-	return nil
 }
 
 // scaleDown destroys excess free instances.
@@ -268,7 +258,7 @@ func (s *Scaler) scaleDown(
 	ctx context.Context,
 	poolName, variantID string,
 	count int,
-) error {
+) {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       poolName,
 		"variant_id": variantID,
@@ -310,7 +300,6 @@ func (s *Scaler) scaleDown(
 	}
 
 	logr.WithField("destroyed_count", destroyedCount).Infoln("scaler: scale down complete")
-	return nil
 }
 
 // getFreeInstanceCountsForPool returns a map of variant -> free count for a specific pool.
