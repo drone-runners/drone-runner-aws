@@ -71,14 +71,14 @@ func (p *OutboxProcessor) ProcessPendingJobs(ctx context.Context) error {
 	}
 
 	// Combine both job lists
-	jobs := append(runnerJobs, globalJobs...)
-	if len(jobs) == 0 {
+	runnerJobs = append(runnerJobs, globalJobs...)
+	if len(runnerJobs) == 0 {
 		return nil // No pending jobs found
 	}
 
 	// Process jobs in parallel
 	var wg sync.WaitGroup
-	for _, job := range jobs {
+	for _, job := range runnerJobs {
 		wg.Add(1)
 		go func(job *types.OutboxJob) {
 			defer wg.Done()
