@@ -25,6 +25,7 @@ const (
 // ScalablePool represents a pool and its variants that can be scaled.
 type ScalablePool struct {
 	Name     string
+	Driver   string
 	MinSize  int
 	Variants []ScalableVariant
 }

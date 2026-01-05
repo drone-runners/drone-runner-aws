@@ -96,6 +96,11 @@ func (j *ScalerTriggerJob) Execute(ctx context.Context) error {
 	// Create scale jobs for each pool
 	jobsCreated := 0
 	for _, pool := range j.pools {
+		// Only process pools with google or amazon drivers
+		if pool.Driver != string(types.Google) && pool.Driver != string(types.Amazon) {
+			continue
+		}
+
 		// Check if a scale job already exists for this pool and window
 		existingJob, err := j.outboxStore.FindScaleJobForWindow(ctx, pool.Name, windowStart)
 		if err != nil {
