@@ -13,6 +13,7 @@ import (
 	"github.com/drone/signal"
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/httphelper"
 	"golang.org/x/sync/errgroup"
@@ -52,6 +53,7 @@ func (c *delegateCommand) delegateListener() http.Handler {
 	mux.Post("/destroy", c.handleDestroy)
 	mux.Post("/step", c.handleStep)
 	mux.Post("/suspend", c.handleSuspend)
+	mux.Mount("/metrics", promhttp.Handler())
 	mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "OK") //nolint: errcheck
 	})
