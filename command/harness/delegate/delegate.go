@@ -108,11 +108,11 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	// Check if distributed mode is enabled
 	if c.env.Database.DistributedMode {
 		logrus.Infoln("delegate: Starting in distributed mode (using dlite internals)")
-		if err = c.setupDistributedMode(ctx); err != nil {
+		if err := c.setupDistributedMode(ctx); err != nil {
 			return err
 		}
 	} else {
-		if err = c.setupStandardMode(ctx); err != nil {
+		if err := c.setupStandardMode(ctx); err != nil {
 			return err
 		}
 	}
