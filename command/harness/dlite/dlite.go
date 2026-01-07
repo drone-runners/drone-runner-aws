@@ -13,11 +13,9 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/scheduler"
-	"github.com/drone-runners/drone-runner-aws/app/scheduler/jobs"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/drone-runners/drone-runner-aws/metric"
-	"github.com/drone-runners/drone-runner-aws/store/database"
 	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/joho/godotenv"
@@ -196,89 +194,24 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 }
 
 func (c *dliteCommand) setupDistributedPool(ctx context.Context) (*config.PoolFile, error) {
-	logrus.Infoln("Starting postgres database")
-	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, err := database.ProvideStore(c.env.DistributedMode.Driver, c.env.DistributedMode.Datasource)
+	result, err := harness.SetupDistributedMode(
+		harness.DistributedSetupConfig{
+			Ctx:      ctx,
+			Env:      &c.env,
+			PoolFile: c.poolFile,
+		},
+	)
 	if err != nil {
-		logrus.WithError(err).Fatalln("Unable to start the database")
 		return nil, err
 	}
-	c.distributedPoolManager = drivers.NewDistributedManager(
-		drivers.NewManager(
-			ctx,
-			instanceStore,
-			stageOwnerStore,
-			capacityReservationStore,
-			types.Tmate(c.env.Tmate),
-			c.env.Runner.Name,
-			c.env.LiteEngine.Path,
-			c.env.Settings.HarnessTestBinaryURI,
-			c.env.Settings.PluginBinaryURI,
-			c.env.Settings.AutoInjectionBinaryURI,
-			c.env.LiteEngine.FallbackPath,
-			c.env.Settings.PluginBinaryFallbackURI,
-			types.RunnerConfig(c.env.RunnerConfig),
-			c.env.Settings.AnnotationsBinaryURI,
-			c.env.Settings.AnnotationsBinaryFallbackURI,
-		),
-		outboxStore,
-	)
 
-	// Initialize scheduler and register jobs
-	c.scheduler = scheduler.New(ctx)
+	c.distributedPoolManager = result.PoolManager
+	c.scheduler = result.Scheduler
 
-	// Register outbox processor jobs
-	distributedManager := c.distributedPoolManager.(*drivers.DistributedManager)
-	outboxProcessor := jobs.NewOutboxProcessor(
-		distributedManager,
-		outboxStore,
-		time.Duration(c.env.OutboxProcessor.RetryIntervalSecs)*time.Second,
-		c.env.OutboxProcessor.MaxRetries,
-		c.env.OutboxProcessor.BatchSize,
-	)
+	// Register metrics
+	harness.RegisterDistributedMetrics(ctx, c.metrics, result, c.env.Runner.Name)
 
-	outboxProcessorJob := jobs.NewOutboxProcessorJob(
-		outboxProcessor,
-		time.Duration(c.env.OutboxProcessor.PollIntervalSecs)*time.Second,
-	)
-	c.scheduler.Register(outboxProcessorJob)
-
-	outboxCleanupJob := jobs.NewOutboxCleanupJob(
-		outboxProcessor,
-		1*time.Hour, //nolint:mnd
-	)
-	c.scheduler.Register(outboxCleanupJob)
-
-	if instanceStore != nil && utilizationHistoryStore != nil {
-		utilizationTrackerJob := jobs.NewUtilizationTrackerJob(
-			instanceStore,
-			utilizationHistoryStore,
-			time.Duration(c.env.Scheduler.UtilizationTracker.IntervalSecs)*time.Second,
-		)
-		c.scheduler.Register(utilizationTrackerJob)
-
-		historyCleanupJob := jobs.NewHistoryCleanupJob(
-			utilizationHistoryStore,
-			time.Duration(c.env.Scheduler.HistoryCleanup.IntervalHours)*time.Hour,
-			time.Duration(c.env.Scheduler.HistoryCleanup.RetentionDays)*24*time.Hour,
-		)
-		c.scheduler.Register(historyCleanupJob)
-	}
-
-	poolConfig, err := harness.SetupPoolWithEnv(ctx, &c.env, c.distributedPoolManager, c.poolFile)
-	if err != nil {
-		logrus.WithError(err).Error("could not setup distributed pool")
-		return poolConfig, err
-	}
-	c.metrics.AddMetricStore(&metric.Store{
-		Store: instanceStore,
-		Query: &types.QueryParams{
-			RunnerName: c.env.Runner.Name,
-		},
-		Manager:     c.distributedPoolManager,
-		PoolConfig:  poolConfig,
-		Distributed: true,
-	})
-	return poolConfig, nil
+	return result.PoolConfig, nil
 }
 
 func (c *dliteCommand) getPoolManager(distributed bool) drivers.IManager {

@@ -456,8 +456,9 @@ type EnvConfig struct {
 	}
 
 	Database struct {
-		Driver     string `envconfig:"DRONE_DATABASE_DRIVER" default:"sqlite3"`
-		Datasource string `envconfig:"DRONE_DATABASE_DATASOURCE" default:"database.sqlite3"`
+		Driver          string `envconfig:"DRONE_DATABASE_DRIVER" default:"sqlite3"`
+		Datasource      string `envconfig:"DRONE_DATABASE_DATASOURCE" default:"database.sqlite3"`
+		DistributedMode bool   `envconfig:"DRONE_DELEGATE_DISTRIBUTED_MODE" default:"false"`
 	}
 
 	DistributedMode struct {
