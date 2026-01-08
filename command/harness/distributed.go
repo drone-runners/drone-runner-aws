@@ -196,14 +196,17 @@ func RegisterDistributedMetrics(ctx context.Context, metrics *metric.Metrics, re
 func buildScalablePools(poolConfig *config.PoolFile) []jobs.ScalablePool {
 	var scalablePools []jobs.ScalablePool
 
-	for _, instance := range poolConfig.Instances {
+	for i := range poolConfig.Instances {
+		instance := &poolConfig.Instances[i]
 		pool := jobs.ScalablePool{
 			Name:    instance.Name,
 			MinSize: instance.Pool, // Pool field represents min size
+			Driver:  instance.Type,
 		}
 
 		// Add variants if any
-		for _, variant := range instance.Variants {
+		for j := range instance.Variants {
+			variant := &instance.Variants[j]
 			pool.Variants = append(pool.Variants, jobs.ScalableVariant{
 				MinSize: variant.Pool, // Pool field represents min size for variant
 				Params: types.SetupInstanceParams{
