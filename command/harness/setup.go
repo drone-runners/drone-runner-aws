@@ -160,7 +160,7 @@ func HandleSetup(
 		WithField("os", platform.OS).
 		WithField("arch", platform.Arch)
 
-	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), &platform, r.ResourceClass, r.VMImageConfig.ImageVersion)
+	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), &platform, r.ResourceClass, r.VMImageConfig.ImageVersion, stageRuntimeID)
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
@@ -349,6 +349,7 @@ func HandleSetup(
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
+	printKV(logr, "Machine IP", instance.Address)
 	printOK(logr, "VM setup is complete")
 
 	internalLogr.WithField("selected_pool", selectedPool).
