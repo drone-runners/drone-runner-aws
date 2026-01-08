@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Pre-push hook to run tests before pushing
+# This hook is called with the following parameters:
+# $1 -- Name of the remote to which the push is being done
+# $2 -- URL to which the push is being done
+
+echo "🧪 Running tests before push..."
+
+# Run all tests in short mode for faster execution
+if ! go test ./... -short; then
+    echo ""
+    echo "❌ Tests failed! Push aborted."
+    echo "   Please fix the failing tests before pushing."
+    exit 1
+fi
+
+echo ""
+echo "✅ All tests passed! Proceeding with push..."
+exit 0
+

@@ -43,6 +43,11 @@ func (j *HistoryCleanupJob) Interval() time.Duration {
 	return j.interval
 }
 
+// Timeout returns 0 to use the interval as the timeout.
+func (j *HistoryCleanupJob) Timeout() time.Duration {
+	return j.interval
+}
+
 // RunOnStart returns false - no need to cleanup immediately on start.
 func (j *HistoryCleanupJob) RunOnStart() bool {
 	return false

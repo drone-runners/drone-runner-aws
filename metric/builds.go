@@ -33,6 +33,9 @@ type Metrics struct {
 	CapacityReservationFallbackCount        *prometheus.CounterVec
 	CapacityReservationFailedCount          *prometheus.CounterVec
 
+	// Scaler metrics
+	ScalerPredictedInstances *prometheus.GaugeVec
+
 	stores []*Store
 }
 
@@ -402,6 +405,17 @@ func CapacityReservationCount() *prometheus.CounterVec {
 	)
 }
 
+// ScalerPredictedInstances provides the predicted number of instances for a pool/variant
+func ScalerPredictedInstances() *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "harness_ci_scaler_predicted_instances",
+			Help: "Predicted number of instances needed for the upcoming window",
+		},
+		[]string{"pool_id", "variant_id"},
+	)
+}
+
 func RegisterMetrics() *Metrics {
 	buildCount := BuildCount()
 	failedBuildCount := FailedBuildCount()
@@ -419,7 +433,20 @@ func RegisterMetrics() *Metrics {
 	capacityReservationPerPoolDurationCount := CapacityReservationPerPoolDurationCount()
 	capacityReservationFallbackCount := CapacityReservationFallbackCount()
 	capacityReservationFailedCount := CapacityReservationFailedCount()
-	prometheus.MustRegister(buildCount, failedBuildCount, runningCount, runningPerAccountCount, poolFallbackCount, waitDurationCount, totalVMInitDurationCount, cpuPercentile, memoryPercentile, errorCount, warmPoolCount, capacityReservationCount, capacityReservationDurationCount, capacityReservationPerPoolDurationCount, capacityReservationFallbackCount, capacityReservationFailedCount) //nolint:lll
+
+	// Scaler metrics
+	scalerPredictedInstances := ScalerPredictedInstances()
+
+	prometheus.MustRegister(
+		buildCount, failedBuildCount, runningCount, runningPerAccountCount,
+		poolFallbackCount, waitDurationCount, totalVMInitDurationCount,
+		cpuPercentile, memoryPercentile, errorCount, warmPoolCount,
+		capacityReservationCount, capacityReservationDurationCount,
+		capacityReservationPerPoolDurationCount, capacityReservationFallbackCount,
+		capacityReservationFailedCount,
+		scalerPredictedInstances,
+	)
+
 	return &Metrics{
 		BuildCount:                              buildCount,
 		FailedCount:                             failedBuildCount,
@@ -437,5 +464,6 @@ func RegisterMetrics() *Metrics {
 		CapacityReservationPerPoolDurationCount: capacityReservationPerPoolDurationCount,
 		CapacityReservationFallbackCount:        capacityReservationFallbackCount,
 		CapacityReservationFailedCount:          capacityReservationFailedCount,
+		ScalerPredictedInstances:                scalerPredictedInstances,
 	}
 }

@@ -211,6 +211,7 @@ func (c *delegateCommand) setupDistributedMode(ctx context.Context) error {
 			Ctx:      ctx,
 			Env:      &c.env,
 			PoolFile: c.poolFile,
+			Metrics:  c.metrics,
 		},
 	)
 	if err != nil {

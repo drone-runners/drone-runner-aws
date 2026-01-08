@@ -4,6 +4,35 @@
 
 This runner provisions instances in various clouds for both mac, windows and Linux. It also sets up the lite-engine and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Pools of hot swappable EC2 instances are created on startup of the runner to improve build spin up time.
 
+## Development Setup
+
+### Git Hooks
+
+This repository includes git hooks to ensure code quality. To enable them, run:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This will enable:
+- **pre-push**: Runs all tests before pushing. Push will be blocked if any tests fail.
+
+### Running Tests
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests in short mode (faster)
+go test ./... -short
+
+# Run tests with verbose output
+go test -v ./...
+
+# Run specific package tests
+go test -v ./app/scheduler/jobs/...
+```
+
 ## Installation
 
 For more information about installing this runner look at the [installation documentation](https://docs.drone.io/runner/vm/overview/).
