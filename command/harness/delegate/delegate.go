@@ -13,6 +13,7 @@ import (
 	"github.com/drone/signal"
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/wings-software/dlite/httphelper"
 	"golang.org/x/sync/errgroup"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/httprender"
+	"github.com/drone-runners/drone-runner-aws/app/scheduler"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
@@ -34,10 +36,11 @@ type delegateCommand struct {
 	envFile                  string
 	env                      config.EnvConfig
 	poolFile                 string
-	poolManager              *drivers.Manager
+	poolManager              drivers.IManager
 	metrics                  *metric.Metrics
 	stageOwnerStore          store.StageOwnerStore
 	capacityReservationStore store.CapacityReservationStore
+	scheduler                *scheduler.Scheduler
 }
 
 func (c *delegateCommand) delegateListener() http.Handler {
@@ -50,6 +53,7 @@ func (c *delegateCommand) delegateListener() http.Handler {
 	mux.Post("/destroy", c.handleDestroy)
 	mux.Post("/step", c.handleStep)
 	mux.Post("/suspend", c.handleSuspend)
+	mux.Mount("/metrics", promhttp.Handler())
 	mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "OK") //nolint: errcheck
 	})
@@ -68,17 +72,6 @@ func RegisterDelegate(app *kingpin.Application) {
 		StringVar(&c.envFile)
 	cmd.Flag("pool", "file to seed the pool").
 		StringVar(&c.poolFile)
-}
-
-// register metrics
-func (c *delegateCommand) registerMetrics(instanceStore store.InstanceStore) {
-	c.metrics = metric.RegisterMetrics()
-	c.metrics.AddMetricStore(&metric.Store{
-		Store:       instanceStore,
-		Query:       nil,
-		Distributed: false,
-	})
-	c.metrics.UpdateRunningCount(context.Background())
 }
 
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
@@ -111,28 +104,38 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 		cancel()
 	})
 
-	instanceStore, stageOwnerStore, _, _, _, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource) //nolint:dogsled
+	// Initialize metrics
+	c.metrics = metric.RegisterMetrics()
 
-	if err != nil {
-		logrus.WithError(err).Fatalln("Unable to start the database")
+	// Check if distributed mode is enabled
+	if c.env.Database.DistributedMode {
+		logrus.Infoln("delegate: Starting in distributed mode (using dlite internals)")
+		if err := c.setupDistributedMode(ctx); err != nil {
+			return err
+		}
+	} else {
+		if err := c.setupStandardMode(ctx); err != nil {
+			return err
+		}
 	}
 
-	c.stageOwnerStore = stageOwnerStore
-	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
-
-	_, err = harness.SetupPoolWithEnv(ctx, &c.env, c.poolManager, c.poolFile)
 	shouldCleanBusyVMs := true
 	if c.poolManager.GetRunnerConfig().HA {
 		shouldCleanBusyVMs = false
 	}
 
 	defer harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, shouldCleanBusyVMs, true) //nolint: errcheck
-	if err != nil {
-		return err
+
+	// Update metrics running count
+	c.metrics.UpdateRunningCount(ctx)
+	if c.env.Database.DistributedMode {
+		c.metrics.UpdateWarmPoolCount(ctx)
 	}
 
-	// Initialize metrics
-	c.registerMetrics(instanceStore)
+	// Start the scheduler if initialized (distributed mode)
+	if c.scheduler != nil {
+		c.scheduler.Start()
+	}
 
 	hook := loghistory.New()
 	logrus.AddHook(hook)
@@ -146,11 +149,20 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 	logrus.WithField("addr", runnerServer.Addr).
 		WithField("kind", resource.Kind).
 		WithField("type", resource.Type).
+		WithField("distributed_mode", c.env.Database.DistributedMode).
 		Infoln("starting the server")
 
 	g.Go(func() error {
 		<-ctx.Done()
 		return harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, shouldCleanBusyVMs, true)
+	})
+
+	g.Go(func() error {
+		<-ctx.Done()
+		if c.scheduler != nil {
+			c.scheduler.Stop()
+		}
+		return nil
 	})
 
 	g.Go(func() error {
@@ -163,6 +175,57 @@ func (c *delegateCommand) run(*kingpin.ParseContext) error {
 			Errorln("shutting down the server")
 	}
 	return waitErr
+}
+
+// setupStandardMode initializes the delegate in standard (non-distributed) mode
+func (c *delegateCommand) setupStandardMode(ctx context.Context) error {
+	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource) //nolint:dogsled
+	if err != nil {
+		logrus.WithError(err).Fatalln("Unable to start the database")
+		return err
+	}
+
+	c.stageOwnerStore = stageOwnerStore
+	c.capacityReservationStore = capacityReservationStore
+	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
+
+	_, err = harness.SetupPoolWithEnv(ctx, &c.env, c.poolManager, c.poolFile)
+	if err != nil {
+		return err
+	}
+
+	// Register standard metrics
+	c.metrics.AddMetricStore(&metric.Store{
+		Store:       instanceStore,
+		Query:       nil,
+		Distributed: false,
+	})
+
+	return nil
+}
+
+// setupDistributedMode initializes the delegate in distributed mode (using dlite internals)
+func (c *delegateCommand) setupDistributedMode(ctx context.Context) error {
+	result, err := harness.SetupDistributedMode(
+		harness.DistributedSetupConfig{
+			Ctx:      ctx,
+			Env:      &c.env,
+			PoolFile: c.poolFile,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	c.poolManager = result.PoolManager
+	c.stageOwnerStore = result.StageOwnerStore
+	c.capacityReservationStore = result.CapacityReservationStore
+	c.scheduler = result.Scheduler
+
+	// Register distributed metrics
+	harness.RegisterDistributedMetrics(ctx, c.metrics, result, c.env.Runner.Name)
+
+	return nil
 }
 
 func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request) {
