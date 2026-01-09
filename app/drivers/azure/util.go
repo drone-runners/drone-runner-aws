@@ -139,6 +139,9 @@ func (c *config) createPublicIP(ctx context.Context, publicIPName string) (*armn
 	parameters := armnetwork.PublicIPAddress{
 		Location: to.Ptr(c.location),
 		Zones:    c.zones,
+		SKU: &armnetwork.PublicIPAddressSKU{
+			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandard),
+		},  
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic), // Static or Dynamic
 		},
