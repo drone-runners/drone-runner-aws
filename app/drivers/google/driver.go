@@ -529,6 +529,17 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	// Apply GitspaceConfigIdentifier to labels if present
 	in.Labels = p.buildLabelsWithGitspace(opts)
 
+	// Add BYOI-specific metadata for custom images
+	if opts.VMImageConfig.IsCustomImage {
+		logr.Debugln("google: adding BYOI metadata items for custom image")
+		in.Metadata.Items = append(in.Metadata.Items,
+			&compute.MetadataItems{
+				Key:   "harness-byoi",
+				Value: googleapi.String("true"),
+			},
+		)
+	}
+
 	if !p.noServiceAccount {
 		in.ServiceAccounts = []*compute.ServiceAccount{
 			{
