@@ -349,7 +349,7 @@ func HandleSetup(
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
-	printOK(logr, "Machine IP", instance.Address)
+	printKV(logr, "Machine IP", instance.Address)
 	printOK(logr, "VM setup is complete")
 
 	internalLogr.WithField("selected_pool", selectedPool).

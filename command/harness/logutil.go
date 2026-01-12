@@ -80,7 +80,7 @@ func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolI
 	printKV(logr, "Image Version", useNonEmpty(imageVersion, poolImageForLog))
 	nvFromConfig := deriveEnableNestedVirtualization(poolManager, poolID)
 	printKV(logr, "Hardware Acceleration (Nested Virtualization)", nvFromConfig)
-	printTitle(logr, "Stage Runtime ID", stageRuntimeID)
+	printKV(logr, "Stage Runtime ID", stageRuntimeID)
 }
 
 // deriveEnableNestedVirtualization reads the nested virtualization flag from the pool YAML config.
