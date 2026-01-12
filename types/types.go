@@ -292,7 +292,7 @@ type OutboxJob struct {
 // SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
 type SetupInstanceParams struct {
 	ImageName            string   `json:"image_name,omitempty" yaml:"image_name,omitempty"`
-	NestedVirtualization bool     `json:"nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+	NestedVirtualization bool     `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
 	MachineType          string   `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
 	Hibernate            bool     `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
 	Zones                []string `json:"zones,omitempty" yaml:"zones,omitempty"`
