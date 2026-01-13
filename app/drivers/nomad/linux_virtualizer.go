@@ -262,6 +262,10 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		AnnotationsBinaryURI:         opts.AnnotationsBinaryURI,
 		AnnotationsBinaryFallbackURI: opts.AnnotationsBinaryFallbackURI,
 		DriverName:                   opts.DriverName,
+		EnvmanBinaryURI:              opts.EnvmanBinaryURI,
+		EnvmanBinaryFallbackURI:      opts.EnvmanBinaryFallbackURI,
+		TmateBinaryURI:               opts.TmateBinaryURI,
+		TmateBinaryFallbackURI:       opts.TmateBinaryFallbackURI,
 	}
 	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
 		(opts.GitspaceOpts.VMInitScript != "") {
