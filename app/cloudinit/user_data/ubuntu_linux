@@ -239,8 +239,8 @@ runcmd:
   # Download and install envman for amd64 architecture
   {{ if eq .Platform.Arch "amd64" }}
   - |
-    (curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || \
-    (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
+    (curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || \
+    (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
   - chmod 777 /usr/bin/envman
   {{ end }}
 
@@ -263,16 +263,16 @@ runcmd:
   - mkdir /addon
   {{ if eq .Platform.Arch "amd64" }}
   - |
-    (wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
-    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
+    (wget -nv {{ .TmateBinaryURI }}tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
+    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv {{ .TmateBinaryFallbackURI }}tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
   - tar -xf /addon/tmate.xz -C /addon/
   - chmod 777 /addon/tmate-1.0-static-linux-amd64/tmate
   - mv /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate
   - rm -rf /addon/tmate-1.0-static-linux-amd64/
   {{ else if eq .Platform.Arch "arm64" }}
   - |
-    (wget -nv https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
-    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
+    (wget -nv {{ .TmateBinaryURI }}tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from primary URL.") || \
+    (echo "Primary URL failed for tmate. Trying fallback URL..." && wget -nv {{ .TmateBinaryFallbackURI }}tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz && echo "Successfully downloaded tmate binary from fallback URL.")
   - tar -xf /addon/tmate.xz -C /addon/
   - chmod 777 /addon/tmate-1.0-static-linux-arm64v8/tmate
   - mv /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate

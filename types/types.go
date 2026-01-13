@@ -172,6 +172,10 @@ type InstanceCreateOpts struct {
 	EnableC4D                    bool
 	CapacityReservation          *CapacityReservation
 	NestedVirtualization         bool
+	EnvmanBinaryURI              string
+	EnvmanBinaryFallbackURI      string
+	TmateBinaryURI               string
+	TmateBinaryFallbackURI       string
 }
 
 // Platform defines the target platform.

@@ -49,6 +49,10 @@ type (
 		runnerConfig                 types.RunnerConfig
 		annotationsBinaryURI         string
 		annotationsBinaryFallbackURI string
+		envmanBinaryURI              string
+		envmanBinaryFallbackURI      string
+		tmateBinaryURI               string
+		tmateBinaryFallbackURI       string
 	}
 
 	poolEntry struct {
@@ -76,6 +80,10 @@ func New(
 		runnerConfig:                 types.RunnerConfig(env.RunnerConfig),
 		annotationsBinaryURI:         env.Settings.AnnotationsBinaryURI,
 		annotationsBinaryFallbackURI: env.Settings.AnnotationsBinaryFallbackURI,
+		envmanBinaryURI:              env.Settings.EnvmanBinaryURI,
+		envmanBinaryFallbackURI:      env.Settings.EnvmanBinaryFallbackURI,
+		tmateBinaryURI:               env.Settings.TmateBinaryURI,
+		tmateBinaryFallbackURI:       env.Settings.TmateBinaryFallbackURI,
 	}
 }
 
@@ -94,6 +102,8 @@ func NewManager(
 	liteEngineFallbackPath,
 	pluginBinaryFallbackURI string, runnerConfig types.RunnerConfig,
 	annotationsBinaryURI string, annotationsBinaryFallbackURI string,
+	envmanBinaryURI string, envmanBinaryFallbackURI string,
+	tmateBinaryURI string, tmateBinaryFallbackURI string,
 ) *Manager {
 	return &Manager{
 		globalCtx:                    globalContext,
@@ -111,6 +121,10 @@ func NewManager(
 		runnerConfig:                 runnerConfig,
 		annotationsBinaryURI:         annotationsBinaryURI,
 		annotationsBinaryFallbackURI: annotationsBinaryFallbackURI,
+		envmanBinaryURI:              envmanBinaryURI,
+		envmanBinaryFallbackURI:      envmanBinaryFallbackURI,
+		tmateBinaryURI:               tmateBinaryURI,
+		tmateBinaryFallbackURI:       tmateBinaryFallbackURI,
 	}
 }
 
@@ -966,6 +980,10 @@ func (m *Manager) setupInstance(
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	createOptions.AnnotationsBinaryURI = m.annotationsBinaryURI
 	createOptions.AnnotationsBinaryFallbackURI = m.annotationsBinaryFallbackURI
+	createOptions.EnvmanBinaryURI = m.envmanBinaryURI
+	createOptions.EnvmanBinaryFallbackURI = m.envmanBinaryFallbackURI
+	createOptions.TmateBinaryURI = m.tmateBinaryURI
+	createOptions.TmateBinaryFallbackURI = m.tmateBinaryFallbackURI
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:                   agentConfig.Secret,

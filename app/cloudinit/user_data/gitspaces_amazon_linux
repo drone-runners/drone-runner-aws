@@ -49,7 +49,7 @@ runcmd:
 - 'chmod 755 /usr/bin/hcli'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
-- 'curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman'
+- 'curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /usr/bin/envman || curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /usr/bin/envman'
 - 'chmod 777 /usr/bin/envman'
 {{ end }}
 - 'touch /root/.env'
@@ -58,13 +58,13 @@ runcmd:
 {{ if .Tmate.Enabled }}
 - 'mkdir /addon'
 {{ if eq .Platform.Arch "amd64" }}
-- 'wget https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-amd64.tar.xz  -O /addon/tmate.xz'
+- 'wget {{ .TmateBinaryURI }}tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz || wget {{ .TmateBinaryFallbackURI }}tmate-1.0-static-linux-amd64.tar.xz -O /addon/tmate.xz'
 - 'tar -xf /addon/tmate.xz -C /addon/'
 - 'chmod 777  /addon/tmate-1.0-static-linux-amd64/tmate'
 - 'mv  /addon/tmate-1.0-static-linux-amd64/tmate /addon/tmate'
 - 'rm -rf /addon/tmate-1.0-static-linux-amd64/'
 {{ else if eq .Platform.Arch "arm64" }}
-- 'wget https://github.com/harness/tmate/releases/download/1.0/tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz'
+- 'wget {{ .TmateBinaryURI }}tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz || wget {{ .TmateBinaryFallbackURI }}tmate-1.0-static-linux-arm64v8.tar.xz -O /addon/tmate.xz'
 - 'tar -xf /addon/tmate.xz -C /addon/'
 - 'chmod 777  /addon/tmate-1.0-static-linux-arm64v8/tmate'
 - 'mv  /addon/tmate-1.0-static-linux-arm64v8/tmate /addon/tmate'

@@ -83,6 +83,16 @@ const (
 	defaultSecurityGroupName = "harness-runner"
 )
 
+// requestConfig holds request-specific configuration derived from InstanceCreateOpts
+// without mutating the shared pool configuration
+type requestConfig struct {
+	availabilityZone string
+	subnet           string
+	size             string
+	volumeSize       int64
+	volumeType       string
+}
+
 func New(opts ...Option) (drivers.Driver, error) {
 	p := new(config)
 	for _, opt := range opts {
@@ -229,15 +239,16 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
 	client := p.service
 
-	// Configure dynamic fields (zone, machine type, etc.)
-	if err := p.configureDynamicFields(opts); err != nil {
-		return nil, fmt.Errorf("failed to configure dynamic fields: %w", err)
+	// Get request-specific configuration without mutating shared state
+	reqCfg, err := p.getDynamicConfig(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dynamic config: %w", err)
 	}
 
 	logr := logger.FromContext(ctx).
 		WithField("driver", types.Amazon).
-		WithField("instance_type", p.size).
-		WithField("availability_zone", p.availabilityZone).
+		WithField("instance_type", reqCfg.size).
+		WithField("availability_zone", reqCfg.availabilityZone).
 		WithField("pool", opts.PoolName)
 
 	logr.Debugln("amazon: creating capacity reservation")
@@ -265,9 +276,9 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	// Create the capacity reservation
 	input := &ec2.CreateCapacityReservationInput{
-		InstanceType:          aws.String(p.size),
+		InstanceType:          aws.String(reqCfg.size),
 		InstancePlatform:      aws.String(instancePlatform),
-		AvailabilityZone:      aws.String(p.availabilityZone),
+		AvailabilityZone:      aws.String(reqCfg.availabilityZone),
 		InstanceCount:         aws.Int64(1),
 		EndDateType:           aws.String("unlimited"), // No end date
 		InstanceMatchCriteria: aws.String("targeted"),  // Instances must explicitly target this reservation
@@ -347,8 +358,11 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	client := p.service
 	startTime := time.Now()
-	if err = p.configureDynamicFields(opts); err != nil {
-		return nil, fmt.Errorf("failed to configure dynamic fields: %s", err)
+
+	// Get request-specific configuration without mutating shared state
+	reqCfg, err := p.getDynamicConfig(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dynamic config: %w", err)
 	}
 
 	resolvedAMI, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
@@ -362,8 +376,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("pool", opts.PoolName).
 		WithField("region", p.region).
 		WithField("ami", resolvedAMI).
-		WithField("size", p.size).
-		WithField("zone", p.availabilityZone).
+		WithField("size", reqCfg.size).
+		WithField("zone", reqCfg.availabilityZone).
 		WithField("hibernate", p.CanHibernate())
 
 	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
@@ -422,8 +436,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	in := &ec2.RunInstancesInput{
 		ImageId:            aws.String(resolvedAMI),
-		InstanceType:       aws.String(p.size),
-		Placement:          &ec2.Placement{AvailabilityZone: aws.String(p.availabilityZone)},
+		InstanceType:       aws.String(reqCfg.size),
+		Placement:          &ec2.Placement{AvailabilityZone: aws.String(reqCfg.availabilityZone)},
 		MinCount:           aws.Int64(1),
 		MaxCount:           aws.Int64(1),
 		IamInstanceProfile: iamProfile,
@@ -436,7 +450,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			{
 				AssociatePublicIpAddress: aws.Bool(p.allocPublicIP),
 				DeviceIndex:              aws.Int64(0),
-				SubnetId:                 aws.String(p.subnet),
+				SubnetId:                 aws.String(reqCfg.subnet),
 				Groups:                   aws.StringSlice(p.groups),
 			},
 		},
@@ -450,8 +464,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 			{
 				DeviceName: aws.String(p.deviceName),
 				Ebs: &ec2.EbsBlockDevice{
-					VolumeSize:          aws.Int64(p.volumeSize),
-					VolumeType:          aws.String(p.volumeType),
+					VolumeSize:          aws.Int64(reqCfg.volumeSize),
+					VolumeType:          aws.String(reqCfg.volumeType),
 					DeleteOnTermination: aws.Bool(true),
 				},
 			},
@@ -505,7 +519,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	// Create persistent disks first
-	volumes, err := p.createPersistentDisks(ctx, opts)
+	volumes, err := p.createPersistentDisks(ctx, opts, reqCfg)
 	if err != nil {
 		logr.WithError(err).Errorln("amazon: failed to create persistent disks")
 		return nil, err
@@ -565,9 +579,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		State:                types.StateCreated,
 		Pool:                 opts.PoolName,
 		Image:                resolvedAMI,
-		Zone:                 p.availabilityZone,
+		Zone:                 reqCfg.availabilityZone,
 		Region:               p.region,
-		Size:                 p.size,
+		Size:                 reqCfg.size,
 		Platform:             opts.Platform,
 		Address:              instanceIP,
 		CACert:               opts.CACert,
@@ -770,29 +784,47 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, poolName s
 	return p.getIP(awsInstance), nil
 }
 
-func (p *config) configureDynamicFields(opts *types.InstanceCreateOpts) error {
+// getDynamicConfig extracts request-specific configuration from opts without mutating shared state.
+// This prevents race conditions when multiple requests use the same pool concurrently.
+func (p *config) getDynamicConfig(opts *types.InstanceCreateOpts) (*requestConfig, error) {
+	cfg := &requestConfig{
+		// Start with pool defaults
+		availabilityZone: p.availabilityZone,
+		subnet:           p.subnet,
+		size:             p.size,
+		volumeSize:       p.volumeSize,
+		volumeType:       p.volumeType,
+	}
+
+	// Override with request-specific values
 	if len(opts.Zones) > 0 {
-		p.availabilityZone = opts.Zones[0]
+		cfg.availabilityZone = opts.Zones[0]
+		// Find matching subnet for the zone
 		for _, zoneDetail := range p.zoneDetails {
 			if zoneDetail.AvailabilityZone == opts.Zones[0] {
-				p.subnet = zoneDetail.SubnetID
+				cfg.subnet = zoneDetail.SubnetID
+				break
 			}
 		}
 	}
+
 	if opts.MachineType != "" {
-		p.size = opts.MachineType
+		cfg.size = opts.MachineType
 	}
+
 	if opts.StorageOpts.BootDiskSize != "" {
-		diskSize, diskSizeErr := strconv.ParseInt(opts.StorageOpts.BootDiskSize, 10, 64)
-		if diskSizeErr != nil {
-			return fmt.Errorf("failed to parse volume size: %w", diskSizeErr)
+		diskSize, err := strconv.ParseInt(opts.StorageOpts.BootDiskSize, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse volume size: %w", err)
 		}
-		p.volumeSize = diskSize
+		cfg.volumeSize = diskSize
 	}
+
 	if opts.StorageOpts.BootDiskType != "" {
-		p.volumeType = opts.StorageOpts.BootDiskType
+		cfg.volumeType = opts.StorageOpts.BootDiskType
 	}
-	return nil
+
+	return cfg, nil
 }
 
 func (p *config) getIP(amazonInstance *ec2.Instance) string {
@@ -1073,6 +1105,7 @@ func (p *config) attachVolumes(ctx context.Context, instanceID *string, volumes 
 func (p *config) createPersistentDisks(
 	ctx context.Context,
 	opts *types.InstanceCreateOpts,
+	reqCfg *requestConfig,
 ) ([]*ec2.Volume, error) {
 	if opts.StorageOpts.Identifier == "" {
 		return nil, nil
@@ -1095,7 +1128,7 @@ func (p *config) createPersistentDisks(
 
 		// Create volume
 		createVolumeInput := &ec2.CreateVolumeInput{
-			AvailabilityZone: aws.String(p.availabilityZone),
+			AvailabilityZone: aws.String(reqCfg.availabilityZone),
 			VolumeType:       aws.String(opts.StorageOpts.Type),
 			Size:             aws.Int64(volumeSize),
 			Encrypted:        aws.Bool(true),
