@@ -72,9 +72,6 @@ type config struct {
 	// AMI cache
 	amiCache  *AMICache
 	enableC4D bool
-
-	// Resource class to machine type mapping
-	resourceClassMachineTypes map[string]string
 }
 
 const (
@@ -1171,28 +1168,6 @@ func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
 
 // GetMachineType returns the machine type for the given resource class.
 // If resourceClass is empty or mapping doesn't exist, returns the default machine type.
-func (p *config) GetMachineType(ctx context.Context, resourceClass string) string {
-	// If resourceClass is empty, return the default machine type
-	if resourceClass == "" {
-		return p.size
-	}
-
-	logr := logger.FromContext(ctx).
-		WithField("resource_class", resourceClass).
-		WithField("machine_type", p.size)
-
-	// If no mapping is configured, return the default machine type
-	if len(p.resourceClassMachineTypes) == 0 {
-		logr.Warnln("amazon: no resource class to machine type mapping configured, using default machine type")
-		return p.size
-	}
-
-	// Look up the machine type for the resource class
-	if machineType, ok := p.resourceClassMachineTypes[resourceClass]; ok {
-		return machineType
-	}
-
-	// Mapping doesn't exist for this resource class, log and return default
-	logr.Warnln("amazon: resource class mapping not found, using default machine type")
+func (p *config) GetMachineType(_ context.Context, _ string) string {
 	return p.size
 }

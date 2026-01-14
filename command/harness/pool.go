@@ -20,7 +20,6 @@ func SetupPool(
 	configPool *config.PoolFile,
 	runnerName string,
 	passwords types.Passwords,
-	driverSettings types.DriverSettings,
 	poolManager drivers.IManager,
 	busyMaxAge int64,
 	freeMaxAge int64,
@@ -28,7 +27,7 @@ func SetupPool(
 	reusePool bool,
 	freeCapacityMaxAge int64,
 ) (*config.PoolFile, error) {
-	pools, err := poolfile.ProcessPool(configPool, runnerName, passwords, driverSettings)
+	pools, err := poolfile.ProcessPool(configPool, runnerName, passwords)
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err
@@ -83,7 +82,6 @@ func SetupPoolWithFile(
 	poolFilePath string,
 	poolManager drivers.IManager,
 	passwords types.Passwords,
-	driverSettings types.DriverSettings,
 	runnerName string,
 	busyAge,
 	freeAge,
@@ -99,7 +97,7 @@ func SetupPoolWithFile(
 		return nil, err
 	}
 
-	return SetupPool(ctx, configPool, runnerName, passwords, driverSettings, poolManager, busyAge, freeAge, purgerTime, reusePool, freeCapacityMaxAge)
+	return SetupPool(ctx, configPool, runnerName, passwords, poolManager, busyAge, freeAge, purgerTime, reusePool, freeCapacityMaxAge)
 }
 
 func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string) (*config.PoolFile, error) {
@@ -112,7 +110,6 @@ func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager dr
 		configPool,
 		env.Runner.Name,
 		env.Passwords(),
-		env.DriverSettings(),
 		poolManager,
 		env.Settings.BusyMaxAge,
 		env.Settings.FreeMaxAge,

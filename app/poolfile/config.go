@@ -31,8 +31,7 @@ const (
 
 // ProcessPool processes the pool file and returns a list of pools.
 // Passwords are not present in the pool file and passed separately for security reasons.
-// DriverSettings contains driver-specific configuration from environment variables.
-func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.Passwords, driverSettings types.DriverSettings) ([]drivers.Pool, error) { //nolint
+func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.Passwords) ([]drivers.Pool, error) { //nolint
 	var pools = []drivers.Pool{}
 
 	for i := range poolFile.Instances {
@@ -119,7 +118,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				amazon.WithHibernate(a.Hibernate),
 				amazon.WithZoneDetails(a.ZoneDetails),
 				amazon.WithEnableC4D(a.EnableC4D),
-				amazon.WithResourceClassMachineTypes(driverSettings.AmazonResourceClassMachineTypes),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
@@ -199,7 +197,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				}),
 				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
 				google.WithEnableC4D(g.EnableC4D),
-				google.WithResourceClassMachineTypes(driverSettings.GoogleResourceClassMachineTypes),
 			)
 			if err != nil {
 				return nil, err
@@ -372,14 +369,15 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 	}
 
 	pool = drivers.Pool{
-		RunnerName:   runnerName,
-		Name:         instance.Name,
-		MaxSize:      instance.Limit,
-		MinSize:      instance.Pool,
-		Platform:     instance.Platform,
-		Spec:         instance.Spec,
-		VariantID:    instance.VariantID,
-		PoolVariants: instance.Variants,
+		RunnerName:      runnerName,
+		Name:            instance.Name,
+		MaxSize:         instance.Limit,
+		MinSize:         instance.Pool,
+		Platform:        instance.Platform,
+		Spec:            instance.Spec,
+		ResourceMapping: instance.ResourceMapping,
+		VariantID:       instance.VariantID,
+		PoolVariants:    instance.Variants,
 	}
 	// Preserve only the provider-specific spec for later retrieval.
 

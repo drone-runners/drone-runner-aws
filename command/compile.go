@@ -91,7 +91,7 @@ func (c *compileCommand) run(*kingpin.ParseContext) error {
 	}
 
 	configEnv, _ := config.FromEnviron()
-	pools, err := poolfile.ProcessPool(poolFile, runnerName, configEnv.Passwords(), configEnv.DriverSettings())
+	pools, err := poolfile.ProcessPool(poolFile, runnerName, configEnv.Passwords())
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("compile: unable to process pool file")

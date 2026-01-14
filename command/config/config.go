@@ -22,15 +22,16 @@ type (
 	}
 
 	Instance struct {
-		Name      string              `json:"name"`
-		Default   bool                `json:"default"`
-		Type      string              `json:"type"`
-		Pool      int                 `json:"pool"`
-		Limit     int                 `json:"limit"`
-		Platform  types.Platform      `json:"platform,omitempty" yaml:"platform,omitempty"`
-		Spec      interface{}         `json:"spec,omitempty"`
-		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
-		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
+		Name            string              `json:"name"`
+		Default         bool                `json:"default"`
+		Type            string              `json:"type"`
+		Pool            int                 `json:"pool"`
+		Limit           int                 `json:"limit"`
+		Platform        types.Platform      `json:"platform,omitempty" yaml:"platform,omitempty"`
+		Spec            interface{}         `json:"spec,omitempty"`
+		ResourceMapping map[string]string   `json:"resource_mapping,omitempty" yaml:"resource_mapping,omitempty"`
+		VariantID       string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
+		Variants        []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
 	}
 
 	// Amazon specifies the configuration for an AWS instance.
@@ -316,17 +317,15 @@ type EnvConfig struct {
 	}
 
 	Google struct {
-		ProjectID                 string            `envconfig:"GOOGLE_PROJECT_ID"`
-		JSONPath                  string            `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`
-		Zone                      string            `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
-		ResourceClassMachineTypes map[string]string `envconfig:"GOOGLE_RESOURCE_CLASS_MACHINE_TYPES"`
+		ProjectID string `envconfig:"GOOGLE_PROJECT_ID"`
+		JSONPath  string `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`
+		Zone      string `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
 	}
 
 	Amazon struct {
-		AccessKeyID               string            `envconfig:"AMAZON_ACCESS_KEY_ID"`
-		AccessKeySecret           string            `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
-		SessionToken              string            `envconfig:"AMAZON_SESSION_TOKEN"`
-		ResourceClassMachineTypes map[string]string `envconfig:"AMAZON_RESOURCE_CLASS_MACHINE_TYPES"`
+		AccessKeyID     string `envconfig:"AMAZON_ACCESS_KEY_ID"`
+		AccessKeySecret string `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
+		SessionToken    string `envconfig:"AMAZON_SESSION_TOKEN"`
 	}
 
 	Limit struct {
@@ -496,16 +495,6 @@ func (c EnvConfig) Passwords() types.Passwords {
 		AWSAccessKeyID:     c.Amazon.AccessKeyID,
 		AWSAccessKeySecret: c.Amazon.AccessKeySecret,
 		AWSSessionToken:    c.Amazon.SessionToken,
-	}
-}
-
-// DriverSettings returns driver-specific configuration settings.
-//
-//nolint:gocritic
-func (c EnvConfig) DriverSettings() types.DriverSettings {
-	return types.DriverSettings{
-		GoogleResourceClassMachineTypes: c.Google.ResourceClassMachineTypes,
-		AmazonResourceClassMachineTypes: c.Amazon.ResourceClassMachineTypes,
 	}
 }
 

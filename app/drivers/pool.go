@@ -18,9 +18,9 @@ type Pool struct {
 	MaxSize int
 	MinSize int
 
-	Platform types.Platform
-
-	Driver Driver
+	Platform        types.Platform
+	ResourceMapping map[string]string
+	Driver          Driver
 	// Spec stores only the provider-specific spec from the pool YAML (e.g., *config.Google, *config.Amazon, etc.).
 	Spec interface{}
 	// variant specific data
