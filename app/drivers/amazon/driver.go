@@ -1166,8 +1166,7 @@ func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
 	return fmt.Sprintf("%s-%s-%s", runner, pool, uniuri.NewLen(8)) //nolint:mnd
 }
 
-// GetMachineType returns the machine type for the given resource class.
-// If resourceClass is empty or mapping doesn't exist, returns the default machine type.
-func (p *config) GetMachineType(_ context.Context, _ string) string {
+// GetMachineType returns the default machine type configured for the driver.
+func (p *config) GetMachineType() string {
 	return p.size
 }

@@ -375,7 +375,7 @@ func (d *DistributedManager) provisionFromPool(
 func (d *DistributedManager) getMachineTypeForResourceClass(ctx context.Context, pool *poolEntry, resourceClass string) string {
 	// If resourceClass is empty, return the driver's default machine type
 	if resourceClass == "" {
-		return pool.Driver.GetMachineType(ctx, resourceClass)
+		return pool.Driver.GetMachineType()
 	}
 
 	// Try to get the machine type from pool's resource mapping
@@ -395,7 +395,7 @@ func (d *DistributedManager) getMachineTypeForResourceClass(ctx context.Context,
 		WithField("resource_class", resourceClass).
 		WithField("pool", pool.Name).
 		Traceln("provision: resource class mapping not found in pool, using driver default")
-	return pool.Driver.GetMachineType(ctx, resourceClass)
+	return pool.Driver.GetMachineType()
 }
 
 // setupInstanceAsync creates an outbox job for setting up the instance

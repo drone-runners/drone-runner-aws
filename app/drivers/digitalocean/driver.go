@@ -366,7 +366,7 @@ func getFirewallID(ctx context.Context, client *godo.Client, sshException bool) 
 	return firewall.ID, nil
 }
 
-// GetMachineType returns the default machine type as DigitalOcean does not support resource class to machine type mapping.
-func (p *config) GetMachineType(_ context.Context, _ string) string {
+// GetMachineType returns the default machine type configured for the driver.
+func (p *config) GetMachineType() string {
 	return p.size
 }
