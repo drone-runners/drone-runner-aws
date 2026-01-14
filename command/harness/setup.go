@@ -67,6 +67,7 @@ func HandleSetup(
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
+	envFallbackPoolIDs []string,
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
 	stageRuntimeID := r.ID
@@ -130,7 +131,12 @@ func HandleSetup(
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
-	pools = append(pools, r.FallbackPoolIDs...)
+	// If request has no fallback pools, use the env config fallback pools if available
+	if len(r.FallbackPoolIDs) == 0 && len(envFallbackPoolIDs) > 0 {
+		pools = append(pools, envFallbackPoolIDs...)
+	} else {
+		pools = append(pools, r.FallbackPoolIDs...)
+	}
 
 	var selectedPool, selectedPoolDriver string
 	var poolErr error
