@@ -314,7 +314,7 @@ func commandDeleteVM(ctx context.Context, vmID string) *exec.Cmd {
 	)
 }
 
-// GetMachineType returns an empty string as Anka does not support resource class to machine type mapping.
-func (p *config) GetMachineType(_ context.Context, _ string) string {
+// GetMachineType returns an empty string as Anka does not have a default machine type.
+func (p *config) GetMachineType() string {
 	return ""
 }

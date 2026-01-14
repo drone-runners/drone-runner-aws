@@ -399,7 +399,7 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 	}
 }
 
-// GetMachineType returns the default machine type as Azure does not support resource class to machine type mapping.
-func (c *config) GetMachineType(_ context.Context, _ string) string {
+// GetMachineType returns the default machine type configured for the driver.
+func (c *config) GetMachineType() string {
 	return c.size
 }

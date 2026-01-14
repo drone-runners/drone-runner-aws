@@ -99,12 +99,6 @@ type Passwords struct {
 	AWSSessionToken    string
 }
 
-// DriverSettings holds driver-specific configuration from environment variables.
-type DriverSettings struct {
-	GoogleResourceClassMachineTypes map[string]string
-	AmazonResourceClassMachineTypes map[string]string
-}
-
 type RunnerConfig struct {
 	HealthCheckHotpoolTimeout       time.Duration
 	HealthCheckColdstartTimeout     time.Duration

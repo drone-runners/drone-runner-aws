@@ -321,7 +321,7 @@ func commandCp(ctx context.Context, src, dest string) *exec.Cmd {
 	)
 }
 
-// GetMachineType returns an empty string as VMFusion does not support resource class to machine type mapping.
-func (p *config) GetMachineType(_ context.Context, _ string) string {
+// GetMachineType returns an empty string as VMFusion does not have a default machine type.
+func (p *config) GetMachineType() string {
 	return ""
 }
