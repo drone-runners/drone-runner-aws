@@ -284,6 +284,7 @@ func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
 		c.env.LiteEngine.MockStepTimeoutSecs,
 		c.poolManager,
 		c.metrics,
+		c.env.Settings.FallbackPoolIDs,
 	)
 
 	if err != nil {

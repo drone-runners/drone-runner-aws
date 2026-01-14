@@ -407,24 +407,25 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
-		ReusePool                    bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
-		BusyMaxAge                   int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
-		FreeMaxAge                   int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"72"`
-		FreeCapacityMaxAgeMinutes    int64  `envconfig:"DRONE_SETTINGS_FREE_CAPACITY_MAX_AGE" default:"30"`
-		MinPoolSize                  int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
-		MaxPoolSize                  int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
-		EnableAutoPool               bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
-		HarnessTestBinaryURI         string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI              string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.3-beta"`
-		PluginBinaryFallbackURI      string `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.3-beta"`
-		PurgerTime                   int64  `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
-		AutoInjectionBinaryURI       string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.12"`
-		AnnotationsBinaryURI         string `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://github.com/harness/lite-engine/releases/download/v0.5.142/"`
-		AnnotationsBinaryFallbackURI string `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.142/"`
-		EnvmanBinaryURI              string `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/2.4.2/"`
-		EnvmanBinaryFallbackURI      string `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/"`
-		TmateBinaryURI               string `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
-		TmateBinaryFallbackURI       string `envconfig:"DRONE_TMATE_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
+		ReusePool                    bool     `envconfig:"DRONE_REUSE_POOL" default:"false"`
+		BusyMaxAge                   int64    `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
+		FreeMaxAge                   int64    `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"72"`
+		FreeCapacityMaxAgeMinutes    int64    `envconfig:"DRONE_SETTINGS_FREE_CAPACITY_MAX_AGE" default:"30"`
+		MinPoolSize                  int      `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
+		MaxPoolSize                  int      `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
+		EnableAutoPool               bool     `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
+		HarnessTestBinaryURI         string   `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
+		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.3-beta"`
+		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.3-beta"`
+		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
+		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.12"`
+		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://github.com/harness/lite-engine/releases/download/v0.5.142/"`
+		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.142/"`
+		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/2.4.2/"`
+		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/"`
+		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
+		TmateBinaryFallbackURI       string   `envconfig:"DRONE_TMATE_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
+		FallbackPoolIDs              []string `envconfig:"DRONE_FALLBACK_POOL_IDS"`
 	}
 
 	LiteEngine struct {
