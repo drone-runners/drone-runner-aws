@@ -243,8 +243,10 @@ github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgf
 github.com/grpc-ecosystem/grpc-gateway v1.9.5/go.mod h1:vNeuVxBJEsws4ogUvrchl83t/GYV9WGTSLVdBhOQFDY=
 github.com/harness/godotenv/v3 v3.0.1 h1:7QPEOkpx6SLLrYRRzPBp50d6c0XIxq721iqoFxbz1Bs=
 github.com/harness/godotenv/v3 v3.0.1/go.mod h1:UIXXJtTM7NkSYMYknHYOO2d8BfDlAWMYZRuRsXcDDR0=
-github.com/harness/lite-engine v0.5.154 h1:TMNGe2WCqAviCjhHPO1ab4zBSzN9a5Xy44SsBW7K2UU=
-github.com/harness/lite-engine v0.5.154/go.mod h1:TJ3tfXVDTxxLpnJmlfGuJgm9qUpUwvrnqe8RrT9P6vw=
+github.com/harness/lite-engine v0.5.148-debug2 h1:bzyb/iwYCc4Wgt8m6DWTsKri6x4iXnqWy9GuCyVBA6Q=
+github.com/harness/lite-engine v0.5.148-debug2/go.mod h1:8JHqlmIm8Vmw9i3psNPfDr7QS7apeyAOCPlE9LCfEnQ=
+github.com/harness/lite-engine v0.5.148 h1:q32cToQNuAikbcRdmRRB+6EEKlYBHpi93c3/DlNMpTw=
+github.com/harness/lite-engine v0.5.148/go.mod h1:8JHqlmIm8Vmw9i3psNPfDr7QS7apeyAOCPlE9LCfEnQ=
 github.com/harness/ti-client v0.0.0-20260106231425-06bf65d965b0 h1:J4Na3luGEI1jHnpYzsnDH9/XzVpXPX6x19SGiJZojvo=
 github.com/harness/ti-client v0.0.0-20260106231425-06bf65d965b0/go.mod h1:dGKnH3sg7UvBL2OztrqIusmsiBknSNy1Y5+9M2J241Q=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
