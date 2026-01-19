@@ -67,7 +67,8 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t.c.env.Dlite.PoolMapByAccount.Convert(),
 		t.c.env.Runner.Name,
 		poolManager,
-		t.c.metrics)
+		t.c.metrics,
+		t.c.env.Settings.FallbackPoolIDs)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(true)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not reserve capacity for VM")

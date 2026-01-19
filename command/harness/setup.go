@@ -67,6 +67,7 @@ func HandleSetup(
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
+	envFallbackPoolIDs []string,
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
 	stageRuntimeID := r.ID
@@ -130,7 +131,12 @@ func HandleSetup(
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
-	pools = append(pools, r.FallbackPoolIDs...)
+	// If request has no fallback pools, use the env config fallback pools if available
+	if len(r.FallbackPoolIDs) == 0 && len(envFallbackPoolIDs) > 0 {
+		pools = append(pools, envFallbackPoolIDs...)
+	} else {
+		pools = append(pools, r.FallbackPoolIDs...)
+	}
 
 	var selectedPool, selectedPoolDriver string
 	var poolErr error
@@ -160,7 +166,7 @@ func HandleSetup(
 		WithField("os", platform.OS).
 		WithField("arch", platform.Arch)
 
-	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), &platform, r.ResourceClass, r.VMImageConfig.ImageVersion)
+	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), &platform, r.ResourceClass, r.VMImageConfig.ImageVersion, stageRuntimeID)
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
@@ -349,6 +355,7 @@ func HandleSetup(
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 
+	printKV(logr, "Machine IP", instance.Address)
 	printOK(logr, "VM setup is complete")
 
 	internalLogr.WithField("selected_pool", selectedPool).

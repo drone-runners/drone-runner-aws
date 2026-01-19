@@ -22,15 +22,16 @@ type (
 	}
 
 	Instance struct {
-		Name      string              `json:"name"`
-		Default   bool                `json:"default"`
-		Type      string              `json:"type"`
-		Pool      int                 `json:"pool"`
-		Limit     int                 `json:"limit"`
-		Platform  types.Platform      `json:"platform,omitempty" yaml:"platform,omitempty"`
-		Spec      interface{}         `json:"spec,omitempty"`
-		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
-		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
+		Name            string              `json:"name"`
+		Default         bool                `json:"default"`
+		Type            string              `json:"type"`
+		Pool            int                 `json:"pool"`
+		Limit           int                 `json:"limit"`
+		Platform        types.Platform      `json:"platform,omitempty" yaml:"platform,omitempty"`
+		Spec            interface{}         `json:"spec,omitempty"`
+		ResourceMapping map[string]string   `json:"resource_mapping,omitempty" yaml:"resource_mapping,omitempty"`
+		VariantID       string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
+		Variants        []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
 	}
 
 	// Amazon specifies the configuration for an AWS instance.
@@ -316,17 +317,15 @@ type EnvConfig struct {
 	}
 
 	Google struct {
-		ProjectID                 string            `envconfig:"GOOGLE_PROJECT_ID"`
-		JSONPath                  string            `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`
-		Zone                      string            `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
-		ResourceClassMachineTypes map[string]string `envconfig:"GOOGLE_RESOURCE_CLASS_MACHINE_TYPES"`
+		ProjectID string `envconfig:"GOOGLE_PROJECT_ID"`
+		JSONPath  string `envconfig:"GOOGLE_JSON_PATH" default:"~/.config/gcloud/application_default_credentials.json"`
+		Zone      string `envconfig:"GOOGLE_ZONE" default:"northamerica-northeast1-a"`
 	}
 
 	Amazon struct {
-		AccessKeyID               string            `envconfig:"AMAZON_ACCESS_KEY_ID"`
-		AccessKeySecret           string            `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
-		SessionToken              string            `envconfig:"AMAZON_SESSION_TOKEN"`
-		ResourceClassMachineTypes map[string]string `envconfig:"AMAZON_RESOURCE_CLASS_MACHINE_TYPES"`
+		AccessKeyID     string `envconfig:"AMAZON_ACCESS_KEY_ID"`
+		AccessKeySecret string `envconfig:"AMAZON_ACCESS_KEY_SECRET"`
+		SessionToken    string `envconfig:"AMAZON_SESSION_TOKEN"`
 	}
 
 	Limit struct {
@@ -386,9 +385,9 @@ type EnvConfig struct {
 
 	OutboxProcessor struct {
 		PollIntervalSecs  int `envconfig:"DLITE_OUTBOXER_POLL_INTERVAL_SECS" default:"30"`
-		RetryIntervalSecs int `envconfig:"DLITE_OUTBOXER_RETRY_INTERVAL_SECS" default:"300"`
-		MaxRetries        int `envconfig:"DLITE_OUTBOXER_MAX_RETRIES" default:"25"`
-		BatchSize         int `envconfig:"DLITE_OUTBOXER_BATCH_SIZE" default:"20"`
+		RetryIntervalSecs int `envconfig:"DLITE_OUTBOXER_RETRY_INTERVAL_SECS" default:"180"`
+		MaxRetries        int `envconfig:"DLITE_OUTBOXER_MAX_RETRIES" default:"3"`
+		BatchSize         int `envconfig:"DLITE_OUTBOXER_BATCH_SIZE" default:"30"`
 	}
 
 	Scheduler struct {
@@ -399,23 +398,33 @@ type EnvConfig struct {
 			IntervalHours int `envconfig:"DLITE_SCHEDULER_HISTORY_CLEANUP_INTERVAL_HOURS" default:"24"`
 			RetentionDays int `envconfig:"DLITE_SCHEDULER_HISTORY_CLEANUP_RETENTION_DAYS" default:"60"`
 		}
+		Scaler struct {
+			Enabled            bool `envconfig:"DLITE_SCHEDULER_SCALER_ENABLED" default:"false"`
+			WindowDurationMins int  `envconfig:"DLITE_SCHEDULER_SCALER_WINDOW_DURATION_MINS" default:"30"`
+			LeadTimeMins       int  `envconfig:"DLITE_SCHEDULER_SCALER_LEAD_TIME_MINS" default:"10"`
+		}
 	}
 
 	Settings struct {
-		ReusePool                    bool   `envconfig:"DRONE_REUSE_POOL" default:"false"`
-		BusyMaxAge                   int64  `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
-		FreeMaxAge                   int64  `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"72"`
-		FreeCapacityMaxAgeMinutes    int64  `envconfig:"DRONE_SETTINGS_FREE_CAPACITY_MAX_AGE" default:"30"`
-		MinPoolSize                  int    `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
-		MaxPoolSize                  int    `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
-		EnableAutoPool               bool   `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
-		HarnessTestBinaryURI         string `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI              string `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.3-beta"`
-		PluginBinaryFallbackURI      string `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.3-beta"`
-		PurgerTime                   int64  `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
-		AutoInjectionBinaryURI       string `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.12"`
-		AnnotationsBinaryURI         string `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://github.com/harness/lite-engine/releases/download/v0.5.142/"`
-		AnnotationsBinaryFallbackURI string `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.142/"`
+		ReusePool                    bool     `envconfig:"DRONE_REUSE_POOL" default:"false"`
+		BusyMaxAge                   int64    `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
+		FreeMaxAge                   int64    `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"72"`
+		FreeCapacityMaxAgeMinutes    int64    `envconfig:"DRONE_SETTINGS_FREE_CAPACITY_MAX_AGE" default:"30"`
+		MinPoolSize                  int      `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
+		MaxPoolSize                  int      `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
+		EnableAutoPool               bool     `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
+		HarnessTestBinaryURI         string   `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
+		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.3-beta"`
+		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.3-beta"`
+		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"30"`
+		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.12"`
+		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/latest/"`
+		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/latest/"`
+		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/2.4.2/"`
+		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/"`
+		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
+		TmateBinaryFallbackURI       string   `envconfig:"DRONE_TMATE_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
+		FallbackPoolIDs              []string `envconfig:"DRONE_FALLBACK_POOL_IDS"`
 	}
 
 	LiteEngine struct {
@@ -456,8 +465,9 @@ type EnvConfig struct {
 	}
 
 	Database struct {
-		Driver     string `envconfig:"DRONE_DATABASE_DRIVER" default:"sqlite3"`
-		Datasource string `envconfig:"DRONE_DATABASE_DATASOURCE" default:"database.sqlite3"`
+		Driver          string `envconfig:"DRONE_DATABASE_DRIVER" default:"sqlite3"`
+		Datasource      string `envconfig:"DRONE_DATABASE_DATASOURCE" default:"database.sqlite3"`
+		DistributedMode bool   `envconfig:"DRONE_DELEGATE_DISTRIBUTED_MODE" default:"false"`
 	}
 
 	DistributedMode struct {
@@ -485,16 +495,6 @@ func (c EnvConfig) Passwords() types.Passwords {
 		AWSAccessKeyID:     c.Amazon.AccessKeyID,
 		AWSAccessKeySecret: c.Amazon.AccessKeySecret,
 		AWSSessionToken:    c.Amazon.SessionToken,
-	}
-}
-
-// DriverSettings returns driver-specific configuration settings.
-//
-//nolint:gocritic
-func (c EnvConfig) DriverSettings() types.DriverSettings {
-	return types.DriverSettings{
-		GoogleResourceClassMachineTypes: c.Google.ResourceClassMachineTypes,
-		AmazonResourceClassMachineTypes: c.Amazon.ResourceClassMachineTypes,
 	}
 }
 

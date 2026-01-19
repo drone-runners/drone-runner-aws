@@ -40,6 +40,10 @@ type Params struct {
 	EnableC4D                    bool
 	AnnotationsBinaryURI         string
 	AnnotationsBinaryFallbackURI string
+	EnvmanBinaryURI              string
+	EnvmanBinaryFallbackURI      string
+	TmateBinaryURI               string
+	TmateBinaryFallbackURI       string
 }
 
 var funcs = map[string]interface{}{

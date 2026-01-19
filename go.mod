@@ -62,7 +62,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/harness/godotenv/v3 v3.0.1 // indirect
-	github.com/harness/ti-client v0.0.0-20251118125510-84acebf61b81 // indirect
+	github.com/harness/ti-client v0.0.0-20260106231425-06bf65d965b0 // indirect
 	github.com/hashicorp/cronexpr v1.1.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect

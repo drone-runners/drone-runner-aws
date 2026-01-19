@@ -35,6 +35,10 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		EnableC4D:                    opts.EnableC4D,
 		AnnotationsBinaryURI:         opts.AnnotationsBinaryURI,
 		AnnotationsBinaryFallbackURI: opts.AnnotationsBinaryFallbackURI,
+		EnvmanBinaryURI:              opts.EnvmanBinaryURI,
+		EnvmanBinaryFallbackURI:      opts.EnvmanBinaryFallbackURI,
+		TmateBinaryURI:               opts.TmateBinaryURI,
+		TmateBinaryFallbackURI:       opts.TmateBinaryFallbackURI,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{

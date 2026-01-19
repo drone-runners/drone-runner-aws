@@ -82,15 +82,40 @@ func TestEMAWeekendDecayPredictor_Predict_EmptyHistory(t *testing.T) {
 }
 
 func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
-	now := time.Now()
-	// Create hourly data for the past 24 hours with varying utilization
+	// Use a fixed weekday timestamp for predictable results
+	// Wednesday, January 10, 2024 at 10:00 AM UTC
+	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
+
+	// The predictor looks for data at specific timestamps:
+	// 1. EMA: same time window from the past 5 weekdays
+	// 2. Historical: same time window from 1, 2, and 3 weeks ago
+	// We need to place records at these exact timestamps
+
 	var records []types.UtilizationRecord
-	for i := 24; i > 0; i-- {
+
+	// Add data for past 5 weekdays at the same time window (for EMA calculation)
+	for daysBack := 1; daysBack <= 7; daysBack++ {
+		historicalTime := now.Add(-time.Duration(daysBack) * 24 * time.Hour)
+		// Skip weekends
+		if historicalTime.Weekday() == time.Saturday || historicalTime.Weekday() == time.Sunday {
+			continue
+		}
 		records = append(records, types.UtilizationRecord{
 			Pool:           "test-pool",
 			VariantID:      "variant-1",
-			InUseInstances: 10 + (i % 5), // Values between 10-14
-			RecordedAt:     now.Add(-time.Duration(i) * time.Hour).Unix(),
+			InUseInstances: 12, // Consistent value for EMA
+			RecordedAt:     historicalTime.Unix(),
+		})
+	}
+
+	// Add data for 1, 2, and 3 weeks ago (for historical calculation)
+	for week := 1; week <= 3; week++ {
+		historicalTime := now.Add(-time.Duration(week) * 7 * 24 * time.Hour)
+		records = append(records, types.UtilizationRecord{
+			Pool:           "test-pool",
+			VariantID:      "variant-1",
+			InUseInstances: 10 + week, // Values 11, 12, 13
+			RecordedAt:     historicalTime.Unix(),
 		})
 	}
 
@@ -110,6 +135,7 @@ func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
 	}
 
 	// Should recommend more than minimum based on historical data
+	// EMA ~12, Historical weighted avg ~11.7, Combined ~11.8, with 10% buffer ~13
 	if result.RecommendedInstances < 10 {
 		t.Errorf("expected recommended instances >= 10, got %d", result.RecommendedInstances)
 	}

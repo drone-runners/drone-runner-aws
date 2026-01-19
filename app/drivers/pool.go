@@ -18,9 +18,9 @@ type Pool struct {
 	MaxSize int
 	MinSize int
 
-	Platform types.Platform
-
-	Driver Driver
+	Platform        types.Platform
+	ResourceMapping map[string]string
+	Driver          Driver
 	// Spec stores only the provider-specific spec from the pool YAML (e.g., *config.Google, *config.Amazon, etc.).
 	Spec interface{}
 	// variant specific data
@@ -46,7 +46,6 @@ type Driver interface {
 	CanHibernate() bool
 	// GetFullyQualifiedImage returns the fully qualified image name based on the provided VMImageConfig
 	GetFullyQualifiedImage(ctx context.Context, config *types.VMImageConfig) (string, error)
-	// GetMachineType returns the machine type for the given resource class.
-	// If resourceClass is empty or mapping doesn't exist, returns the default machine type.
-	GetMachineType(ctx context.Context, resourceClass string) string
+	// GetMachineType returns the default machine type configured for the driver.
+	GetMachineType() string
 }

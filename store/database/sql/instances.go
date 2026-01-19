@@ -162,6 +162,10 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"enable_nested_virtualization": true})
 	}
 
+	if params.VariantID != "" {
+		subQuery = subQuery.Where(squirrel.Eq{"variant_id": params.VariantID})
+	}
+
 	if len(allowedStates) > 0 {
 		stateVals := make([]interface{}, len(allowedStates))
 		for i, state := range allowedStates {

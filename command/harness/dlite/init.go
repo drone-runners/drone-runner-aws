@@ -69,7 +69,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), poolManager.GetCapacityReservationStore(),
 		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
 		t.c.env.Runner.Name, t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs,
-		poolManager, t.c.metrics)
+		poolManager, t.c.metrics, t.c.env.Settings.FallbackPoolIDs)
 	if err != nil {
 		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not setup VM")

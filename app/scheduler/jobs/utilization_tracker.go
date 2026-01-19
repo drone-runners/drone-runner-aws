@@ -44,9 +44,14 @@ func (j *UtilizationTrackerJob) Interval() time.Duration {
 	return j.interval
 }
 
+// Timeout returns 0 to use the interval as the timeout.
+func (j *UtilizationTrackerJob) Timeout() time.Duration {
+	return j.interval
+}
+
 // RunOnStart returns true - we want to record immediately on start.
 func (j *UtilizationTrackerJob) RunOnStart() bool {
-	return true
+	return false
 }
 
 // Execute records the current utilization for all pools.

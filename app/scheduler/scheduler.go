@@ -14,6 +14,9 @@ type Job interface {
 	Name() string
 	// Interval returns how often the job should run.
 	Interval() time.Duration
+	// Timeout returns the maximum duration for job execution.
+	// Return 0 to use the interval as the timeout.
+	Timeout() time.Duration
 	// Execute runs the job. Returns an error if the job fails.
 	Execute(ctx context.Context) error
 	// RunOnStart returns true if the job should run immediately when scheduled.
@@ -154,9 +157,10 @@ func (s *Scheduler) startJob(job Job) {
 	}()
 }
 
-// executeJobWithTimeout runs a job with a timeout based on the job's interval.
+// executeJobWithTimeout runs a job with a timeout.
+// Uses job.Timeout() if set, otherwise falls back to job.Interval().
 func (s *Scheduler) executeJobWithTimeout(ctx context.Context, job Job) {
-	timeoutCtx, cancel := context.WithTimeout(ctx, job.Interval())
+	timeoutCtx, cancel := context.WithTimeout(ctx, job.Timeout())
 	defer cancel()
 
 	s.executeJob(timeoutCtx, job)

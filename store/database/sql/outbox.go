@@ -55,7 +55,9 @@ func (s *outboxStore) Create(ctx context.Context, job *types.OutboxJob) error {
 	return nil
 }
 
-// FindAndClaimPending finds and claims pending jobs for the given runner and job types.
+// FindAndClaimPending finds and claims pending jobs.
+// If runnerName is non-empty, only jobs matching that runner_name are returned.
+// If runnerName is empty, only jobs with empty runner_name are returned (global jobs).
 func (s *outboxStore) FindAndClaimPending(ctx context.Context, runnerName string, jobTypes []types.OutboxJobType, limit int, retryInterval time.Duration) ([]*types.OutboxJob, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -84,6 +86,10 @@ func (s *outboxStore) FindAndClaimPending(ctx context.Context, runnerName string
 		return nil, fmt.Errorf("failed to build CTE subquery: %w", err)
 	}
 
+	// Calculate the next placeholder number based on how many args were generated
+	// (jobTypes slice expands to multiple placeholders)
+	nextPlaceholder := len(subArgs) + 1
+
 	// Build final CTE UPDATE SQL
 	//nolint: gosec
 	finalSQL := fmt.Sprintf(`
@@ -91,15 +97,15 @@ WITH candidate AS (
 	%s
 )
 UPDATE outbox_jobs
-SET status = $5,
+SET status = $%d,
 	processed_at = extract(epoch FROM now()),
 	retry_count = retry_count + 1
 FROM candidate
 WHERE outbox_jobs.id = candidate.job_id
 RETURNING id, pool_name, runner_name, job_type, job_params, created_at, processed_at, status, error_message, retry_count
-`, subSQL)
+`, subSQL, nextPlaceholder)
 
-	// Combine args: status first, then subquery args
+	// Append status to args
 	subArgs = append(subArgs, types.OutboxJobStatusRunning)
 
 	// Execute and scan results
@@ -203,4 +209,44 @@ func (s *outboxStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int
 	}
 
 	return result.RowsAffected()
+}
+
+// FindScaleJobForWindow checks if a scale job already exists for the given pool and window.
+// It looks for jobs with job_type='scale' where pool_name and job_params->>'window_start' match.
+func (s *outboxStore) FindScaleJobForWindow(ctx context.Context, poolName string, windowStart int64) (*types.OutboxJob, error) {
+	query := squirrel.Select(
+		"id", "pool_name", "runner_name", "job_type", "job_params",
+		"created_at", "processed_at", "status", "error_message", "retry_count",
+	).
+		From("outbox_jobs").
+		Where(squirrel.And{
+			squirrel.Eq{"job_type": types.OutboxJobTypeScale},
+			squirrel.Eq{"pool_name": poolName},
+			squirrel.Expr("(job_params->>'window_start')::bigint = ?", windowStart),
+		}).
+		Limit(1).
+		RunWith(s.db).
+		PlaceholderFormat(squirrel.Dollar)
+
+	job := new(types.OutboxJob)
+	err := query.QueryRowContext(ctx).Scan(
+		&job.ID,
+		&job.PoolName,
+		&job.RunnerName,
+		&job.JobType,
+		&job.JobParams,
+		&job.CreatedAt,
+		&job.ProcessedAt,
+		&job.Status,
+		&job.ErrorMessage,
+		&job.RetryCount,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No job found for this pool and window
+		}
+		return nil, fmt.Errorf("error finding scale job for window: %w", err)
+	}
+
+	return job, nil
 }

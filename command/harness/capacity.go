@@ -45,6 +45,7 @@ func HandleCapacityReservation(
 	runnerName string,
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
+	envFallbackPoolIDs []string,
 ) (*types.CapacityReservation, error) {
 	capacityStartTime := time.Now()
 	stageRuntimeID := r.ID
@@ -70,7 +71,12 @@ func HandleCapacityReservation(
 
 	pools := []string{}
 	pools = append(pools, r.PoolID)
-	pools = append(pools, r.FallbackPoolIDs...)
+	// If request has no fallback pools, use the env config fallback pools if available
+	if len(r.FallbackPoolIDs) == 0 && len(envFallbackPoolIDs) > 0 {
+		pools = append(pools, envFallbackPoolIDs...)
+	} else {
+		pools = append(pools, r.FallbackPoolIDs...)
+	}
 
 	var selectedPool string
 	var poolErr error

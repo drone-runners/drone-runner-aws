@@ -99,12 +99,6 @@ type Passwords struct {
 	AWSSessionToken    string
 }
 
-// DriverSettings holds driver-specific configuration from environment variables.
-type DriverSettings struct {
-	GoogleResourceClassMachineTypes map[string]string
-	AmazonResourceClassMachineTypes map[string]string
-}
-
 type RunnerConfig struct {
 	HealthCheckHotpoolTimeout       time.Duration
 	HealthCheckColdstartTimeout     time.Duration
@@ -172,6 +166,10 @@ type InstanceCreateOpts struct {
 	EnableC4D                    bool
 	CapacityReservation          *CapacityReservation
 	NestedVirtualization         bool
+	EnvmanBinaryURI              string
+	EnvmanBinaryFallbackURI      string
+	TmateBinaryURI               string
+	TmateBinaryFallbackURI       string
 }
 
 // Platform defines the target platform.
@@ -194,6 +192,7 @@ type QueryParams struct {
 	ImageName            string
 	MachineType          string
 	NestedVirtualization bool
+	VariantID            string
 }
 
 type StageOwner struct {
@@ -276,6 +275,7 @@ type OutboxJobType string
 
 const (
 	OutboxJobTypeSetupInstance = OutboxJobType("setup_instance")
+	OutboxJobTypeScale         = OutboxJobType("scale")
 )
 
 // OutboxJob represents a job in the outbox queue
@@ -295,12 +295,29 @@ type OutboxJob struct {
 // SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
 type SetupInstanceParams struct {
 	ImageName            string   `json:"image_name,omitempty" yaml:"image_name,omitempty"`
-	NestedVirtualization bool     `json:"nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+	NestedVirtualization bool     `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
 	MachineType          string   `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
 	Hibernate            bool     `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
 	Zones                []string `json:"zones,omitempty" yaml:"zones,omitempty"`
 	VariantID            string   `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
 	// Add more fields as needed in the future
+}
+
+// ScaleJobParams represents the parameters for a scaling job.
+// Note: PoolName is stored in OutboxJob.PoolName, not duplicated here.
+type ScaleJobParams struct {
+	WindowStart int64 `json:"window_start"` // Unix timestamp of window start
+	WindowEnd   int64 `json:"window_end"`   // Unix timestamp of window end
+}
+
+// ScalerConfig contains configuration for the pool scaler
+type ScalerConfig struct {
+	// WindowDuration is the duration of each scaling window (default: 30 minutes)
+	WindowDuration time.Duration
+	// LeadTime is how long before a window starts to scale for it (default: 5 minutes)
+	LeadTime time.Duration
+	// Enabled controls whether scaling is active
+	Enabled bool
 }
 
 // MachineConfig contains machine-level configuration properties

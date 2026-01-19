@@ -39,7 +39,7 @@ runcmd:
 - 'chmod 755 /usr/bin/hcli'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}
-- '(curl -fL https://github.com/bitrise-io/envman/releases/download/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
+- '(curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")'
 - 'chmod 777 /usr/bin/envman'
 {{ end }}
 - 'touch /root/.env'
