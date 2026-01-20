@@ -398,9 +398,11 @@ type EnvConfig struct {
 			RetentionDays int `envconfig:"DLITE_SCHEDULER_HISTORY_CLEANUP_RETENTION_DAYS" default:"60"`
 		}
 		Scaler struct {
-			Enabled            bool `envconfig:"DLITE_SCHEDULER_SCALER_ENABLED" default:"false"`
-			WindowDurationMins int  `envconfig:"DLITE_SCHEDULER_SCALER_WINDOW_DURATION_MINS" default:"30"`
-			LeadTimeMins       int  `envconfig:"DLITE_SCHEDULER_SCALER_LEAD_TIME_MINS" default:"10"`
+			Enabled            bool     `envconfig:"DLITE_SCHEDULER_SCALER_ENABLED" default:"false"`
+			WindowDurationMins int      `envconfig:"DLITE_SCHEDULER_SCALER_WINDOW_DURATION_MINS" default:"30"`
+			LeadTimeMins       int      `envconfig:"DLITE_SCHEDULER_SCALER_LEAD_TIME_MINS" default:"10"`
+			DryRun             bool     `envconfig:"DLITE_SCHEDULER_SCALER_DRY_RUN" default:"false"`
+			DisabledPools      []string `envconfig:"DLITE_SCHEDULER_SCALER_DISABLED_POOLS"`
 		}
 	}
 

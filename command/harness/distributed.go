@@ -129,6 +129,8 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			Enabled:        cfg.Env.Scheduler.Scaler.Enabled,
 			WindowDuration: time.Duration(cfg.Env.Scheduler.Scaler.WindowDurationMins) * time.Minute,
 			LeadTime:       time.Duration(cfg.Env.Scheduler.Scaler.LeadTimeMins) * time.Minute,
+			DryRun:         cfg.Env.Scheduler.Scaler.DryRun,
+			DisabledPools:  cfg.Env.Scheduler.Scaler.DisabledPools,
 		}
 
 		// Build scalable pools from pool config
