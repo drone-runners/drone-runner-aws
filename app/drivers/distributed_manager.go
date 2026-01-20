@@ -290,7 +290,7 @@ func (d *DistributedManager) provisionFromPool(
 		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 	}
 
-	machineConfig.MachineType = d.getMachineTypeForResourceClass(ctx, pool, resourceClass)
+	machineConfig.MachineType = pool.Driver.GetMachineType()
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
 	allowedStates := []types.InstanceState{types.StateCreated}
@@ -368,34 +368,6 @@ func (d *DistributedManager) provisionFromPool(
 		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
 	return inst, capacity, false, nil
-}
-
-// getMachineTypeForResourceClass returns the machine type for the given resource class.
-// It first checks the pool's ResourceMapping, and if not found, falls back to the driver's default.
-func (d *DistributedManager) getMachineTypeForResourceClass(ctx context.Context, pool *poolEntry, resourceClass string) string {
-	// If resourceClass is empty, return the driver's default machine type
-	if resourceClass == "" {
-		return pool.Driver.GetMachineType()
-	}
-
-	// Try to get the machine type from pool's resource mapping
-	if len(pool.ResourceMapping) > 0 {
-		if machineType, ok := pool.ResourceMapping[resourceClass]; ok {
-			logger.FromContext(ctx).
-				WithField("resource_class", resourceClass).
-				WithField("machine_type", machineType).
-				WithField("pool", pool.Name).
-				Traceln("provision: using machine type from pool resource mapping")
-			return machineType
-		}
-	}
-
-	// Fall back to the driver's default machine type
-	logger.FromContext(ctx).
-		WithField("resource_class", resourceClass).
-		WithField("pool", pool.Name).
-		Traceln("provision: resource class mapping not found in pool, using driver default")
-	return pool.Driver.GetMachineType()
 }
 
 // setupInstanceAsync creates an outbox job for setting up the instance

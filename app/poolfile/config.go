@@ -369,15 +369,14 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 	}
 
 	pool = drivers.Pool{
-		RunnerName:      runnerName,
-		Name:            instance.Name,
-		MaxSize:         instance.Limit,
-		MinSize:         instance.Pool,
-		Platform:        instance.Platform,
-		Spec:            instance.Spec,
-		ResourceMapping: instance.ResourceMapping,
-		VariantID:       instance.VariantID,
-		PoolVariants:    instance.Variants,
+		RunnerName:   runnerName,
+		Name:         instance.Name,
+		MaxSize:      instance.Limit,
+		MinSize:      instance.Pool,
+		Platform:     instance.Platform,
+		Spec:         instance.Spec,
+		VariantID:    instance.VariantID,
+		PoolVariants: instance.Variants,
 	}
 	// Preserve only the provider-specific spec for later retrieval.
 

@@ -22,16 +22,15 @@ type (
 	}
 
 	Instance struct {
-		Name            string              `json:"name"`
-		Default         bool                `json:"default"`
-		Type            string              `json:"type"`
-		Pool            int                 `json:"pool"`
-		Limit           int                 `json:"limit"`
-		Platform        types.Platform      `json:"platform,omitempty" yaml:"platform,omitempty"`
-		Spec            interface{}         `json:"spec,omitempty"`
-		ResourceMapping map[string]string   `json:"resource_mapping,omitempty" yaml:"resource_mapping,omitempty"`
-		VariantID       string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
-		Variants        []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
+		Name      string              `json:"name"`
+		Default   bool                `json:"default"`
+		Type      string              `json:"type"`
+		Pool      int                 `json:"pool"`
+		Limit     int                 `json:"limit"`
+		Platform  types.Platform      `json:"platform,omitempty" yaml:"platform,omitempty"`
+		Spec      interface{}         `json:"spec,omitempty"`
+		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
+		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
 	}
 
 	// Amazon specifies the configuration for an AWS instance.
