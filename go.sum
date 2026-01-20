@@ -249,6 +249,8 @@ github.com/harness/lite-engine v0.5.148-debug3 h1:qNpkbj3ZH3qqG4HBJ0Xe3nN4HjTnfg
 github.com/harness/lite-engine v0.5.148-debug3/go.mod h1:8JHqlmIm8Vmw9i3psNPfDr7QS7apeyAOCPlE9LCfEnQ=
 github.com/harness/lite-engine v0.5.148-debug4 h1:p0uiK7QOWt5IncLXsO5TAqzlYAqdTCX56KJxCp36Gjc=
 github.com/harness/lite-engine v0.5.148-debug4/go.mod h1:8JHqlmIm8Vmw9i3psNPfDr7QS7apeyAOCPlE9LCfEnQ=
+github.com/harness/lite-engine v0.5.148-debug5 h1:5BXvf+uNsv0+ZvA7xQ3Dofwyn0WF5dkpqgEBvSzSrfQ=
+github.com/harness/lite-engine v0.5.148-debug5/go.mod h1:8JHqlmIm8Vmw9i3psNPfDr7QS7apeyAOCPlE9LCfEnQ=
 github.com/harness/lite-engine v0.5.148 h1:q32cToQNuAikbcRdmRRB+6EEKlYBHpi93c3/DlNMpTw=
 github.com/harness/lite-engine v0.5.148/go.mod h1:8JHqlmIm8Vmw9i3psNPfDr7QS7apeyAOCPlE9LCfEnQ=
 github.com/harness/ti-client v0.0.0-20260106231425-06bf65d965b0 h1:J4Na3luGEI1jHnpYzsnDH9/XzVpXPX6x19SGiJZojvo=
