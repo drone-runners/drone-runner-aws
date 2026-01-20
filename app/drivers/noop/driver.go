@@ -124,6 +124,6 @@ func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImage
 }
 
 // GetMachineType returns an empty string as Noop does not have a default machine type.
-func (p *config) GetMachineType() string {
+func (p *config) GetMachineType(_ string, _ bool) string {
 	return ""
 }

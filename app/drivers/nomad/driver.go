@@ -988,6 +988,6 @@ func getNetworkResources(portLabel string, gitspacesPortCount int) []*api.Networ
 }
 
 // GetMachineType returns an empty string as Nomad does not have a default machine type.
-func (p *config) GetMachineType() string {
+func (p *config) GetMachineType(_ string, _ bool) string {
 	return ""
 }

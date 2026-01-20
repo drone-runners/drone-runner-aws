@@ -290,7 +290,8 @@ func (d *DistributedManager) provisionFromPool(
 		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 	}
 
-	machineConfig.MachineType = pool.Driver.GetMachineType()
+	nestedVirt := machineConfig != nil && machineConfig.NestedVirtualization
+	machineConfig.MachineType = pool.Driver.GetMachineType(resourceClass, nestedVirt)
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
 	allowedStates := []types.InstanceState{types.StateCreated}
