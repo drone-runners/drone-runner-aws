@@ -313,6 +313,10 @@ type ScalerConfig struct {
 	LeadTime time.Duration
 	// Enabled controls whether scaling is active
 	Enabled bool
+	// DryRun when enabled, only records metrics without performing actual scale up/down operations
+	DryRun bool
+	// DisabledPools is a list of pool names that should be skipped during scaling
+	DisabledPools []string
 }
 
 // MachineConfig contains machine-level configuration properties
