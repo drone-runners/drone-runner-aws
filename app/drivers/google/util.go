@@ -100,3 +100,34 @@ func extractImageNameFromTag(tag string) string {
 	parts := strings.SplitN(tag, ":", maxSplitParts)
 	return parts[1]
 }
+
+// normalizeImagePath ensures the image path is in 4-segment format.
+// If the path is in 5-segment format (with "projects/" prefix), it strips the prefix.
+// This prevents double "projects/" in the SourceImage URL construction.
+//
+// Input:  "projects/debian-cloud/global/images/debian-11" (5-segment)
+// Output: "debian-cloud/global/images/debian-11" (4-segment)
+//
+// Input:  "debian-cloud/global/images/debian-11" (4-segment)
+// Output: "debian-cloud/global/images/debian-11" (unchanged)
+func normalizeImagePath(imagePath string) string {
+	parts := strings.Split(imagePath, "/")
+	// If 5-segment format with "projects/" prefix, strip it
+	if len(parts) == minImagePathSplits && parts[0] == "projects" {
+		return strings.Join(parts[1:], "/")
+	}
+	return imagePath
+}
+
+// isByoiImage returns true if the image is a BYOI (Bring Your Own Image) custom image.
+// BYOI images follow the naming convention: byoi-{accountId}-{imageName}-{imageVersion}
+// The image path format is: {project}/global/images/byoi-{accountId}-{imageName}-{imageVersion}
+func isByoiImage(imagePath string) bool {
+	parts := strings.Split(imagePath, "/")
+	if len(parts) >= 4 && parts[len(parts)-2] == "images" {
+		imageName := parts[len(parts)-1]
+		return strings.HasPrefix(strings.ToLower(imageName), "byoi-")
+	}
+	// Also check for image name directly (without full path)
+	return strings.HasPrefix(strings.ToLower(imagePath), "byoi-")
+}

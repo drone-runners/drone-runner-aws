@@ -952,11 +952,10 @@ func (m *Manager) setupInstance(
 		createOptions.NestedVirtualization = machineConfig.NestedVirtualization
 		if machineConfig.VMImageConfig != nil && machineConfig.VMImageConfig.ImageName != "" {
 			createOptions.VMImageConfig = types.VMImageConfig{
-				ImageName:     machineConfig.VMImageConfig.ImageName,
-				Username:      machineConfig.VMImageConfig.Username,
-				Password:      machineConfig.VMImageConfig.Password,
-				ImageVersion:  machineConfig.VMImageConfig.ImageVersion,
-				IsCustomImage: machineConfig.VMImageConfig.IsCustomImage,
+				ImageName:    machineConfig.VMImageConfig.ImageName,
+				Username:     machineConfig.VMImageConfig.Username,
+				Password:     machineConfig.VMImageConfig.Password,
+				ImageVersion: machineConfig.VMImageConfig.ImageVersion,
 			}
 
 			if machineConfig.VMImageConfig.Auth != nil {
