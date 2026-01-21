@@ -39,12 +39,16 @@ type PredictorConfig struct { //nolint:revive
 	SafetyBuffer float64
 
 	// MinInstances is the minimum number of instances to recommend.
-	// Default: 1
+	// Default: 0
 	MinInstances int
 
-	// LookbackHours is how many hours of recent data to use for EMA calculation.
-	// Default: 24
-	LookbackHours int
+	// MaxLookbackDays is the maximum number of days to look back to find weekday data.
+	// Default: 9 (to ensure we capture at least 5 weekdays)
+	MaxLookbackDays int
+
+	// TargetWeekdays is the number of weekdays to use for EMA calculation.
+	// Default: 5
+	TargetWeekdays int
 }
 
 // DefaultPredictorConfig returns a PredictorConfig with sensible defaults.
@@ -54,8 +58,9 @@ func DefaultPredictorConfig() PredictorConfig {
 		EMAWeight:        0.4,
 		WeekDecayFactors: [3]float64{0.5, 0.3, 0.2},
 		SafetyBuffer:     0.1,
-		MinInstances:     1,
-		LookbackHours:    24,
+		MinInstances:     0,
+		MaxLookbackDays:  9,
+		TargetWeekdays:   5,
 	}
 }
 
@@ -118,22 +123,18 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 	}, nil
 }
 
-// calculateEMA computes the Exponential Moving Average from the last 5 weekdays' data.
+// calculateEMA computes the Exponential Moving Average from the last N weekdays' data.
 // This function is only called for weekday predictions.
 // It fetches only the same time window from each past weekday using a single batch query.
 func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *PredictionInput) (float64, error) {
-	const (
-		maxLookbackDays = 9 // Look back up to 9 days to ensure we capture at least 5 weekdays
-		targetWeekdays  = 5
-		secondsPerDay   = 24 * 3600
-	)
+	const secondsPerDay = 24 * 3600
 
 	// Calculate the window duration to apply to each past day
 	windowDuration := input.EndTimestamp - input.StartTimestamp
 
-	// Build time ranges for the last 5 weekdays
+	// Build time ranges for the last N weekdays (configured via TargetWeekdays)
 	var ranges []store.TimeRange
-	for daysBack := 1; daysBack <= maxLookbackDays && len(ranges) < targetWeekdays; daysBack++ {
+	for daysBack := 1; daysBack <= p.config.MaxLookbackDays && len(ranges) < p.config.TargetWeekdays; daysBack++ {
 		offset := int64(daysBack * secondsPerDay)
 		historicalStart := input.StartTimestamp - offset
 		historicalEnd := historicalStart + windowDuration
