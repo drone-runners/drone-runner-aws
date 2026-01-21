@@ -209,6 +209,16 @@ func Test_isByoiImage(t *testing.T) {
 			imagePath: "byoi-accountid-imagename-v1",
 			expected:  true,
 		},
+		{
+			name:      "BYOI with double hyphen (account ID starting with underscore)",
+			imagePath: "ci-play/global/images/byoi--6svmrogsgud8hvpppraeg-my-ubuntu-v1",
+			expected:  true,
+		},
+		{
+			name:      "plain BYOI with double hyphen",
+			imagePath: "byoi--6svmrogsgud8hvpppraeg-minimal-v2",
+			expected:  true,
+		},
 		// Non-BYOI images - should return false
 		{
 			name:      "standard Harness image",
