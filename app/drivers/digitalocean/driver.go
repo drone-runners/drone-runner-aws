@@ -367,6 +367,6 @@ func getFirewallID(ctx context.Context, client *godo.Client, sshException bool) 
 }
 
 // GetMachineType returns the default machine type configured for the driver.
-func (p *config) GetMachineType() string {
+func (p *config) GetMachineType(_ string, _ bool) string {
 	return p.size
 }

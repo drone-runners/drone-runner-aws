@@ -45,6 +45,6 @@ type Driver interface {
 	CanHibernate() bool
 	// GetFullyQualifiedImage returns the fully qualified image name based on the provided VMImageConfig
 	GetFullyQualifiedImage(ctx context.Context, config *types.VMImageConfig) (string, error)
-	// GetMachineType returns the default machine type configured for the driver.
-	GetMachineType() string
+	// GetMachineType returns the machine type based on resource class and nested virtualization fallback to default pool
+	GetMachineType(resourceClass string, nestedVirt bool) string
 }

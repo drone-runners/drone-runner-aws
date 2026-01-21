@@ -315,6 +315,6 @@ func commandDeleteVM(ctx context.Context, vmID string) *exec.Cmd {
 }
 
 // GetMachineType returns an empty string as Anka does not have a default machine type.
-func (p *config) GetMachineType() string {
+func (p *config) GetMachineType(_ string, _ bool) string {
 	return ""
 }
