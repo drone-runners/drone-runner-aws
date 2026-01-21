@@ -40,12 +40,13 @@ type Metrics struct {
 }
 
 type label struct {
-	os      string
-	arch    string
-	state   string
-	poolID  string
-	driver  string
-	ownerID string
+	os        string
+	arch      string
+	state     string
+	poolID    string
+	driver    string
+	ownerID   string
+	variantID string
 }
 
 type Store struct {
@@ -92,7 +93,7 @@ func BuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_total",
 			Help: "Total number of completed pipeline executions (failed + successful)",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "resource_class", "address", "image_version", "image_name"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "resource_class", "address", "image_version", "image_name", "variant_id"},
 	)
 }
 
@@ -114,7 +115,7 @@ func RunningCount() *prometheus.GaugeVec {
 			Name: "harness_ci_pipeline_running_executions",
 			Help: "Total number of running executions",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "state", "distributed", "owner_id"}, // state can be running, in_use, or hibernating
+		[]string{"pool_id", "os", "arch", "driver", "state", "distributed", "owner_id", "variant_id"}, // state can be running, in_use, or hibernating
 	)
 }
 
@@ -192,14 +193,14 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 		return
 	}
 	for _, i := range instances {
-		l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider), ownerID: i.OwnerID}
+		l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider), ownerID: i.OwnerID, variantID: i.VariantID}
 		if i.OwnerID != "" {
 			m.RunningPerAccountCount.WithLabelValues(i.OwnerID, i.OS, strconv.FormatBool(metricStore.Distributed)).Inc()
 		}
 		d[l]++
 	}
 	for k, v := range d {
-		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed), k.ownerID).Set(float64(v))
+		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed), k.ownerID, k.variantID).Set(float64(v))
 	}
 }
 
@@ -295,7 +296,7 @@ func PoolFallbackCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_pool_fallbacks",
 			Help: "Total number of fallbacks triggered on the pool",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id", "resource_class", "image_version", "image_name"},
+		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id", "resource_class", "image_version", "image_name", "variant_id"},
 		// success is true/false depending on whether fallback happened successfully
 	)
 }
@@ -308,7 +309,7 @@ func CPUPercentile() *prometheus.HistogramVec {
 			Help:    "Max CPU usage in the pipeline",
 			Buckets: []float64{30, 50, 70, 90},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "variant_id"},
 	)
 }
 
@@ -320,7 +321,7 @@ func MemoryPercentile() *prometheus.HistogramVec {
 			Help:    "Max memory usage in the pipeline",
 			Buckets: []float64{30, 50, 70, 90},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "variant_id"},
 	)
 }
 
@@ -344,7 +345,7 @@ func TotalVMInitDurationCount() *prometheus.HistogramVec {
 			Help:    "Total time needed to successfully allocate a machine",
 			Buckets: []float64{5, 15, 30, 60, 300, 600},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated"},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated", "variant_id"},
 	)
 }
 
