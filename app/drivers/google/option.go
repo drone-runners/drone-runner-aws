@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/sirupsen/logrus"
@@ -233,5 +234,13 @@ func WithIsNestedVirtualizationEnabled(enableNestedVirtualization bool) Option {
 func WithEnableC4D(enableC4D bool) Option {
 	return func(p *config) {
 		p.enableC4D = enableC4D
+	}
+}
+
+// WithMachineTypeByResourceClass returns an option to set machine type mapping by resource class.
+// This allows different machine types to be used based on resource class and nested virtualization.
+func WithMachineTypeByResourceClass(mapping map[string]cf.ResourceClassMachineType) Option {
+	return func(p *config) {
+		p.machineTypeByResourceClass = mapping
 	}
 }

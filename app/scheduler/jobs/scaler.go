@@ -84,6 +84,12 @@ func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, wi
 		"window_end":   time.Unix(windowEnd, 0).Format(time.RFC3339),
 	}).Infoln("scaler: starting scaling operation for pool")
 
+	// Check if pool is in the disabled list
+	if s.isPoolDisabled(poolName) {
+		logrus.WithField("pool", poolName).Infoln("scaler: pool is disabled for scaling, skipping")
+		return nil
+	}
+
 	// Find the pool to scale
 	var targetPool *ScalablePool
 	for i := range s.poolsToScale {
@@ -185,6 +191,12 @@ func (s *Scaler) scaleVariant(
 	// Record metrics
 	if s.metrics != nil {
 		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID).Set(float64(prediction.RecommendedInstances))
+	}
+
+	// If dry run mode is enabled, only record metrics and skip actual scaling
+	if s.config.DryRun {
+		logr.WithField("dry_run", true).Infoln("scaler: dry run mode enabled, skipping scale operation")
+		return nil
 	}
 
 	if delta > 0 {
@@ -317,4 +329,14 @@ func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool Scalable
 	}
 
 	return variantCounts, nil
+}
+
+// isPoolDisabled checks if the given pool name is in the disabled pools list.
+func (s *Scaler) isPoolDisabled(poolName string) bool {
+	for _, disabledPool := range s.config.DisabledPools {
+		if disabledPool == poolName {
+			return true
+		}
+	}
+	return false
 }

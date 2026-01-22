@@ -129,15 +129,26 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			Enabled:        cfg.Env.Scheduler.Scaler.Enabled,
 			WindowDuration: time.Duration(cfg.Env.Scheduler.Scaler.WindowDurationMins) * time.Minute,
 			LeadTime:       time.Duration(cfg.Env.Scheduler.Scaler.LeadTimeMins) * time.Minute,
+			DryRun:         cfg.Env.Scheduler.Scaler.DryRun,
+			DisabledPools:  cfg.Env.Scheduler.Scaler.DisabledPools,
 		}
 
 		// Build scalable pools from pool config
 		scalablePools := buildScalablePools(poolConfig)
 
-		// Create predictor
+		// Create predictor with config from environment
+		predictorConfig := predictor.PredictorConfig{
+			EMAPeriod:        cfg.Env.Scheduler.Predictor.EMAPeriod,
+			EMAWeight:        cfg.Env.Scheduler.Predictor.EMAWeight,
+			WeekDecayFactors: cfg.Env.PredictorConfig(),
+			SafetyBuffer:     cfg.Env.Scheduler.Predictor.SafetyBuffer,
+			MinInstances:     cfg.Env.Scheduler.Predictor.MinInstances,
+			MaxLookbackDays:  cfg.Env.Scheduler.Predictor.MaxLookbackDays,
+			TargetWeekdays:   cfg.Env.Scheduler.Predictor.TargetWeekdays,
+		}
 		pred := predictor.NewEMAWeekendDecayPredictor(
 			utilizationHistoryStore,
-			predictor.DefaultPredictorConfig(),
+			predictorConfig,
 		)
 
 		// Create scaler

@@ -281,6 +281,7 @@ func HandleSetup(
 				r.ResourceClass,
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
+				instance.VariantID,
 			).Inc()
 		}
 		internalLogr.WithField("os", instance.OS).
@@ -302,6 +303,7 @@ func HandleSetup(
 			"",
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
+			"",
 		).Inc()
 		if fallback {
 			metrics.PoolFallbackCount.WithLabelValues(
@@ -315,6 +317,7 @@ func HandleSetup(
 				r.ResourceClass,
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
+				"",
 			).Inc()
 		}
 		printError(logr, "Init step failed")
@@ -335,6 +338,7 @@ func HandleSetup(
 		instance.Address,
 		r.VMImageConfig.ImageVersion,
 		r.VMImageConfig.ImageName,
+		instance.VariantID,
 	).Inc()
 
 	instanceInfo := common.InstanceInfo{
@@ -387,6 +391,7 @@ func HandleSetup(
 		r.VMImageConfig.ImageName,
 		strconv.FormatBool(warmed),
 		strconv.FormatBool(hibernated),
+		instance.VariantID,
 	).Observe(totalInitTime.Seconds())
 
 	return resp, selectedPoolDriver, nil

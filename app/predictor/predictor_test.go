@@ -75,9 +75,9 @@ func TestEMAWeekendDecayPredictor_Predict_EmptyHistory(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// With no historical data, should return minimum instances
-	if result.RecommendedInstances != 1 {
-		t.Errorf("expected minimum instances 1, got %d", result.RecommendedInstances)
+	// With no historical data, should return minimum instances (0 by default)
+	if result.RecommendedInstances != 0 {
+		t.Errorf("expected minimum instances 0, got %d", result.RecommendedInstances)
 	}
 }
 
@@ -345,8 +345,14 @@ func TestDefaultPredictorConfig(t *testing.T) {
 	if config.SafetyBuffer != 0.1 {
 		t.Errorf("expected SafetyBuffer 0.1, got %f", config.SafetyBuffer)
 	}
-	if config.MinInstances != 1 {
-		t.Errorf("expected MinInstances 1, got %d", config.MinInstances)
+	if config.MinInstances != 0 {
+		t.Errorf("expected MinInstances 0, got %d", config.MinInstances)
+	}
+	if config.MaxLookbackDays != 9 {
+		t.Errorf("expected MaxLookbackDays 9, got %d", config.MaxLookbackDays)
+	}
+	if config.TargetWeekdays != 5 {
+		t.Errorf("expected TargetWeekdays 5, got %d", config.TargetWeekdays)
 	}
 }
 

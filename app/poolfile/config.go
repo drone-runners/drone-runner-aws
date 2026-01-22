@@ -105,6 +105,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				amazon.WithSecurityGroup(a.Network.SecurityGroups...),
 				amazon.WithSize(a.Size, instance.Platform.Arch),
 				amazon.WithSizeAlt(a.SizeAlt),
+				amazon.WithMachineTypeByResourceClass(a.MachineTypeByResourceClass),
 				amazon.WithSubnet(a.Network.SubnetID),
 				amazon.WithUserData(a.UserData, a.UserDataPath),
 				amazon.WithVolumeSize(a.Disk.Size),
@@ -179,6 +180,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				google.WithDiskType(g.Disk.Type),
 				google.WithMachineImage(g.Image),
 				google.WithSize(g.MachineType),
+				google.WithMachineTypeByResourceClass(g.MachineTypeByResourceClass),
 				google.WithNetwork(g.Network),
 				google.WithSubnetwork(g.Subnetwork),
 				google.WithPrivateIP(g.PrivateIP),
@@ -369,15 +371,14 @@ func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {
 	}
 
 	pool = drivers.Pool{
-		RunnerName:      runnerName,
-		Name:            instance.Name,
-		MaxSize:         instance.Limit,
-		MinSize:         instance.Pool,
-		Platform:        instance.Platform,
-		Spec:            instance.Spec,
-		ResourceMapping: instance.ResourceMapping,
-		VariantID:       instance.VariantID,
-		PoolVariants:    instance.Variants,
+		RunnerName:   runnerName,
+		Name:         instance.Name,
+		MaxSize:      instance.Limit,
+		MinSize:      instance.Pool,
+		Platform:     instance.Platform,
+		Spec:         instance.Spec,
+		VariantID:    instance.VariantID,
+		PoolVariants: instance.Variants,
 	}
 	// Preserve only the provider-specific spec for later retrieval.
 

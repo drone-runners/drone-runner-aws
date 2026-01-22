@@ -189,8 +189,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 				}
 			}
 
-			metrics.CPUPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed())).Observe(resp.OSStats.MaxCPUUsagePct)
-			metrics.MemoryPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed())).Observe(resp.OSStats.MaxMemUsagePct)
+			metrics.CPUPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed()), inst.VariantID).Observe(resp.OSStats.MaxCPUUsagePct)
+			metrics.MemoryPercentile.WithLabelValues(poolID, inst.OS, inst.Arch, string(inst.Provider), strconv.FormatBool(poolManager.IsDistributed()), inst.VariantID).Observe(resp.OSStats.MaxMemUsagePct)
 
 			logr.WithField("cpu_ge50", cpuGe50).WithField("cpu_ge70", cpuGe70).WithField("cpu_ge90", cpuGe90).
 				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).

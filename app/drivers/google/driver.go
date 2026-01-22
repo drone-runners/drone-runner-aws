@@ -19,6 +19,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 
@@ -77,6 +78,7 @@ type config struct {
 	scopes                     []string
 	serviceAccountEmail        string
 	size                       string
+	machineTypeByResourceClass map[string]cf.ResourceClassMachineType
 	tags                       []string
 	zones                      []string
 	userData                   string
@@ -1200,7 +1202,23 @@ func (p *config) buildLabelsWithGitspace(opts *types.InstanceCreateOpts) map[str
 	return labels
 }
 
-// GetMachineType returns the default machine type configured for the driver.
-func (p *config) GetMachineType() string {
+// GetMachineType returns the machine type based on resource class and nested virtualization fallback to default pool
+func (p *config) GetMachineType(resourceClass string, nestedVirt bool) string {
+	if p.machineTypeByResourceClass == nil {
+		return p.size
+	}
+
+	config, ok := p.machineTypeByResourceClass[resourceClass]
+	if !ok {
+		return p.size
+	}
+
+	if nestedVirt && config.Nested != "" {
+		return config.Nested
+	}
+	if config.Default != "" {
+		return config.Default
+	}
+
 	return p.size
 }
