@@ -977,8 +977,8 @@ func (m *Manager) setupInstance(
 	}
 	// Set boot disk settings from machineConfig if provided and not already set
 	if machineConfig != nil {
-		if machineConfig.DiskSize != "" && createOptions.StorageOpts.BootDiskSize == "" {
-			createOptions.StorageOpts.BootDiskSize = machineConfig.DiskSize
+		if machineConfig.DiskSize != 0 && createOptions.StorageOpts.BootDiskSize == "" {
+			createOptions.StorageOpts.BootDiskSize = fmt.Sprintf("%d", machineConfig.DiskSize)
 		}
 		if machineConfig.DiskType != "" && createOptions.StorageOpts.BootDiskType == "" {
 			createOptions.StorageOpts.BootDiskType = machineConfig.DiskType

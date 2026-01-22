@@ -295,7 +295,7 @@ type SetupInstanceParams struct {
 	Hibernate            bool     `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
 	Zones                []string `json:"zones,omitempty" yaml:"zones,omitempty"`
 	VariantID            string   `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
-	DiskSize             string   `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
+	DiskSize             int64    `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
 	DiskType             string   `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
 	ResourceClass        string   `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
 	// Add more fields as needed in the future

@@ -287,8 +287,9 @@ func (d *DistributedManager) provisionFromPool(
 	}
 
 	// Variant filtering: select the best matching variant based on machineConfig
+	var selectedVariant *types.PoolVariant
 	if len(pool.PoolVariants) > 0 {
-		selectedVariant := d.filterVariant(ctx, pool, machineConfig)
+		selectedVariant = d.filterVariant(ctx, pool, machineConfig)
 		if selectedVariant != nil {
 			// Apply variant configuration to machineConfig
 			d.applyVariantToMachineConfig(machineConfig, selectedVariant)
@@ -302,6 +303,11 @@ func (d *DistributedManager) provisionFromPool(
 		PoolName:             poolName,
 		MachineType:          machineConfig.MachineType,
 		NestedVirtualization: machineConfig.NestedVirtualization,
+	}
+
+	// Set VariantID: use the selected variant's ID if available, otherwise use "default"
+	if selectedVariant == nil && len(pool.PoolVariants) > 0 {
+		queryParams.VariantID = "default"
 	}
 	if machineConfig.VMImageConfig != nil {
 		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
@@ -452,7 +458,7 @@ func (d *DistributedManager) applyVariantToMachineConfig(machineConfig *types.Ma
 	if len(variant.Zones) > 0 {
 		machineConfig.Zones = variant.Zones
 	}
-	if variant.DiskSize != "" {
+	if variant.DiskSize != 0 {
 		machineConfig.DiskSize = variant.DiskSize
 	}
 	if variant.DiskType != "" {
