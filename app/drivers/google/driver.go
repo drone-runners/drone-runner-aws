@@ -528,6 +528,17 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	// Apply GitspaceConfigIdentifier to labels if present
 	in.Labels = p.buildLabelsWithGitspace(opts)
 
+	// Add BYOI metadata for custom images
+	if isByoiImage(image) {
+		logr.Debugln("google: adding BYOI metadata items for custom image")
+		in.Metadata.Items = append(in.Metadata.Items,
+			&compute.MetadataItems{
+				Key:   "harness-byoi",
+				Value: googleapi.String("true"),
+			},
+		)
+	}
+
 	if !p.noServiceAccount {
 		in.ServiceAccounts = []*compute.ServiceAccount{
 			{
@@ -1109,17 +1120,20 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 func (p *config) GetFullyQualifiedImage(ctx context.Context, config *types.VMImageConfig) (string, error) {
 	// If no image name is provided, return the default image
 	if config.ImageName == "" {
-		return p.image, nil
+		return normalizeImagePath(p.image), nil
 	}
 
 	// config.ImageName can be of different formats.
 	// we can receive image in following 2 formats:
 	// Format #1: harness/vmimage: hosted-vm-ubuntu-2204-jammy-v20250508
 	// Format #2: projects/debian-cloud/global/images/debian-11-bullseye-v2025070
+	//            OR: debian-cloud/global/images/debian-11-bullseye-v2025070
 	// isFullImagePath() method checks if given image in config.ImageName is of Format #2 which can be
 	// directly used, else we convert Format #1 to Format #2 in buildImagePathFromTag() method.
 	if isFullImagePath(config.ImageName) {
-		return config.ImageName, nil
+		// Normalize to 4-segment format (strip "projects/" prefix if present)
+		// This prevents double "projects/" in SourceImage URL
+		return normalizeImagePath(config.ImageName), nil
 	}
 
 	return buildImagePathFromTag(config.ImageName, p.projectID), nil
