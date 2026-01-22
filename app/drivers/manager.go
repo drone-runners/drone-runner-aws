@@ -794,7 +794,8 @@ func (m *Manager) buildPoolWithVariants(
 	logr logger.Logger,
 ) {
 	// Process each variant and create instances
-	for idx, variant := range pool.PoolVariants {
+	for idx := range pool.PoolVariants {
+		variant := &pool.PoolVariants[idx]
 		// Get variant params (VariantID should already be set from YAML through embedding)
 		variantParams := variant.SetupInstanceParams
 
