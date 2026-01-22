@@ -398,8 +398,3 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 		Port:         lehelper.LiteEnginePort,
 	}
 }
-
-// GetMachineType returns the default machine type configured for the driver.
-func (c *config) GetMachineType(_ string, _ bool) string {
-	return c.size
-}

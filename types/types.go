@@ -295,6 +295,9 @@ type SetupInstanceParams struct {
 	Hibernate            bool     `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
 	Zones                []string `json:"zones,omitempty" yaml:"zones,omitempty"`
 	VariantID            string   `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	DiskSize             string   `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
+	DiskType             string   `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
+	ResourceClass        string   `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
 	// Add more fields as needed in the future
 }
 
@@ -320,13 +323,10 @@ type ScalerConfig struct {
 }
 
 // MachineConfig contains machine-level configuration properties
+// It embeds SetupInstanceParams and adds runtime-specific fields
 type MachineConfig struct {
-	VMImageConfig        *spec.VMImageConfig
-	Zones                []string
-	MachineType          string
-	NestedVirtualization bool
-	Hibernate            bool
-	VariantID            string `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	SetupInstanceParams
+	VMImageConfig *spec.VMImageConfig
 }
 
 type PoolVariant struct {

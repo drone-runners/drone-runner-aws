@@ -47,26 +47,25 @@ type config struct {
 
 	rootDir string
 
-	image                      string
-	size                       string
-	sizeAlt                    string
-	machineTypeByResourceClass map[string]cf.ResourceClassMachineType
-	user                       string
-	userData                   string
-	subnet                     string
-	vpc                        string
-	groups                     []string
-	allocPublicIP              bool
-	volumeType                 string
-	volumeSize                 int64
-	volumeTags                 map[string]string
-	volumeIops                 int64
-	kmsKeyID                   string
-	deviceName                 string
-	iamProfileArn              string
-	tags                       map[string]string // user defined tags
-	hibernate                  bool
-	zoneDetails                []cf.ZoneInfo
+	image         string
+	size          string
+	sizeAlt       string
+	user          string
+	userData      string
+	subnet        string
+	vpc           string
+	groups        []string
+	allocPublicIP bool
+	volumeType    string
+	volumeSize    int64
+	volumeTags    map[string]string
+	volumeIops    int64
+	kmsKeyID      string
+	deviceName    string
+	iamProfileArn string
+	tags          map[string]string // user defined tags
+	hibernate     bool
+	zoneDetails   []cf.ZoneInfo
 
 	service *ec2.EC2
 
@@ -1165,25 +1164,4 @@ func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
 		return gitspaceConfigIdentifier
 	}
 	return fmt.Sprintf("%s-%s-%s", runner, pool, uniuri.NewLen(8)) //nolint:mnd
-}
-
-// GetMachineType returns the machine type based on resource class and nested virtualization fallback to default pool
-func (p *config) GetMachineType(resourceClass string, nestedVirt bool) string {
-	if p.machineTypeByResourceClass == nil {
-		return p.size
-	}
-
-	config, ok := p.machineTypeByResourceClass[resourceClass]
-	if !ok {
-		return p.size
-	}
-
-	if nestedVirt && config.Nested != "" {
-		return config.Nested
-	}
-	if config.Default != "" {
-		return config.Default
-	}
-
-	return p.size
 }

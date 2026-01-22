@@ -35,27 +35,26 @@ type (
 
 	// Amazon specifies the configuration for an AWS instance.
 	Amazon struct {
-		Account                    AmazonAccount                       `json:"account,omitempty"`
-		Name                       string                              `json:"name,omitempty" yaml:"name,omitempty"`
-		Size                       string                              `json:"size,omitempty"`
-		SizeAlt                    string                              `json:"size_alt,omitempty" yaml:"size_alt,omitempty"`
-		MachineTypeByResourceClass map[string]ResourceClassMachineType `json:"machine_type_by_resource_class,omitempty" yaml:"machine_type_by_resource_class,omitempty"`
-		AMI                        string                              `json:"ami,omitempty"`
-		VPC                        string                              `json:"vpc,omitempty" yaml:"vpc,omitempty"`
-		Tags                       map[string]string                   `json:"tags,omitempty" yaml:"tags,omitempty"`
-		Type                       string                              `json:"type,omitempty" yaml:"type,omitempty"`
-		UserData                   string                              `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath               string                              `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
-		Disk                       disk                                `json:"disk,omitempty" yaml:"disk,omitempty"`
-		Network                    AmazonNetwork                       `json:"network,omitempty" yaml:"network,omitempty"`
-		DeviceName                 string                              `json:"device_name,omitempty" yaml:"device_name,omitempty"`
-		IamProfileArn              string                              `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn,omitempty"`
-		MarketType                 string                              `json:"market_type,omitempty" yaml:"market_type,omitempty"`
-		RootDirectory              string                              `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
-		Hibernate                  bool                                `json:"hibernate,omitempty"`
-		User                       string                              `json:"user,omitempty" yaml:"user,omitempty"`
-		ZoneDetails                []ZoneInfo                          `json:"zone_details,omitempty" yaml:"zone_details,omitempty"`
-		EnableC4D                  bool                                `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
+		Account       AmazonAccount     `json:"account,omitempty"`
+		Name          string            `json:"name,omitempty" yaml:"name,omitempty"`
+		Size          string            `json:"size,omitempty"`
+		SizeAlt       string            `json:"size_alt,omitempty" yaml:"size_alt,omitempty"`
+		AMI           string            `json:"ami,omitempty"`
+		VPC           string            `json:"vpc,omitempty" yaml:"vpc,omitempty"`
+		Tags          map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Type          string            `json:"type,omitempty" yaml:"type,omitempty"`
+		UserData      string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath  string            `json:"user_data_Path,omitempty" yaml:"user_data_Path,omitempty"`
+		Disk          disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
+		Network       AmazonNetwork     `json:"network,omitempty" yaml:"network,omitempty"`
+		DeviceName    string            `json:"device_name,omitempty" yaml:"device_name,omitempty"`
+		IamProfileArn string            `json:"iam_profile_arn,omitempty" yaml:"iam_profile_arn,omitempty"`
+		MarketType    string            `json:"market_type,omitempty" yaml:"market_type,omitempty"`
+		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
+		Hibernate     bool              `json:"hibernate,omitempty"`
+		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
+		ZoneDetails   []ZoneInfo        `json:"zone_details,omitempty" yaml:"zone_details,omitempty"`
+		EnableC4D     bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 	}
 
 	ZoneInfo struct {
@@ -200,34 +199,27 @@ type (
 		Region string `json:"region,omitempty" yaml:"region,omitempty"`
 	}
 
-	// ResourceClassMachineType defines machine types for a resource class based on nested virtualization
-	ResourceClassMachineType struct {
-		Default string `json:"default,omitempty" yaml:"default,omitempty"`
-		Nested  string `json:"nested,omitempty" yaml:"nested,omitempty"`
-	}
-
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
-		Account                    GoogleAccount                       `json:"account,omitempty"  yaml:"account"`
-		Image                      string                              `json:"image,omitempty" yaml:"image,omitempty"`
-		Name                       string                              `json:"name,omitempty" yaml:"name,omitempty"`
-		Tags                       []string                            `json:"tags,omitempty" yaml:"tags,omitempty"`
-		Size                       string                              `json:"size,omitempty" yaml:"size,omitempty"`
-		MachineType                string                              `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-		MachineTypeByResourceClass map[string]ResourceClassMachineType `json:"machine_type_by_resource_class,omitempty" yaml:"machine_type_by_resource_class,omitempty"`
-		UserData                   string                              `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath               string                              `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
-		UserDataKey                string                              `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
-		Disk                       disk                                `json:"disk,omitempty" yaml:"disk,omitempty"`
-		Network                    string                              `json:"network,omitempty" yaml:"network,omitempty"`
-		Subnetwork                 string                              `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
-		PrivateIP                  bool                                `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
-		Zone                       []string                            `json:"zone,omitempty" yaml:"zone,omitempty"`
-		Labels                     map[string]string                   `json:"labels,omitempty" yaml:"labels,omitempty"`
-		Scopes                     []string                            `json:"scopes,omitempty" yaml:"scopes,omitempty"`
-		Hibernate                  bool                                `json:"hibernate,omitempty"`
-		EnableNestedVirtualization bool                                `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-		EnableC4D                  bool                                `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
+		Account                    GoogleAccount     `json:"account,omitempty"  yaml:"account"`
+		Image                      string            `json:"image,omitempty" yaml:"image,omitempty"`
+		Name                       string            `json:"name,omitempty" yaml:"name,omitempty"`
+		Tags                       []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Size                       string            `json:"size,omitempty" yaml:"size,omitempty"`
+		MachineType                string            `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+		UserData                   string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath               string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+		UserDataKey                string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
+		Disk                       disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
+		Network                    string            `json:"network,omitempty" yaml:"network,omitempty"`
+		Subnetwork                 string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
+		PrivateIP                  bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
+		Zone                       []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
+		Labels                     map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+		Scopes                     []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
+		Hibernate                  bool              `json:"hibernate,omitempty"`
+		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 	}
 
 	GoogleAccount struct {

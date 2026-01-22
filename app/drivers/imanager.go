@@ -19,7 +19,7 @@ type IManager interface {
 	Update(ctx context.Context, instance *types.Instance) error
 	Add(pools ...Pool) error
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, purgerTime time.Duration) error
-	Provision(ctx context.Context, poolName, serverName, ownerID, resourceClass string, machineConfig *types.MachineConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool, reservedCapacity *types.CapacityReservation, isCapacityTask bool) (*types.Instance, *types.CapacityReservation, bool, error) //nolint 	//nolint
+	Provision(ctx context.Context, poolName, serverName, ownerID string, machineConfig *types.MachineConfig, query *types.QueryParams, gitspaceAgentConfig *types.GitspaceAgentConfig, storageConfig *types.StorageConfig, info *common.InstanceInfo, timeout int64, isMarkedForInfraReset bool, reservedCapacity *types.CapacityReservation, isCapacityTask bool) (*types.Instance, *types.CapacityReservation, bool, error) //nolint 	//nolint
 	Destroy(ctx context.Context, poolName string, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
 	DestroyCapacity(ctx context.Context, capacityReservation *types.CapacityReservation) error
 	BuildPools(ctx context.Context) error

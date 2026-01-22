@@ -378,8 +378,7 @@ func (m *Manager) Provision(
 	ctx context.Context,
 	poolName,
 	serverName,
-	ownerID,
-	resourceClass string,
+	ownerID string,
 	machineConfig *types.MachineConfig,
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
@@ -405,7 +404,6 @@ func (m *Manager) Provision(
 			instanceInfo,
 			serverName,
 			ownerID,
-			resourceClass,
 			machineConfig,
 			gitspaceAgentConfig,
 			storageConfig,
@@ -421,7 +419,6 @@ func (m *Manager) Provision(
 		query,
 		serverName,
 		ownerID,
-		resourceClass,
 		machineConfig,
 		gitspaceAgentConfig,
 		storageConfig,
@@ -436,7 +433,7 @@ func (m *Manager) Provision(
 	// TODO: Move to outbox
 	if hotpool {
 		go func(ctx context.Context) {
-			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", "", nil, nil, nil, timeout, nil)
+			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", nil, nil, nil, timeout, nil)
 		}(m.globalCtx)
 	}
 	return instance, nil, hotpool, err
@@ -465,7 +462,7 @@ func (m *Manager) provisionFromPool(
 	ctx context.Context,
 	pool *poolEntry,
 	query *types.QueryParams,
-	serverName, ownerID, resourceClass string,
+	serverName, ownerID string,
 	machineConfig *types.MachineConfig,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -497,7 +494,7 @@ func (m *Manager) provisionFromPool(
 			return nil, nil, false, ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, resourceClass, machineConfig, true, gitspaceAgentConfig, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
+		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, machineConfig, true, gitspaceAgentConfig, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
 		if err != nil {
 			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -696,7 +693,6 @@ func (m *Manager) buildPool(
 		*poolEntry,
 		string,
 		string,
-		string,
 		*types.MachineConfig,
 		*types.GitspaceAgentConfig,
 		*types.StorageConfig,
@@ -748,7 +744,7 @@ func (m *Manager) buildPool(
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", "", nil, nil, nil, 0, nil)
+			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", nil, nil, nil, 0, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				if setupInstanceAsync != nil {
@@ -786,7 +782,6 @@ func (m *Manager) buildPoolWithVariants(
 	setupInstanceWithHibernate func(
 		context.Context,
 		*poolEntry,
-		string,
 		string,
 		string,
 		*types.MachineConfig,
@@ -829,7 +824,7 @@ func (m *Manager) buildPoolWithVariants(
 			go func(ctx context.Context, logr logger.Logger, variantParams *types.SetupInstanceParams, machineConfig *types.MachineConfig) {
 				defer wg.Done()
 
-				inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", "", machineConfig, nil, nil, 0, nil)
+				inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", machineConfig, nil, nil, 0, nil)
 				if err != nil {
 					logr.WithError(err).Errorln("build pool with variants: failed to create instance")
 					if setupInstanceAsync != nil {
@@ -858,11 +853,13 @@ func (m *Manager) setupInstanceParamsToMachineConfig(params *types.SetupInstance
 	}
 
 	machineConfig := &types.MachineConfig{
-		Zones:                params.Zones,
-		MachineType:          params.MachineType,
-		NestedVirtualization: params.NestedVirtualization,
-		Hibernate:            params.Hibernate,
-		VariantID:            params.VariantID,
+		SetupInstanceParams: *params,
+	}
+
+	// Deep copy Zones slice to ensure immutability
+	if len(params.Zones) > 0 {
+		machineConfig.Zones = make([]string, len(params.Zones))
+		copy(machineConfig.Zones, params.Zones)
 	}
 
 	if params.ImageName != "" {
@@ -884,7 +881,7 @@ func (m *Manager) buildPoolWithMutex(ctx context.Context, pool *poolEntry, tlsSe
 func (m *Manager) setupInstanceWithHibernate(
 	ctx context.Context,
 	pool *poolEntry,
-	tlsServerName, ownerID, resourceClass string,
+	tlsServerName, ownerID string,
 	machineConfig *types.MachineConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -895,7 +892,6 @@ func (m *Manager) setupInstanceWithHibernate(
 		pool,
 		tlsServerName,
 		ownerID,
-		resourceClass,
 		machineConfig,
 		false,
 		agentConfig,
@@ -919,7 +915,7 @@ func (m *Manager) setupInstanceWithHibernate(
 func (m *Manager) setupInstance(
 	ctx context.Context,
 	pool *poolEntry,
-	tlsServerName, ownerID, resourceClass string,
+	tlsServerName, ownerID string,
 	machineConfig *types.MachineConfig,
 	inuse bool,
 	agentConfig *types.GitspaceAgentConfig,
@@ -945,8 +941,9 @@ func (m *Manager) setupInstance(
 	createOptions.PluginBinaryFallbackURI = m.pluginBinaryFallbackURI
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
-	createOptions.ResourceClass = resourceClass
 	if machineConfig != nil {
+		// Use ResourceClass from machineConfig
+		createOptions.ResourceClass = machineConfig.ResourceClass
 		createOptions.Zones = machineConfig.Zones
 		createOptions.MachineType = machineConfig.MachineType
 		createOptions.NestedVirtualization = machineConfig.NestedVirtualization
@@ -975,6 +972,15 @@ func (m *Manager) setupInstance(
 			Type:               storageConfig.Type,
 			BootDiskSize:       storageConfig.BootDiskSize,
 			BootDiskType:       storageConfig.BootDiskType,
+		}
+	}
+	// Set boot disk settings from machineConfig if provided and not already set
+	if machineConfig != nil {
+		if machineConfig.DiskSize != "" && createOptions.StorageOpts.BootDiskSize == "" {
+			createOptions.StorageOpts.BootDiskSize = machineConfig.DiskSize
+		}
+		if machineConfig.DiskType != "" && createOptions.StorageOpts.BootDiskType == "" {
+			createOptions.StorageOpts.BootDiskType = machineConfig.DiskType
 		}
 	}
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
@@ -1421,7 +1427,7 @@ func (m *Manager) processExistingInstance(
 	ctx context.Context,
 	pool *poolEntry,
 	instanceInfo *common.InstanceInfo,
-	serverName, ownerID, resourceClass string,
+	serverName, ownerID string,
 	machineConfig *types.MachineConfig,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -1470,7 +1476,6 @@ func (m *Manager) processExistingInstance(
 		pool,
 		serverName,
 		ownerID,
-		resourceClass,
 		machineConfig,
 		true,
 		gitspaceAgentConfig,

@@ -231,6 +231,8 @@ func buildScalablePools(poolConfig *config.PoolFile) []jobs.ScalablePool {
 					NestedVirtualization: variant.NestedVirtualization,
 					Hibernate:            variant.Hibernate,
 					Zones:                variant.Zones,
+					DiskSize:             variant.DiskSize,
+					DiskType:             variant.DiskType,
 				},
 			})
 		}

@@ -256,8 +256,11 @@ func handleCapacityReservation(
 	timeoutSeconds := int64(timeout / time.Second)
 
 	machineConfig := &types.MachineConfig{
-		VMImageConfig:        &r.RequestedVMImageConfig,
-		NestedVirtualization: r.NestedVirtualization,
+		VMImageConfig: &r.RequestedVMImageConfig,
+		SetupInstanceParams: types.SetupInstanceParams{
+			NestedVirtualization: r.NestedVirtualization,
+			ResourceClass:        r.ResourceClass,
+		},
 	}
 	if r.Zone != "" {
 		machineConfig.Zones = []string{r.Zone}
@@ -268,7 +271,6 @@ func handleCapacityReservation(
 		pool,
 		poolManager.GetTLSServerName(),
 		owner,
-		r.ResourceClass,
 		machineConfig,
 		query,
 		nil,
