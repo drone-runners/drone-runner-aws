@@ -23,19 +23,9 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 			params:   nil,
 			expected: nil,
 		},
-	{
-		name: "basic conversion without zones",
-		params: &types.SetupInstanceParams{
-			MachineType:          "n2-standard-4",
-			NestedVirtualization: true,
-			Hibernate:            false,
-			VariantID:            "v1",
-			ResourceClass:        "medium",
-			DiskSize:             100,
-			DiskType:             "pd-ssd",
-		},
-		expected: &types.MachineConfig{
-			SetupInstanceParams: types.SetupInstanceParams{
+		{
+			name: "basic conversion without zones",
+			params: &types.SetupInstanceParams{
 				MachineType:          "n2-standard-4",
 				NestedVirtualization: true,
 				Hibernate:            false,
@@ -44,8 +34,18 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 				DiskSize:             100,
 				DiskType:             "pd-ssd",
 			},
+			expected: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					MachineType:          "n2-standard-4",
+					NestedVirtualization: true,
+					Hibernate:            false,
+					VariantID:            "v1",
+					ResourceClass:        "medium",
+					DiskSize:             100,
+					DiskType:             "pd-ssd",
+				},
+			},
 		},
-	},
 		{
 			name: "conversion with zones - deep copy",
 			params: &types.SetupInstanceParams{
@@ -82,18 +82,6 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 		{
 			name: "conversion with all fields populated",
 			params: &types.SetupInstanceParams{
-			ImageName:            "custom-image",
-			NestedVirtualization: true,
-			MachineType:          "e2-highcpu-16",
-			Hibernate:            true,
-			Zones:                []string{"europe-west1-a", "europe-west1-b", "europe-west1-c"},
-			VariantID:            "premium-variant",
-			DiskSize:             500,
-			DiskType:             "pd-extreme",
-			ResourceClass:        "xlarge",
-		},
-		expected: &types.MachineConfig{
-			SetupInstanceParams: types.SetupInstanceParams{
 				ImageName:            "custom-image",
 				NestedVirtualization: true,
 				MachineType:          "e2-highcpu-16",
@@ -104,6 +92,18 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 				DiskType:             "pd-extreme",
 				ResourceClass:        "xlarge",
 			},
+			expected: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					ImageName:            "custom-image",
+					NestedVirtualization: true,
+					MachineType:          "e2-highcpu-16",
+					Hibernate:            true,
+					Zones:                []string{"europe-west1-a", "europe-west1-b", "europe-west1-c"},
+					VariantID:            "premium-variant",
+					DiskSize:             500,
+					DiskType:             "pd-extreme",
+					ResourceClass:        "xlarge",
+				},
 				VMImageConfig: &spec.VMImageConfig{
 					ImageName: "custom-image",
 				},
@@ -161,9 +161,9 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 			if result.ResourceClass != tt.expected.ResourceClass {
 				t.Errorf("ResourceClass: expected %s, got %s", tt.expected.ResourceClass, result.ResourceClass)
 			}
-		if result.DiskSize != tt.expected.DiskSize {
-			t.Errorf("DiskSize: expected %d, got %d", tt.expected.DiskSize, result.DiskSize)
-		}
+			if result.DiskSize != tt.expected.DiskSize {
+				t.Errorf("DiskSize: expected %d, got %d", tt.expected.DiskSize, result.DiskSize)
+			}
 			if result.DiskType != tt.expected.DiskType {
 				t.Errorf("DiskType: expected %s, got %s", tt.expected.DiskType, result.DiskType)
 			}
