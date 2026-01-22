@@ -297,8 +297,3 @@ func (c *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImage
 	// For AnkaBuild, the image name is the VM ID or VM template name
 	return config.ImageName, nil
 }
-
-// GetMachineType returns an empty string as AnkaBuild does not have a default machine type.
-func (c *config) GetMachineType(_ string, _ bool) string {
-	return ""
-}

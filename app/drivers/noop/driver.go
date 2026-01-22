@@ -122,8 +122,3 @@ func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImage
 	// This is a no-op implementation used for testing
 	return config.ImageName, nil
 }
-
-// GetMachineType returns an empty string as Noop does not have a default machine type.
-func (p *config) GetMachineType(_ string, _ bool) string {
-	return ""
-}

@@ -439,8 +439,11 @@ func handleSetup(
 	}
 
 	machineConfig := &types.MachineConfig{
-		VMImageConfig:        &r.VMImageConfig,
-		NestedVirtualization: r.NestedVirtualization,
+		VMImageConfig: &r.VMImageConfig,
+		SetupInstanceParams: types.SetupInstanceParams{
+			NestedVirtualization: r.NestedVirtualization,
+			ResourceClass:        r.ResourceClass,
+		},
 	}
 	if r.Zone != "" {
 		machineConfig.Zones = []string{r.Zone}
@@ -451,7 +454,6 @@ func handleSetup(
 		pool,
 		poolManager.GetTLSServerName(),
 		owner,
-		r.ResourceClass,
 		machineConfig,
 		query,
 		&r.GitspaceAgentConfig,

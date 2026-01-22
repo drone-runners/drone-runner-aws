@@ -40,8 +40,7 @@ func (d *DistributedManager) Provision(
 	ctx context.Context,
 	poolName,
 	serverName,
-	ownerID,
-	resourceClass string,
+	ownerID string,
 	machineConfig *types.MachineConfig,
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
@@ -61,7 +60,6 @@ func (d *DistributedManager) Provision(
 		pool,
 		serverName,
 		ownerID,
-		resourceClass,
 		machineConfig,
 		gitspaceAgentConfig,
 		storageConfig,
@@ -217,7 +215,6 @@ func (d *DistributedManager) SetupInstanceForPool(
 		pool,
 		d.GetTLSServerName(),
 		"",
-		"",
 		machineConfig,
 		nil,
 		nil,
@@ -230,7 +227,7 @@ func (d *DistributedManager) SetupInstanceForPool(
 func (d *DistributedManager) provisionFromReservedCapacity(
 	ctx context.Context,
 	pool *poolEntry,
-	tlsServerName, ownerID, resourceClass string,
+	tlsServerName, ownerID string,
 	machineConfig *types.MachineConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -256,7 +253,6 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 		pool,
 		tlsServerName,
 		ownerID,
-		resourceClass,
 		machineConfig,
 		true,
 		agentConfig,
@@ -276,7 +272,7 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 func (d *DistributedManager) provisionFromPool(
 	ctx context.Context,
 	pool *poolEntry,
-	tlsServerName, ownerID, resourceClass string,
+	tlsServerName, ownerID string,
 	machineConfig *types.MachineConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -287,11 +283,19 @@ func (d *DistributedManager) provisionFromPool(
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
 	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
-		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, resourceClass, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
+		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 	}
 
-	nestedVirt := machineConfig != nil && machineConfig.NestedVirtualization
-	machineConfig.MachineType = pool.Driver.GetMachineType(resourceClass, nestedVirt)
+	// Variant filtering: select the best matching variant based on machineConfig
+	var selectedVariant *types.PoolVariant
+	if len(pool.PoolVariants) > 0 {
+		selectedVariant = d.filterVariant(ctx, pool, machineConfig)
+		if selectedVariant != nil {
+			// Apply variant configuration to machineConfig
+			d.applyVariantToMachineConfig(machineConfig, selectedVariant)
+		}
+		// If no variant found, continue with default machineConfig
+	}
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
 	allowedStates := []types.InstanceState{types.StateCreated}
@@ -299,6 +303,11 @@ func (d *DistributedManager) provisionFromPool(
 		PoolName:             poolName,
 		MachineType:          machineConfig.MachineType,
 		NestedVirtualization: machineConfig.NestedVirtualization,
+	}
+
+	// Set VariantID: use the selected variant's ID if available, otherwise use "default"
+	if selectedVariant == nil && len(pool.PoolVariants) > 0 {
+		queryParams.VariantID = "default"
 	}
 	if machineConfig.VMImageConfig != nil {
 		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
@@ -352,7 +361,6 @@ func (d *DistributedManager) provisionFromPool(
 		pool,
 		tlsServerName,
 		ownerID,
-		resourceClass,
 		machineConfig,
 		true,
 		agentConfig,
@@ -369,6 +377,97 @@ func (d *DistributedManager) provisionFromPool(
 		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
 	return inst, capacity, false, nil
+}
+
+// filterVariant selects the best matching variant based on machineConfig criteria
+func (d *DistributedManager) filterVariant(ctx context.Context, pool *poolEntry, machineConfig *types.MachineConfig) *types.PoolVariant {
+	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
+
+	// Step 1: Filter by ResourceClass (required)
+	var candidatesByResourceClass []*types.PoolVariant
+	for i := range pool.PoolVariants {
+		if pool.PoolVariants[i].ResourceClass == machineConfig.ResourceClass {
+			candidatesByResourceClass = append(candidatesByResourceClass, &pool.PoolVariants[i])
+		}
+	}
+
+	if len(candidatesByResourceClass) == 0 {
+		logr.WithField("resource_class", machineConfig.ResourceClass).
+			Warnln("provision: no variants found matching resource_class")
+		return nil
+	}
+
+	// Step 2: Further filter by ImageName and NestedVirtualization (optional but preferred)
+	var fullyQualifiedImageName string
+	if machineConfig.VMImageConfig != nil && machineConfig.VMImageConfig.ImageName != "" {
+		fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
+	}
+
+	var refinedCandidates []*types.PoolVariant
+	for _, variant := range candidatesByResourceClass {
+		matchesImage := true
+		matchesNestedVirt := true
+
+		// Check image name if both are specified
+		if fullyQualifiedImageName != "" && variant.ImageName != "" {
+			variantFullyQualifiedImage, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
+			matchesImage = (variantFullyQualifiedImage == fullyQualifiedImageName)
+		}
+
+		// Check nested virtualization if specified in variant
+		if variant.NestedVirtualization != machineConfig.NestedVirtualization {
+			matchesNestedVirt = false
+		}
+
+		if matchesImage && matchesNestedVirt {
+			refinedCandidates = append(refinedCandidates, variant)
+		}
+	}
+
+	// Use refined candidates if any were found, otherwise fall back to resource class matches
+	finalCandidates := refinedCandidates
+	if len(finalCandidates) == 0 {
+		finalCandidates = candidatesByResourceClass
+		logr.WithField("resource_class", machineConfig.ResourceClass).
+			Debugln("provision: no variants matched image/nested_virt filters, using resource_class matches only")
+	}
+
+	// Step 3: If multiple variants remain, log them and return the first one
+	if len(finalCandidates) > 1 {
+		variantIDs := make([]string, len(finalCandidates))
+		for i := range finalCandidates {
+			variantIDs[i] = finalCandidates[i].VariantID
+		}
+		logr.WithField("variant_ids", variantIDs).
+			WithField("selected", finalCandidates[0].VariantID).
+			Infoln("provision: multiple variants matched, selecting first one")
+	} else {
+		logr.WithField("variant_id", finalCandidates[0].VariantID).
+			Debugln("provision: selected variant")
+	}
+
+	return finalCandidates[0]
+}
+
+// applyVariantToMachineConfig applies the selected variant's configuration to machineConfig
+func (d *DistributedManager) applyVariantToMachineConfig(machineConfig *types.MachineConfig, variant *types.PoolVariant) {
+	// Override with variant-specific values if they are set
+	if variant.MachineType != "" {
+		machineConfig.MachineType = variant.MachineType
+	}
+	if len(variant.Zones) > 0 {
+		machineConfig.Zones = variant.Zones
+	}
+	if variant.DiskSize != 0 {
+		machineConfig.DiskSize = variant.DiskSize
+	}
+	if variant.DiskType != "" {
+		machineConfig.DiskType = variant.DiskType
+	}
+	// Set VariantID for tracking
+	machineConfig.VariantID = variant.VariantID
+	// NestedVirtualization and Hibernate are typically not overridden from variant
+	// as they come from the request, but we could add them if needed
 }
 
 // setupInstanceAsync creates an outbox job for setting up the instance
@@ -417,7 +516,7 @@ func (d *DistributedManager) setupInstanceAsync(
 func (d *DistributedManager) setupInstanceWithHibernate(
 	ctx context.Context,
 	pool *poolEntry,
-	tlsServerName, ownerID, resourceClass string,
+	tlsServerName, ownerID string,
 	machineConfig *types.MachineConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -428,7 +527,6 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 		pool,
 		tlsServerName,
 		ownerID,
-		resourceClass,
 		machineConfig,
 		false,
 		agentConfig,

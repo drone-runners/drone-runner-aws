@@ -131,7 +131,8 @@ func (s *Scaler) scalePoolInternal(
 	}
 
 	// Scale each variant
-	for _, variant := range pool.Variants {
+	for i := range pool.Variants {
+		variant := &pool.Variants[i]
 		params := variant.Params // Copy to avoid pointer issues
 		if err := s.scaleVariant(ctx, pool, params.VariantID, variant.MinSize, &params, windowStart, windowEnd, freeCountsByVariant); err != nil {
 			logr.WithError(err).WithField("variant_id", params.VariantID).
