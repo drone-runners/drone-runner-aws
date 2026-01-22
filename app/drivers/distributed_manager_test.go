@@ -55,9 +55,15 @@ func (m *mockDriver) DestroyCapacity(ctx context.Context, capacity *types.Capaci
 func (m *mockDriver) SetTags(ctx context.Context, instance *types.Instance, tags map[string]string) error {
 	return nil
 }
-func (m *mockDriver) RootDir() string        { return "/tmp" }
-func (m *mockDriver) DriverName() string     { return "mock" }
-func (m *mockDriver) CanHibernate() bool     { return false }
+func (m *mockDriver) RootDir() string {
+	return "/tmp"
+}
+func (m *mockDriver) DriverName() string {
+	return "mock"
+}
+func (m *mockDriver) CanHibernate() bool {
+	return false
+}
 
 func TestFilterVariant(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
@@ -351,7 +357,7 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 			expectedConfig: &types.MachineConfig{
 				SetupInstanceParams: types.SetupInstanceParams{
 					MachineType: "existing-type", // Preserved
-					DiskSize:    "50GB",           // Preserved
+					DiskSize:    "50GB",          // Preserved
 					VariantID:   "v5",
 				},
 			},

@@ -378,10 +378,10 @@ func (d *DistributedManager) filterVariant(ctx context.Context, pool *poolEntry,
 	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
 
 	// Step 1: Filter by ResourceClass (required)
-	var candidatesByResourceClass []types.PoolVariant
-	for _, variant := range pool.PoolVariants {
-		if variant.ResourceClass == machineConfig.ResourceClass {
-			candidatesByResourceClass = append(candidatesByResourceClass, variant)
+	var candidatesByResourceClass []*types.PoolVariant
+	for i := range pool.PoolVariants {
+		if pool.PoolVariants[i].ResourceClass == machineConfig.ResourceClass {
+			candidatesByResourceClass = append(candidatesByResourceClass, &pool.PoolVariants[i])
 		}
 	}
 
@@ -397,7 +397,7 @@ func (d *DistributedManager) filterVariant(ctx context.Context, pool *poolEntry,
 		fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
 	}
 
-	var refinedCandidates []types.PoolVariant
+	var refinedCandidates []*types.PoolVariant
 	for _, variant := range candidatesByResourceClass {
 		matchesImage := true
 		matchesNestedVirt := true
@@ -429,8 +429,8 @@ func (d *DistributedManager) filterVariant(ctx context.Context, pool *poolEntry,
 	// Step 3: If multiple variants remain, log them and return the first one
 	if len(finalCandidates) > 1 {
 		variantIDs := make([]string, len(finalCandidates))
-		for i, v := range finalCandidates {
-			variantIDs[i] = v.VariantID
+		for i := range finalCandidates {
+			variantIDs[i] = finalCandidates[i].VariantID
 		}
 		logr.WithField("variant_ids", variantIDs).
 			WithField("selected", finalCandidates[0].VariantID).
@@ -440,7 +440,7 @@ func (d *DistributedManager) filterVariant(ctx context.Context, pool *poolEntry,
 			Debugln("provision: selected variant")
 	}
 
-	return &finalCandidates[0]
+	return finalCandidates[0]
 }
 
 // applyVariantToMachineConfig applies the selected variant's configuration to machineConfig
