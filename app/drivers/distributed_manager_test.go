@@ -296,20 +296,20 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 			name: "apply disk configuration",
 			initialConfig: &types.MachineConfig{
 				SetupInstanceParams: types.SetupInstanceParams{
-					DiskSize: "",
+					DiskSize: 0,
 					DiskType: "",
 				},
 			},
 			variant: &types.PoolVariant{
 				SetupInstanceParams: types.SetupInstanceParams{
 					VariantID: "v3",
-					DiskSize:  "100GB",
+					DiskSize:  100,
 					DiskType:  "pd-ssd",
 				},
 			},
 			expectedConfig: &types.MachineConfig{
 				SetupInstanceParams: types.SetupInstanceParams{
-					DiskSize:  "100GB",
+					DiskSize:  100,
 					DiskType:  "pd-ssd",
 					VariantID: "v3",
 				},
@@ -325,7 +325,7 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 					VariantID:   "v4",
 					MachineType: "c2-standard-8",
 					Zones:       []string{"europe-west1-b"},
-					DiskSize:    "200GB",
+					DiskSize:    200,
 					DiskType:    "pd-balanced",
 				},
 			},
@@ -333,7 +333,7 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 				SetupInstanceParams: types.SetupInstanceParams{
 					MachineType: "c2-standard-8",
 					Zones:       []string{"europe-west1-b"},
-					DiskSize:    "200GB",
+					DiskSize:    200,
 					DiskType:    "pd-balanced",
 					VariantID:   "v4",
 				},
@@ -344,20 +344,20 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 			initialConfig: &types.MachineConfig{
 				SetupInstanceParams: types.SetupInstanceParams{
 					MachineType: "existing-type",
-					DiskSize:    "50GB",
+					DiskSize:    50,
 				},
 			},
 			variant: &types.PoolVariant{
 				SetupInstanceParams: types.SetupInstanceParams{
 					VariantID:   "v5",
 					MachineType: "", // Empty, should not override
-					DiskSize:    "",
+					DiskSize:    0,
 				},
 			},
 			expectedConfig: &types.MachineConfig{
 				SetupInstanceParams: types.SetupInstanceParams{
 					MachineType: "existing-type", // Preserved
-					DiskSize:    "50GB",          // Preserved
+					DiskSize:    50,              // Preserved
 					VariantID:   "v5",
 				},
 			},
@@ -377,7 +377,7 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 				t.Errorf("VariantID: expected %s, got %s", tt.expectedConfig.VariantID, tt.initialConfig.VariantID)
 			}
 			if tt.initialConfig.DiskSize != tt.expectedConfig.DiskSize {
-				t.Errorf("DiskSize: expected %s, got %s", tt.expectedConfig.DiskSize, tt.initialConfig.DiskSize)
+				t.Errorf("DiskSize: expected %d, got %d", tt.expectedConfig.DiskSize, tt.initialConfig.DiskSize)
 			}
 			if tt.initialConfig.DiskType != tt.expectedConfig.DiskType {
 				t.Errorf("DiskType: expected %s, got %s", tt.expectedConfig.DiskType, tt.initialConfig.DiskType)
