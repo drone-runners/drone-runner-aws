@@ -16,7 +16,7 @@ import (
 
 const (
 	initTimeoutSec        = 30 * 60
-	initTimeoutSecForBYOI = 3 * 60 * 60 // 3 hours for BYOI image builds
+	initTimeoutSecForBYOI = 60 * 60
 )
 
 type VMInitTask struct {
