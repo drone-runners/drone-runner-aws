@@ -339,6 +339,9 @@ func (d *DistributedManager) provisionFromPool(
 			Hibernate:            inst.IsHibernated,
 			Zones:                []string{inst.Zone},
 			VariantID:            inst.VariantID,
+			DiskSize:             machineConfig.DiskSize,
+			DiskType:             machineConfig.DiskType,
+			ResourceClass:        machineConfig.ResourceClass,
 		})
 		capacity := &types.CapacityReservation{
 			InstanceID: inst.ID,
