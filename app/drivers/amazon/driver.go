@@ -407,6 +407,115 @@ func (p *amazonConfig) DestroyCapacity(ctx context.Context, capacity *drtypes.Ca
 	return nil
 }
 
+// buildRunInstancesInput constructs the EC2 RunInstancesInput with all configuration
+func (p *amazonConfig) buildRunInstancesInput(
+	resolvedAMI string,
+	userData string,
+	reqCfg *requestConfig,
+	tags map[string]string,
+	volumeTags map[string]string,
+	opts *drtypes.InstanceCreateOpts,
+) *ec2.RunInstancesInput {
+	var iamProfile *types.IamInstanceProfileSpecification
+	if p.iamProfileArn != "" {
+		iamProfile = &types.IamInstanceProfileSpecification{
+			Arn: aws.String(p.iamProfileArn),
+		}
+	}
+
+	in := &ec2.RunInstancesInput{
+		ImageId:            aws.String(resolvedAMI),
+		InstanceType:       types.InstanceType(reqCfg.size),
+		Placement:          &types.Placement{AvailabilityZone: aws.String(reqCfg.availabilityZone)},
+		MinCount:           aws.Int32(1),
+		MaxCount:           aws.Int32(1),
+		IamInstanceProfile: iamProfile,
+		UserData: aws.String(
+			base64.StdEncoding.EncodeToString(
+				[]byte(userData),
+			),
+		),
+		NetworkInterfaces: []types.InstanceNetworkInterfaceSpecification{
+			{
+				AssociatePublicIpAddress: aws.Bool(p.allocPublicIP),
+				DeviceIndex:              aws.Int32(0),
+				SubnetId:                 aws.String(reqCfg.subnet),
+				Groups:                   p.groups,
+			},
+		},
+		TagSpecifications: []types.TagSpecification{
+			{
+				ResourceType: types.ResourceTypeInstance,
+				Tags:         convertTags(tags),
+			},
+		},
+		BlockDeviceMappings: []types.BlockDeviceMapping{
+			{
+				DeviceName: aws.String(p.deviceName),
+				Ebs: &types.EbsBlockDevice{
+					VolumeSize:          aws.Int32(int32(reqCfg.volumeSize)),
+					VolumeType:          types.VolumeType(reqCfg.volumeType),
+					DeleteOnTermination: aws.Bool(true),
+				},
+			},
+		},
+	}
+
+	if len(volumeTags) != 0 {
+		in.TagSpecifications = append(in.TagSpecifications, types.TagSpecification{
+			ResourceType: types.ResourceTypeVolume,
+			Tags:         convertTags(volumeTags),
+		})
+	}
+
+	if p.keyPairName != "" {
+		in.KeyName = aws.String(p.keyPairName)
+	}
+
+	if p.volumeType == "io1" {
+		for i := range in.BlockDeviceMappings {
+			if in.BlockDeviceMappings[i].Ebs != nil {
+				in.BlockDeviceMappings[i].Ebs.Iops = aws.Int32(int32(p.volumeIops))
+			}
+		}
+	}
+
+	if p.kmsKeyID != "" {
+		for i := range in.BlockDeviceMappings {
+			if in.BlockDeviceMappings[i].Ebs != nil {
+				in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
+				in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+			}
+		}
+	}
+
+	if p.CanHibernate() {
+		for i := range in.BlockDeviceMappings {
+			if in.BlockDeviceMappings[i].Ebs != nil {
+				in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
+				if p.kmsKeyID != "" {
+					in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+				}
+			}
+		}
+
+		in.HibernationOptions = &types.HibernationOptionsRequest{
+			Configured: aws.Bool(true),
+		}
+	}
+
+	// Use capacity reservation if provided
+	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
+		in.CapacityReservationSpecification = &types.CapacityReservationSpecification{
+			CapacityReservationTarget: &types.CapacityReservationTarget{
+				CapacityReservationId: aws.String(opts.CapacityReservation.ReservationID),
+			},
+		}
+	}
+
+	return in
+}
+
 // Create an AWS instance for the pool, it will not perform build specific setup.
 //
 //nolint:gocyclo
@@ -477,12 +586,6 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 
 	logr.Traceln("amazon: provisioning VM")
 
-	var iamProfile *types.IamInstanceProfileSpecification
-	if p.iamProfileArn != "" {
-		iamProfile = &types.IamInstanceProfileSpecification{
-			Arn: aws.String(p.iamProfileArn),
-		}
-	}
 	opts.EnableC4D = p.enableC4D
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
@@ -492,94 +595,12 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 		return nil, err
 	}
 
-	in := &ec2.RunInstancesInput{
-		ImageId:            aws.String(resolvedAMI),
-		InstanceType:       types.InstanceType(reqCfg.size),
-		Placement:          &types.Placement{AvailabilityZone: aws.String(reqCfg.availabilityZone)},
-		MinCount:           aws.Int32(1),
-		MaxCount:           aws.Int32(1),
-		IamInstanceProfile: iamProfile,
-		UserData: aws.String(
-			base64.StdEncoding.EncodeToString(
-				[]byte(userData),
-			),
-		),
-		NetworkInterfaces: []types.InstanceNetworkInterfaceSpecification{
-			{
-				AssociatePublicIpAddress: aws.Bool(p.allocPublicIP),
-				DeviceIndex:              aws.Int32(0),
-				SubnetId:                 aws.String(reqCfg.subnet),
-				Groups:                   p.groups,
-			},
-		},
-		TagSpecifications: []types.TagSpecification{
-			{
-				ResourceType: types.ResourceTypeInstance,
-				Tags:         convertTags(tags),
-			},
-		},
-		BlockDeviceMappings: []types.BlockDeviceMapping{
-			{
-				DeviceName: aws.String(p.deviceName),
-				Ebs: &types.EbsBlockDevice{
-					VolumeSize:          aws.Int32(int32(reqCfg.volumeSize)),
-					VolumeType:          types.VolumeType(reqCfg.volumeType),
-					DeleteOnTermination: aws.Bool(true),
-				},
-			},
-		},
-	}
-	if len(volumeTags) != 0 {
-		in.TagSpecifications = append(in.TagSpecifications, types.TagSpecification{
-			ResourceType: types.ResourceTypeVolume,
-			Tags:         convertTags(volumeTags),
-		})
-	}
-	if p.keyPairName != "" {
-		in.KeyName = aws.String(p.keyPairName)
-	}
+	// Build the RunInstances input
+	in := p.buildRunInstancesInput(resolvedAMI, userData, reqCfg, tags, volumeTags, opts)
 
-	if p.volumeType == "io1" {
-		for i := range in.BlockDeviceMappings {
-			if in.BlockDeviceMappings[i].Ebs != nil {
-				in.BlockDeviceMappings[i].Ebs.Iops = aws.Int32(int32(p.volumeIops))
-			}
-		}
-	}
-
-	if p.kmsKeyID != "" {
-		for i := range in.BlockDeviceMappings {
-			if in.BlockDeviceMappings[i].Ebs != nil {
-				in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
-				in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
-			}
-		}
-	}
-
-	if p.CanHibernate() {
-		for i := range in.BlockDeviceMappings {
-			if in.BlockDeviceMappings[i].Ebs != nil {
-				in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
-				if p.kmsKeyID != "" {
-					in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
-				}
-			}
-		}
-
-		in.HibernationOptions = &types.HibernationOptionsRequest{
-			Configured: aws.Bool(true),
-		}
-	}
-
-	// Use capacity reservation if provided
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
 		logr.WithField("reservation_id", opts.CapacityReservation.ReservationID).
 			Debugln("amazon: using capacity reservation")
-		in.CapacityReservationSpecification = &types.CapacityReservationSpecification{
-			CapacityReservationTarget: &types.CapacityReservationTarget{
-				CapacityReservationId: aws.String(opts.CapacityReservation.ReservationID),
-			},
-		}
 	}
 
 	// Create persistent disks first

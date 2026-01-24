@@ -1,0 +1,22 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+  generation: 1
+  name: ti-service
+  namespace: prod3
+spec:
+  endpoints:
+  - interval: 120s
+    path: /metrics
+    port: 8078
+  selector:
+    matchLabels:
+      app: ti-service
+  targetLabels:
+    metadata:
+    - pod
+    - container
+status:
+  conditions:

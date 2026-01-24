@@ -1480,6 +1480,6 @@ func (s *mockStrategy) CanCreate(minCount, maxCount, busy, free int) bool {
 	return true
 }
 
-func (s *mockStrategy) CountCreateRemove(minCount, maxCount, busy, free int) (int, int) {
+func (s *mockStrategy) CountCreateRemove(minCount, maxCount, busy, free int) (createCount int, removeCount int) {
 	return 0, 0
 }
