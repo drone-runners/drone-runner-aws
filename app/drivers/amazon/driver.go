@@ -17,24 +17,46 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
-	"github.com/drone-runners/drone-runner-aws/types"
+	drtypes "github.com/drone-runners/drone-runner-aws/types"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dchest/uniuri"
 
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 )
 
-var _ drivers.Driver = (*config)(nil)
+var _ drivers.Driver = (*amazonConfig)(nil)
 
-// config is a struct that implements drivers.Pool interface
-type config struct {
+// ec2ClientAPI is an interface for EC2 client operations
+type ec2ClientAPI interface {
+	DescribeRegions(ctx context.Context, params *ec2.DescribeRegionsInput, optFns ...func(*ec2.Options)) (*ec2.DescribeRegionsOutput, error)
+	RunInstances(ctx context.Context, params *ec2.RunInstancesInput, optFns ...func(*ec2.Options)) (*ec2.RunInstancesOutput, error)
+	DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
+	TerminateInstances(ctx context.Context, params *ec2.TerminateInstancesInput, optFns ...func(*ec2.Options)) (*ec2.TerminateInstancesOutput, error)
+	StopInstances(ctx context.Context, params *ec2.StopInstancesInput, optFns ...func(*ec2.Options)) (*ec2.StopInstancesOutput, error)
+	StartInstances(ctx context.Context, params *ec2.StartInstancesInput, optFns ...func(*ec2.Options)) (*ec2.StartInstancesOutput, error)
+	DescribeImages(ctx context.Context, params *ec2.DescribeImagesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeImagesOutput, error)
+	CreateSecurityGroup(ctx context.Context, params *ec2.CreateSecurityGroupInput, optFns ...func(*ec2.Options)) (*ec2.CreateSecurityGroupOutput, error)
+	DescribeSecurityGroups(ctx context.Context, params *ec2.DescribeSecurityGroupsInput, optFns ...func(*ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error)
+	AuthorizeSecurityGroupIngress(ctx context.Context, params *ec2.AuthorizeSecurityGroupIngressInput, optFns ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput, error)
+	CreateVolume(ctx context.Context, params *ec2.CreateVolumeInput, optFns ...func(*ec2.Options)) (*ec2.CreateVolumeOutput, error)
+	DescribeVolumes(ctx context.Context, params *ec2.DescribeVolumesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeVolumesOutput, error)
+	AttachVolume(ctx context.Context, params *ec2.AttachVolumeInput, optFns ...func(*ec2.Options)) (*ec2.AttachVolumeOutput, error)
+	DeleteVolume(ctx context.Context, params *ec2.DeleteVolumeInput, optFns ...func(*ec2.Options)) (*ec2.DeleteVolumeOutput, error)
+	CreateTags(ctx context.Context, params *ec2.CreateTagsInput, optFns ...func(*ec2.Options)) (*ec2.CreateTagsOutput, error)
+	GetConsoleOutput(ctx context.Context, params *ec2.GetConsoleOutputInput, optFns ...func(*ec2.Options)) (*ec2.GetConsoleOutputOutput, error)
+	CreateCapacityReservation(ctx context.Context, params *ec2.CreateCapacityReservationInput, optFns ...func(*ec2.Options)) (*ec2.CreateCapacityReservationOutput, error)
+	CancelCapacityReservation(ctx context.Context, params *ec2.CancelCapacityReservationInput, optFns ...func(*ec2.Options)) (*ec2.CancelCapacityReservationOutput, error)
+}
+
+// amazonConfig is a struct that implements drivers.Pool interface
+type amazonConfig struct {
 	spotInstance     bool
 	region           string
 	availabilityZone string
@@ -67,7 +89,7 @@ type config struct {
 	hibernate     bool
 	zoneDetails   []cf.ZoneInfo
 
-	service *ec2.EC2
+	service ec2ClientAPI
 
 	// AMI cache
 	amiCache  *AMICache
@@ -91,44 +113,55 @@ type requestConfig struct {
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
-	p := new(config)
+	p := new(amazonConfig)
 	for _, opt := range opts {
 		opt(p)
 	}
 	// setup service
 	if p.service == nil {
-		config := &aws.Config{
-			Region:     aws.String(p.region),
-			MaxRetries: aws.Int(p.retries),
+		ctx := context.Background()
+
+		// Load default config
+		cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(p.region))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load AWS config: %w", err)
 		}
+
+		// Override with static credentials if provided
 		if p.accessKeyID != "" && p.secretAccessKey != "" {
-			if p.sessionToken != "" {
-				config.Credentials = credentials.NewStaticCredentials(p.accessKeyID, p.secretAccessKey, p.sessionToken)
-			} else {
-				config.Credentials = credentials.NewStaticCredentials(p.accessKeyID, p.secretAccessKey, "")
-			}
+			cfg.Credentials = credentials.NewStaticCredentialsProvider(
+				p.accessKeyID,
+				p.secretAccessKey,
+				p.sessionToken,
+			)
 		}
-		mySession := session.Must(session.NewSession())
-		p.service = ec2.New(mySession, config)
+
+		// Note: SDK v2 handles retries differently via retry modes
+		// The retries field may need to be configured via config.WithRetryMaxAttempts
+		if p.retries > 0 {
+			cfg.RetryMaxAttempts = p.retries
+		}
+
+		p.service = ec2.NewFromConfig(cfg)
 	}
 	// Initialize AMI cache
 	p.amiCache = NewAMICache()
 	return p, nil
 }
 
-func (p *config) DriverName() string {
-	return string(types.Amazon)
+func (p *amazonConfig) DriverName() string {
+	return string(drtypes.Amazon)
 }
 
-func (p *config) InstanceType() string {
+func (p *amazonConfig) InstanceType() string {
 	return p.image
 }
 
-func (p *config) RootDir() string {
+func (p *amazonConfig) RootDir() string {
 	return p.rootDir
 }
 
-func (p *config) GetFullyQualifiedImage(ctx context.Context, config *types.VMImageConfig) (string, error) {
+func (p *amazonConfig) GetFullyQualifiedImage(ctx context.Context, config *drtypes.VMImageConfig) (string, error) {
 	imageName := p.image
 	// If no image name is provided, return the default image
 	if config.ImageName != "" {
@@ -149,28 +182,28 @@ func (p *config) GetFullyQualifiedImage(ctx context.Context, config *types.VMIma
 	return resolvedAMI, nil
 }
 
-func (p *config) CanHibernate() bool {
+func (p *amazonConfig) CanHibernate() bool {
 	return p.hibernate
 }
 
 // Ping checks that we can log into EC2, and the regions respond
-func (p *config) Ping(ctx context.Context) error {
+func (p *amazonConfig) Ping(ctx context.Context) error {
 	client := p.service
 
 	allRegions := true
 	input := &ec2.DescribeRegionsInput{
 		AllRegions: &allRegions,
 	}
-	_, err := client.DescribeRegionsWithContext(ctx, input)
+	_, err := client.DescribeRegions(ctx, input)
 
 	return err
 }
 
-func lookupCreateSecurityGroupID(ctx context.Context, client *ec2.EC2, vpc string) (string, error) {
+func lookupCreateSecurityGroupID(ctx context.Context, client ec2ClientAPI, vpc string) (string, error) {
 	input := &ec2.DescribeSecurityGroupsInput{
-		GroupNames: []*string{aws.String(defaultSecurityGroupName)},
+		GroupNames: []string{defaultSecurityGroupName},
 	}
-	securityGroupResponse, lookupErr := client.DescribeSecurityGroupsWithContext(ctx, input)
+	securityGroupResponse, lookupErr := client.DescribeSecurityGroups(ctx, input)
 	if lookupErr != nil || len(securityGroupResponse.SecurityGroups) == 0 {
 		// create the security group
 		inputGroup := &ec2.CreateSecurityGroupInput{
@@ -181,18 +214,18 @@ func lookupCreateSecurityGroupID(ctx context.Context, client *ec2.EC2, vpc strin
 		if vpc != "" {
 			inputGroup.VpcId = aws.String(vpc)
 		}
-		createdGroup, createGroupErr := client.CreateSecurityGroupWithContext(ctx, inputGroup)
+		createdGroup, createGroupErr := client.CreateSecurityGroup(ctx, inputGroup)
 		if createGroupErr != nil {
 			return "", fmt.Errorf("failed to create security group: %s. %s", defaultSecurityGroupName, createGroupErr)
 		}
 		ingress := &ec2.AuthorizeSecurityGroupIngressInput{
-			GroupId: aws.String(*createdGroup.GroupId),
-			IpPermissions: []*ec2.IpPermission{
+			GroupId: createdGroup.GroupId,
+			IpPermissions: []types.IpPermission{
 				{
 					IpProtocol: aws.String("tcp"),
-					FromPort:   aws.Int64(lehelper.LiteEnginePort),
-					ToPort:     aws.Int64(lehelper.LiteEnginePort),
-					IpRanges: []*ec2.IpRange{
+					FromPort:   aws.Int32(int32(lehelper.LiteEnginePort)),
+					ToPort:     aws.Int32(int32(lehelper.LiteEnginePort)),
+					IpRanges: []types.IpRange{
 						{
 							CidrIp: aws.String("0.0.0.0/0"),
 						},
@@ -200,7 +233,7 @@ func lookupCreateSecurityGroupID(ctx context.Context, client *ec2.EC2, vpc strin
 				},
 			},
 		}
-		_, ingressErr := client.AuthorizeSecurityGroupIngressWithContext(ctx, ingress)
+		_, ingressErr := client.AuthorizeSecurityGroupIngress(ctx, ingress)
 		if ingressErr != nil {
 			return "", fmt.Errorf("failed to create ingress rules for security group: %s. %s", defaultSecurityGroupName, ingressErr)
 		}
@@ -210,18 +243,20 @@ func lookupCreateSecurityGroupID(ctx context.Context, client *ec2.EC2, vpc strin
 }
 
 // lookup Security Group ID and check it has the correct ingress rules
-func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) error {
+func checkIngressRules(ctx context.Context, client ec2ClientAPI, groupID string) error {
 	input := &ec2.DescribeSecurityGroupsInput{
-		GroupIds: []*string{aws.String(groupID)},
+		GroupIds: []string{groupID},
 	}
-	securityGroupResponse, lookupErr := client.DescribeSecurityGroupsWithContext(ctx, input)
+	securityGroupResponse, lookupErr := client.DescribeSecurityGroups(ctx, input)
 	if lookupErr != nil || len(securityGroupResponse.SecurityGroups) == 0 {
 		return fmt.Errorf("failed to lookup security group: %s. %s", groupID, lookupErr)
 	}
 	securityGroup := securityGroupResponse.SecurityGroups[0]
 	found := false
 	for _, permission := range securityGroup.IpPermissions {
-		if *permission.IpProtocol == "tcp" && *permission.FromPort == lehelper.LiteEnginePort && *permission.ToPort == lehelper.LiteEnginePort {
+		if permission.IpProtocol != nil && *permission.IpProtocol == "tcp" &&
+			permission.FromPort != nil && *permission.FromPort == int32(lehelper.LiteEnginePort) &&
+			permission.ToPort != nil && *permission.ToPort == int32(lehelper.LiteEnginePort) {
 			found = true
 			break
 		}
@@ -233,7 +268,7 @@ func checkIngressRules(ctx context.Context, client *ec2.EC2, groupID string) err
 }
 
 // ReserveCapacity reserves capacity for a VM
-func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
+func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.InstanceCreateOpts) (*drtypes.CapacityReservation, error) {
 	client := p.service
 
 	// Get request-specific configuration without mutating shared state
@@ -243,7 +278,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	}
 
 	logr := logger.FromContext(ctx).
-		WithField("driver", types.Amazon).
+		WithField("driver", drtypes.Amazon).
 		WithField("instance_type", reqCfg.size).
 		WithField("availability_zone", reqCfg.availabilityZone).
 		WithField("pool", opts.PoolName)
@@ -274,23 +309,24 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	// Create the capacity reservation
 	input := &ec2.CreateCapacityReservationInput{
 		InstanceType:          aws.String(reqCfg.size),
-		InstancePlatform:      aws.String(instancePlatform),
+		InstancePlatform:      types.CapacityReservationInstancePlatform(instancePlatform),
 		AvailabilityZone:      aws.String(reqCfg.availabilityZone),
-		InstanceCount:         aws.Int64(1),
-		EndDateType:           aws.String("unlimited"), // No end date
-		InstanceMatchCriteria: aws.String("targeted"),  // Instances must explicitly target this reservation
-		TagSpecifications: []*ec2.TagSpecification{
+		InstanceCount:         aws.Int32(1),
+		EndDateType:           types.EndDateTypeUnlimited,          // No end date
+		InstanceMatchCriteria: types.InstanceMatchCriteriaTargeted, // Instances must explicitly target this reservation
+		TagSpecifications: []types.TagSpecification{
 			{
-				ResourceType: aws.String("capacity-reservation"),
+				ResourceType: types.ResourceTypeCapacityReservation,
 				Tags:         convertTags(buildHarnessTags(opts)),
 			},
 		},
 	}
 
-	result, err := client.CreateCapacityReservationWithContext(ctx, input)
+	result, err := client.CreateCapacityReservation(ctx, input)
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			if awsErr.Code() == "InsufficientInstanceCapacity" {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "InsufficientInstanceCapacity" {
 				logr.WithError(err).Errorln("amazon: insufficient capacity available")
 				return nil, &ierrors.ErrCapacityUnavailable{Driver: p.DriverName()}
 			}
@@ -299,11 +335,11 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 		return nil, &ierrors.ErrCapacityUnavailable{Driver: p.DriverName()}
 	}
 
-	reservationID := aws.StringValue(result.CapacityReservation.CapacityReservationId)
+	reservationID := aws.ToString(result.CapacityReservation.CapacityReservationId)
 
 	logr.WithField("reservation_id", reservationID).Infoln("amazon: capacity reservation created successfully")
 
-	return &types.CapacityReservation{
+	return &drtypes.CapacityReservation{
 		StageID:       "", // Will be set by the caller
 		PoolName:      opts.PoolName,
 		InstanceID:    "",
@@ -313,7 +349,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 }
 
 // DestroyCapacity destroys capacity for a VM
-func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error) {
+func (p *amazonConfig) DestroyCapacity(ctx context.Context, capacity *drtypes.CapacityReservation) (err error) {
 	if capacity == nil || capacity.ReservationID == "" {
 		return fmt.Errorf("invalid capacity reservation: missing reservation ID")
 	}
@@ -321,7 +357,7 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("driver", types.Amazon).
+		WithField("driver", drtypes.Amazon).
 		WithField("reservation", capacity.ReservationID).
 		WithField("pool", capacity.PoolName)
 
@@ -332,11 +368,12 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 		CapacityReservationId: aws.String(capacity.ReservationID),
 	}
 
-	_, err = client.CancelCapacityReservationWithContext(ctx, input)
+	_, err = client.CancelCapacityReservation(ctx, input)
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
 			// If the reservation doesn't exist, consider it already deleted
-			if awsErr.Code() == "InvalidCapacityReservationId.NotFound" {
+			if apiErr.ErrorCode() == "InvalidCapacityReservationId.NotFound" {
 				logr.Warnln("amazon: capacity reservation already deleted or not found")
 				return nil
 			}
@@ -352,7 +389,7 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 // Create an AWS instance for the pool, it will not perform build specific setup.
 //
 //nolint:gocyclo
-func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
+func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateOpts) (instance *drtypes.Instance, err error) {
 	client := p.service
 	startTime := time.Now()
 
@@ -368,7 +405,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	logr := logger.FromContext(ctx).
-		WithField("driver", types.Amazon).
+		WithField("driver", drtypes.Amazon).
 		WithField("ami", p.InstanceType()).
 		WithField("pool", opts.PoolName).
 		WithField("region", p.region).
@@ -416,9 +453,9 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	logr.Traceln("amazon: provisioning VM")
 
-	var iamProfile *ec2.IamInstanceProfileSpecification
+	var iamProfile *types.IamInstanceProfileSpecification
 	if p.iamProfileArn != "" {
-		iamProfile = &ec2.IamInstanceProfileSpecification{
+		iamProfile = &types.IamInstanceProfileSpecification{
 			Arn: aws.String(p.iamProfileArn),
 		}
 	}
@@ -433,44 +470,44 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	in := &ec2.RunInstancesInput{
 		ImageId:            aws.String(resolvedAMI),
-		InstanceType:       aws.String(reqCfg.size),
-		Placement:          &ec2.Placement{AvailabilityZone: aws.String(reqCfg.availabilityZone)},
-		MinCount:           aws.Int64(1),
-		MaxCount:           aws.Int64(1),
+		InstanceType:       types.InstanceType(reqCfg.size),
+		Placement:          &types.Placement{AvailabilityZone: aws.String(reqCfg.availabilityZone)},
+		MinCount:           aws.Int32(1),
+		MaxCount:           aws.Int32(1),
 		IamInstanceProfile: iamProfile,
 		UserData: aws.String(
 			base64.StdEncoding.EncodeToString(
 				[]byte(userData),
 			),
 		),
-		NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
+		NetworkInterfaces: []types.InstanceNetworkInterfaceSpecification{
 			{
 				AssociatePublicIpAddress: aws.Bool(p.allocPublicIP),
-				DeviceIndex:              aws.Int64(0),
+				DeviceIndex:              aws.Int32(0),
 				SubnetId:                 aws.String(reqCfg.subnet),
-				Groups:                   aws.StringSlice(p.groups),
+				Groups:                   p.groups,
 			},
 		},
-		TagSpecifications: []*ec2.TagSpecification{
+		TagSpecifications: []types.TagSpecification{
 			{
-				ResourceType: aws.String("instance"),
+				ResourceType: types.ResourceTypeInstance,
 				Tags:         convertTags(tags),
 			},
 		},
-		BlockDeviceMappings: []*ec2.BlockDeviceMapping{
+		BlockDeviceMappings: []types.BlockDeviceMapping{
 			{
 				DeviceName: aws.String(p.deviceName),
-				Ebs: &ec2.EbsBlockDevice{
-					VolumeSize:          aws.Int64(reqCfg.volumeSize),
-					VolumeType:          aws.String(reqCfg.volumeType),
+				Ebs: &types.EbsBlockDevice{
+					VolumeSize:          aws.Int32(int32(reqCfg.volumeSize)),
+					VolumeType:          types.VolumeType(reqCfg.volumeType),
 					DeleteOnTermination: aws.Bool(true),
 				},
 			},
 		},
 	}
 	if len(volumeTags) != 0 {
-		in.TagSpecifications = append(in.TagSpecifications, &ec2.TagSpecification{
-			ResourceType: aws.String("volume"),
+		in.TagSpecifications = append(in.TagSpecifications, types.TagSpecification{
+			ResourceType: types.ResourceTypeVolume,
 			Tags:         convertTags(volumeTags),
 		})
 	}
@@ -479,27 +516,27 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	if p.volumeType == "io1" {
-		for _, blockDeviceMapping := range in.BlockDeviceMappings {
-			blockDeviceMapping.Ebs.Iops = aws.Int64(p.volumeIops)
+		for i := range in.BlockDeviceMappings {
+			in.BlockDeviceMappings[i].Ebs.Iops = aws.Int32(int32(p.volumeIops))
 		}
 	}
 
 	if p.kmsKeyID != "" {
-		for _, blockDeviceMapping := range in.BlockDeviceMappings {
-			blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
-			blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+		for i := range in.BlockDeviceMappings {
+			in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
+			in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
 		}
 	}
 
 	if p.CanHibernate() {
-		for _, blockDeviceMapping := range in.BlockDeviceMappings {
-			blockDeviceMapping.Ebs.Encrypted = aws.Bool(true)
+		for i := range in.BlockDeviceMappings {
+			in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
 			if p.kmsKeyID != "" {
-				blockDeviceMapping.Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+				in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
 			}
 		}
 
-		in.HibernationOptions = &ec2.HibernationOptionsRequest{
+		in.HibernationOptions = &types.HibernationOptionsRequest{
 			Configured: aws.Bool(true),
 		}
 	}
@@ -508,8 +545,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
 		logr.WithField("reservation_id", opts.CapacityReservation.ReservationID).
 			Debugln("amazon: using capacity reservation")
-		in.CapacityReservationSpecification = &ec2.CapacityReservationSpecification{
-			CapacityReservationTarget: &ec2.CapacityReservationTarget{
+		in.CapacityReservationSpecification = &types.CapacityReservationSpecification{
+			CapacityReservationTarget: &types.CapacityReservationTarget{
 				CapacityReservationId: aws.String(opts.CapacityReservation.ReservationID),
 			},
 		}
@@ -522,7 +559,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return nil, err
 	}
 
-	runResult, err := client.RunInstancesWithContext(ctx, in)
+	runResult, err := client.RunInstances(ctx, in)
 	if err != nil {
 		logr.WithError(err).
 			Errorln("amazon: [provision] failed to create VMs")
@@ -542,7 +579,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	logr.Debugln("amazon: [provision] created instance")
 
 	// poll the amazon endpoint for server updates and exit when a network address is allocated.
-	var amazonInstance *ec2.Instance
+	var amazonInstance *types.Instance
 	amazonInstance, err = p.pollInstanceIPAddr(ctx, *awsInstanceID, logr)
 	if err != nil {
 		return nil, err
@@ -551,7 +588,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	// Now that instance is running, attach volumes if any
 	if len(volumes) > 0 {
 		logr.Debugln("amazon: [provision] attaching volumes to the instance")
-		if attachVolumesErr := p.attachVolumes(ctx, awsInstanceID, volumes, logr); attachVolumesErr != nil {
+		if attachVolumesErr := p.attachVolumes(ctx, *awsInstanceID, volumes, logr); attachVolumesErr != nil {
 			return nil, err
 		}
 	}
@@ -562,18 +599,18 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	labelsBytes, marshalErr := json.Marshal(opts.Labels)
 	if marshalErr != nil {
-		return &types.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
+		return &drtypes.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
 	}
 	gitspacePortMappings := make(map[int]int)
 	for _, port := range opts.GitspaceOpts.Ports {
 		gitspacePortMappings[port] = port
 	}
 
-	instance = &types.Instance{
+	instance = &drtypes.Instance{
 		ID:                   instanceID,
 		Name:                 instanceID,
-		Provider:             types.Amazon, // this is driver, though its the old legacy name of provider
-		State:                types.StateCreated,
+		Provider:             drtypes.Amazon, // this is driver, though its the old legacy name of provider
+		State:                drtypes.StateCreated,
 		Pool:                 opts.PoolName,
 		Image:                resolvedAMI,
 		Zone:                 reqCfg.availabilityZone,
@@ -601,14 +638,14 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return instance, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *amazonConfig) Destroy(ctx context.Context, instances []*drtypes.Instance) (err error) {
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
 // DestroyInstanceAndStorage destroys the server AWS EC2 instances.
-func (p *config) DestroyInstanceAndStorage(
+func (p *amazonConfig) DestroyInstanceAndStorage(
 	ctx context.Context,
-	instances []*types.Instance,
+	instances []*drtypes.Instance,
 	storageCleanupType *storage.CleanupType,
 ) (err error) {
 	var instanceIDs []string
@@ -623,14 +660,11 @@ func (p *config) DestroyInstanceAndStorage(
 
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
-		WithField("driver", types.Amazon)
+		WithField("driver", drtypes.Amazon)
 
-	awsIDs := make([]*string, len(instanceIDs))
-	for i, instanceID := range instanceIDs {
-		awsIDs[i] = aws.String(instanceID)
-	}
+	awsIDs := instanceIDs
 
-	var volumesToDelete []*string
+	var volumesToDelete []string
 	if storageCleanupType != nil && *storageCleanupType == storage.Delete {
 		vols, findVolumesErr := p.findPersistentVolumes(ctx, instances, logr)
 		if findVolumesErr != nil {
@@ -639,7 +673,7 @@ func (p *config) DestroyInstanceAndStorage(
 		volumesToDelete = vols
 	}
 
-	_, err = client.TerminateInstances(&ec2.TerminateInstancesInput{InstanceIds: awsIDs})
+	_, err = client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: awsIDs})
 	if err != nil {
 		err = fmt.Errorf("failed to terminate instances: %v", err)
 		logr.Error(err)
@@ -655,10 +689,10 @@ func (p *config) DestroyInstanceAndStorage(
 	return nil
 }
 
-func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {
+func (p *amazonConfig) Logs(ctx context.Context, instanceID string) (string, error) {
 	client := p.service
 
-	output, err := client.GetConsoleOutputWithContext(ctx, &ec2.GetConsoleOutputInput{
+	output, err := client.GetConsoleOutput(ctx, &ec2.GetConsoleOutputInput{
 		InstanceId: aws.String(instanceID),
 	})
 	if err != nil {
@@ -671,23 +705,23 @@ func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {
 	return string(decoded), nil
 }
 
-func (p *config) SetTags(ctx context.Context, instance *types.Instance,
+func (p *amazonConfig) SetTags(ctx context.Context, instance *drtypes.Instance,
 	tags map[string]string) error {
 	in := &ec2.CreateTagsInput{
-		Resources: []*string{aws.String(instance.ID)},
+		Resources: []string{instance.ID},
 	}
 	logr := logger.FromContext(ctx).
 		WithField("id", instance.ID).
-		WithField("driver", types.Amazon)
+		WithField("driver", drtypes.Amazon)
 	for key, value := range tags {
-		in.Tags = append(in.Tags, &ec2.Tag{
+		in.Tags = append(in.Tags, types.Tag{
 			Key:   aws.String(key),
 			Value: aws.String(value),
 		})
 	}
 	var err error
 	for i := 0; i < tagRetries; i++ {
-		_, err = p.service.CreateTagsWithContext(ctx, in)
+		_, err = p.service.CreateTags(ctx, in)
 		if err == nil {
 			return nil
 		}
@@ -698,16 +732,16 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return err
 }
 
-func (p *config) Hibernate(ctx context.Context, instanceID, poolName, _ string) error {
+func (p *amazonConfig) Hibernate(ctx context.Context, instanceID, poolName, _ string) error {
 	logr := logger.FromContext(ctx).
-		WithField("driver", types.Amazon).
+		WithField("driver", drtypes.Amazon).
 		WithField("pool", poolName).
 		WithField("instanceID", instanceID).
 		WithField("hibernate", p.hibernate)
 
 	client := p.service
-	_, err := client.StopInstancesWithContext(ctx, &ec2.StopInstancesInput{
-		InstanceIds: []*string{aws.String(instanceID)},
+	_, err := client.StopInstances(ctx, &ec2.StopInstancesInput{
+		InstanceIds: []string{instanceID},
 		Hibernate:   aws.Bool(p.hibernate),
 	})
 	if err != nil {
@@ -724,14 +758,12 @@ func (p *config) Hibernate(ctx context.Context, instanceID, poolName, _ string) 
 }
 
 func isHibernateRetryable(origErr error) bool {
-	if request.IsErrorRetryable(origErr) {
-		return true
-	}
-
-	if awsErr, ok := origErr.(awserr.Error); ok {
+	// Check if it's a Smithy API error
+	var apiErr smithy.APIError
+	if errors.As(origErr, &apiErr) {
 		// Amazon linux 2 instance return error message on first try:
 		// UnsupportedOperation: Instance is not ready to hibernate yet, retry in a few minutes
-		if awsErr.Code() == "UnsupportedOperation" {
+		if apiErr.ErrorCode() == "UnsupportedOperation" {
 			return true
 		}
 	}
@@ -739,11 +771,11 @@ func isHibernateRetryable(origErr error) bool {
 	return false
 }
 
-func (p *config) Start(ctx context.Context, instance *types.Instance, poolName string) (string, error) {
+func (p *amazonConfig) Start(ctx context.Context, instance *drtypes.Instance, poolName string) (string, error) {
 	client := p.service
 
 	logr := logger.FromContext(ctx).
-		WithField("driver", types.Amazon).
+		WithField("driver", drtypes.Amazon).
 		WithField("pool", poolName).
 		WithField("instanceID", instance.ID)
 
@@ -753,18 +785,19 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, poolName s
 	}
 
 	state := p.getState(amazonInstance)
-	if state == ec2.InstanceStateNameRunning {
+	if state == string(types.InstanceStateNameRunning) {
 		return p.getIP(amazonInstance), nil
-	} else if state == ec2.InstanceStateNameStopping {
+	} else if state == string(types.InstanceStateNameStopping) {
 		logr.Traceln("aws: waiting for instance to stop")
-		waitErr := client.WaitUntilInstanceStoppedWithContext(ctx, &ec2.DescribeInstancesInput{InstanceIds: []*string{aws.String(instance.ID)}})
+		waiter := ec2.NewInstanceStoppedWaiter(client)
+		waitErr := waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instance.ID}}, 5*time.Minute)
 		if waitErr != nil {
 			logr.WithError(waitErr).Warnln("aws: instance failed to stop. Proceeding with starting the instance")
 		}
 	}
 
-	_, err = client.StartInstancesWithContext(ctx,
-		&ec2.StartInstancesInput{InstanceIds: []*string{aws.String(instance.ID)}})
+	_, err = client.StartInstances(ctx,
+		&ec2.StartInstancesInput{InstanceIds: []string{instance.ID}})
 	if err != nil {
 		logr.WithError(err).
 			Errorln("aws: failed to start VMs")
@@ -783,7 +816,7 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, poolName s
 
 // getDynamicConfig extracts request-specific configuration from opts without mutating shared state.
 // This prevents race conditions when multiple requests use the same pool concurrently.
-func (p *config) getDynamicConfig(opts *types.InstanceCreateOpts) (*requestConfig, error) {
+func (p *amazonConfig) getDynamicConfig(opts *drtypes.InstanceCreateOpts) (*requestConfig, error) {
 	cfg := &requestConfig{
 		// Start with pool defaults
 		availabilityZone: p.availabilityZone,
@@ -824,7 +857,7 @@ func (p *config) getDynamicConfig(opts *types.InstanceCreateOpts) (*requestConfi
 	return cfg, nil
 }
 
-func (p *config) getIP(amazonInstance *ec2.Instance) string {
+func (p *amazonConfig) getIP(amazonInstance *types.Instance) string {
 	if p.allocPublicIP {
 		if amazonInstance.PublicIpAddress == nil {
 			return ""
@@ -838,26 +871,22 @@ func (p *config) getIP(amazonInstance *ec2.Instance) string {
 	return *amazonInstance.PrivateIpAddress
 }
 
-func (p *config) getState(amazonInstance *ec2.Instance) string {
+func (p *amazonConfig) getState(amazonInstance *types.Instance) string {
 	if amazonInstance.State == nil {
 		return ""
 	}
 
-	if amazonInstance.State.Name == nil {
-		return ""
-	}
-
-	return *amazonInstance.State.Name
+	return string(amazonInstance.State.Name)
 }
 
-func (p *config) getLaunchTime(amazonInstance *ec2.Instance) time.Time {
+func (p *amazonConfig) getLaunchTime(amazonInstance *types.Instance) time.Time {
 	if amazonInstance.LaunchTime == nil {
 		return time.Now()
 	}
 	return *amazonInstance.LaunchTime
 }
 
-func (p *config) pollInstanceIPAddr(ctx context.Context, instanceID string, logr logger.Logger) (*ec2.Instance, error) {
+func (p *amazonConfig) pollInstanceIPAddr(ctx context.Context, instanceID string, logr logger.Logger) (*types.Instance, error) {
 	client := p.service
 	b := backoff.NewExponentialBackOff()
 	for {
@@ -866,9 +895,9 @@ func (p *config) pollInstanceIPAddr(ctx context.Context, instanceID string, logr
 			logr.Errorln("amazon: [provision] failed to obtain IP; terminating it")
 
 			input := &ec2.TerminateInstancesInput{
-				InstanceIds: []*string{aws.String(instanceID)},
+				InstanceIds: []string{instanceID},
 			}
-			_, _ = client.TerminateInstancesWithContext(ctx, input)
+			_, _ = client.TerminateInstances(ctx, input)
 			return nil, errors.New("failed to obtain IP address")
 		}
 
@@ -880,9 +909,9 @@ func (p *config) pollInstanceIPAddr(ctx context.Context, instanceID string, logr
 		case <-time.After(duration):
 			logr.Traceln("amazon: [provision] checking instance IP address")
 
-			desc, descrErr := client.DescribeInstancesWithContext(ctx,
+			desc, descrErr := client.DescribeInstances(ctx,
 				&ec2.DescribeInstancesInput{
-					InstanceIds: []*string{aws.String(instanceID)},
+					InstanceIds: []string{instanceID},
 				},
 			)
 			if descrErr != nil {
@@ -901,21 +930,21 @@ func (p *config) pollInstanceIPAddr(ctx context.Context, instanceID string, logr
 			}
 
 			instance := desc.Reservations[0].Instances[0]
-			instanceIP := p.getIP(instance)
+			instanceIP := p.getIP(&instance)
 
 			if instanceIP == "" {
 				logr.Traceln("amazon: [provision] instance has no IP yet")
 				continue
 			}
 
-			return instance, nil
+			return &instance, nil
 		}
 	}
 }
 
-func (p *config) getInstance(ctx context.Context, instanceID string) (*ec2.Instance, error) {
+func (p *amazonConfig) getInstance(ctx context.Context, instanceID string) (*types.Instance, error) {
 	client := p.service
-	response, err := client.DescribeInstancesWithContext(ctx, &ec2.DescribeInstancesInput{InstanceIds: []*string{aws.String(instanceID)}})
+	response, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}})
 	if err != nil {
 		return nil, err
 	}
@@ -928,13 +957,14 @@ func (p *config) getInstance(ctx context.Context, instanceID string) (*ec2.Insta
 		return nil, errors.New("amazon: [provision] empty instances in reservations")
 	}
 
-	return response.Reservations[0].Instances[0], nil
+	instance := response.Reservations[0].Instances[0]
+	return &instance, nil
 }
 
 // getNextDeviceName returns the next available device name starting from /dev/sde.
 // We start from 'e' because:
 // This ensures we avoid conflicts with built-in device names.
-func (p *config) getNextDeviceName(index int) string {
+func (p *amazonConfig) getNextDeviceName(index int) string {
 	// For HVM instances, AWS recommends /dev/sd[b-z] for EBS data volumes
 	deviceLetter := rune('e' + index)
 	if deviceLetter > 'z' {
@@ -944,13 +974,13 @@ func (p *config) getNextDeviceName(index int) string {
 	return fmt.Sprintf("/dev/sd%c", deviceLetter)
 }
 
-func (p *config) waitForVolumeAvailable(ctx context.Context, volumeID *string) error {
+func (p *amazonConfig) waitForVolumeAvailable(ctx context.Context, volumeID string) error {
 	b := backoff.NewExponentialBackOff()
 	b.MaxElapsedTime = 5 * time.Minute
 
 	return backoff.Retry(func() error {
-		desc, err := p.service.DescribeVolumesWithContext(ctx, &ec2.DescribeVolumesInput{
-			VolumeIds: []*string{volumeID},
+		desc, err := p.service.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{
+			VolumeIds: []string{volumeID},
 		})
 		if err != nil {
 			return err
@@ -958,7 +988,7 @@ func (p *config) waitForVolumeAvailable(ctx context.Context, volumeID *string) e
 		if len(desc.Volumes) == 0 {
 			return fmt.Errorf("volume not found")
 		}
-		if *desc.Volumes[0].State != "available" {
+		if desc.Volumes[0].State != types.VolumeStateAvailable {
 			return fmt.Errorf("volume not available yet")
 		}
 		return nil
@@ -966,7 +996,7 @@ func (p *config) waitForVolumeAvailable(ctx context.Context, volumeID *string) e
 }
 
 // cleanupVolumes waits for instances to terminate and handles volume cleanup based on cleanup type
-func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, cleanupType storage.CleanupType, volumeIDs []*string) error {
+func (p *amazonConfig) cleanupVolumes(ctx context.Context, instanceIDs []string, cleanupType storage.CleanupType, volumeIDs []string) error {
 	logr := logger.FromContext(ctx)
 	if cleanupType != storage.Delete || len(volumeIDs) == 0 {
 		return nil
@@ -974,9 +1004,10 @@ func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, clea
 
 	// Wait for instances to terminate
 	logr.Infoln("aws: waiting for instance termination")
-	if err := p.service.WaitUntilInstanceTerminatedWithContext(ctx, &ec2.DescribeInstancesInput{
+	waiter := ec2.NewInstanceTerminatedWaiter(p.service)
+	if err := waiter.Wait(ctx, &ec2.DescribeInstancesInput{
 		InstanceIds: instanceIDs,
-	}); err != nil {
+	}, 5*time.Minute); err != nil {
 		logr.WithError(err).Errorln("aws: failed waiting for instance termination")
 		return err
 	}
@@ -984,16 +1015,16 @@ func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, clea
 	// Delete the persistent volumes
 	logr.Infoln("aws: deleting persistent volumes")
 	for _, volumeID := range volumeIDs {
-		_, err := p.service.DeleteVolumeWithContext(ctx, &ec2.DeleteVolumeInput{
-			VolumeId: volumeID,
+		_, err := p.service.DeleteVolume(ctx, &ec2.DeleteVolumeInput{
+			VolumeId: aws.String(volumeID),
 		})
 		if err != nil {
-			var awsErr awserr.Error
-			if errors.As(err, &awsErr) && awsErr.Code() == "InvalidVolume.NotFound" {
-				logr.WithError(err).Warnf("aws: volume %s not found", aws.StringValue(volumeID))
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidVolume.NotFound" {
+				logr.WithError(err).Warnf("aws: volume %s not found", volumeID)
 				continue
 			}
-			logr.WithError(err).Errorf("aws: failed to delete volume %s", aws.StringValue(volumeID))
+			logr.WithError(err).Errorf("aws: failed to delete volume %s", volumeID)
 			return err
 		}
 	}
@@ -1002,13 +1033,13 @@ func (p *config) cleanupVolumes(ctx context.Context, instanceIDs []*string, clea
 }
 
 // findPersistentVolumes finds all EBS volumes attached to the given instances that have DeleteOnTermination=false
-func (p *config) findPersistentVolumes(ctx context.Context, instances []*types.Instance, logr logger.Logger) ([]*string, error) {
+func (p *amazonConfig) findPersistentVolumes(ctx context.Context, instances []*drtypes.Instance, logr logger.Logger) ([]string, error) {
 	// Get all volumes with Name tag matching any of the storage identifiers and DeleteOnTermination=false
-	var filters []*ec2.Filter
+	var filters []types.Filter
 	// Add filter for non-delete-on-termination volumes
-	filters = append(filters, &ec2.Filter{
+	filters = append(filters, types.Filter{
 		Name:   aws.String("attachment.delete-on-termination"),
-		Values: []*string{aws.String("false")},
+		Values: []string{"false"},
 	})
 
 	// Add filters for volume names
@@ -1016,9 +1047,9 @@ func (p *config) findPersistentVolumes(ctx context.Context, instances []*types.I
 		if instance.StorageIdentifier != "" {
 			for _, diskName := range strings.Split(instance.StorageIdentifier, ",") {
 				diskName = strings.TrimSpace(diskName)
-				filters = append(filters, &ec2.Filter{
+				filters = append(filters, types.Filter{
 					Name:   aws.String("tag:Name"),
-					Values: []*string{aws.String(diskName)},
+					Values: []string{diskName},
 				})
 			}
 		}
@@ -1028,7 +1059,7 @@ func (p *config) findPersistentVolumes(ctx context.Context, instances []*types.I
 		return nil, nil
 	}
 
-	describe, err := p.service.DescribeVolumesWithContext(ctx, &ec2.DescribeVolumesInput{
+	describe, err := p.service.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{
 		Filters: filters,
 	})
 	if err != nil {
@@ -1036,29 +1067,30 @@ func (p *config) findPersistentVolumes(ctx context.Context, instances []*types.I
 		return nil, err
 	}
 
-	var volumeIDs []*string
+	var volumeIDs []string
 	for _, volume := range describe.Volumes {
-		volumeIDs = append(volumeIDs, volume.VolumeId)
+		volumeIDs = append(volumeIDs, *volume.VolumeId)
 	}
 
 	return volumeIDs, nil
 }
 
-func (p *config) attachVolumes(ctx context.Context, instanceID *string, volumes []*ec2.Volume, logr logger.Logger) error {
+func (p *amazonConfig) attachVolumes(ctx context.Context, instanceID string, volumes []types.Volume, logr logger.Logger) error {
 	// Attach volumes with retry
 	b := backoff.NewExponentialBackOff()
 	b.InitialInterval = 2 * time.Second // First retry after 2s
 	b.Multiplier = 2                    // Next retry after 4s (total 6s)
 	b.MaxElapsedTime = 5 * time.Minute
 
-	for i, volume := range volumes {
+	for i := range volumes {
+		volume := &volumes[i]
 		retryCount := 0
 		err := backoff.Retry(func() error {
 			retryCount++
 			logr.Debugf("amazon: attempting to attach volume %s (attempt %d)", *volume.VolumeId, retryCount)
 			// Check if instance is running
-			desc, err := p.service.DescribeInstancesWithContext(ctx, &ec2.DescribeInstancesInput{
-				InstanceIds: []*string{instanceID},
+			desc, err := p.service.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+				InstanceIds: []string{instanceID},
 			})
 			if err != nil {
 				logr.Debugf("amazon: failed to describe instance on attempt %d: %v", retryCount, err)
@@ -1069,8 +1101,8 @@ func (p *config) attachVolumes(ctx context.Context, instanceID *string, volumes 
 				return fmt.Errorf("instance not found")
 			}
 
-			state := aws.StringValue(desc.Reservations[0].Instances[0].State.Name)
-			if state != "running" {
+			state := desc.Reservations[0].Instances[0].State.Name
+			if state != types.InstanceStateNameRunning {
 				logr.Debugf("amazon: instance state is %s on attempt %d", state, retryCount)
 				return fmt.Errorf("instance not running yet")
 			}
@@ -1079,9 +1111,9 @@ func (p *config) attachVolumes(ctx context.Context, instanceID *string, volumes 
 			deviceName := p.getNextDeviceName(i)
 			logr.Debugf("amazon: attempting to attach volume %s to device %s on attempt %d", *volume.VolumeId, deviceName, retryCount)
 
-			_, err = p.service.AttachVolumeWithContext(ctx, &ec2.AttachVolumeInput{
+			_, err = p.service.AttachVolume(ctx, &ec2.AttachVolumeInput{
 				Device:     aws.String(deviceName),
-				InstanceId: instanceID,
+				InstanceId: aws.String(instanceID),
 				VolumeId:   volume.VolumeId,
 			})
 			if err != nil {
@@ -1099,11 +1131,11 @@ func (p *config) attachVolumes(ctx context.Context, instanceID *string, volumes 
 	return nil
 }
 
-func (p *config) createPersistentDisks(
+func (p *amazonConfig) createPersistentDisks(
 	ctx context.Context,
-	opts *types.InstanceCreateOpts,
+	opts *drtypes.InstanceCreateOpts,
 	reqCfg *requestConfig,
-) ([]*ec2.Volume, error) {
+) ([]types.Volume, error) {
 	if opts.StorageOpts.Identifier == "" {
 		return nil, nil
 	}
@@ -1119,20 +1151,20 @@ func (p *config) createPersistentDisks(
 		volumeSize = size
 	}
 
-	var volumes []*ec2.Volume
+	var volumes []types.Volume
 	for _, diskName := range storageIdentifiers {
 		diskName = strings.TrimSpace(diskName)
 
 		// Create volume
 		createVolumeInput := &ec2.CreateVolumeInput{
 			AvailabilityZone: aws.String(reqCfg.availabilityZone),
-			VolumeType:       aws.String(opts.StorageOpts.Type),
-			Size:             aws.Int64(volumeSize),
+			VolumeType:       types.VolumeType(opts.StorageOpts.Type),
+			Size:             aws.Int32(int32(volumeSize)),
 			Encrypted:        aws.Bool(true),
-			TagSpecifications: []*ec2.TagSpecification{
+			TagSpecifications: []types.TagSpecification{
 				{
-					ResourceType: aws.String("volume"),
-					Tags: []*ec2.Tag{
+					ResourceType: types.ResourceTypeVolume,
+					Tags: []types.Tag{
 						{
 							Key:   aws.String("Name"),
 							Value: aws.String(diskName),
@@ -1143,16 +1175,27 @@ func (p *config) createPersistentDisks(
 		}
 
 		// Create the volume
-		volume, err := p.service.CreateVolumeWithContext(ctx, createVolumeInput)
+		volumeOutput, err := p.service.CreateVolume(ctx, createVolumeInput)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create volume: %w", err)
 		}
 
 		// Wait for volume to be available
-		if err := p.waitForVolumeAvailable(ctx, volume.VolumeId); err != nil {
+		if err := p.waitForVolumeAvailable(ctx, *volumeOutput.VolumeId); err != nil {
 			return nil, fmt.Errorf("error waiting for volume to become available: %w", err)
 		}
 
+		volume := types.Volume{
+			VolumeId:         volumeOutput.VolumeId,
+			Size:             volumeOutput.Size,
+			VolumeType:       volumeOutput.VolumeType,
+			State:            volumeOutput.State,
+			AvailabilityZone: volumeOutput.AvailabilityZone,
+			CreateTime:       volumeOutput.CreateTime,
+			Encrypted:        volumeOutput.Encrypted,
+			KmsKeyId:         volumeOutput.KmsKeyId,
+			Tags:             volumeOutput.Tags,
+		}
 		volumes = append(volumes, volume)
 	}
 

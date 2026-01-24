@@ -6,18 +6,18 @@ package amazon
 
 import (
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
-	"github.com/drone-runners/drone-runner-aws/types"
+	drtypes "github.com/drone-runners/drone-runner-aws/types"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
 // helper function converts an array of tags in string
 // format to an array of ec2 tags.
-func convertTags(in map[string]string) []*ec2.Tag {
-	var out []*ec2.Tag
+func convertTags(in map[string]string) []types.Tag {
+	var out []types.Tag
 	for k, v := range in {
-		out = append(out, &ec2.Tag{
+		out = append(out, types.Tag{
 			Key:   aws.String(k),
 			Value: aws.String(v),
 		})
@@ -26,7 +26,7 @@ func convertTags(in map[string]string) []*ec2.Tag {
 }
 
 // buildHarnessTags creates common harness tags from InstanceCreateOpts
-func buildHarnessTags(opts *types.InstanceCreateOpts) map[string]string {
+func buildHarnessTags(opts *drtypes.InstanceCreateOpts) map[string]string {
 	return map[string]string{
 		"harness-account-id":     opts.AccountID,
 		"harness-pool-name":      opts.PoolName,
