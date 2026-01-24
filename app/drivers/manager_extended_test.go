@@ -21,12 +21,12 @@ import (
 // Mock implementations for testing
 
 type mockInstanceStore struct {
-	FindFunc                func(ctx context.Context, id string) (*types.Instance, error)
-	ListFunc                func(ctx context.Context, poolName string, query *types.QueryParams) ([]*types.Instance, error)
-	CreateFunc              func(ctx context.Context, instance *types.Instance) error
-	DeleteFunc              func(ctx context.Context, id string) error
-	UpdateFunc              func(ctx context.Context, instance *types.Instance) error
-	FindAndClaimFunc        func(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error)
+	FindFunc                  func(ctx context.Context, id string) (*types.Instance, error)
+	ListFunc                  func(ctx context.Context, poolName string, query *types.QueryParams) ([]*types.Instance, error)
+	CreateFunc                func(ctx context.Context, instance *types.Instance) error
+	DeleteFunc                func(ctx context.Context, id string) error
+	UpdateFunc                func(ctx context.Context, instance *types.Instance) error
+	FindAndClaimFunc          func(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error)
 	CountByPoolAndVariantFunc func(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error)
 }
 
@@ -115,11 +115,11 @@ func (m *mockStageOwnerStore) Delete(ctx context.Context, id string) error {
 }
 
 type mockCapacityReservationStore struct {
-	FindFunc         func(ctx context.Context, id string) (*types.CapacityReservation, error)
-	CreateFunc       func(ctx context.Context, reservation *types.CapacityReservation) error
-	DeleteFunc       func(ctx context.Context, id string) error
+	FindFunc           func(ctx context.Context, id string) (*types.CapacityReservation, error)
+	CreateFunc         func(ctx context.Context, reservation *types.CapacityReservation) error
+	DeleteFunc         func(ctx context.Context, id string) error
 	ListByPoolNameFunc func(ctx context.Context, poolName string) ([]*types.CapacityReservation, error)
-	UpdateStateFunc  func(ctx context.Context, stageID string, state types.CapacityReservationState) error
+	UpdateStateFunc    func(ctx context.Context, stageID string, state types.CapacityReservationState) error
 }
 
 func (m *mockCapacityReservationStore) Find(ctx context.Context, id string) (*types.CapacityReservation, error) {
@@ -158,20 +158,20 @@ func (m *mockCapacityReservationStore) UpdateState(ctx context.Context, stageID 
 }
 
 type flexibleMockDriver struct {
-	ReserveCapacityFunc            func(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error)
-	DestroyCapacityFunc            func(ctx context.Context, capacity *types.CapacityReservation) error
-	CreateFunc                     func(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error)
-	DestroyFunc                    func(ctx context.Context, instances []*types.Instance) error
-	DestroyInstanceAndStorageFunc  func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error
-	HibernateFunc                  func(ctx context.Context, instanceID, poolName, zone string) error
-	StartFunc                      func(ctx context.Context, instance *types.Instance, poolName string) (string, error)
-	SetTagsFunc                    func(ctx context.Context, instance *types.Instance, tags map[string]string) error
-	PingFunc                       func(ctx context.Context) error
-	LogsFunc                       func(ctx context.Context, instanceID string) (string, error)
-	GetFullyQualifiedImageFunc     func(ctx context.Context, config *types.VMImageConfig) (string, error)
-	rootDir                        string
-	driverName                     string
-	canHibernate                   bool
+	ReserveCapacityFunc           func(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error)
+	DestroyCapacityFunc           func(ctx context.Context, capacity *types.CapacityReservation) error
+	CreateFunc                    func(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error)
+	DestroyFunc                   func(ctx context.Context, instances []*types.Instance) error
+	DestroyInstanceAndStorageFunc func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error
+	HibernateFunc                 func(ctx context.Context, instanceID, poolName, zone string) error
+	StartFunc                     func(ctx context.Context, instance *types.Instance, poolName string) (string, error)
+	SetTagsFunc                   func(ctx context.Context, instance *types.Instance, tags map[string]string) error
+	PingFunc                      func(ctx context.Context) error
+	LogsFunc                      func(ctx context.Context, instanceID string) (string, error)
+	GetFullyQualifiedImageFunc    func(ctx context.Context, config *types.VMImageConfig) (string, error)
+	rootDir                       string
+	driverName                    string
+	canHibernate                  bool
 }
 
 func (m *flexibleMockDriver) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
@@ -512,11 +512,11 @@ func TestManager_MatchPoolNameFromPlatform(t *testing.T) {
 
 func TestManager_Find(t *testing.T) {
 	tests := []struct {
-		name        string
-		instanceID  string
-		mockReturn  *types.Instance
-		mockErr     error
-		wantErr     bool
+		name       string
+		instanceID string
+		mockReturn *types.Instance
+		mockErr    error
+		wantErr    bool
 	}{
 		{
 			name:       "found instance",
@@ -707,21 +707,21 @@ func TestManager_GetInstanceByStageID(t *testing.T) {
 
 func TestManager_List(t *testing.T) {
 	tests := []struct {
-		name         string
-		poolName     string
-		query        *types.QueryParams
-		mockList     []*types.Instance
-		mockErr      error
-		wantBusy     int
-		wantFree     int
-		wantHibern   int
-		wantErr      bool
-		errContains  string
+		name        string
+		poolName    string
+		query       *types.QueryParams
+		mockList    []*types.Instance
+		mockErr     error
+		wantBusy    int
+		wantFree    int
+		wantHibern  int
+		wantErr     bool
+		errContains string
 	}{
 		{
-			name:     "pool not found",
-			poolName: "non-existing",
-			wantErr:  true,
+			name:        "pool not found",
+			poolName:    "non-existing",
+			wantErr:     true,
 			errContains: "pool non-existing not found",
 		},
 		{
@@ -740,9 +740,9 @@ func TestManager_List(t *testing.T) {
 			wantErr:    false,
 		},
 		{
-			name:       "all busy instances",
-			poolName:   "test-pool",
-			mockList:   []*types.Instance{
+			name:     "all busy instances",
+			poolName: "test-pool",
+			mockList: []*types.Instance{
 				{ID: "1", State: types.StateInUse},
 				{ID: "2", State: types.StateInUse},
 			},
@@ -880,40 +880,40 @@ func TestManager_GetPoolSpec(t *testing.T) {
 
 func TestManager_StartInstancePurger(t *testing.T) {
 	tests := []struct {
-		name              string
-		maxAgeBusy        time.Duration
-		maxAgeFree        time.Duration
+		name               string
+		maxAgeBusy         time.Duration
+		maxAgeFree         time.Duration
 		freeCapacityMaxAge time.Duration
-		purgerTime        time.Duration
-		wantErr           bool
-		errContains       string
+		purgerTime         time.Duration
+		wantErr            bool
+		errContains        string
 	}{
 		{
-			name:              "maxAgeBusy too small",
-			maxAgeBusy:        1 * time.Minute,
-			maxAgeFree:        10 * time.Minute,
+			name:               "maxAgeBusy too small",
+			maxAgeBusy:         1 * time.Minute,
+			maxAgeFree:         10 * time.Minute,
 			freeCapacityMaxAge: 5 * time.Minute,
-			purgerTime:        1 * time.Minute,
-			wantErr:           true,
-			errContains:       "minimum value of max age",
+			purgerTime:         1 * time.Minute,
+			wantErr:            true,
+			errContains:        "minimum value of max age",
 		},
 		{
-			name:              "maxAgeFree too small",
-			maxAgeBusy:        10 * time.Minute,
-			maxAgeFree:        1 * time.Minute,
+			name:               "maxAgeFree too small",
+			maxAgeBusy:         10 * time.Minute,
+			maxAgeFree:         1 * time.Minute,
 			freeCapacityMaxAge: 5 * time.Minute,
-			purgerTime:        1 * time.Minute,
-			wantErr:           true,
-			errContains:       "minimum value of max age",
+			purgerTime:         1 * time.Minute,
+			wantErr:            true,
+			errContains:        "minimum value of max age",
 		},
 		{
-			name:              "maxAgeBusy > maxAgeFree",
-			maxAgeBusy:        20 * time.Minute,
-			maxAgeFree:        10 * time.Minute,
+			name:               "maxAgeBusy > maxAgeFree",
+			maxAgeBusy:         20 * time.Minute,
+			maxAgeFree:         10 * time.Minute,
 			freeCapacityMaxAge: 5 * time.Minute,
-			purgerTime:        1 * time.Minute,
-			wantErr:           true,
-			errContains:       "max age of used instances",
+			purgerTime:         1 * time.Minute,
+			wantErr:            true,
+			errContains:        "max age of used instances",
 		},
 		// Note: Removed test case for "valid parameters - but pool map nil returns error"
 		// because StartInstancePurger spawns a goroutine that would panic with nil poolMap.
@@ -1101,11 +1101,11 @@ func TestManager_Destroy(t *testing.T) {
 // reserved capacity (e.g., EC2 capacity reservations) and associated instances
 func TestManager_DestroyCapacity(t *testing.T) {
 	tests := []struct {
-		name            string
-		reservation     *types.CapacityReservation
-		destroyFunc     func(ctx context.Context, capacity *types.CapacityReservation) error
-		deleteCapFunc   func(ctx context.Context, id string) error
-		wantErr         bool
+		name          string
+		reservation   *types.CapacityReservation
+		destroyFunc   func(ctx context.Context, capacity *types.CapacityReservation) error
+		deleteCapFunc func(ctx context.Context, id string) error
+		wantErr       bool
 	}{
 		{
 			name:        "nil reservation",

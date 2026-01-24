@@ -11,6 +11,8 @@ import (
 	drtypes "github.com/drone-runners/drone-runner-aws/types"
 )
 
+const testAMIID = "ami-1234567890abcdef0"
+
 // TestNewAMICache tests AMI cache initialization
 func TestNewAMICache(t *testing.T) {
 	cache := NewAMICache()
@@ -27,7 +29,7 @@ func TestAMICacheGetSet(t *testing.T) {
 	cache := NewAMICache()
 	region := "us-east-1"
 	imageName := "ubuntu-22.04"
-	amiID := "ami-1234567890abcdef0"
+	amiID := testAMIID
 
 	// Test Get on empty cache
 	_, found := cache.Get(region, imageName)
@@ -53,7 +55,7 @@ func TestAMICacheExpiration(t *testing.T) {
 	cache := NewAMICache()
 	region := "us-east-1"
 	imageName := "ubuntu-22.04"
-	amiID := "ami-1234567890abcdef0"
+	amiID := testAMIID
 
 	// Set with custom expiration for testing
 	cache.cache[region+":"+imageName] = &amiCacheEntry{
@@ -97,7 +99,7 @@ func TestIsAMIID(t *testing.T) {
 // TestResolveImageNameToAMI tests AMI name resolution
 func TestResolveImageNameToAMI(t *testing.T) {
 	imageName := "ubuntu-22.04-*"
-	amiID := "ami-1234567890abcdef0"
+	amiID := testAMIID
 	creationDate := "2024-01-01T00:00:00.000Z"
 
 	tests := []struct {

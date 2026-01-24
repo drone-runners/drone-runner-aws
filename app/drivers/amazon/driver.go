@@ -161,11 +161,11 @@ func (p *amazonConfig) RootDir() string {
 	return p.rootDir
 }
 
-func (p *amazonConfig) GetFullyQualifiedImage(ctx context.Context, config *drtypes.VMImageConfig) (string, error) {
+func (p *amazonConfig) GetFullyQualifiedImage(ctx context.Context, vmConfig *drtypes.VMImageConfig) (string, error) {
 	imageName := p.image
 	// If no image name is provided, return the default image
-	if config.ImageName != "" {
-		imageName = config.ImageName
+	if vmConfig.ImageName != "" {
+		imageName = vmConfig.ImageName
 	}
 
 	// If the image name is already an AMI ID (starts with "ami-"), return it as is
@@ -253,7 +253,8 @@ func checkIngressRules(ctx context.Context, client ec2ClientAPI, groupID string)
 	}
 	securityGroup := securityGroupResponse.SecurityGroups[0]
 	found := false
-	for _, permission := range securityGroup.IpPermissions {
+	for i := range securityGroup.IpPermissions {
+		permission := &securityGroup.IpPermissions[i]
 		if permission.IpProtocol != nil && *permission.IpProtocol == "tcp" &&
 			permission.FromPort != nil && *permission.FromPort == int32(lehelper.LiteEnginePort) &&
 			permission.ToPort != nil && *permission.ToPort == int32(lehelper.LiteEnginePort) {
@@ -1068,8 +1069,8 @@ func (p *amazonConfig) findPersistentVolumes(ctx context.Context, instances []*d
 	}
 
 	var volumeIDs []string
-	for _, volume := range describe.Volumes {
-		volumeIDs = append(volumeIDs, *volume.VolumeId)
+	for i := range describe.Volumes {
+		volumeIDs = append(volumeIDs, *describe.Volumes[i].VolumeId)
 	}
 
 	return volumeIDs, nil
