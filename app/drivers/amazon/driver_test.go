@@ -10,8 +10,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go"
-	drtypes "github.com/drone-runners/drone-runner-aws/types"
 	"github.com/stretchr/testify/assert"
+
+	drtypes "github.com/drone-runners/drone-runner-aws/types"
 )
 
 // mockEC2Client is a mock implementation of the EC2 client for testing

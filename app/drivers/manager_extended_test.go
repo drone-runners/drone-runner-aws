@@ -14,8 +14,9 @@ import (
 	// Note: Removed unused "github.com/drone-runners/drone-runner-aws/store" import
 	// We define mock implementations of store interfaces directly in this file
 	// instead of importing the store package
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // Mock implementations for testing
@@ -1480,6 +1481,6 @@ func (s *mockStrategy) CanCreate(minCount, maxCount, busy, free int) bool {
 	return true
 }
 
-func (s *mockStrategy) CountCreateRemove(minCount, maxCount, busy, free int) (createCount int, removeCount int) {
+func (s *mockStrategy) CountCreateRemove(minCount, maxCount, busy, free int) (createCount, removeCount int) {
 	return 0, 0
 }
