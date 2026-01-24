@@ -27,6 +27,9 @@ func convertTags(in map[string]string) []types.Tag {
 
 // buildHarnessTags creates common harness tags from InstanceCreateOpts
 func buildHarnessTags(opts *drtypes.InstanceCreateOpts) map[string]string {
+	if opts == nil {
+		return map[string]string{}
+	}
 	return map[string]string{
 		"harness-account-id":     opts.AccountID,
 		"harness-pool-name":      opts.PoolName,

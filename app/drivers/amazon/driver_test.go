@@ -99,7 +99,11 @@ func (m *mockEC2Client) DescribeSecurityGroups(ctx context.Context, params *ec2.
 	return &ec2.DescribeSecurityGroupsOutput{}, nil
 }
 
-func (m *mockEC2Client) AuthorizeSecurityGroupIngress(ctx context.Context, params *ec2.AuthorizeSecurityGroupIngressInput, optFns ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput, error) {
+func (m *mockEC2Client) AuthorizeSecurityGroupIngress(
+	ctx context.Context,
+	params *ec2.AuthorizeSecurityGroupIngressInput,
+	optFns ...func(*ec2.Options),
+) (*ec2.AuthorizeSecurityGroupIngressOutput, error) {
 	if m.AuthorizeSecurityGroupIngressFunc != nil {
 		return m.AuthorizeSecurityGroupIngressFunc(ctx, params, optFns...)
 	}

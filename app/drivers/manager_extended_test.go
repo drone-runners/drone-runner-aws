@@ -73,7 +73,13 @@ func (m *mockInstanceStore) DeleteAndReturn(ctx context.Context, query string, a
 	return nil, nil
 }
 
-func (m *mockInstanceStore) FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error) {
+func (m *mockInstanceStore) FindAndClaim(
+	ctx context.Context,
+	params *types.QueryParams,
+	newState types.InstanceState,
+	allowedStates []types.InstanceState,
+	updateStartTime bool,
+) (*types.Instance, error) {
 	if m.FindAndClaimFunc != nil {
 		return m.FindAndClaimFunc(ctx, params, newState, allowedStates, updateStartTime)
 	}
@@ -1470,10 +1476,10 @@ func TestManager_getStrategy(t *testing.T) {
 // Mock strategy for testing
 type mockStrategy struct{}
 
-func (s *mockStrategy) CanCreate(min, max, busy, free int) bool {
+func (s *mockStrategy) CanCreate(minCount, maxCount, busy, free int) bool {
 	return true
 }
 
-func (s *mockStrategy) CountCreateRemove(min, max, busy, free int) (int, int) {
+func (s *mockStrategy) CountCreateRemove(minCount, maxCount, busy, free int) (int, int) {
 	return 0, 0
 }

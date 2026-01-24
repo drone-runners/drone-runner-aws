@@ -31,6 +31,11 @@ import (
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
 )
 
+const (
+	// instanceWaitTimeout is the maximum time to wait for instance state changes
+	instanceWaitTimeout = 5 * time.Minute
+)
+
 var _ drivers.Driver = (*amazonConfig)(nil)
 
 // ec2ClientAPI is an interface for EC2 client operations
@@ -208,7 +213,7 @@ func lookupCreateSecurityGroupID(ctx context.Context, client ec2ClientAPI, vpc s
 		// create the security group
 		inputGroup := &ec2.CreateSecurityGroupInput{
 			GroupName:   aws.String(defaultSecurityGroupName),
-			Description: aws.String("Harnress Runner Security Group"),
+			Description: aws.String("Harness Runner Security Group"),
 		}
 		// if we have a vpc, we need to use it
 		if vpc != "" {
@@ -217,6 +222,9 @@ func lookupCreateSecurityGroupID(ctx context.Context, client ec2ClientAPI, vpc s
 		createdGroup, createGroupErr := client.CreateSecurityGroup(ctx, inputGroup)
 		if createGroupErr != nil {
 			return "", fmt.Errorf("failed to create security group: %s. %s", defaultSecurityGroupName, createGroupErr)
+		}
+		if createdGroup.GroupId == nil {
+			return "", fmt.Errorf("created security group has nil GroupId")
 		}
 		ingress := &ec2.AuthorizeSecurityGroupIngressInput{
 			GroupId: createdGroup.GroupId,
@@ -239,7 +247,11 @@ func lookupCreateSecurityGroupID(ctx context.Context, client ec2ClientAPI, vpc s
 		}
 		return *createdGroup.GroupId, nil
 	}
-	return *securityGroupResponse.SecurityGroups[0].GroupId, nil
+	sg := &securityGroupResponse.SecurityGroups[0]
+	if sg.GroupId == nil {
+		return "", fmt.Errorf("security group has nil GroupId")
+	}
+	return *sg.GroupId, nil
 }
 
 // lookup Security Group ID and check it has the correct ingress rules
@@ -248,8 +260,11 @@ func checkIngressRules(ctx context.Context, client ec2ClientAPI, groupID string)
 		GroupIds: []string{groupID},
 	}
 	securityGroupResponse, lookupErr := client.DescribeSecurityGroups(ctx, input)
-	if lookupErr != nil || len(securityGroupResponse.SecurityGroups) == 0 {
+	if lookupErr != nil {
 		return fmt.Errorf("failed to lookup security group: %s. %s", groupID, lookupErr)
+	}
+	if securityGroupResponse == nil || len(securityGroupResponse.SecurityGroups) == 0 {
+		return fmt.Errorf("security group not found: %s", groupID)
 	}
 	securityGroup := securityGroupResponse.SecurityGroups[0]
 	found := false
@@ -333,6 +348,11 @@ func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.Instan
 			}
 		}
 		logr.WithError(err).Errorln("amazon: failed to create capacity reservation")
+		return nil, &ierrors.ErrCapacityUnavailable{Driver: p.DriverName()}
+	}
+
+	if result.CapacityReservation == nil || result.CapacityReservation.CapacityReservationId == nil {
+		logr.Errorln("amazon: capacity reservation created but missing ID")
 		return nil, &ierrors.ErrCapacityUnavailable{Driver: p.DriverName()}
 	}
 
@@ -447,6 +467,9 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 		p.groups = append(p.groups, returnedGroupID)
 	}
 	// check the security group ingress rules
+	if len(p.groups) == 0 {
+		return nil, fmt.Errorf("no security groups configured")
+	}
 	rulesErr := checkIngressRules(ctx, client, p.groups[0])
 	if rulesErr != nil {
 		return nil, rulesErr
@@ -518,22 +541,28 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 
 	if p.volumeType == "io1" {
 		for i := range in.BlockDeviceMappings {
-			in.BlockDeviceMappings[i].Ebs.Iops = aws.Int32(int32(p.volumeIops))
+			if in.BlockDeviceMappings[i].Ebs != nil {
+				in.BlockDeviceMappings[i].Ebs.Iops = aws.Int32(int32(p.volumeIops))
+			}
 		}
 	}
 
 	if p.kmsKeyID != "" {
 		for i := range in.BlockDeviceMappings {
-			in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
-			in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+			if in.BlockDeviceMappings[i].Ebs != nil {
+				in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
+				in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+			}
 		}
 	}
 
 	if p.CanHibernate() {
 		for i := range in.BlockDeviceMappings {
-			in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
-			if p.kmsKeyID != "" {
-				in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+			if in.BlockDeviceMappings[i].Ebs != nil {
+				in.BlockDeviceMappings[i].Ebs.Encrypted = aws.Bool(true)
+				if p.kmsKeyID != "" {
+					in.BlockDeviceMappings[i].Ebs.KmsKeyId = aws.String(p.kmsKeyID)
+				}
 			}
 		}
 
@@ -562,17 +591,32 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 
 	runResult, err := client.RunInstances(ctx, in)
 	if err != nil {
-		logr.WithError(err).
-			Errorln("amazon: [provision] failed to create VMs")
+		logr.WithError(err).Errorln("amazon: [provision] failed to create VMs")
+		// Cleanup created volumes before returning
+		if len(volumes) > 0 {
+			for i := range volumes {
+				if volumes[i].VolumeId != nil {
+					_, delErr := client.DeleteVolume(ctx, &ec2.DeleteVolumeInput{
+						VolumeId: volumes[i].VolumeId,
+					})
+					if delErr != nil {
+						logr.WithError(delErr).WithField("volume_id", *volumes[i].VolumeId).
+							Warnln("amazon: failed to cleanup volume after instance creation failure")
+					}
+				}
+			}
+		}
 		return nil, err
 	}
 
-	if len(runResult.Instances) == 0 {
-		err = fmt.Errorf("failed to create an AWS EC2 instance")
-		return nil, err
+	if runResult == nil || len(runResult.Instances) == 0 {
+		return nil, fmt.Errorf("failed to create an AWS EC2 instance")
 	}
 
 	awsInstanceID := runResult.Instances[0].InstanceId
+	if awsInstanceID == nil {
+		return nil, fmt.Errorf("created instance has nil InstanceId")
+	}
 
 	logr = logr.
 		WithField("id", *awsInstanceID)
@@ -590,10 +634,22 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	if len(volumes) > 0 {
 		logr.Debugln("amazon: [provision] attaching volumes to the instance")
 		if attachVolumesErr := p.attachVolumes(ctx, *awsInstanceID, volumes, logr); attachVolumesErr != nil {
-			return nil, err
+			logr.WithError(attachVolumesErr).Errorln("amazon: failed to attach volumes, terminating instance")
+			// Terminate the instance to avoid resource leak
+			_, termErr := client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+				InstanceIds: []string{*awsInstanceID},
+			})
+			if termErr != nil {
+				logr.WithError(termErr).WithField("instance_id", *awsInstanceID).
+					Warnln("amazon: failed to terminate instance after volume attachment failure")
+			}
+			return nil, attachVolumesErr
 		}
 	}
 
+	if amazonInstance.InstanceId == nil {
+		return nil, fmt.Errorf("instance has nil InstanceId")
+	}
 	instanceID := *amazonInstance.InstanceId
 	instanceIP := p.getIP(amazonInstance)
 	launchTime := p.getLaunchTime(amazonInstance)
@@ -783,6 +839,7 @@ func (p *amazonConfig) Start(ctx context.Context, instance *drtypes.Instance, po
 	amazonInstance, err := p.getInstance(ctx, instance.ID)
 	if err != nil {
 		logr.WithError(err).Errorln("aws: failed to find instance status")
+		return "", fmt.Errorf("failed to get instance: %w", err)
 	}
 
 	state := p.getState(amazonInstance)
@@ -791,7 +848,7 @@ func (p *amazonConfig) Start(ctx context.Context, instance *drtypes.Instance, po
 	} else if state == string(types.InstanceStateNameStopping) {
 		logr.Traceln("aws: waiting for instance to stop")
 		waiter := ec2.NewInstanceStoppedWaiter(client)
-		waitErr := waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instance.ID}}, 5*time.Minute)
+		waitErr := waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instance.ID}}, instanceWaitTimeout)
 		if waitErr != nil {
 			logr.WithError(waitErr).Warnln("aws: instance failed to stop. Proceeding with starting the instance")
 		}
@@ -859,6 +916,9 @@ func (p *amazonConfig) getDynamicConfig(opts *drtypes.InstanceCreateOpts) (*requ
 }
 
 func (p *amazonConfig) getIP(amazonInstance *types.Instance) string {
+	if amazonInstance == nil {
+		return ""
+	}
 	if p.allocPublicIP {
 		if amazonInstance.PublicIpAddress == nil {
 			return ""
@@ -873,7 +933,7 @@ func (p *amazonConfig) getIP(amazonInstance *types.Instance) string {
 }
 
 func (p *amazonConfig) getState(amazonInstance *types.Instance) string {
-	if amazonInstance.State == nil {
+	if amazonInstance == nil || amazonInstance.State == nil {
 		return ""
 	}
 
@@ -881,7 +941,7 @@ func (p *amazonConfig) getState(amazonInstance *types.Instance) string {
 }
 
 func (p *amazonConfig) getLaunchTime(amazonInstance *types.Instance) time.Time {
-	if amazonInstance.LaunchTime == nil {
+	if amazonInstance == nil || amazonInstance.LaunchTime == nil {
 		return time.Now()
 	}
 	return *amazonInstance.LaunchTime
@@ -977,7 +1037,7 @@ func (p *amazonConfig) getNextDeviceName(index int) string {
 
 func (p *amazonConfig) waitForVolumeAvailable(ctx context.Context, volumeID string) error {
 	b := backoff.NewExponentialBackOff()
-	b.MaxElapsedTime = 5 * time.Minute
+	b.MaxElapsedTime = instanceWaitTimeout
 
 	return backoff.Retry(func() error {
 		desc, err := p.service.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{
@@ -1008,7 +1068,7 @@ func (p *amazonConfig) cleanupVolumes(ctx context.Context, instanceIDs []string,
 	waiter := ec2.NewInstanceTerminatedWaiter(p.service)
 	if err := waiter.Wait(ctx, &ec2.DescribeInstancesInput{
 		InstanceIds: instanceIDs,
-	}, 5*time.Minute); err != nil {
+	}, instanceWaitTimeout); err != nil {
 		logr.WithError(err).Errorln("aws: failed waiting for instance termination")
 		return err
 	}
@@ -1043,20 +1103,29 @@ func (p *amazonConfig) findPersistentVolumes(ctx context.Context, instances []*d
 		Values: []string{"false"},
 	})
 
-	// Add filters for volume names
+	// Collect all disk names from all instances
+	var diskNames []string
 	for _, instance := range instances {
 		if instance.StorageIdentifier != "" {
 			for _, diskName := range strings.Split(instance.StorageIdentifier, ",") {
 				diskName = strings.TrimSpace(diskName)
-				filters = append(filters, types.Filter{
-					Name:   aws.String("tag:Name"),
-					Values: []string{diskName},
-				})
+				if diskName != "" {
+					diskNames = append(diskNames, diskName)
+				}
 			}
 		}
 	}
 
-	if len(filters) == 0 {
+	// Add a single filter with all disk names (OR condition)
+	if len(diskNames) > 0 {
+		filters = append(filters, types.Filter{
+			Name:   aws.String("tag:Name"),
+			Values: diskNames,
+		})
+	}
+
+	if len(filters) == 1 {
+		// Only have delete-on-termination filter, no disk names to search for
 		return nil, nil
 	}
 
@@ -1070,7 +1139,9 @@ func (p *amazonConfig) findPersistentVolumes(ctx context.Context, instances []*d
 
 	var volumeIDs []string
 	for i := range describe.Volumes {
-		volumeIDs = append(volumeIDs, *describe.Volumes[i].VolumeId)
+		if describe.Volumes[i].VolumeId != nil {
+			volumeIDs = append(volumeIDs, *describe.Volumes[i].VolumeId)
+		}
 	}
 
 	return volumeIDs, nil
@@ -1081,7 +1152,7 @@ func (p *amazonConfig) attachVolumes(ctx context.Context, instanceID string, vol
 	b := backoff.NewExponentialBackOff()
 	b.InitialInterval = 2 * time.Second // First retry after 2s
 	b.Multiplier = 2                    // Next retry after 4s (total 6s)
-	b.MaxElapsedTime = 5 * time.Minute
+	b.MaxElapsedTime = instanceWaitTimeout
 
 	for i := range volumes {
 		volume := &volumes[i]
@@ -1102,7 +1173,12 @@ func (p *amazonConfig) attachVolumes(ctx context.Context, instanceID string, vol
 				return fmt.Errorf("instance not found")
 			}
 
-			state := desc.Reservations[0].Instances[0].State.Name
+			instance := &desc.Reservations[0].Instances[0]
+			if instance.State == nil {
+				logr.Debugf("amazon: instance has nil state on attempt %d", retryCount)
+				return fmt.Errorf("instance state is nil")
+			}
+			state := instance.State.Name
 			if state != types.InstanceStateNameRunning {
 				logr.Debugf("amazon: instance state is %s on attempt %d", state, retryCount)
 				return fmt.Errorf("instance not running yet")
@@ -1150,6 +1226,12 @@ func (p *amazonConfig) createPersistentDisks(
 			return nil, fmt.Errorf("failed to parse volume size: %w", err)
 		}
 		volumeSize = size
+	} else {
+		return nil, fmt.Errorf("storage size is required when creating persistent disks")
+	}
+
+	if volumeSize <= 0 {
+		return nil, fmt.Errorf("invalid volume size: %d, must be positive", volumeSize)
 	}
 
 	var volumes []types.Volume
@@ -1178,7 +1260,27 @@ func (p *amazonConfig) createPersistentDisks(
 		// Create the volume
 		volumeOutput, err := p.service.CreateVolume(ctx, createVolumeInput)
 		if err != nil {
+			// Cleanup already created volumes
+			for i := range volumes {
+				if volumes[i].VolumeId != nil {
+					_, _ = p.service.DeleteVolume(ctx, &ec2.DeleteVolumeInput{
+						VolumeId: volumes[i].VolumeId,
+					})
+				}
+			}
 			return nil, fmt.Errorf("failed to create volume: %w", err)
+		}
+
+		if volumeOutput == nil || volumeOutput.VolumeId == nil {
+			// Cleanup already created volumes
+			for i := range volumes {
+				if volumes[i].VolumeId != nil {
+					_, _ = p.service.DeleteVolume(ctx, &ec2.DeleteVolumeInput{
+						VolumeId: volumes[i].VolumeId,
+					})
+				}
+			}
+			return nil, fmt.Errorf("CreateVolume returned nil VolumeId")
 		}
 
 		// Wait for volume to be available
