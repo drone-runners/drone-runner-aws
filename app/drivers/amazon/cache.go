@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
 const (
@@ -75,7 +76,7 @@ func isAMIID(imageID string) bool {
 }
 
 // resolveImageNameToAMI resolves an image name to its corresponding AMI ID with caching
-func (p *config) resolveImageNameToAMI(ctx context.Context, imageName string) (string, error) {
+func (p *amazonConfig) resolveImageNameToAMI(ctx context.Context, imageName string) (string, error) {
 	// Check cache first
 	if amiID, found := p.amiCache.Get(p.region, imageName); found {
 		return amiID, nil
@@ -86,21 +87,21 @@ func (p *config) resolveImageNameToAMI(ctx context.Context, imageName string) (s
 
 	// Search for images by name
 	input := &ec2.DescribeImagesInput{
-		Filters: []*ec2.Filter{
+		Filters: []types.Filter{
 			{
 				Name:   aws.String("name"),
-				Values: []*string{aws.String(imageName)},
+				Values: []string{imageName},
 			},
 			{
 				Name:   aws.String("state"),
-				Values: []*string{aws.String("available")},
+				Values: []string{"available"},
 			},
 		},
 		// Only include images owned by Amazon or the current account
-		Owners: []*string{aws.String("amazon"), aws.String("self")},
+		Owners: []string{"amazon", "self"},
 	}
 
-	result, err := client.DescribeImagesWithContext(ctx, input)
+	result, err := client.DescribeImages(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("failed to describe images: %w", err)
 	}
@@ -110,8 +111,9 @@ func (p *config) resolveImageNameToAMI(ctx context.Context, imageName string) (s
 	}
 
 	// If multiple images found, return the most recent one
-	var mostRecentImage *ec2.Image
-	for _, image := range result.Images {
+	var mostRecentImage *types.Image
+	for i := range result.Images {
+		image := &result.Images[i]
 		if mostRecentImage == nil {
 			mostRecentImage = image
 			continue
