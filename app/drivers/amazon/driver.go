@@ -126,19 +126,25 @@ func New(opts ...Option) (drivers.Driver, error) {
 	if p.service == nil {
 		ctx := context.Background()
 
-		// Load default config
-		cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(p.region))
+		var cfg aws.Config
+		var err error
+
+		// Prioritize static credentials if provided
+		if p.accessKeyID != "" && p.secretAccessKey != "" {
+			cfg, err = config.LoadDefaultConfig(ctx,
+				config.WithRegion(p.region),
+				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+					p.accessKeyID,
+					p.secretAccessKey,
+					p.sessionToken,
+				)),
+			)
+		} else {
+			// Load default config (Pod Identity, IRSA, instance profile, etc.)
+			cfg, err = config.LoadDefaultConfig(ctx, config.WithRegion(p.region))
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to load AWS config: %w", err)
-		}
-
-		// Override with static credentials if provided
-		if p.accessKeyID != "" && p.secretAccessKey != "" {
-			cfg.Credentials = credentials.NewStaticCredentialsProvider(
-				p.accessKeyID,
-				p.secretAccessKey,
-				p.sessionToken,
-			)
 		}
 
 		// Note: SDK v2 handles retries differently via retry modes
