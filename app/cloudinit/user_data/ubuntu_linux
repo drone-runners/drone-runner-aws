@@ -1,9 +1,17 @@
 #cloud-config
-# Package installation
+# Package installation with optimizations
 {{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
+# Hosted environment - minimal packages
+apt_update: false
+apt_upgrade: false
+apt_reboot_if_required: false
 packages:
   - wget
 {{ else }}
+# Self-hosted environment - need Docker
+apt_update: true
+apt_upgrade: false
+apt_reboot_if_required: false
 apt:
   sources:
     docker.list:
@@ -55,7 +63,7 @@ bootcmd:
   - touch /var/log/nvme-setup.log
   - echo "NVME setup is disabled. Skipping NVME disk detection." >> /var/log/nvme-setup.log
 {{ end }}
-# Certificate files
+# Certificate files and systemd service
 write_files:
 - path: {{ .CaCertPath }}
   permissions: '0600'
@@ -69,19 +77,92 @@ write_files:
   permissions: '0600'
   encoding: b64
   content: {{ .TLSKey | base64 }}
+- path: /etc/systemd/system/lite-engine.service
+  permissions: '0644'
+  content: |
+    [Unit]
+    Description=Harness Lite Engine
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Type=simple
+    ExecStart=/harness/bin/lite-engine server --env-file /root/.env
+    WorkingDirectory=/harness
+    Restart=always
+    RestartSec=10
+    StartLimitInterval=0
+    StandardOutput=append:/var/log/lite-engine.log
+    StandardError=append:/var/log/lite-engine.log
+    Environment="PATH=/harness/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    # Ensure service restarts after hibernation/resume
+    RuntimeMaxSec=infinity
+    WatchdogSec=60
+
+    [Install]
+    WantedBy=multi-user.target
 # Main runtime commands
 runcmd:
   # Enable command tracing
   - set -x
-  
+
+  # Setup logging helper function
+  - |
+    log_step() {
+      echo "========================================" | tee -a /var/log/cloud-init-setup.log
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $1" | tee -a /var/log/cloud-init-setup.log
+      echo "========================================" | tee -a /var/log/cloud-init-setup.log
+    }
+
+  # Wait for package installation to complete (happens before runcmd)
+  - |
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Waiting for package installation to complete..." | tee -a /var/log/cloud-init-setup.log
+    MAX_WAIT=300
+    ELAPSED=0
+    while [ $ELAPSED -lt $MAX_WAIT ]; do
+      # Check if cloud-init package installation is complete
+      if [ -f /var/lib/cloud/instance/boot-finished ] || cloud-init status --wait > /dev/null 2>&1; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Package installation completed (took ${ELAPSED}s)" | tee -a /var/log/cloud-init-setup.log
+        break
+      fi
+      sleep 2
+      ELAPSED=$((ELAPSED + 2))
+      if [ $((ELAPSED % 30)) -eq 0 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Still waiting for packages... (${ELAPSED}s)" | tee -a /var/log/cloud-init-setup.log
+      fi
+    done
+
+    # Verify critical packages are installed
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Verifying critical packages..." | tee -a /var/log/cloud-init-setup.log
+    {{ if not (and (.IsHosted) (eq .Platform.Arch "amd64")) }}
+    if ! command -v docker > /dev/null 2>&1; then
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] FATAL: Docker not installed after package phase" | tee -a /var/log/cloud-init-setup.log
+      dpkg -l | grep docker | tee -a /var/log/cloud-init-setup.log
+      exit 1
+    fi
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Docker verified: $(docker --version)" | tee -a /var/log/cloud-init-setup.log
+    {{ end }}
+    if ! command -v wget > /dev/null 2>&1; then
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] FATAL: wget not installed after package phase" | tee -a /var/log/cloud-init-setup.log
+      exit 1
+    fi
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] All critical packages verified" | tee -a /var/log/cloud-init-setup.log
+
+    # Mark package phase complete - safe to hibernate after this point
+    touch /var/lib/cloud/instance/packages-complete
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] CHECKPOINT: Package installation complete - VM ready for hibernation" | tee -a /var/log/cloud-init-setup.log
+
+  - log_step "STEP 1/7: Configuring DNS"
   # Configure Google DNS
   - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
   - systemctl restart systemd-resolved
-  
+
+  - log_step "STEP 2/7: Opening healthcheck port 9079"
   # Open healthcheck port
   - ufw allow 9079
   
   {{ if .EnableC4D }}
+  - log_step "STEP 3/7: Setting up NVMe disk"
   # NVMe disk setup
   - |
     cat > /tmp/nvme-setup.sh <<'EOS'
@@ -195,6 +276,7 @@ runcmd:
     chmod +x /tmp/nvme-setup.sh
     /tmp/nvme-setup.sh
   {{ else }}
+  - log_step "STEP 3/7: Skipping NVMe setup (disabled)"
   # NVME setup is disabled
   - |
     # Define logging function
@@ -203,63 +285,117 @@ runcmd:
     }
     log_echo "NVME setup is disabled in configuration. Skipping NVME disk setup."
   {{ end }}
-  
+
+  - log_step "STEP 4/7: Downloading and installing binaries"
+  # Create /harness/bin directory
+  - mkdir -p /harness/bin
+
   # Download and install lite-engine
   - |
-    (/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from primary URL.") || \
-    (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from fallback URL.")
-  - chmod 777 /usr/bin/lite-engine
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Downloading lite-engine..." | tee -a /var/log/cloud-init-setup.log
+    ((/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /harness/bin/lite-engine 2>&1 | tee -a /var/log/cloud-init-setup.log) && echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Successfully downloaded lite-engine from primary URL" | tee -a /var/log/cloud-init-setup.log) || \
+    ((echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Primary URL failed for lite-engine. Trying fallback URL..." | tee -a /var/log/cloud-init-setup.log) && (/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /harness/bin/lite-engine 2>&1 | tee -a /var/log/cloud-init-setup.log) && echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Successfully downloaded lite-engine from fallback URL" | tee -a /var/log/cloud-init-setup.log)
+  - chmod 755 /harness/bin/lite-engine
   
   # Download and install split_tests if needed
   {{ if .HarnessTestBinaryURI }}
-  - wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /usr/bin/split_tests
-  - chmod 777 /usr/bin/split_tests
+  - wget -nv "{{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }}" -O /harness/bin/split_tests
+  - chmod 755 /harness/bin/split_tests
   {{ end }}
   
   # Download and install plugin if needed
   {{ if .PluginBinaryURI }}
   - |
-    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from primary URL.") || \
-    (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /usr/bin/plugin && echo "Successfully downloaded plugin binary from fallback URL.")
-  - chmod 777 /usr/bin/plugin
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /harness/bin/plugin && echo "Successfully downloaded plugin binary from primary URL.") || \
+    (echo "Primary URL failed for plugin. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 {{ .PluginBinaryFallbackURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }} -O /harness/bin/plugin && echo "Successfully downloaded plugin binary from fallback URL.")
+  - chmod 755 /harness/bin/plugin
   {{ end }}
   
   # Download and install auto-injection if needed
   {{ if .AutoInjectionBinaryURI }}
   - |
-    mkdir -p /tmp/harness/bin
-    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection || \
-    wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /usr/bin/auto-injection
-  - chmod 777 /usr/bin/auto-injection
-  - |
-    cp /usr/bin/auto-injection /tmp/harness/bin/auto-injection
-  - chmod 777 /tmp/harness/bin/auto-injection
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /harness/bin/auto-injection || \
+    wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /harness/bin/auto-injection
+  - chmod 755 /harness/bin/auto-injection
   {{ end }}
   
   # Download and install envman for amd64 architecture
   {{ if eq .Platform.Arch "amd64" }}
   - |
-    (curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || \
-    (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
-  - chmod 777 /usr/bin/envman
+    (curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /harness/bin/envman && echo "Successfully downloaded envman binary from primary URL.") || \
+    (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /harness/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
+  - chmod 755 /harness/bin/envman
   {{ end }}
 
   # Download and install annotations CLI if configured
   {{ if .AnnotationsBinaryURI }}
   - |
-    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli && echo "Successfully downloaded annotations CLI from primary URL.") {{ if .AnnotationsBinaryFallbackURI }} || \
-    (echo "Primary URL failed for annotations CLI. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli && echo "Successfully downloaded annotations CLI from fallback URL."){{ end }}
-  - chmod 755 /usr/bin/hcli
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /harness/bin/hcli && echo "Successfully downloaded annotations CLI from primary URL.") {{ if .AnnotationsBinaryFallbackURI }} || \
+    (echo "Primary URL failed for annotations CLI. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /harness/bin/hcli && echo "Successfully downloaded annotations CLI from fallback URL."){{ end }}
+  - chmod 755 /harness/bin/hcli
   {{ end }}
   
-  # Setup environment and start lite-engine
+  - log_step "STEP 5/7: Starting lite-engine service"
+  # Setup environment and start lite-engine as systemd service
   - touch /root/.env
   - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
   - echo "CLOUD_DRIVER={{ .DriverName }}" >> /root/.env
-  - /usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &
+  - |
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Reloading systemd daemon..." | tee -a /var/log/cloud-init-setup.log
+    systemctl daemon-reload
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Enabling lite-engine service..." | tee -a /var/log/cloud-init-setup.log
+    systemctl enable lite-engine.service
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting lite-engine service..." | tee -a /var/log/cloud-init-setup.log
+    systemctl start lite-engine.service
+
+  - log_step "STEP 6/7: Waiting for lite-engine health check on port 9079"
+  # Wait for lite-engine to be ready - FAIL FAST if not ready in 3 minutes
+  - |
+    MAX_WAIT=180
+    WAIT_INTERVAL=2
+    ELAPSED=0
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Waiting for lite-engine to listen on port 9079 (timeout: ${MAX_WAIT}s)..." | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] CRITICAL: VM will be terminated if health check fails" | tee -a /var/log/cloud-init-setup.log
+
+    while [ $ELAPSED -lt $MAX_WAIT ]; do
+      # Check if port is listening
+      if netstat -tuln | grep -q ":9079 "; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] SUCCESS: lite-engine is listening on port 9079 (took ${ELAPSED}s)" | tee -a /var/log/cloud-init-setup.log
+        systemctl status lite-engine.service --no-pager | tee -a /var/log/cloud-init-setup.log
+        exit 0
+      fi
+
+      # Check if service crashed
+      if ! systemctl is-active --quiet lite-engine.service; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] FATAL: lite-engine service crashed during startup" | tee -a /var/log/cloud-init-setup.log
+        systemctl status lite-engine.service --no-pager | tee -a /var/log/cloud-init-setup.log
+        tail -100 /var/log/lite-engine.log | tee -a /var/log/cloud-init-setup.log
+        exit 1
+      fi
+
+      sleep $WAIT_INTERVAL
+      ELAPSED=$((ELAPSED + WAIT_INTERVAL))
+
+      if [ $((ELAPSED % 10)) -eq 0 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Still waiting... (${ELAPSED}s/${MAX_WAIT}s)" | tee -a /var/log/cloud-init-setup.log
+      fi
+    done
+
+    # Timeout - fail the VM
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] FATAL: lite-engine failed to start within ${MAX_WAIT}s" | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Service status:" | tee -a /var/log/cloud-init-setup.log
+    systemctl status lite-engine.service --no-pager | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Last 100 lines of lite-engine logs:" | tee -a /var/log/cloud-init-setup.log
+    tail -100 /var/log/lite-engine.log | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] VM should be terminated and replaced" | tee -a /var/log/cloud-init-setup.log
+    exit 1
   
+  - log_step "STEP 7/7: Setting up additional tools"
   # Setup tmate if enabled
   {{ if .Tmate.Enabled }}
+  - |
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Setting up tmate..." | tee -a /var/log/cloud-init-setup.log
   - mkdir /addon
   {{ if eq .Platform.Arch "amd64" }}
   - |
@@ -280,3 +416,21 @@ runcmd:
   {{ end }}
   - rm -rf /addon/tmate.xz
   {{ end }}
+
+  # Final success marker
+  - |
+    echo "========================================" | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] CLOUD-INIT COMPLETED SUCCESSFULLY" | tee -a /var/log/cloud-init-setup.log
+    echo "========================================" | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] All services are running:" | tee -a /var/log/cloud-init-setup.log
+    systemctl status lite-engine.service --no-pager | grep "Active:" | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Lite-engine listening on:" | tee -a /var/log/cloud-init-setup.log
+    netstat -tuln | grep ":9079" | tee -a /var/log/cloud-init-setup.log
+    echo "" | tee -a /var/log/cloud-init-setup.log
+    echo "========================================" | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] FULL CLOUD-INIT SETUP LOG" | tee -a /var/log/cloud-init-setup.log
+    echo "========================================" | tee -a /var/log/cloud-init-setup.log
+    cat /var/log/cloud-init-setup.log
+    echo "========================================" | tee -a /var/log/cloud-init-setup.log
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] END OF CLOUD-INIT SETUP LOG" | tee -a /var/log/cloud-init-setup.log
+    echo "========================================" | tee -a /var/log/cloud-init-setup.log
