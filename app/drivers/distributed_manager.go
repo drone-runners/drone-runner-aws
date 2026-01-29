@@ -281,11 +281,6 @@ func (d *DistributedManager) provisionFromPool(
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
-	// Case 1: Init task with reserved capacity
-	if reservedCapacity != nil {
-		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
-	}
-
 	// Variant filtering: select the best matching variant based on machineConfig
 	var selectedVariant *types.PoolVariant
 	if len(pool.PoolVariants) > 0 {
@@ -295,6 +290,11 @@ func (d *DistributedManager) provisionFromPool(
 			d.applyVariantToMachineConfig(machineConfig, selectedVariant)
 		}
 		// If no variant found, continue with default machineConfig
+	}
+
+	// Case 1: Init task with reserved capacity
+	if reservedCapacity != nil {
+		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 	}
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
