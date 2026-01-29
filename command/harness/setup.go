@@ -327,12 +327,8 @@ func handleSetup(
 		RunnerName: runnerName,
 	}
 
-	shouldUseGoogleDNS := false
-	if len(r.SetupRequest.Envs) != 0 {
-		if r.SetupRequest.Envs["CI_HOSTED_USE_GOOGLE_DNS"] == "true" {
-			shouldUseGoogleDNS = true
-		}
-	}
+	// Always use Google DNS for hosted builds
+	shouldUseGoogleDNS := true
 
 	instance, err := poolManager.Provision(
 		ctx,
