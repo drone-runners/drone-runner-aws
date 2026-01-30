@@ -95,7 +95,7 @@ func HandleSetup(
 		internalLog.Out = os.Stdout
 		internalLogr = internalLog.WithField("stage_runtime_id", stageRuntimeID)
 	} else {
-		wc := getStreamLogger(r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
+		wc := getStreamLogger(&r.SetupRequest.LogConfig, r.SetupRequest.MtlsConfig, r.LogKey, r.CorrelationID)
 		defer func() {
 			if err := wc.Close(); err != nil {
 				log.WithError(err).Debugln("failed to close log stream")
