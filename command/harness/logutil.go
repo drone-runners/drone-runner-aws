@@ -71,29 +71,15 @@ func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
 
 // logRequestedMachine prints the standard "Requested machine" block with
 // size, OS, Arch, image, and nested virtualization flag.
-func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID string, platform *types.Platform, resourceClass, imageVersion, stageRuntimeID string) {
+func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID string, platform *types.Platform, resourceClass, imageVersion, stageRuntimeID string, isNested bool) {
 	printTitle(logr, "Requested machine:")
 	printKV(logr, "Machine Size", resourceClass)
 	printKV(logr, "OS", capitalize(platform.OS))
 	printKV(logr, "Arch", capitalize(platform.Arch))
 	poolImageForLog := derivePoolImageForLog(poolManager, poolID)
 	printKV(logr, "Image Version", useNonEmpty(imageVersion, poolImageForLog))
-	nvFromConfig := deriveEnableNestedVirtualization(poolManager, poolID)
-	printKV(logr, "Hardware Acceleration (Nested Virtualization)", nvFromConfig)
+	printKV(logr, "Hardware Acceleration (Nested Virtualization)", isNested)
 	printKV(logr, "Stage Runtime ID", stageRuntimeID)
-}
-
-// deriveEnableNestedVirtualization reads the nested virtualization flag from the pool YAML config.
-// Returns false if not set or not applicable for the provider.
-func deriveEnableNestedVirtualization(poolManager drivers.IManager, pool string) bool {
-	spec, err := poolManager.GetPoolSpec(pool)
-	if err != nil || spec == nil {
-		return false
-	}
-	if g, ok := spec.(*config.Google); ok {
-		return g.EnableNestedVirtualization
-	}
-	return false
 }
 
 // derivePoolImageForLog extracts an image identifier from the pool YAML config for logging purposes.
