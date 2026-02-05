@@ -469,8 +469,8 @@ func (d *DistributedManager) applyVariantToMachineConfig(machineConfig *types.Ma
 	}
 	// Set VariantID for tracking
 	machineConfig.VariantID = variant.VariantID
-	// NestedVirtualization and Hibernate are typically not overridden from variant
-	// as they come from the request, but we could add them if needed
+	// Set Variant hibernate configuration
+	machineConfig.Hibernate = variant.Hibernate
 }
 
 // setupInstanceAsync creates an outbox job for setting up the instance
@@ -547,9 +547,12 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 				logrus.WithField("panic", r).Errorln("panic in hibernate goroutine")
 			}
 		}()
+
 		shouldHibernate := false
-		if machineConfig != nil && machineConfig.Hibernate {
-			shouldHibernate = true
+		if machineConfig != nil && machineConfig.VariantID != "" && machineConfig.VariantID != "default" {
+			shouldHibernate = machineConfig.Hibernate
+		} else {
+			shouldHibernate = pool.Driver.CanHibernate()
 		}
 		err = d.hibernate(context.Background(), pool.Name, tlsServerName, inst, shouldHibernate)
 		if err != nil {
@@ -571,7 +574,7 @@ func (d *DistributedManager) hibernate(
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if !shouldHibernate && !pool.Driver.CanHibernate() {
+	if !shouldHibernate {
 		return nil
 	}
 
@@ -792,6 +795,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 			MachineType:          instance.Size,
 			VariantID:            instance.VariantID,
 			Zones:                []string{instance.Zone},
+			Hibernate:            instance.IsHibernated,
 		})
 	}
 

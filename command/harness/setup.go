@@ -166,7 +166,7 @@ func HandleSetup(
 		WithField("os", platform.OS).
 		WithField("arch", platform.Arch)
 
-	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), &platform, r.ResourceClass, r.VMImageConfig.ImageVersion, stageRuntimeID)
+	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), &platform, r.ResourceClass, r.VMImageConfig.ImageVersion, stageRuntimeID, r.NestedVirtualization)
 
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)

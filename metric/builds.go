@@ -331,7 +331,7 @@ func WaitDurationCount() *prometheus.HistogramVec {
 		prometheus.HistogramOpts{
 			Name:    "harness_ci_runner_wait_duration_seconds",
 			Help:    "Waiting time needed to successfully allocate a machine in a pool",
-			Buckets: []float64{5, 15, 30, 60, 300, 600},
+			Buckets: []float64{0.5, 1, 3, 5, 15, 30, 60, 300, 600},
 		},
 		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated"},
 	)
@@ -343,7 +343,7 @@ func TotalVMInitDurationCount() *prometheus.HistogramVec {
 		prometheus.HistogramOpts{
 			Name:    "harness_ci_runner_total_vm_init_duration_seconds",
 			Help:    "Total time needed to successfully allocate a machine",
-			Buckets: []float64{5, 15, 30, 60, 300, 600},
+			Buckets: []float64{0.5, 1, 3, 5, 15, 30, 60, 300, 600},
 		},
 		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated", "variant_id"},
 	)
@@ -355,7 +355,7 @@ func CapacityReservationDurationCount() *prometheus.HistogramVec {
 		prometheus.HistogramOpts{
 			Name:    "harness_ci_capacity_reservation_duration_seconds",
 			Help:    "Total time needed to successfully reserve capacity",
-			Buckets: []float64{0.5, 1, 2, 5, 10, 30, 60, 120, 300},
+			Buckets: []float64{0.5, 1, 3, 5, 10, 30, 60, 120, 300},
 		},
 		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id"},
 	)

@@ -71,15 +71,14 @@ func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
 
 // logRequestedMachine prints the standard "Requested machine" block with
 // size, OS, Arch, image, and nested virtualization flag.
-func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID string, platform *types.Platform, resourceClass, imageVersion, stageRuntimeID string) {
+func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID string, platform *types.Platform, resourceClass, imageVersion, stageRuntimeID string, isNested bool) {
 	printTitle(logr, "Requested machine:")
 	printKV(logr, "Machine Size", resourceClass)
 	printKV(logr, "OS", capitalize(platform.OS))
 	printKV(logr, "Arch", capitalize(platform.Arch))
 	poolImageForLog := derivePoolImageForLog(poolManager, poolID)
 	printKV(logr, "Image Version", useNonEmpty(imageVersion, poolImageForLog))
-	nvFromConfig := deriveEnableNestedVirtualization(poolManager, poolID)
-	printKV(logr, "Hardware Acceleration (Nested Virtualization)", nvFromConfig)
+	printKV(logr, "Hardware Acceleration (Nested Virtualization)", isNested)
 	printKV(logr, "Stage Runtime ID", stageRuntimeID)
 }
 
