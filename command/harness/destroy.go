@@ -24,11 +24,8 @@ import (
 )
 
 var (
-	destroyTimeout = 10 * time.Minute
-)
-
-const (
-	defaultLEDestroyTimeout = 30 * time.Second // default timeout for lite-engine destroy call
+	destroyTimeout          = 10 * time.Minute
+	liteEngineDestroyTimeout = 30 * time.Second
 )
 
 type VMCleanupRequest struct {
@@ -39,7 +36,6 @@ type VMCleanupRequest struct {
 	Context            Context             `json:"context,omitempty"`
 	StorageCleanupType storage.CleanupType `json:"storage_cleanup_type,omitempty"`
 	InstanceInfo       common.InstanceInfo `json:"instance_info,omitempty"`
-	LEDestroyTimeout   time.Duration       `json:"le_destroy_timeout,omitempty"` // timeout for lite-engine destroy call (default 30s)
 }
 
 func HandleDestroy(
@@ -165,15 +161,11 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
 	} else {
-		// Use timeout from request, fallback to default
-		leDestroyTimeout := r.LEDestroyTimeout
-		if leDestroyTimeout <= 0 {
-			leDestroyTimeout = defaultLEDestroyTimeout
-		}
-
-		// Attempting to call lite engine destroy
-		resp, destroyErr := client.Destroy(context.Background(),
-			&api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS), StageRuntimeID: r.StageRuntimeID, Timeout: leDestroyTimeout})
+		// Attempting to call lite engine destroy with timeout controlled at caller level
+		leCtx, leCancel := context.WithTimeout(ctx, liteEngineDestroyTimeout)
+		defer leCancel()
+		resp, destroyErr := client.Destroy(leCtx,
+			&api.DestroyRequest{LogDrone: false, LogKey: r.LogKey, LiteEnginePath: oshelp.GetLiteEngineLogsPath(inst.OS), StageRuntimeID: r.StageRuntimeID})
 		if destroyErr != nil {
 			// we can continue even if lite engine destroy does not happen successfully. This is because
 			// the VM is anyways destroyed so the process will be killed
