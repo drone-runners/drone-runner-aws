@@ -82,19 +82,6 @@ func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolI
 	printKV(logr, "Stage Runtime ID", stageRuntimeID)
 }
 
-// deriveEnableNestedVirtualization reads the nested virtualization flag from the pool YAML config.
-// Returns false if not set or not applicable for the provider.
-func deriveEnableNestedVirtualization(poolManager drivers.IManager, pool string) bool {
-	spec, err := poolManager.GetPoolSpec(pool)
-	if err != nil || spec == nil {
-		return false
-	}
-	if g, ok := spec.(*config.Google); ok {
-		return g.EnableNestedVirtualization
-	}
-	return false
-}
-
 // derivePoolImageForLog extracts an image identifier from the pool YAML config for logging purposes.
 // It returns an empty string if the pool config is missing or does not match a known driver type.
 func derivePoolImageForLog(poolManager drivers.IManager, pool string) string {

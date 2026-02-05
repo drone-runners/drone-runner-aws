@@ -22,6 +22,8 @@ import (
 
 var _ IManager = (*DistributedManager)(nil)
 
+const defaultVariantID = "default"
+
 type DistributedManager struct {
 	Manager
 	outboxStore store.OutboxStore
@@ -305,9 +307,9 @@ func (d *DistributedManager) provisionFromPool(
 		NestedVirtualization: machineConfig.NestedVirtualization,
 	}
 
-	// Set VariantID: use the selected variant's ID if available, otherwise use "default"
+	// Set VariantID: use the selected variant's ID if available, otherwise use defaultVariantID
 	if selectedVariant == nil && len(pool.PoolVariants) > 0 {
-		queryParams.VariantID = "default"
+		queryParams.VariantID = defaultVariantID
 	}
 	if machineConfig.VMImageConfig != nil {
 		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
@@ -469,8 +471,8 @@ func (d *DistributedManager) applyVariantToMachineConfig(machineConfig *types.Ma
 	}
 	// Set VariantID for tracking
 	machineConfig.VariantID = variant.VariantID
-	// Set Variant hibernate configuration
-	machineConfig.Hibernate = variant.Hibernate
+	// NestedVirtualization and Hibernate are typically not overridden from variant
+	// as they come from the request, but we could add them if needed
 }
 
 // setupInstanceAsync creates an outbox job for setting up the instance
@@ -549,7 +551,7 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 		}()
 
 		shouldHibernate := false
-		if machineConfig != nil && machineConfig.VariantID != "" && machineConfig.VariantID != "default" {
+		if machineConfig != nil && machineConfig.VariantID != "" && machineConfig.VariantID != defaultVariantID {
 			shouldHibernate = machineConfig.Hibernate
 		} else {
 			shouldHibernate = pool.Driver.CanHibernate()
