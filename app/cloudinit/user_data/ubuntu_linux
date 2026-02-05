@@ -1,6 +1,9 @@
 #cloud-config
 # Package installation
-{{ if not .IsHosted }}
+{{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
+packages:
+  - wget
+{{ else }}
 apt:
   sources:
     docker.list:
