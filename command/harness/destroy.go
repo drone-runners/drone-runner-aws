@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	destroyTimeout          = 10 * time.Minute
+	destroyTimeout           = 10 * time.Minute
 	liteEngineDestroyTimeout = 30 * time.Second
 )
 
