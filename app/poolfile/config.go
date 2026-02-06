@@ -116,7 +116,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				amazon.WithMarketType(a.MarketType),
 				amazon.WithTags(a.Tags),
 				amazon.WithHibernate(a.Hibernate),
-				amazon.WithZoneDetails(a.ZoneDetails),
+				amazon.WithZoneDetails(func() []config.ZoneInfo {
+					if len(a.Network.ZoneDetails) > 0 {
+						return a.Network.ZoneDetails
+					}
+					return a.ZoneDetails
+				}()),
 				amazon.WithEnableC4D(a.EnableC4D),
 			)
 			if err != nil {

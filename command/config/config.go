@@ -53,7 +53,7 @@ type (
 		RootDirectory string            `json:"root_directory,omitempty" yaml:"root_directory,omitempty"`
 		Hibernate     bool              `json:"hibernate,omitempty"`
 		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
-		ZoneDetails   []ZoneInfo        `json:"zone_details,omitempty" yaml:"zone_details,omitempty"`
+		ZoneDetails   []ZoneInfo        `json:"zone_details,omitempty" yaml:"zone_details,omitempty"` // Deprecated
 		EnableC4D     bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 	}
 
@@ -68,16 +68,17 @@ type (
 		SessionToken     string `json:"aws_session_token,omitempty" yaml:"aws_session_token"`
 		Region           string `json:"region,omitempty"`
 		Retries          int    `json:"retries,omitempty" yaml:"retries,omitempty"`
-		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"`
+		AvailabilityZone string `json:"availability_zone,omitempty" yaml:"availability_zone,omitempty"` // Deprecated
 		KeyPairName      string `json:"key_pair_name,omitempty" yaml:"key_pair_name,omitempty"`
 	}
 
 	// AmazonNetwork provides AmazonNetwork settings.
 	AmazonNetwork struct {
-		VPCSecurityGroups []string `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
-		SecurityGroups    []string `json:"security_groups,omitempty" yaml:"security_groups"`
-		SubnetID          string   `json:"subnet_id,omitempty" yaml:"subnet_id"`
-		PrivateIP         bool     `json:"private_ip,omitempty" yaml:"private_ip"`
+		VPCSecurityGroups []string   `json:"vpc_security_group_ids,omitempty" yaml:"vpc_security_groups"`
+		SecurityGroups    []string   `json:"security_groups,omitempty" yaml:"security_groups"`
+		SubnetID          string     `json:"subnet_id,omitempty" yaml:"subnet_id"` // Deprecated
+		PrivateIP         bool       `json:"private_ip,omitempty" yaml:"private_ip"`
+		ZoneDetails       []ZoneInfo `json:"zone_details,omitempty" yaml:"zone_details,omitempty"`
 	}
 
 	// Anka specifies the configuration for an Anka instance.
