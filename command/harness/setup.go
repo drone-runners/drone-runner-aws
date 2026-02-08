@@ -174,24 +174,20 @@ func HandleSetup(
 
 	var capacity *types.CapacityReservation
 	if crs != nil {
-		var capFindErr error
-		capacity, capFindErr = crs.Find(noContext, stageRuntimeID)
+		// Atomically find and claim the capacity reservation, transitioning from "created" to "inuse"
+		// This prevents race conditions where multiple requests could claim the same capacity
+		capacities, capClaimErr := crs.FindAndClaim(
+			noContext,
+			&types.CapacityReservationQueryParams{StageID: stageRuntimeID, Limit: 1},
+			types.CapacityReservationStateInUse,
+			[]types.CapacityReservationState{types.CapacityReservationStateCreated},
+		)
 
-		// Early exit if capacity not found or invalid
-		if capFindErr != nil {
-			internalLogr.WithError(capFindErr).Error("could not find capacity reservation")
-			capacity = nil
-		} else if capacity == nil || capacity.PoolName == "" {
-			capacity = nil
-		} else if capacity.ReservationState != types.CapacityReservationStateCreated {
-			internalLogr.WithField("current_state", capacity.ReservationState).Warn("capacity reservation is not in available state")
-			capacity = nil
-		} else {
-			// Mark capacity as in use
-			if err := crs.UpdateState(ctx, capacity.StageID, types.CapacityReservationStateInUse); err != nil {
-				internalLogr.WithError(err).Error("could not update capacity reservation state to in_use")
-				capacity = nil
-			}
+		if capClaimErr != nil {
+			// sql.ErrNoRows means either the capacity doesn't exist or it's not in "created" state
+			internalLogr.WithError(capClaimErr).Debug("could not find or claim capacity reservation")
+		} else if len(capacities) > 0 && capacities[0].PoolName != "" {
+			capacity = capacities[0]
 		}
 	}
 
