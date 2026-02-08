@@ -125,7 +125,7 @@ type mockCapacityReservationStore struct {
 	FindFunc         func(ctx context.Context, id string) (*types.CapacityReservation, error)
 	CreateFunc       func(ctx context.Context, reservation *types.CapacityReservation) error
 	DeleteFunc       func(ctx context.Context, id string) error
-	FindAndClaimFunc func(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error)
+	FindAndClaimFunc func(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) //nolint:lll
 }
 
 func (m *mockCapacityReservationStore) Find(ctx context.Context, id string) (*types.CapacityReservation, error) {
@@ -149,7 +149,7 @@ func (m *mockCapacityReservationStore) Delete(ctx context.Context, id string) er
 	return nil
 }
 
-func (m *mockCapacityReservationStore) FindAndClaim(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+func (m *mockCapacityReservationStore) FindAndClaim(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) { //nolint:lll
 	if m.FindAndClaimFunc != nil {
 		return m.FindAndClaimFunc(ctx, params, newState, allowedStates)
 	}

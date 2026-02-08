@@ -115,10 +115,10 @@ RETURNING capacity_reservation.stage_id, pool_name, instance_id, reservation_id,
 `, subSQL, len(subArgs)+1)
 
 	// Append newState to args
-	args := append(subArgs, newState)
+	subArgs = append(subArgs, newState)
 
 	// Execute and scan results
-	rows, err := tx.QueryContext(ctx, finalSQL, args...)
+	rows, err := tx.QueryContext(ctx, finalSQL, subArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("error executing update: %w", err)
 	}

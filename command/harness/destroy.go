@@ -159,8 +159,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	// Update instance state to terminating and update timestamp
 	inst.State = types.StateTerminating
 	inst.Updated = time.Now().Unix()
-	if err := poolManager.Update(ctx, inst); err != nil {
-		logr.WithError(err).Warnln("failed to update instance state to terminating")
+	if updateErr := poolManager.Update(ctx, inst); updateErr != nil {
+		logr.WithError(updateErr).Warnln("failed to update instance state to terminating")
 	}
 
 	logr.Traceln("invoking lite engine cleanup")
