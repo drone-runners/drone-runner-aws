@@ -19,14 +19,14 @@ require (
 	github.com/dchest/uniuri v1.2.0
 	github.com/drone/drone-go v1.7.1
 	github.com/drone/envsubst v1.0.3
-	github.com/drone/runner-go v1.12.1-0.20260205183937-320be7515cd8
+	github.com/drone/runner-go v1.13.0
 	github.com/drone/signal v1.0.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-chi/chi/v5 v5.2.4
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.148-debug-vul-2
+	github.com/harness/lite-engine v0.5.154
 	github.com/hashicorp/nomad/api v0.0.0-20230421025320-b4e6a70fe69b
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
@@ -41,7 +41,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/wings-software/dlite v1.0.0-rc.14
+	github.com/wings-software/dlite v1.0.0-rc.15
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.18.0
@@ -139,5 +139,3 @@ require (
 	google.golang.org/protobuf v1.35.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace golang.org/x/sys => golang.org/x/sys v0.20.0

@@ -1,14 +1,8 @@
-# Using Alpine 3.21 with edge packages for curl 8.18.0+ (fixes CVE-2025-14017) and patched busybox (fixes CVE-2025-60876)
 FROM alpine:3.21 as alpine
-RUN echo 'https://dl-cdn.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
-    apk update && apk upgrade --no-cache busybox busybox-binsh ssl_client && \
-    apk add -U --no-cache ca-certificates
+RUN apk add -U --no-cache ca-certificates
 
 FROM alpine:3.21
-# Add edge repo and upgrade busybox (CVE-2025-60876) + install curl 8.18.0 (CVE-2025-14017)
-RUN echo 'https://dl-cdn.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
-    apk update && apk upgrade --no-cache busybox busybox-binsh ssl_client && \
-    apk add -U --no-cache curl
+RUN apk add -U --no-cache curl
 EXPOSE 3000
 
 ENV GODEBUG netdns=go
