@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/drone/runner-go/logger"
@@ -93,6 +95,7 @@ type amazonConfig struct {
 	tags          map[string]string // user defined tags
 	hibernate     bool
 	zoneDetails   []cf.ZoneInfo
+	zoneIndex     uint64 // counter for round-robin zone selection
 
 	service ec2ClientAPI
 
@@ -917,6 +920,27 @@ func (p *amazonConfig) getDynamicConfig(opts *drtypes.InstanceCreateOpts) (*requ
 		// Find matching subnet for the zone
 		for _, zoneDetail := range p.zoneDetails {
 			if zoneDetail.AvailabilityZone == opts.Zones[0] {
+				cfg.subnet = zoneDetail.SubnetID
+				break
+			}
+		}
+	} else if len(p.zoneDetails) > 0 {
+		// Round-robin selection of availability zone and subnet
+		numZones := uint64(len(p.zoneDetails))
+		start := time.Now()
+		for {
+			current := atomic.LoadUint64(&p.zoneIndex)
+			next := (current + 1) % numZones
+			if atomic.CompareAndSwapUint64(&p.zoneIndex, current, next) {
+				zoneDetail := p.zoneDetails[current]
+				cfg.availabilityZone = zoneDetail.AvailabilityZone
+				cfg.subnet = zoneDetail.SubnetID
+				break
+			}
+			// Fallback to random selection if CAS loop takes too long
+			if time.Since(start) > 10*time.Second {
+				zoneDetail := p.zoneDetails[rand.Intn(len(p.zoneDetails))] //nolint:gosec
+				cfg.availabilityZone = zoneDetail.AvailabilityZone
 				cfg.subnet = zoneDetail.SubnetID
 				break
 			}

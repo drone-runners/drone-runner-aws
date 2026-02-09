@@ -22,6 +22,8 @@ import (
 
 var _ IManager = (*DistributedManager)(nil)
 
+const defaultVariantID = "default"
+
 type DistributedManager struct {
 	Manager
 	outboxStore store.OutboxStore
@@ -305,9 +307,9 @@ func (d *DistributedManager) provisionFromPool(
 		NestedVirtualization: machineConfig.NestedVirtualization,
 	}
 
-	// Set VariantID: use the selected variant's ID if available, otherwise use "default"
+	// Set VariantID: use the selected variant's ID if available, otherwise use defaultVariantID
 	if selectedVariant == nil && len(pool.PoolVariants) > 0 {
-		queryParams.VariantID = "default"
+		queryParams.VariantID = defaultVariantID
 	}
 	if machineConfig.VMImageConfig != nil {
 		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
@@ -547,9 +549,12 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 				logrus.WithField("panic", r).Errorln("panic in hibernate goroutine")
 			}
 		}()
+
 		shouldHibernate := false
-		if machineConfig != nil && machineConfig.Hibernate {
-			shouldHibernate = true
+		if machineConfig != nil && machineConfig.VariantID != "" && machineConfig.VariantID != defaultVariantID {
+			shouldHibernate = machineConfig.Hibernate
+		} else {
+			shouldHibernate = pool.Driver.CanHibernate()
 		}
 		err = d.hibernate(context.Background(), pool.Name, tlsServerName, inst, shouldHibernate)
 		if err != nil {
@@ -571,7 +576,7 @@ func (d *DistributedManager) hibernate(
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if !shouldHibernate && !pool.Driver.CanHibernate() {
+	if !shouldHibernate {
 		return nil
 	}
 
@@ -792,6 +797,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 			MachineType:          instance.Size,
 			VariantID:            instance.VariantID,
 			Zones:                []string{instance.Zone},
+			Hibernate:            instance.IsHibernated,
 		})
 	}
 
