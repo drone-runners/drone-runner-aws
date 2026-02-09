@@ -1,6 +1,7 @@
 # First Stage: Build environment with Go and dependencies
 FROM golang:1.24-alpine3.21 as builder
-RUN apk --no-cache add ca-certificates git build-base
+# Update all packages to fix CVE-2025-14017 (curl) and CVE-2025-60876 (busybox)
+RUN apk update && apk upgrade --no-cache && apk add --no-cache ca-certificates git build-base
 WORKDIR /app
 COPY . .
 USER root
@@ -13,7 +14,8 @@ RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/drone-runn
 FROM alpine:3.21
 WORKDIR /app
 RUN chown -R nobody:nobody /app
-RUN apk --no-cache add ca-certificates
+# Update all packages to fix CVE-2025-14017 (curl) and CVE-2025-60876 (busybox)
+RUN apk update && apk upgrade --no-cache && apk add --no-cache ca-certificates
 RUN touch database.sqlite3 && chmod 777 /app/database.sqlite3
 COPY --from=builder /app/drone-runner-aws ./drone-runner-aws
 RUN chmod 777  ./drone-runner-aws
