@@ -51,9 +51,9 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 	args := []interface{}{ignitePath, vmImageConfig.ImageName, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
 
 	// add labels
-	if len(opts.Labels) > 0 {
+	if len(opts.InternalLabels) > 0 {
 		runCmdFormat += " --label"
-		for key, value := range opts.Labels {
+		for key, value := range opts.InternalLabels {
 			runCmdFormat += fmt.Sprintf(" %s=%s", key, value)
 		}
 	}

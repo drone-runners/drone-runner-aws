@@ -358,12 +358,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		logr = logr.WithField("gitspaces_port_mapping", gitspacesPortMappingsString)
 	}
 
-	labelsBytes, marshalErr := json.Marshal(opts.Labels)
+	labelsBytes, marshalErr := json.Marshal(opts.InternalLabels)
 	if marshalErr != nil {
 		defer func() {
 			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		}()
-		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
+		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.InternalLabels, marshalErr)
 	}
 	instance := &types.Instance{
 		ID:                   vm,

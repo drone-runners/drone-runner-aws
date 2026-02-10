@@ -53,6 +53,7 @@ type (
 		envmanBinaryFallbackURI      string
 		tmateBinaryURI               string
 		tmateBinaryFallbackURI       string
+		env                          string
 	}
 
 	poolEntry struct {
@@ -64,26 +65,27 @@ type (
 func New(
 	globalContext context.Context,
 	instanceStore store.InstanceStore,
-	env *config.EnvConfig,
+	envConfig *config.EnvConfig,
 ) *Manager {
 	return &Manager{
 		globalCtx:                    globalContext,
 		instanceStore:                instanceStore,
-		tmate:                        types.Tmate(env.Tmate),
-		runnerName:                   env.Runner.Name,
-		liteEnginePath:               env.LiteEngine.Path,
-		harnessTestBinaryURI:         env.Settings.HarnessTestBinaryURI,
-		pluginBinaryURI:              env.Settings.PluginBinaryURI,
-		autoInjectionBinaryURI:       env.Settings.AutoInjectionBinaryURI,
-		liteEngineFallbackPath:       env.LiteEngine.FallbackPath,
-		pluginBinaryFallbackURI:      env.Settings.PluginBinaryFallbackURI,
-		runnerConfig:                 types.RunnerConfig(env.RunnerConfig),
-		annotationsBinaryURI:         env.Settings.AnnotationsBinaryURI,
-		annotationsBinaryFallbackURI: env.Settings.AnnotationsBinaryFallbackURI,
-		envmanBinaryURI:              env.Settings.EnvmanBinaryURI,
-		envmanBinaryFallbackURI:      env.Settings.EnvmanBinaryFallbackURI,
-		tmateBinaryURI:               env.Settings.TmateBinaryURI,
-		tmateBinaryFallbackURI:       env.Settings.TmateBinaryFallbackURI,
+		tmate:                        types.Tmate(envConfig.Tmate),
+		runnerName:                   envConfig.Runner.Name,
+		liteEnginePath:               envConfig.LiteEngine.Path,
+		harnessTestBinaryURI:         envConfig.Settings.HarnessTestBinaryURI,
+		pluginBinaryURI:              envConfig.Settings.PluginBinaryURI,
+		autoInjectionBinaryURI:       envConfig.Settings.AutoInjectionBinaryURI,
+		liteEngineFallbackPath:       envConfig.LiteEngine.FallbackPath,
+		pluginBinaryFallbackURI:      envConfig.Settings.PluginBinaryFallbackURI,
+		runnerConfig:                 types.RunnerConfig(envConfig.RunnerConfig),
+		annotationsBinaryURI:         envConfig.Settings.AnnotationsBinaryURI,
+		annotationsBinaryFallbackURI: envConfig.Settings.AnnotationsBinaryFallbackURI,
+		envmanBinaryURI:              envConfig.Settings.EnvmanBinaryURI,
+		envmanBinaryFallbackURI:      envConfig.Settings.EnvmanBinaryFallbackURI,
+		tmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
+		tmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
+		env:                          envConfig.Settings.Env,
 	}
 }
 
@@ -104,6 +106,7 @@ func NewManager(
 	annotationsBinaryURI string, annotationsBinaryFallbackURI string,
 	envmanBinaryURI string, envmanBinaryFallbackURI string,
 	tmateBinaryURI string, tmateBinaryFallbackURI string,
+	env string,
 ) *Manager {
 	return &Manager{
 		globalCtx:                    globalContext,
@@ -125,6 +128,7 @@ func NewManager(
 		envmanBinaryFallbackURI:      envmanBinaryFallbackURI,
 		tmateBinaryURI:               tmateBinaryURI,
 		tmateBinaryFallbackURI:       tmateBinaryFallbackURI,
+		env:                          env,
 	}
 }
 
@@ -1001,7 +1005,15 @@ func (m *Manager) setupInstance(
 		}
 		retain = "true"
 	}
-	createOptions.Labels = map[string]string{"retain": retain}
+	createOptions.InternalLabels = map[string]string{"retain": retain}
+	if createOptions.IsHosted {
+		createOptions.VMLabels = map[string]string{
+			"pool_id": pool.Name,
+		}
+		if m.env != "" {
+			createOptions.VMLabels["harness_env"] = m.env
+		}
+	}
 	createOptions.DriverName = pool.Driver.DriverName()
 	createOptions.Timeout = timeout
 	createOptions.CapacityReservation = reservedCapacity
