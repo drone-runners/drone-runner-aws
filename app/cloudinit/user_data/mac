@@ -25,4 +25,10 @@ chmod 777 /usr/bin/plugin
 chmod 755 /usr/local/bin/hcli
 {{ end }}
 
+{{ if .AutoInjectionBinaryURI }}
+mkdir -p /tmp/harness/bin
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection
+chmod 777 /tmp/harness/bin/auto-injection
+{{ end }}
+
 /usr/local/bin/lite-engine server --env-file $HOME/.env > {{ .LiteEngineLogsPath }} 2>&1 &

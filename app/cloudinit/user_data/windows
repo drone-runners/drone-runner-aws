@@ -69,6 +69,18 @@ try {
 }
 {{ end }}
 
+{{ if .AutoInjectionBinaryURI }}
+$autoInjectionUrl = "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection.exe"
+$outputFile = "C:\Program Files\lite-engine\auto-injection.exe"
+
+try {
+    echo "[DRONE] Downloading auto-injection binary"
+    Invoke-WebRequest -Uri $autoInjectionUrl -OutFile $outputFile
+} catch {
+    echo "[DRONE] Failed to download auto-injection binary"
+}
+{{ end }}
+
 $primaryLiteEngineUrl = "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $secondaryLiteEngineUrl = "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $outputFile = "C:\Program Files\lite-engine\lite-engine.exe"
