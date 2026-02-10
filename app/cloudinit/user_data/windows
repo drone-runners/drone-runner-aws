@@ -70,14 +70,13 @@ try {
 {{ end }}
 
 {{ if .AutoInjectionBinaryURI }}
-$autoInjectionUrl = "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection.exe"
-$outputFile = "C:\Program Files\lite-engine\auto-injection.exe"
+$autoInjectionUrl = "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection"
+$autoInjectionPath = "C:\Program Files\lite-engine\auto-injection.exe"
 
 try {
-    echo "[DRONE] Downloading auto-injection binary"
-    Invoke-WebRequest -Uri $autoInjectionUrl -OutFile $outputFile
+    Invoke-WebRequest -Uri $autoInjectionUrl -OutFile $autoInjectionPath -ErrorAction Stop
 } catch {
-    echo "[DRONE] Failed to download auto-injection binary"
+    echo "[DRONE] WARNING: Failed to download auto-injection binary"
 }
 {{ end }}
 
