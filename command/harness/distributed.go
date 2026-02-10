@@ -71,6 +71,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			cfg.Env.Settings.EnvmanBinaryFallbackURI,
 			cfg.Env.Settings.TmateBinaryURI,
 			cfg.Env.Settings.TmateBinaryFallbackURI,
+			cfg.Env.Settings.Env,
 		),
 		outboxStore,
 	)

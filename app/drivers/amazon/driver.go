@@ -565,6 +565,10 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	for k, v := range p.tags {
 		tags[k] = v
 	}
+	// add VM labels from createOptions
+	for k, v := range opts.VMLabels {
+		tags[k] = v
+	}
 	// add volume tags
 	for k, v := range p.volumeTags {
 		volumeTags[k] = v
@@ -684,9 +688,9 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	instanceIP := p.getIP(amazonInstance)
 	launchTime := p.getLaunchTime(amazonInstance)
 
-	labelsBytes, marshalErr := json.Marshal(opts.Labels)
+	labelsBytes, marshalErr := json.Marshal(opts.InternalLabels)
 	if marshalErr != nil {
-		return &drtypes.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
+		return &drtypes.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.InternalLabels, marshalErr)
 	}
 	gitspacePortMappings := make(map[int]int)
 	for _, port := range opts.GitspaceOpts.Ports {

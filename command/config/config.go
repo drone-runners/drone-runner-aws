@@ -416,6 +416,7 @@ type EnvConfig struct {
 	}
 
 	Settings struct {
+		Env                          string   `envconfig:"ENV"`
 		ReusePool                    bool     `envconfig:"DRONE_REUSE_POOL" default:"false"`
 		BusyMaxAge                   int64    `envconfig:"DRONE_SETTINGS_BUSY_MAX_AGE" default:"24"`
 		FreeMaxAge                   int64    `envconfig:"DRONE_SETTINGS_FREE_MAX_AGE" default:"72"`
@@ -430,16 +431,16 @@ type EnvConfig struct {
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.12"`
 		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/latest/"`
 		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/latest/"`
-		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/2.4.2/"`
-		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/2.4.2/"`
+		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/v2.5.5/"`
+		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/v2.5.5/"`
 		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
 		TmateBinaryFallbackURI       string   `envconfig:"DRONE_TMATE_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
 		FallbackPoolIDs              []string `envconfig:"DRONE_FALLBACK_POOL_IDS"`
 	}
 
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.152/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.152/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.154/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.154/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
