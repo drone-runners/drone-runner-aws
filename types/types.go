@@ -155,7 +155,8 @@ type InstanceCreateOpts struct {
 	AutoInjectionBinaryURI       string
 	AnnotationsBinaryURI         string
 	AnnotationsBinaryFallbackURI string
-	Labels                       map[string]string
+	InternalLabels               map[string]string
+	VMLabels                     map[string]string
 	Zones                        []string
 	MachineType                  string
 	LiteEngineFallbackPath       string

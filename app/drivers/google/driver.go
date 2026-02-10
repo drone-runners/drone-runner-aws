@@ -927,9 +927,9 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		instanceIP = network.AccessConfigs[0].NatIP
 	}
 
-	labelsBytes, marshalErr := json.Marshal(opts.Labels)
+	labelsBytes, marshalErr := json.Marshal(opts.InternalLabels)
 	if marshalErr != nil {
-		return types.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.Labels, marshalErr)
+		return types.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.InternalLabels, marshalErr)
 	}
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
@@ -1187,14 +1187,21 @@ func (p *config) buildLabelsWithGitspace(opts *types.InstanceCreateOpts) map[str
 	// Start with the default labels
 	labels := p.labels
 
-	// Add GitspaceConfigIdentifier to labels if present
-	if opts.GitspaceOpts.GitspaceConfigIdentifier != "" {
+	// Check if we need to modify labels (GitspaceConfigIdentifier or VMLabels present)
+	if opts.GitspaceOpts.GitspaceConfigIdentifier != "" || len(opts.VMLabels) > 0 {
 		// Create a copy of labels to avoid modifying the original
 		labels = make(map[string]string)
 		for k, v := range p.labels {
 			labels[k] = v
 		}
-		labels["name"] = opts.GitspaceOpts.GitspaceConfigIdentifier
+		// Add GitspaceConfigIdentifier to labels if present
+		if opts.GitspaceOpts.GitspaceConfigIdentifier != "" {
+			labels["name"] = opts.GitspaceOpts.GitspaceConfigIdentifier
+		}
+		// Add VM labels from createOptions
+		for k, v := range opts.VMLabels {
+			labels[k] = v
+		}
 	}
 
 	return labels

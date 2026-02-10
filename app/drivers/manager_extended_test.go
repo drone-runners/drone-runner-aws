@@ -298,6 +298,7 @@ func TestNewManager(t *testing.T) {
 		"https://test.com/envman-fallback",
 		"https://test.com/tmate",
 		"https://test.com/tmate-fallback",
+		"test-env",
 	)
 
 	assert.NotNil(t, m)
