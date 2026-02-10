@@ -53,18 +53,9 @@ const (
 
 // CapacityReservationState type enumeration.
 const (
-	CapacityReservationStateCreated     = CapacityReservationState("created")
-	CapacityReservationStateInUse       = CapacityReservationState("inuse")
-	CapacityReservationStateTerminating = CapacityReservationState("terminating")
+	CapacityReservationStateCreated = CapacityReservationState("created")
+	CapacityReservationStateInUse   = CapacityReservationState("inuse")
 )
-
-// CapacityReservationQueryParams holds query parameters for capacity reservation operations.
-type CapacityReservationQueryParams struct {
-	StageID         string // If set, query by specific stage ID
-	PoolName        string
-	CreatedAtBefore int64 // Unix timestamp - only return reservations created before this time
-	Limit           int
-}
 
 type Instance struct {
 	ID                         string        `db:"instance_id" json:"id"`
