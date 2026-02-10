@@ -917,6 +917,7 @@ func (m *Manager) setupInstanceWithHibernate(
 	return inst, nil
 }
 
+//nolint:gocyclo
 func (m *Manager) setupInstance(
 	ctx context.Context,
 	pool *poolEntry,
