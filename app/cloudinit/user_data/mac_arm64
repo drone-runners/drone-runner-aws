@@ -79,6 +79,12 @@ fi
 chmod 755 /usr/local/bin/hcli
 {{ end }}
 
+{{ if .AutoInjectionBinaryURI }}
+mkdir -p /tmp/harness/bin
+wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection || wget --retry-connrefused --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection
+chmod 777 /tmp/harness/bin/auto-injection
+{{ end }}
+
 {{ if .HarnessTestBinaryURI }}
     if wget -nv --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=3 {{ .HarnessTestBinaryURI }}/{{ .Platform.Arch }}/{{ .Platform.OS }}/bin/split_tests-{{ .Platform.OS }}_{{ .Platform.Arch }} -O /usr/local/bin/split_tests; then
         echo "Successfully downloaded split test binary URL."
