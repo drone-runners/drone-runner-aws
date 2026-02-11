@@ -723,9 +723,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	}
 
 	if freeCapacityMaxAge != 0 {
-		if err := d.cleanupCapacities(ctx, pool, freeCapacityMaxAge); err != nil {
-			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup free capacity")
-		}
+		d.cleanupCapacities(ctx, pool, freeCapacityMaxAge)
 	}
 }
 
@@ -814,7 +812,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	return err
 }
 
-func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) error {
+func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) {
 	// Calculate the cutoff time for stale capacity reservations
 	createdAtBefore := time.Now().Add(-freeCapacityMaxAge).Unix()
 
@@ -861,7 +859,7 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 	}
 
 	if len(capacitiesToDelete) == 0 {
-		return nil
+		return
 	}
 
 	stageIDs := make([]string, len(capacitiesToDelete))
@@ -875,7 +873,6 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 		Infof("distributed dlite: purger: cleaning up stale capacity reservations")
 
 	d.destroyCapacityFromReservation(ctx, capacitiesToDelete)
-	return nil
 }
 
 // executeInstanceCleanup performs cleanup and returns the instances for further processing
