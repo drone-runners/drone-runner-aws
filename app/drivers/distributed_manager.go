@@ -23,8 +23,9 @@ import (
 var _ IManager = (*DistributedManager)(nil)
 
 const (
-	defaultVariantID       = "default"
-	stuckTerminatingMaxAge = 2 * time.Minute
+	defaultVariantID        = "default"
+	stuckTerminatingMaxAge  = 2 * time.Minute
+	stuckProvisioningMaxAge = 30 * time.Minute
 )
 
 type DistributedManager struct {
@@ -114,7 +115,7 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 		allowedStates = append(allowedStates, types.StateInUse)
 	}
 	if destroyFree {
-		allowedStates = append(allowedStates, types.StateCreated, types.StateHibernating)
+		allowedStates = append(allowedStates, types.StateCreated, types.StateHibernating, types.StateProvisioning)
 	}
 
 	// Set the pool name on the query parameters
@@ -553,13 +554,38 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 			}
 		}()
 
+		ctx := context.Background()
+		// Step 1: Wait for instance connectivity
+		if !d.waitForInstanceConnectivity(ctx, tlsServerName, inst.ID) {
+			logrus.WithField("instanceID", inst.ID).Errorln("connectivity check failed, destroying instance and scheduling async setup")
+			if derr := d.Destroy(ctx, pool.Name, inst.ID, inst, nil); derr != nil {
+				logrus.WithError(derr).WithField("instanceID", inst.ID).Errorln("failed to cleanup instance after connectivity failure")
+			}
+			// Schedule async instance setup to replenish the pool
+			var params *types.SetupInstanceParams
+			if machineConfig != nil {
+				params = &machineConfig.SetupInstanceParams
+			}
+			d.setupInstanceAsync(ctx, pool.Name, d.runnerName, params)
+			return
+		}
+
+		// Step 2: Connectivity successful - update state to Created (VM is ready for use)
+		inst.State = types.StateCreated
+		if err := d.instanceStore.Update(ctx, inst); err != nil {
+			logrus.WithError(err).WithField("instanceID", inst.ID).Errorln("failed to update instance state to created")
+			return
+		}
+		logrus.WithField("instanceID", inst.ID).Infoln("instance connectivity verified, state updated to created")
+
+		// Step 3: Attempt to hibernate the instance
 		shouldHibernate := false
 		if machineConfig != nil && machineConfig.VariantID != "" && machineConfig.VariantID != defaultVariantID {
 			shouldHibernate = machineConfig.Hibernate
 		} else {
 			shouldHibernate = pool.Driver.CanHibernate()
 		}
-		err = d.hibernate(context.Background(), pool.Name, tlsServerName, inst, shouldHibernate)
+		err = d.hibernate(ctx, pool.Name, inst, shouldHibernate)
 		if err != nil {
 			logrus.WithError(err).Errorln("failed to hibernate the vm")
 		}
@@ -570,7 +596,7 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 // hibernate handles hibernation for distributed manager using FindAndClaim
 func (d *DistributedManager) hibernate(
 	ctx context.Context,
-	poolName, tlsServerName string,
+	poolName string,
 	instance *types.Instance,
 	shouldHibernate bool,
 ) error {
@@ -581,11 +607,6 @@ func (d *DistributedManager) hibernate(
 
 	if !shouldHibernate {
 		return nil
-	}
-
-	// Check connectivity before attempting hibernation
-	if !d.waitForInstanceConnectivity(ctx, tlsServerName, instance.ID) {
-		return fmt.Errorf("hibernate: connectivity check deadline exceeded")
 	}
 
 	// Use FindAndClaim to atomically set the instance state to hibernating
@@ -778,7 +799,7 @@ func (d *DistributedManager) cleanupBusyInstances(ctx context.Context, pool *poo
 func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poolEntry, maxAgeFree time.Duration, queryParams *types.QueryParams) error {
 	currentTime := time.Now()
 
-	// Condition for free instances
+	// Condition for free instances (StateCreated, StateHibernating)
 	freeCondition := squirrel.And{
 		squirrel.Eq{"instance_pool": pool.Name},
 		squirrel.Or{
@@ -792,7 +813,14 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 		freeCondition = append(freeCondition, condition)
 	}
 
-	conditions := squirrel.Or{freeCondition}
+	// Condition for stuck provisioning instances (StateProvisioning for more than 30 minutes)
+	stuckProvisioningCondition := squirrel.And{
+		squirrel.Eq{"instance_pool": pool.Name},
+		squirrel.Eq{"instance_state": types.StateProvisioning},
+		squirrel.Lt{"instance_started": currentTime.Add(-stuckProvisioningMaxAge).Unix()},
+	}
+
+	conditions := squirrel.Or{freeCondition, stuckProvisioningCondition}
 
 	// Execute cleanup and call setupInstanceAsync for each cleaned instance
 	instances, err := d.executeInstanceCleanup(ctx, pool, conditions, "free")

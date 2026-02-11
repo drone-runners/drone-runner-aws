@@ -564,7 +564,7 @@ func handleSetup(
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS, warmed)
 
 	// Get the health check timeout based on the instance OS and provider
-	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider)
+	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider, warmed)
 
 	if _, err = client.RetryHealth(ctx, &api.HealthRequest{
 		PerformDNSLookup:                performDNSLookup,

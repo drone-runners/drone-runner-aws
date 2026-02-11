@@ -59,7 +59,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		ID:           id,
 		Name:         id,
 		Provider:     types.Noop, // this is driver, though its the old legacy name of provider
-		State:        types.StateCreated,
+		State:        types.StateProvisioning,
 		Pool:         opts.PoolName,
 		Platform:     opts.Platform,
 		Address:      p.leIP,

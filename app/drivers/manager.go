@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/drone/runner-go/logger"
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
@@ -28,6 +27,10 @@ import (
 )
 
 var _ IManager = (*Manager)(nil)
+
+const (
+	defaultConnectivityTimeout = 15 * time.Minute
+)
 
 type (
 	Manager struct {
@@ -909,7 +912,27 @@ func (m *Manager) setupInstanceWithHibernate(
 		return nil, err
 	}
 	go func() {
-		herr := m.hibernateOrStopWithRetries(context.Background(), pool.Name, tlsServerName, inst, false)
+		ctx := context.Background()
+
+		// Step 1: Wait for instance connectivity
+		if !m.waitForInstanceConnectivity(ctx, tlsServerName, inst.ID) {
+			logrus.WithField("instanceID", inst.ID).Errorln("connectivity check failed, destroying instance")
+			if derr := m.Destroy(ctx, pool.Name, inst.ID, inst, nil); derr != nil {
+				logrus.WithError(derr).WithField("instanceID", inst.ID).Errorln("failed to cleanup instance after connectivity failure")
+			}
+			return
+		}
+
+		// Step 2: Connectivity successful - update state to Created (VM is ready for use)
+		inst.State = types.StateCreated
+		if err := m.instanceStore.Update(ctx, inst); err != nil {
+			logrus.WithError(err).WithField("instanceID", inst.ID).Errorln("failed to update instance state to created")
+			return
+		}
+		logrus.WithField("instanceID", inst.ID).Infoln("instance connectivity verified, state updated to created")
+
+		// Step 3: Attempt to hibernate the instance
+		herr := m.hibernateOrStopWithRetries(ctx, pool.Name, inst, false)
 		if herr != nil {
 			logrus.WithError(herr).Errorln("failed to hibernate the vm")
 		}
@@ -1149,7 +1172,7 @@ func (m *Manager) InstanceLogs(ctx context.Context, poolName, instanceID string)
 
 func (m *Manager) hibernateOrStopWithRetries(
 	ctx context.Context,
-	poolName, tlsServerName string,
+	poolName string,
 	instance *types.Instance,
 	fallbackStop bool,
 ) error {
@@ -1160,14 +1183,6 @@ func (m *Manager) hibernateOrStopWithRetries(
 
 	if !pool.Driver.CanHibernate() && !fallbackStop {
 		return nil
-	}
-
-	shouldHibernate := m.waitForInstanceConnectivity(ctx, tlsServerName, instance.ID)
-	if !shouldHibernate {
-		if derr := m.Destroy(ctx, poolName, instance.ID, instance, nil); derr != nil {
-			logrus.WithError(derr).WithField("instanceID", instance.ID).Errorln("failed to cleanup instance after connectivity failure")
-		}
-		return fmt.Errorf("hibernate: connectivity check deadline exceeded")
 	}
 
 	retryCount := 1
@@ -1268,56 +1283,34 @@ func (m *Manager) forEach(ctx context.Context,
 }
 
 func (m *Manager) waitForInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) bool {
-	bf := backoff.NewExponentialBackOff()
-	for {
-		duration := bf.NextBackOff()
-		if duration == bf.Stop {
-			return false
-		}
-
-		select {
-		case <-ctx.Done():
-			logrus.WithField("instanceID", instanceID).Warnln("hibernate: connectivity check deadline exceeded")
-			return false
-		case <-time.After(duration):
-			err := m.checkInstanceConnectivity(ctx, tlsServerName, instanceID)
-			if err == nil {
-				return true
-			}
-			logrus.WithError(err).WithField("instanceID", instanceID).Traceln("hibernate: instance connectivity check failed")
-		}
-	}
-}
-
-func (m *Manager) checkInstanceConnectivity(ctx context.Context, tlsServerName, instanceID string) error {
 	instance, err := m.Find(ctx, instanceID)
 	if err != nil {
-		return errors.Wrap(err, "failed to find the instance in db")
+		logrus.WithError(err).WithField("instanceID", instanceID).Errorln("connectivity check: failed to find instance in db")
+		return false
 	}
 
 	if instance.Address == "" {
-		return errors.New("instance has not received IP address")
+		logrus.WithField("instanceID", instanceID).Errorln("connectivity check: instance has not received IP address")
+		return false
 	}
 
 	endpoint := fmt.Sprintf("https://%s:9079/", instance.Address)
 	client, err := lehttp.NewHTTPClient(endpoint, tlsServerName, string(instance.CACert), string(instance.TLSCert), string(instance.TLSKey))
 	if err != nil {
-		return errors.Wrap(err, "failed to create client")
+		logrus.WithError(err).WithField("instanceID", instanceID).Errorln("connectivity check: failed to create client")
+		return false
 	}
 
-	response, err := client.Health(ctx, &api.HealthRequest{
+	_, err = client.RetryHealth(ctx, &api.HealthRequest{
 		PerformDNSLookup:                true,
+		Timeout:                         defaultConnectivityTimeout,
 		HealthCheckConnectivityDuration: m.GetHealthCheckConnectivityDuration(),
 	})
 	if err != nil {
-		return err
+		logrus.WithError(err).WithField("instanceID", instanceID).Errorln("connectivity check: health check failed")
+		return false
 	}
-
-	if !response.OK {
-		return errors.New("health check call failed")
-	}
-
-	return nil
+	return true
 }
 
 func (m *Manager) GetTLSServerName() string {
@@ -1331,15 +1324,15 @@ func (m *Manager) GetRunnerConfig() types.RunnerConfig {
 	return m.runnerConfig
 }
 
-// GetHealthCheckTimeout returns the appropriate health check timeout based on the OS and provider
-func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType) time.Duration {
+// GetHealthCheckTimeout returns the appropriate health check timeout based on the OS, provider, and warmed status
+func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType, warmed bool) time.Duration {
 	// Override for Windows
 	if os == "windows" {
 		return m.runnerConfig.HealthCheckWindowsTimeout
 	}
 
-	// Use hotpool timeout for Nomad
-	if provider == types.Nomad {
+	// Use hotpool timeout for Nomad or warmed instances
+	if provider == types.Nomad || warmed {
 		return m.runnerConfig.HealthCheckHotpoolTimeout
 	}
 
@@ -1377,7 +1370,6 @@ func (m *Manager) Suspend(ctx context.Context, poolName string, instance *types.
 	if err := m.hibernateOrStopWithRetries(
 		ctx,
 		poolName,
-		m.GetTLSServerName(),
 		instance,
 		true,
 	); err != nil {

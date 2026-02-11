@@ -370,7 +370,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		NodeID:               id,
 		Name:                 vm,
 		Platform:             opts.Platform,
-		State:                types.StateCreated,
+		State:                types.StateProvisioning,
 		CACert:               opts.CACert,
 		CAKey:                opts.CAKey,
 		TLSCert:              opts.TLSCert,

@@ -381,7 +381,7 @@ func (c *config) mapToInstance(vm *armcompute.VirtualMachinesClientCreateOrUpdat
 		ID:           *vm.Name,
 		Name:         *vm.Name,
 		Provider:     types.Azure,
-		State:        types.StateCreated,
+		State:        types.StateProvisioning,
 		Pool:         opts.PoolName,
 		Image:        c.offer,
 		Zone:         c.Zones(),
