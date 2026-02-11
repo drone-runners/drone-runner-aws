@@ -2,6 +2,8 @@ module github.com/drone-runners/drone-runner-aws
 
 go 1.24.0
 
+toolchain go1.25.7
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
@@ -26,7 +28,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.5.0
-	github.com/harness/lite-engine v0.5.154
+	github.com/harness/lite-engine v0.5.155
 	github.com/hashicorp/nomad/api v0.0.0-20230421025320-b4e6a70fe69b
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
