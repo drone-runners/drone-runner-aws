@@ -156,6 +156,13 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_id", inst.ID).
 		WithField("instance_name", inst.Name)
 
+	// Update instance state to terminating and update timestamp
+	inst.State = types.StateTerminating
+	inst.Updated = time.Now().Unix()
+	if updateErr := poolManager.Update(ctx, inst); updateErr != nil {
+		logr.WithError(updateErr).Warnln("failed to update instance state to terminating")
+	}
+
 	logr.Traceln("invoking lite engine cleanup")
 	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, enableMock, mockTimeout)
 	if err != nil {

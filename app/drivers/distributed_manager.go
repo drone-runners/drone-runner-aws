@@ -22,7 +22,10 @@ import (
 
 var _ IManager = (*DistributedManager)(nil)
 
-const defaultVariantID = "default"
+const (
+	defaultVariantID       = "default"
+	stuckTerminatingMaxAge = 2 * time.Minute
+)
 
 type DistributedManager struct {
 	Manager
@@ -720,9 +723,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	}
 
 	if freeCapacityMaxAge != 0 {
-		if err := d.cleanupFreeCapacity(ctx, pool, freeCapacityMaxAge); err != nil {
-			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup free capacity")
-		}
+		d.cleanupCapacities(ctx, pool, freeCapacityMaxAge)
 	}
 }
 
@@ -761,7 +762,14 @@ func (d *DistributedManager) cleanupBusyInstances(ctx context.Context, pool *poo
 		condition := squirrel.Expr("(instance_labels->>?) = ?", key, value)
 		extendedBusyCondition = append(extendedBusyCondition, condition)
 	}
-	conditions = append(conditions, busyCondition, extendedBusyCondition)
+
+	// Third condition: instances stuck in terminating state for more than 5 minutes
+	stuckTerminatingCondition := squirrel.And{
+		squirrel.Eq{"instance_pool": pool.Name},
+		squirrel.Eq{"instance_state": types.StateTerminating},
+		squirrel.Lt{"instance_updated": currentTime.Add(-stuckTerminatingMaxAge).Unix()},
+	}
+	conditions = append(conditions, busyCondition, extendedBusyCondition, stuckTerminatingCondition)
 	_, err := d.executeInstanceCleanup(ctx, pool, conditions, "busy")
 	return err
 }
@@ -804,30 +812,67 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	return err
 }
 
-func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) error {
-	reservedCapacitiesForPool, err := d.capacityReservationStore.ListByPoolName(ctx, pool.Name)
-	if err != nil {
-		return fmt.Errorf("failed to list capacity reservations for pool=%q error: %w", pool.Name, err)
-	}
+func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) {
+	// Calculate the cutoff time for stale capacity reservations
+	createdAtBefore := time.Now().Add(-freeCapacityMaxAge).Unix()
 
 	var capacitiesToDelete []*types.CapacityReservation
 
-	for _, capacityReservation := range reservedCapacitiesForPool {
-		inst, _ := d.GetInstanceByStageID(ctx, pool.Name, capacityReservation.StageID)
-		if inst == nil {
-			createdAt := time.Unix(capacityReservation.CreatedAt, 0)
-			if time.Since(createdAt) > freeCapacityMaxAge {
-				capacitiesToDelete = append(capacitiesToDelete, capacityReservation)
-			}
-		}
+	// List capacity reservations stuck in "terminating" state
+	// Always clean stale terminating capacity reservations first to duplicate detection
+	staleCapacities, err := d.capacityReservationStore.List(
+		ctx,
+		&types.CapacityReservationQueryParams{
+			PoolName:        pool.Name,
+			CreatedAtBefore: createdAtBefore,
+		},
+		[]types.CapacityReservationState{types.CapacityReservationStateTerminating},
+	)
+
+	if err != nil {
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithError(err).
+			Error("distributed dlite: purger: failed to list stale terminating capacity reservations")
+	} else {
+		capacitiesToDelete = append(capacitiesToDelete, staleCapacities...)
+	}
+
+	// Use FindAndClaim to atomically find and claim stale capacity reservations
+	// Only claim capacities that are in "created" state (not yet in use)
+	freeCapacities, err := d.capacityReservationStore.FindAndClaim(
+		ctx,
+		&types.CapacityReservationQueryParams{
+			PoolName:        pool.Name,
+			CreatedAtBefore: createdAtBefore,
+		},
+		types.CapacityReservationStateTerminating,
+		[]types.CapacityReservationState{types.CapacityReservationStateCreated},
+	)
+	if err != nil {
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithError(err).
+			Error("distributed dlite: purger: failed to find and claim stale capacity reservations")
+	} else {
+		capacitiesToDelete = append(capacitiesToDelete, freeCapacities...)
 	}
 
 	if len(capacitiesToDelete) == 0 {
-		return nil
+		return
 	}
 
+	stageIDs := make([]string, len(capacitiesToDelete))
+	for i, c := range capacitiesToDelete {
+		stageIDs[i] = c.StageID
+	}
+	logger.FromContext(ctx).
+		WithField("pool", pool.Name).
+		WithField("count", len(capacitiesToDelete)).
+		WithField("stage_ids", stageIDs).
+		Infof("distributed dlite: purger: cleaning up stale capacity reservations")
+
 	d.destroyCapacityFromReservation(ctx, capacitiesToDelete)
-	return nil
 }
 
 // executeInstanceCleanup performs cleanup and returns the instances for further processing
