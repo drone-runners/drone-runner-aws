@@ -925,8 +925,8 @@ func (m *Manager) setupInstanceWithHibernate(
 
 		// Step 2: Connectivity successful - update state to Created (VM is ready for use)
 		inst.State = types.StateCreated
-		if err := m.instanceStore.Update(ctx, inst); err != nil {
-			logrus.WithError(err).WithField("instanceID", inst.ID).Errorln("failed to update instance state to created")
+		if updateErr := m.instanceStore.Update(ctx, inst); updateErr != nil {
+			logrus.WithError(updateErr).WithField("instanceID", inst.ID).Errorln("failed to update instance state to created")
 			return
 		}
 		logrus.WithField("instanceID", inst.ID).Infoln("instance connectivity verified, state updated to created")
