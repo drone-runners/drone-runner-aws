@@ -2,6 +2,8 @@ module github.com/drone-runners/drone-runner-aws
 
 go 1.24.0
 
+toolchain go1.25.7
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
