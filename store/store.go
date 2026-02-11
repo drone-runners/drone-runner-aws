@@ -42,6 +42,9 @@ type CapacityReservationStore interface {
 	Find(ctx context.Context, id string) (*types.CapacityReservation, error)
 	Create(context.Context, *types.CapacityReservation) error
 	Delete(context.Context, string) error
+	// List returns capacity reservations matching the query params and states.
+	// Query params can filter by StageID, PoolName, CreatedAtBefore, and Limit.
+	List(ctx context.Context, params *types.CapacityReservationQueryParams, states []types.CapacityReservationState) ([]*types.CapacityReservation, error)
 	// FindAndClaim atomically finds capacity reservations matching the query params that are in
 	// one of the allowedStates, transitions them to newState, and returns the claimed capacities.
 	// Uses FOR UPDATE SKIP LOCKED to prevent race conditions.

@@ -723,7 +723,7 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	}
 
 	if freeCapacityMaxAge != 0 {
-		if err := d.cleanupFreeCapacity(ctx, pool, freeCapacityMaxAge); err != nil {
+		if err := d.cleanupCapacities(ctx, pool, freeCapacityMaxAge); err != nil {
 			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup free capacity")
 		}
 	}
@@ -814,13 +814,35 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	return err
 }
 
-func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) error {
+func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) error {
 	// Calculate the cutoff time for stale capacity reservations
 	createdAtBefore := time.Now().Add(-freeCapacityMaxAge).Unix()
 
+	var capacitiesToDelete []*types.CapacityReservation
+
+	// List capacity reservations stuck in "terminating" state
+	// Always clean stale terminating capacity reservations first to duplicate detection
+	staleCapacities, err := d.capacityReservationStore.List(
+		ctx,
+		&types.CapacityReservationQueryParams{
+			PoolName:        pool.Name,
+			CreatedAtBefore: createdAtBefore,
+		},
+		[]types.CapacityReservationState{types.CapacityReservationStateTerminating},
+	)
+
+	if err != nil {
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithError(err).
+			Error("distributed dlite: purger: failed to list stale terminating capacity reservations")
+	} else {
+		capacitiesToDelete = append(capacitiesToDelete, staleCapacities...)
+	}
+
 	// Use FindAndClaim to atomically find and claim stale capacity reservations
 	// Only claim capacities that are in "created" state (not yet in use)
-	capacitiesToDelete, err := d.capacityReservationStore.FindAndClaim(
+	freeCapacities, err := d.capacityReservationStore.FindAndClaim(
 		ctx,
 		&types.CapacityReservationQueryParams{
 			PoolName:        pool.Name,
@@ -830,7 +852,12 @@ func (d *DistributedManager) cleanupFreeCapacity(ctx context.Context, pool *pool
 		[]types.CapacityReservationState{types.CapacityReservationStateCreated},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to find and claim stale capacity reservations for pool=%q error: %w", pool.Name, err)
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithError(err).
+			Error("distributed dlite: purger: failed to find and claim stale capacity reservations")
+	} else {
+		capacitiesToDelete = append(capacitiesToDelete, freeCapacities...)
 	}
 
 	if len(capacitiesToDelete) == 0 {

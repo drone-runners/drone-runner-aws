@@ -47,6 +47,82 @@ func (s CapacityReservationStore) Delete(ctx context.Context, id string) error {
 	return tx.Commit()
 }
 
+// List returns capacity reservations matching the query params and states.
+// Query params can filter by StageID, PoolName, CreatedAtBefore, and Limit.
+func (s CapacityReservationStore) List(
+	ctx context.Context,
+	params *types.CapacityReservationQueryParams,
+	states []types.CapacityReservationState,
+) ([]*types.CapacityReservation, error) {
+	query := builder.Select(
+		"stage_id",
+		"pool_name",
+		"instance_id",
+		"reservation_id",
+		"created_at",
+		"reservation_state",
+	).From("capacity_reservation")
+
+	if params != nil {
+		if params.StageID != "" {
+			query = query.Where(squirrel.Eq{"stage_id": params.StageID})
+		}
+
+		if params.PoolName != "" {
+			query = query.Where(squirrel.Eq{"pool_name": params.PoolName})
+		}
+
+		if params.CreatedAtBefore > 0 {
+			query = query.Where(squirrel.Lt{"created_at": params.CreatedAtBefore})
+		}
+
+		if params.Limit > 0 {
+			query = query.Limit(uint64(params.Limit))
+		}
+	}
+
+	if len(states) > 0 {
+		stateVals := make([]interface{}, len(states))
+		for i, state := range states {
+			stateVals[i] = state
+		}
+		query = query.Where(squirrel.Eq{"reservation_state": stateVals})
+	}
+
+	sql, args, err := query.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := s.db.QueryContext(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query: %w", err)
+	}
+	defer rows.Close()
+
+	var capacities []*types.CapacityReservation
+	for rows.Next() {
+		capacity := new(types.CapacityReservation)
+		scanErr := rows.Scan(
+			&capacity.StageID,
+			&capacity.PoolName,
+			&capacity.InstanceID,
+			&capacity.ReservationID,
+			&capacity.CreatedAt,
+			&capacity.ReservationState,
+		)
+		if scanErr != nil {
+			return nil, fmt.Errorf("error scanning capacity reservation: %w", scanErr)
+		}
+		capacities = append(capacities, capacity)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating capacity reservations: %w", err)
+	}
+
+	return capacities, nil
+}
+
 // FindAndClaim atomically finds capacity reservations matching the query params that are in
 // one of the allowedStates, transitions them to newState, and returns the claimed capacities.
 // Uses FOR UPDATE SKIP LOCKED to prevent race conditions.

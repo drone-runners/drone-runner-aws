@@ -125,6 +125,7 @@ type mockCapacityReservationStore struct {
 	FindFunc         func(ctx context.Context, id string) (*types.CapacityReservation, error)
 	CreateFunc       func(ctx context.Context, reservation *types.CapacityReservation) error
 	DeleteFunc       func(ctx context.Context, id string) error
+	ListFunc         func(ctx context.Context, params *types.CapacityReservationQueryParams, states []types.CapacityReservationState) ([]*types.CapacityReservation, error)
 	FindAndClaimFunc func(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) //nolint:lll
 }
 
@@ -147,6 +148,13 @@ func (m *mockCapacityReservationStore) Delete(ctx context.Context, id string) er
 		return m.DeleteFunc(ctx, id)
 	}
 	return nil
+}
+
+func (m *mockCapacityReservationStore) List(ctx context.Context, params *types.CapacityReservationQueryParams, states []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx, params, states)
+	}
+	return nil, nil
 }
 
 func (m *mockCapacityReservationStore) FindAndClaim(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) { //nolint:lll
