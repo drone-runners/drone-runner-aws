@@ -45,10 +45,11 @@ const (
 
 // InstanceState type enumeration.
 const (
-	StateCreated     = InstanceState("created")
-	StateInUse       = InstanceState("inuse")
-	StateHibernating = InstanceState("hibernating")
-	StateTerminating = InstanceState("terminating")
+	StateCreated      = InstanceState("created")
+	StateInUse        = InstanceState("inuse")
+	StateHibernating  = InstanceState("hibernating")
+	StateTerminating  = InstanceState("terminating")
+	StateProvisioning = InstanceState("provisioning") // VM created but not yet ready for use
 )
 
 // CapacityReservationState type enumeration.

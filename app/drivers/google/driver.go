@@ -941,7 +941,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		ID:                         strconv.FormatUint(vm.Id, 10),
 		Name:                       vm.Name,
 		Provider:                   types.Google, // this is driver, though its the old legacy name of provider
-		State:                      types.StateCreated,
+		State:                      types.StateProvisioning,
 		Pool:                       opts.PoolName,
 		Image:                      image,
 		Zone:                       zone,

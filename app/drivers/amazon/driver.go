@@ -701,7 +701,7 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 		ID:                   instanceID,
 		Name:                 instanceID,
 		Provider:             drtypes.Amazon, // this is driver, though its the old legacy name of provider
-		State:                drtypes.StateCreated,
+		State:                drtypes.StateProvisioning,
 		Pool:                 opts.PoolName,
 		Image:                resolvedAMI,
 		Zone:                 reqCfg.availabilityZone,

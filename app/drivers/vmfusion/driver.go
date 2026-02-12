@@ -229,7 +229,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		ID:       p.vmxPath(),
 		Name:     machineName,
 		Provider: types.VMFusion, // this is driver, though its the old legacy name of provider
-		State:    types.StateCreated,
+		State:    types.StateProvisioning,
 		Pool:     opts.PoolName,
 		Image:    iso,
 		Platform: opts.Platform,

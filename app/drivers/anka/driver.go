@@ -189,7 +189,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		ID:       createdVM.Body.UUID,
 		Name:     machineName,
 		Provider: types.Anka, // this is driver, though its the old legacy name of provider
-		State:    types.StateCreated,
+		State:    types.StateProvisioning,
 		Pool:     opts.PoolName,
 		Platform: opts.Platform,
 		Address:  ip,

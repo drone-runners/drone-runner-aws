@@ -128,7 +128,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		ID:       inst.InstanceID,
 		Name:     machineName,
 		Provider: types.AnkaBuild,
-		State:    types.StateCreated,
+		State:    types.StateProvisioning,
 		Pool:     opts.PoolName,
 		Platform: opts.Platform,
 		Address:  inst.Vminfo.HostIP,

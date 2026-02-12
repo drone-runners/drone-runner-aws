@@ -159,7 +159,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	instance = &types.Instance{
 		Name:         name,
 		Provider:     types.DigitalOcean,
-		State:        types.StateCreated,
+		State:        types.StateProvisioning,
 		Pool:         opts.PoolName,
 		Region:       p.region,
 		Image:        image,
