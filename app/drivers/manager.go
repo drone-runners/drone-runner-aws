@@ -1325,7 +1325,7 @@ func (m *Manager) GetRunnerConfig() types.RunnerConfig {
 }
 
 // GetHealthCheckTimeout returns the appropriate health check timeout based on the OS, provider, warmed status, and hibernated status
-func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType, warmed bool, hibernated bool) time.Duration {
+func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType, warmed, hibernated bool) time.Duration {
 	// Override for Windows
 	if os == "windows" {
 		return m.runnerConfig.HealthCheckWindowsTimeout
