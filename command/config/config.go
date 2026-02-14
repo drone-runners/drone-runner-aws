@@ -348,6 +348,7 @@ type EnvConfig struct {
 
 	RunnerConfig struct {
 		HealthCheckHotpoolTimeout       time.Duration `envconfig:"HEALTH_CHECK_HOTPOOL_TIMEOUT" default:"10s"`
+		HealthCheckHibernatedTimeout    time.Duration `envconfig:"HEALTH_CHECK_HIBERNATED_TIMEOUT" default:"2m"`
 		HealthCheckColdstartTimeout     time.Duration `envconfig:"HEALTH_CHECK_COLDSTART_TIMEOUT" default:"3m"`
 		HealthCheckWindowsTimeout       time.Duration `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5m"`
 		HealthCheckConnectivityDuration time.Duration `envconfig:"HEALTH_CHECK_CONNECTIVITY_DURATION" default:"3s"`

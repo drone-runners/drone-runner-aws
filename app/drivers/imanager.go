@@ -34,7 +34,7 @@ type IManager interface {
 	GetTLSServerName() string
 	IsDistributed() bool
 	GetRunnerConfig() types.RunnerConfig
-	GetHealthCheckTimeout(os string, provider types.DriverType, warmed bool) time.Duration
+	GetHealthCheckTimeout(os string, provider types.DriverType, warmed bool, hibernated bool) time.Duration
 	GetHealthCheckConnectivityDuration() time.Duration
 	GetSetupTimeout() time.Duration
 	Suspend(ctx context.Context, poolID string, instance *types.Instance) error
