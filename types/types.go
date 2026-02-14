@@ -111,6 +111,7 @@ type Passwords struct {
 
 type RunnerConfig struct {
 	HealthCheckHotpoolTimeout       time.Duration
+	HealthCheckHibernatedTimeout    time.Duration
 	HealthCheckColdstartTimeout     time.Duration
 	HealthCheckWindowsTimeout       time.Duration
 	HealthCheckConnectivityDuration time.Duration

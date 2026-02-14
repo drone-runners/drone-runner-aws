@@ -563,8 +563,8 @@ func handleSetup(
 	ilog.Traceln("running healthcheck and waiting for an ok response")
 	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS, warmed)
 
-	// Get the health check timeout based on the instance OS and provider
-	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider, warmed)
+	// Get the health check timeout based on the instance OS, provider, warmed status, and hibernated status
+	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider, warmed, hibernated)
 
 	if _, err = client.RetryHealth(ctx, &api.HealthRequest{
 		PerformDNSLookup:                performDNSLookup,

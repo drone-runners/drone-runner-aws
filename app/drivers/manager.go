@@ -1324,18 +1324,29 @@ func (m *Manager) GetRunnerConfig() types.RunnerConfig {
 	return m.runnerConfig
 }
 
-// GetHealthCheckTimeout returns the appropriate health check timeout based on the OS, provider, and warmed status
-func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType, warmed bool) time.Duration {
+// GetHealthCheckTimeout returns the appropriate health check timeout based on the OS, provider, warmed status, and hibernated status
+func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType, warmed, hibernated bool) time.Duration {
 	// Override for Windows
 	if os == "windows" {
 		return m.runnerConfig.HealthCheckWindowsTimeout
 	}
 
-	// Use hotpool timeout for Nomad or warmed instances
-	if provider == types.Nomad || warmed {
+	// Use hotpool timeout for Nomad (true hot pool with running processes)
+	if provider == types.Nomad {
 		return m.runnerConfig.HealthCheckHotpoolTimeout
 	}
 
+	// Use hibernated timeout for hibernated VMs (need time to resume from disk and restart processes)
+	if hibernated {
+		return m.runnerConfig.HealthCheckHibernatedTimeout
+	}
+
+	// Use hotpool timeout for other warmed instances
+	if warmed {
+		return m.runnerConfig.HealthCheckHotpoolTimeout
+	}
+
+	// Default to cold start timeout
 	return m.runnerConfig.HealthCheckColdstartTimeout
 }
 
