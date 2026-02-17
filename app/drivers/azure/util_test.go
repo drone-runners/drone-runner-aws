@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork"
+
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 )
 
