@@ -160,6 +160,9 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				azure.WithSecurityGroupName(az.SecurityGroupName),
 				azure.WithID(az.Image.ID),
 				azure.WithSecurityType(az.SecurityType),
+				azure.WithPrivateIP(az.Network.PrivateIP),
+				azure.WithVNet(az.Network.VNetName),
+				azure.WithSubnet(az.Network.SubnetName),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)

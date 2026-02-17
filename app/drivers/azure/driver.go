@@ -21,6 +21,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork"
 	"github.com/dchest/uniuri"
 )
 
@@ -57,6 +58,11 @@ type config struct {
 
 	username string
 	password string
+
+	// network configuration
+	privateIP  bool   // if true, don't create public IP
+	vnetName   string // existing VNet name (optional)
+	subnetName string // existing subnet name (optional)
 
 	service *armcompute.VirtualMachinesClient
 	cred    azcore.TokenCredential
@@ -138,6 +144,13 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	networkInterfaceName := fmt.Sprintf("%s-networkinterface", name)
 	diskName := fmt.Sprintf("%s-disk", name)
 
+	// Use existing VNet/Subnet if provided
+	useExistingNetwork := c.vnetName != "" && c.subnetName != ""
+	if useExistingNetwork {
+		vnetName = c.vnetName
+		subnetName = c.subnetName
+	}
+
 	var tags = map[string]*string{}
 	// add user defined tags
 	for k, v := range c.tags {
@@ -152,7 +165,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("pool", opts.PoolName).
 		WithField("zone", c.zones).
 		WithField("image", c.offer).
-		WithField("size", c.size)
+		WithField("size", c.size).
+		WithField("private_ip", c.privateIP)
 
 	logr.Info("starting Azure Setup")
 
@@ -162,26 +176,76 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return
 	}
 
-	_, err = c.createVirtualNetwork(ctx, vnetName)
-	if err != nil {
-		logr.WithError(err).Error("could not create virtual network")
-		return nil, err
+	var subnetID string
+	if useExistingNetwork {
+		// Use existing VNet and Subnet
+		subnet, subnetErr := c.getExistingSubnet(ctx, vnetName, subnetName)
+		if subnetErr != nil {
+			logr.WithError(subnetErr).Error("could not get existing subnet")
+			return nil, subnetErr
+		}
+		if subnet.ID == nil {
+			err = errors.New("existing subnet has nil ID")
+			logr.WithError(err).Error("could not get subnet ID")
+			return nil, err
+		}
+		subnetID = *subnet.ID
+		logr.Debugf("using existing VNet: %s, Subnet: %s", vnetName, subnetName)
+	} else {
+		// Create new VNet and Subnet
+		_, err = c.createVirtualNetwork(ctx, vnetName)
+		if err != nil {
+			logr.WithError(err).Error("could not create virtual network")
+			return nil, err
+		}
+		subnet, subnetErr := c.createSubnets(ctx, subnetName, vnetName)
+		if subnetErr != nil {
+			logr.WithError(subnetErr).Error("could not create subnet")
+			return nil, subnetErr
+		}
+		if subnet.ID == nil {
+			err = errors.New("created subnet has nil ID")
+			logr.WithError(err).Error("could not get subnet ID")
+			return nil, err
+		}
+		subnetID = *subnet.ID
 	}
-	subnet, err := c.createSubnets(ctx, subnetName, vnetName)
-	if err != nil {
-		logr.WithError(err).Error("could not create subnet")
-		return nil, err
-	}
-	publicIP, err := c.createPublicIP(ctx, publicIPName)
-	if err != nil {
-		logr.WithError(err).Error("could not create public IP")
-		return nil, err
-	}
-	c.IPAddress = *publicIP.Properties.IPAddress
-	networkInterface, err := c.createNetworkInterface(ctx, networkInterfaceName, *subnet.ID, *publicIP.ID)
-	if err != nil {
-		logr.WithError(err).Error("could not create network interface")
-		return nil, err
+
+	var networkInterface *armnetwork.Interface
+	if c.privateIP {
+		// Create network interface without public IP
+		networkInterface, err = c.createNetworkInterfacePrivate(ctx, networkInterfaceName, subnetID)
+		if err != nil {
+			logr.WithError(err).Error("could not create network interface (private)")
+			return nil, err
+		}
+		// Get private IP from the network interface
+		c.IPAddress = c.getPrivateIPFromInterface(networkInterface)
+		if c.IPAddress == "" {
+			err = errors.New("failed to get private IP address from network interface")
+			logr.WithError(err).Error("could not obtain private IP")
+			return nil, err
+		}
+		logr.Infof("azure: using private IP: %s", c.IPAddress)
+	} else {
+		// Create public IP and network interface with public IP
+		publicIP, publicIPErr := c.createPublicIP(ctx, publicIPName)
+		if publicIPErr != nil {
+			logr.WithError(publicIPErr).Error("could not create public IP")
+			return nil, publicIPErr
+		}
+		// Get public IP address with nil check
+		if publicIP.Properties == nil || publicIP.Properties.IPAddress == nil {
+			err = errors.New("failed to get public IP address: properties or IP address is nil")
+			logr.WithError(err).Error("could not obtain public IP")
+			return nil, err
+		}
+		c.IPAddress = *publicIP.Properties.IPAddress
+		networkInterface, err = c.createNetworkInterface(ctx, networkInterfaceName, subnetID, *publicIP.ID)
+		if err != nil {
+			logr.WithError(err).Error("could not create network interface")
+			return nil, err
+		}
 	}
 
 	// create the instance
@@ -307,6 +371,10 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	if len(instanceIDs) == 0 {
 		return nil
 	}
+
+	// Check if using existing network (don't delete VNet if so)
+	useExistingNetwork := c.vnetName != "" && c.subnetName != ""
+
 	for _, instanceID := range instanceIDs {
 		vnetName := fmt.Sprintf("%s-vnet", instanceID)
 		publicIPName := fmt.Sprintf("%s-publicip", instanceID)
@@ -328,18 +396,26 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			return err
 		}
 		logr.Info("azure: deleted network interface: ", networkInterfaceName)
-		err = c.deletePublicIP(ctx, publicIPName)
-		if err != nil {
-			logr.Errorln(err)
-			return err
+
+		// Only delete public IP if we're not using private IP mode
+		if !c.privateIP {
+			err = c.deletePublicIP(ctx, publicIPName)
+			if err != nil {
+				logr.Errorln(err)
+				return err
+			}
+			logr.Info("azure: deleted public ip: ", publicIPName)
 		}
-		logr.Info("azure: deleted public ip: ", publicIPName)
-		err = c.deleteVirtualNetWork(ctx, vnetName)
-		if err != nil {
-			logr.Errorln(err)
-			return err
+
+		// Only delete VNet if we're not using an existing network
+		if !useExistingNetwork {
+			err = c.deleteVirtualNetWork(ctx, vnetName)
+			if err != nil {
+				logr.Errorln(err)
+				return err
+			}
+			logr.Info("azure: deleted virtual network: ", vnetName)
 		}
-		logr.Info("azure: deleted virtual network: ", vnetName)
 		err = c.deleteDisk(ctx, diskName)
 		if err != nil {
 			logr.Errorln(err)

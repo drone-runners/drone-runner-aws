@@ -129,6 +129,21 @@ func (c *config) createSubnets(ctx context.Context, subnetName, vnetName string)
 	return &resp.Subnet, nil
 }
 
+func (c *config) getExistingSubnet(ctx context.Context, vnetName, subnetName string) (*armnetwork.Subnet, error) {
+	logr := logger.FromContext(ctx)
+	subnetClient, err := armnetwork.NewSubnetsClient(c.subscriptionID, c.cred, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := subnetClient.Get(ctx, c.resourceGroupName, vnetName, subnetName, nil)
+	if err != nil {
+		return nil, err
+	}
+	logr.Debugf("using existing subnet: %s in vnet: %s", subnetName, vnetName)
+	return &resp.Subnet, nil
+}
+
 func (c *config) createPublicIP(ctx context.Context, publicIPName string) (*armnetwork.PublicIPAddress, error) {
 	logr := logger.FromContext(ctx)
 	publicIPAddressClient, err := armnetwork.NewPublicIPAddressesClient(c.subscriptionID, c.cred, nil)
@@ -215,6 +230,45 @@ func (c *config) createNetworkInterface(ctx context.Context, networkInterfaceNam
 	return &resp.Interface, nil
 }
 
+// createNetworkInterfacePrivate creates a network interface without a public IP address
+func (c *config) createNetworkInterfacePrivate(ctx context.Context, networkInterfaceName, subnetID string) (*armnetwork.Interface, error) {
+	logr := logger.FromContext(ctx)
+	nicClient, err := armnetwork.NewInterfacesClient(c.subscriptionID, c.cred, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	parameters := armnetwork.Interface{
+		Location: to.Ptr(c.location),
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+				{
+					Name: to.Ptr("ipConfig"),
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+						Subnet: &armnetwork.Subnet{
+							ID: to.Ptr(subnetID),
+						},
+						// No PublicIPAddress - using private IP only
+					},
+				},
+			},
+		},
+	}
+
+	pollerResponse, createErr := nicClient.BeginCreateOrUpdate(ctx, c.resourceGroupName, networkInterfaceName, parameters, nil)
+	if createErr != nil {
+		return nil, createErr
+	}
+
+	resp, pollErr := pollerResponse.PollUntilDone(ctx, nil)
+	if pollErr != nil {
+		return nil, pollErr
+	}
+	logr.Debugf("created network interface (private IP only): %s", networkInterfaceName)
+	return &resp.Interface, nil
+}
+
 func (c *config) addExtension(ctx context.Context, vmName string) (ext armcompute.VirtualMachineExtension, err error) {
 	// https://github.com/Azure-Samples/azure-sdk-for-go-samples/blob/648055b2a48e67b7f93f0c32411366d8dd3c239a/services/compute/vm_with_identity.go
 	logr := logger.FromContext(ctx)
@@ -294,4 +348,30 @@ func tempdir(inputOS string) string {
 	default:
 		return oshelp.JoinPaths(inputOS, "/tmp", dir)
 	}
+}
+
+// getPrivateIPFromInterface extracts the private IP address from a network interface.
+// Returns empty string if the IP cannot be obtained (similar to AWS/GCP patterns).
+func (c *config) getPrivateIPFromInterface(nic *armnetwork.Interface) string {
+	if nic == nil {
+		return ""
+	}
+	if nic.Properties == nil {
+		return ""
+	}
+	if len(nic.Properties.IPConfigurations) == 0 {
+		return ""
+	}
+	ipConfig := nic.Properties.IPConfigurations[0]
+	// IPConfigurations is a slice of pointers, so the element itself could be nil
+	if ipConfig == nil {
+		return ""
+	}
+	if ipConfig.Properties == nil {
+		return ""
+	}
+	if ipConfig.Properties.PrivateIPAddress == nil {
+		return ""
+	}
+	return *ipConfig.Properties.PrivateIPAddress
 }

@@ -163,6 +163,14 @@ type (
 		Tags              map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
 		SecurityGroupName string            `json:"security_group_name,omitempty" yaml:"security_group_name,omitempty"`
 		SecurityType      string            `json:"security_type,omitempty" yaml:"security_type,omitempty"`
+		Network           AzureNetwork      `json:"network,omitempty" yaml:"network,omitempty"`
+	}
+
+	// AzureNetwork provides network settings for Azure instances.
+	AzureNetwork struct {
+		VNetName   string `json:"vnet_name,omitempty" yaml:"vnet_name,omitempty"`     // Existing VNet name (optional)
+		SubnetName string `json:"subnet_name,omitempty" yaml:"subnet_name,omitempty"` // Existing subnet name (optional)
+		PrivateIP  bool   `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`   // Use private IP only (no public IP)
 	}
 
 	AzureAccount struct {
