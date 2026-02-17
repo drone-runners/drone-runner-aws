@@ -99,9 +99,9 @@ func TestWithSubnet(t *testing.T) {
 
 func TestUseExistingNetwork(t *testing.T) {
 	tests := []struct {
-		name       string
-		vnetName   string
-		subnetName string
+		name            string
+		vnetName        string
+		subnetName      string
 		wantUseExisting bool
 	}{
 		{
@@ -620,44 +620,44 @@ func TestWithSecurityType(t *testing.T) {
 
 func TestPrivateIPConfigCombinations(t *testing.T) {
 	tests := []struct {
-		name                 string
-		privateIP            bool
-		vnetName             string
-		subnetName           string
-		wantPrivateIP        bool
-		wantUseExistingNet   bool
+		name               string
+		privateIP          bool
+		vnetName           string
+		subnetName         string
+		wantPrivateIP      bool
+		wantUseExistingNet bool
 	}{
 		{
-			name:                 "private IP with existing network",
-			privateIP:            true,
-			vnetName:             "existing-vnet",
-			subnetName:           "existing-subnet",
-			wantPrivateIP:        true,
-			wantUseExistingNet:   true,
+			name:               "private IP with existing network",
+			privateIP:          true,
+			vnetName:           "existing-vnet",
+			subnetName:         "existing-subnet",
+			wantPrivateIP:      true,
+			wantUseExistingNet: true,
 		},
 		{
-			name:                 "private IP with new network (auto-created)",
-			privateIP:            true,
-			vnetName:             "",
-			subnetName:           "",
-			wantPrivateIP:        true,
-			wantUseExistingNet:   false,
+			name:               "private IP with new network (auto-created)",
+			privateIP:          true,
+			vnetName:           "",
+			subnetName:         "",
+			wantPrivateIP:      true,
+			wantUseExistingNet: false,
 		},
 		{
-			name:                 "public IP with existing network",
-			privateIP:            false,
-			vnetName:             "existing-vnet",
-			subnetName:           "existing-subnet",
-			wantPrivateIP:        false,
-			wantUseExistingNet:   true,
+			name:               "public IP with existing network",
+			privateIP:          false,
+			vnetName:           "existing-vnet",
+			subnetName:         "existing-subnet",
+			wantPrivateIP:      false,
+			wantUseExistingNet: true,
 		},
 		{
-			name:                 "public IP with new network (default behavior)",
-			privateIP:            false,
-			vnetName:             "",
-			subnetName:           "",
-			wantPrivateIP:        false,
-			wantUseExistingNet:   false,
+			name:               "public IP with new network (default behavior)",
+			privateIP:          false,
+			vnetName:           "",
+			subnetName:         "",
+			wantPrivateIP:      false,
+			wantUseExistingNet: false,
 		},
 	}
 
