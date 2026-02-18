@@ -217,6 +217,22 @@ func (c *config) createNetworkInterface(ctx context.Context, networkInterfaceNam
 		},
 	}
 
+	// Attach NSG to network interface if specified
+	if c.securityGroupName != "" {
+		securityGroupClient, sgClientErr := armnetwork.NewSecurityGroupsClient(c.subscriptionID, c.cred, nil)
+		if sgClientErr == nil {
+			sG, sgErr := securityGroupClient.Get(ctx, c.resourceGroupName, c.securityGroupName, nil)
+			if sgErr != nil {
+				logr.Warnf("failed to get security group %s: %s", c.securityGroupName, sgErr)
+			} else {
+				parameters.Properties.NetworkSecurityGroup = &armnetwork.SecurityGroup{
+					ID: sG.ID,
+				}
+				logr.Debugf("attaching NSG %s to network interface", c.securityGroupName)
+			}
+		}
+	}
+
 	pollerResponse, createErr := nicClient.BeginCreateOrUpdate(ctx, c.resourceGroupName, networkInterfaceName, parameters, nil)
 	if createErr != nil {
 		return nil, createErr
@@ -254,6 +270,22 @@ func (c *config) createNetworkInterfacePrivate(ctx context.Context, networkInter
 				},
 			},
 		},
+	}
+
+	// Attach NSG to network interface if specified
+	if c.securityGroupName != "" {
+		securityGroupClient, sgClientErr := armnetwork.NewSecurityGroupsClient(c.subscriptionID, c.cred, nil)
+		if sgClientErr == nil {
+			sG, sgErr := securityGroupClient.Get(ctx, c.resourceGroupName, c.securityGroupName, nil)
+			if sgErr != nil {
+				logr.Warnf("failed to get security group %s: %s", c.securityGroupName, sgErr)
+			} else {
+				parameters.Properties.NetworkSecurityGroup = &armnetwork.SecurityGroup{
+					ID: sG.ID,
+				}
+				logr.Debugf("attaching NSG %s to network interface (private)", c.securityGroupName)
+			}
+		}
 	}
 
 	pollerResponse, createErr := nicClient.BeginCreateOrUpdate(ctx, c.resourceGroupName, networkInterfaceName, parameters, nil)
