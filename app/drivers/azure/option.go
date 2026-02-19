@@ -180,3 +180,24 @@ func WithSecurityGroupName(securityGroupName string) Option {
 		p.securityGroupName = securityGroupName
 	}
 }
+
+// WithPrivateIP returns an option to use private IP addresses only (no public IP).
+func WithPrivateIP(private bool) Option {
+	return func(p *config) {
+		p.privateIP = private
+	}
+}
+
+// WithVNet returns an option to use an existing Virtual Network.
+func WithVNet(vnetName string) Option {
+	return func(p *config) {
+		p.vnetName = vnetName
+	}
+}
+
+// WithSubnet returns an option to use an existing Subnet.
+func WithSubnet(subnetName string) Option {
+	return func(p *config) {
+		p.subnetName = subnetName
+	}
+}
