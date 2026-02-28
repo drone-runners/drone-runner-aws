@@ -1,0 +1,85 @@
+# ---------------------------------------------------------#
+#                   Get certificates                       #
+# ---------------------------------------------------------#
+FROM --platform=$BUILDPLATFORM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21 as cert-image
+RUN apk --update add ca-certificates
+
+# ---------------------------------------------------------#
+#                   Build Harness VM Runner                #
+# ---------------------------------------------------------#
+FROM golang:1.24 as builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy go module files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build arguments for version information
+ARG BUILD_VERSION
+ARG BUILD_TIME
+ARG COMMIT_SHA
+ARG BRANCH_NAME
+ARG GIT_TAG
+
+# Build the application for target platform
+# CGO is required for sqlite3 support
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    set -e; \
+    CGO_ENABLED=1 go build \
+    -ldflags "-extldflags \"-static\" \
+              -X 'github.com/drone-runners/drone-runner-aws/version.Version=${BUILD_VERSION}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.Commit=${COMMIT_SHA}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.BuildTime=${BUILD_TIME}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.Branch=${BRANCH_NAME}'" \
+    -o /app/harness-vm-runner
+
+# ---------------------------------------------------------#
+#                   Create final image                     #
+# ---------------------------------------------------------#
+FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21
+
+RUN apk add -U --no-cache curl ca-certificates
+
+WORKDIR /app
+VOLUME /data
+ENV XDG_CACHE_HOME=/data
+ENV GODEBUG=netdns=go
+ENV HARNESS_PLATFORM_OS=linux
+ENV HARNESS_PLATFORM_ARCH=amd64
+
+COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /app/harness-vm-runner /bin/harness-vm-runner
+
+# Build metadata labels
+ARG BUILD_VERSION
+ARG BUILD_TIME
+ARG COMMIT_SHA
+ARG BRANCH_NAME
+ARG GIT_TAG
+
+LABEL org.opencontainers.image.title="Harness VM Runner"
+LABEL org.opencontainers.image.description="Harness CI VM-based build runner"
+LABEL org.opencontainers.image.vendor="Harness Inc."
+LABEL org.opencontainers.image.created="${BUILD_TIME}"
+LABEL org.opencontainers.image.revision="${COMMIT_SHA}"
+LABEL org.opencontainers.image.source="https://github.com/harness/harness-runner"
+LABEL org.opencontainers.image.version="${BUILD_VERSION}"
+LABEL BUILD_VERSION="${BUILD_VERSION}"
+LABEL BUILD_TIME="${BUILD_TIME}"
+LABEL BRANCH_NAME="${BRANCH_NAME}"
+LABEL COMMIT_SHA="${COMMIT_SHA}"
+LABEL GIT_TAG="${GIT_TAG}"
+LABEL com.centurylinklabs.watchtower.stop-signal="SIGINT"
+
+EXPOSE 3000
+
+ENTRYPOINT ["/bin/harness-vm-runner"]
