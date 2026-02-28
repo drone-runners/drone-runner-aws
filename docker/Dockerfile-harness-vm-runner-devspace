@@ -1,0 +1,21 @@
+# First Stage: Build environment with Go and dependencies
+FROM us-west1-docker.pkg.dev/gar-setup/docker/golang:1.24-alpine3.21 as builder
+RUN apk --no-cache add ca-certificates git build-base
+WORKDIR /app
+COPY . .
+USER root
+# Fetch dependencies
+RUN go mod download && export GOPATH=""
+
+# Build the application
+RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/harness-vm-runner
+#Second Stage: Final lightweight image
+FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21
+WORKDIR /app
+RUN chown -R nobody:nobody /app
+RUN apk --no-cache add ca-certificates
+RUN touch database.sqlite3 && chmod 777 /app/database.sqlite3
+COPY --from=builder /app/harness-vm-runner ./harness-vm-runner
+RUN chmod 777  ./harness-vm-runner
+EXPOSE 3000
+ENTRYPOINT ["/app/harness-vm-runner"]
