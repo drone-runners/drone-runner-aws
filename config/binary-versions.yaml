@@ -1,0 +1,35 @@
+# Binary Component Versions for harness-vm-runner
+#
+# This file defines which versions of binary components are bundled
+# into the harness-vm-runner image.
+#
+# When you update a version here and commit, harness-vm-runner will
+# rebuild and pull the specified binary versions during its multi-stage build.
+#
+# Version Format: Semantic versioning (MAJOR.MINOR.PATCH)
+
+binaries:
+  lite-engine:
+    version: "1.0.0"
+    image: "harness/harness-vm-runner-lite-engine"
+    description: "Harness CI execution engine"
+
+  plugin:
+    version: "1.0.0"
+    image: "harness/harness-vm-runner-plugin"
+    description: "Plugin system for extending functionality"
+
+  auto-injection:
+    version: "1.0.0"
+    image: "harness/harness-vm-runner-auto-injection"
+    description: "Auto-injection for build instrumentation"
+
+  hcli:
+    version: "1.0.0"
+    image: "harness/harness-vm-runner-hcli"
+    description: "Harness CLI for annotations and step integration"
+
+  tmate:
+    version: "1.0.0"
+    image: "harness/harness-vm-runner-tmate"
+    description: "Terminal sharing for debugging support"
