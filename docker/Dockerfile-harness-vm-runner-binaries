@@ -1,0 +1,70 @@
+# ---------------------------------------------------------#
+#          Harness VM Runner Binaries Bundle              #
+# ---------------------------------------------------------#
+# This Dockerfile creates a binary bundle image containing
+# all runtime binaries needed by VMs created by harness-vm-runner.
+#
+# Binary versions are defined in config/binary-versions.yaml
+# and passed as build arguments by the CI pipeline.
+#
+# This image is pulled by harness-vm-runner at runtime when
+# creating VMs and binaries are extracted and injected via cloud-init.
+
+# Binary component versions (passed from pipeline reading binary-versions.yaml)
+ARG LITE_ENGINE_VERSION
+ARG PLUGIN_VERSION
+ARG AUTO_INJECTION_VERSION
+ARG HCLI_VERSION
+ARG TMATE_VERSION
+
+# ---------------------------------------------------------#
+#                Pull Binary Component Images              #
+# ---------------------------------------------------------#
+FROM harness/harness-vm-runner-lite-engine:${LITE_ENGINE_VERSION} as lite-engine-binary
+FROM harness/harness-vm-runner-plugin:${PLUGIN_VERSION} as plugin-binary
+FROM harness/harness-vm-runner-auto-injection:${AUTO_INJECTION_VERSION} as auto-injection-binary
+FROM harness/harness-vm-runner-hcli:${HCLI_VERSION} as hcli-binary
+FROM harness/harness-vm-runner-tmate:${TMATE_VERSION} as tmate-binary
+
+# ---------------------------------------------------------#
+#                Create Binaries Bundle Image              #
+# ---------------------------------------------------------#
+FROM scratch
+
+WORKDIR /binaries
+
+# Copy all binaries from component images
+# Each binary image should have the binary at /binaries/<binary-name>
+COPY --from=lite-engine-binary /binaries/lite-engine /binaries/lite-engine
+COPY --from=plugin-binary /binaries/plugin /binaries/plugin
+COPY --from=auto-injection-binary /binaries/auto-injection /binaries/auto-injection
+COPY --from=hcli-binary /binaries/hcli /binaries/hcli
+COPY --from=tmate-binary /binaries/tmate /binaries/tmate
+
+# Build metadata labels
+ARG BUILD_VERSION
+ARG BUILD_TIME
+ARG COMMIT_SHA
+ARG BRANCH_NAME
+ARG LITE_ENGINE_VERSION
+ARG PLUGIN_VERSION
+ARG AUTO_INJECTION_VERSION
+ARG HCLI_VERSION
+ARG TMATE_VERSION
+
+LABEL org.opencontainers.image.title="Harness VM Runner Binaries"
+LABEL org.opencontainers.image.description="Binary bundle for Harness VM Runner"
+LABEL org.opencontainers.image.vendor="Harness Inc."
+LABEL org.opencontainers.image.created="${BUILD_TIME}"
+LABEL org.opencontainers.image.revision="${COMMIT_SHA}"
+LABEL org.opencontainers.image.source="https://github.com/harness/harness-runner"
+LABEL org.opencontainers.image.version="${BUILD_VERSION}"
+LABEL BUILD_VERSION="${BUILD_VERSION}"
+LABEL BUILD_TIME="${BUILD_TIME}"
+LABEL BRANCH_NAME="${BRANCH_NAME}"
+LABEL COMMIT_SHA="${COMMIT_SHA}"
+LABEL LITE_ENGINE_VERSION="${LITE_ENGINE_VERSION}"
+LABEL PLUGIN_VERSION="${PLUGIN_VERSION}"
+LABEL AUTO_INJECTION_VERSION="${AUTO_INJECTION_VERSION}"
+LABEL HCLI_VERSION="${HCLI_VERSION}"
+LABEL TMATE_VERSION="${TMATE_VERSION}"
