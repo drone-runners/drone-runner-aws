@@ -789,7 +789,7 @@ func TestManager_List(t *testing.T) {
 				_ = m.Add(Pool{Name: tt.poolName})
 			}
 
-			busy, free, hibernating, err := m.List(context.Background(), tt.poolName, tt.query)
+			busy, free, hibernating, _, err := m.List(context.Background(), tt.poolName, tt.query)
 
 			if tt.wantErr {
 				assert.Error(t, err)
