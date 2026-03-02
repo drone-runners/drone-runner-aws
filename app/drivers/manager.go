@@ -232,7 +232,7 @@ func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.
 			busy = append(busy, loopInstance)
 		} else if instance.State == types.StateHibernating {
 			hibernating = append(hibernating, loopInstance)
-		} else {
+		} else if instance.State != types.StateProvisioning {
 			free = append(free, loopInstance)
 		}
 	}
@@ -912,7 +912,7 @@ func (m *Manager) setupInstanceWithHibernate(
 		return nil, err
 	}
 	go func() {
-		ctx := context.Background()
+		ctx := m.globalCtx
 
 		// Step 1: Wait for instance connectivity
 		if !m.waitForInstanceConnectivity(ctx, tlsServerName, inst.ID) {
@@ -1302,7 +1302,7 @@ func (m *Manager) waitForInstanceConnectivity(ctx context.Context, tlsServerName
 	}
 
 	_, err = client.RetryHealth(ctx, &api.HealthRequest{
-		PerformDNSLookup:                true,
+		PerformDNSLookup:                ShouldPerformDNSLookup(ctx, instance.Platform.OS, false),
 		Timeout:                         defaultConnectivityTimeout,
 		HealthCheckConnectivityDuration: m.GetHealthCheckConnectivityDuration(),
 	})
