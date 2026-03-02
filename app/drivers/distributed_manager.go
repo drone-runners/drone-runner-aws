@@ -554,7 +554,7 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 			}
 		}()
 
-		ctx := context.Background()
+		ctx := d.globalCtx
 		// Step 1: Wait for instance connectivity
 		if !d.waitForInstanceConnectivity(ctx, tlsServerName, inst.ID) {
 			logrus.WithField("instanceID", inst.ID).Errorln("connectivity check failed, destroying instance and scheduling async setup")
