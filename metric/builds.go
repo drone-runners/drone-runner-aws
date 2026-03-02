@@ -226,7 +226,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 		}
 
 		// Get all instances for this pool using instanceStore.List()
-		busy, free, hibernating, err := metricStore.Manager.List(ctx, poolName, metricStore.Query)
+		busy, free, hibernating, provisioning, err := metricStore.Manager.List(ctx, poolName, metricStore.Query)
 		if err != nil {
 			// Log error but continue with other pools
 			continue
@@ -285,6 +285,17 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				driver,
 				"hibernating",
 			).Set(float64(len(hibernating)))
+		}
+
+		// Update metrics for provisioning instances
+		if len(provisioning) > 0 {
+			m.WarmPoolCount.WithLabelValues(
+				poolName,
+				platform.OS,
+				platform.Arch,
+				driver,
+				"provisioning",
+			).Set(float64(len(provisioning)))
 		}
 	}
 }

@@ -12,7 +12,7 @@ import (
 
 type IManager interface {
 	Inspect(name string) (platform types.Platform, rootDir, driver string)
-	List(ctx context.Context, pool string, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error)
+	List(ctx context.Context, pool string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning []*types.Instance, err error)
 	Exists(name string) bool
 	Find(ctx context.Context, instanceID string) (*types.Instance, error)
 	GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error)

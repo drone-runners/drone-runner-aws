@@ -209,15 +209,15 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 	return list[0], nil
 }
 
-func (m *Manager) List(ctx context.Context, poolName string, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error) {
+func (m *Manager) List(ctx context.Context, poolName string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning []*types.Instance, err error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
-		return nil, nil, nil, fmt.Errorf("manager: pool %s not found", poolName)
+		return nil, nil, nil, nil, fmt.Errorf("manager: pool %s not found", poolName)
 	}
 	return m.list(ctx, pool, queryParams)
 }
 
-func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating []*types.Instance, err error) {
+func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating, provisioning []*types.Instance, err error) {
 	list, err := m.instanceStore.List(ctx, pool.Name, queryParams)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).
@@ -232,12 +232,14 @@ func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.
 			busy = append(busy, loopInstance)
 		} else if instance.State == types.StateHibernating {
 			hibernating = append(hibernating, loopInstance)
-		} else if instance.State != types.StateProvisioning {
+		} else if instance.State == types.StateProvisioning {
+			provisioning = append(provisioning, loopInstance)
+		} else {
 			free = append(free, loopInstance)
 		}
 	}
 
-	return busy, free, hibernating, nil
+	return busy, free, hibernating, provisioning, nil
 }
 
 func (m *Manager) Delete(ctx context.Context, instanceID string) error {
@@ -323,7 +325,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							defer pool.Unlock()
 
 							queryParams := &types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
-							busy, free, hibernating, err := m.list(ctx, pool, queryParams)
+							busy, free, hibernating, provisioning, err := m.list(ctx, pool, queryParams)
 							if err != nil {
 								return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 							}
@@ -339,6 +341,12 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							for _, inst := range free {
 								startedAt := time.Unix(inst.Started, 0)
 								if time.Since(startedAt) > maxAgeFree {
+									instances = append(instances, inst)
+								}
+							}
+							for _, inst := range provisioning {
+								startedAt := time.Unix(inst.Started, 0)
+								if time.Since(startedAt) > stuckProvisioningMaxAge {
 									instances = append(instances, inst)
 								}
 							}
@@ -480,7 +488,7 @@ func (m *Manager) provisionFromPool(
 ) (*types.Instance, *types.CapacityReservation, bool, error) {
 	pool.Lock()
 
-	busy, free, _, err := m.list(ctx, pool, query)
+	busy, free, _, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		pool.Unlock()
 		return nil, nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
@@ -609,7 +617,7 @@ func (m *Manager) BuildPools(ctx context.Context) error {
 func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.QueryParams, destroyBusy, destroyFree bool) error {
 	pool.Lock()
 	defer pool.Unlock()
-	busy, free, hibernating, err := m.list(ctx, pool, query)
+	busy, free, hibernating, provisioning, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
 	}
@@ -622,6 +630,7 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 
 	if destroyFree {
 		instances = append(instances, free...)
+		instances = append(instances, provisioning...)
 	}
 
 	if len(instances) == 0 {
@@ -708,7 +717,7 @@ func (m *Manager) buildPool(
 	) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
 ) error {
-	instBusy, instFree, instHibernating, err := m.list(ctx, pool, query)
+	instBusy, instFree, instHibernating, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
 	}
