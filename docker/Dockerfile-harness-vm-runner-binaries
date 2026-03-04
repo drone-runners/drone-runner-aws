@@ -10,12 +10,12 @@
 # This image is pulled by harness-vm-runner at runtime when
 # creating VMs and binaries are extracted and injected via cloud-init.
 
-# Binary versions - must match harness-vm-runner go.mod
-ARG LITE_ENGINE_VERSION=1.0.0
-ARG PLUGIN_VERSION=1.0.0
-ARG AUTO_INJECTION_VERSION=1.0.0
-ARG HCLI_VERSION=1.0.0
-ARG TMATE_VERSION=1.0.0
+# Binary versions - must match binary-versions.yaml
+ARG LITE_ENGINE_VERSION=1.0.0-main-822a72
+ARG PLUGIN_VERSION=v3.9.5-beta
+ARG AUTO_INJECTION_VERSION=1.0.16
+ARG HCLI_VERSION=latest
+ARG TMATE_VERSION=1.0
 
 # ---------------------------------------------------------#
 #           Pull binary component images                   #
@@ -40,6 +40,10 @@ COPY --from=plugin-binary /binaries/plugin /binaries/plugin
 COPY --from=auto-injection-binary /binaries/auto-injection /binaries/auto-injection
 COPY --from=hcli-binary /binaries/hcli /binaries/hcli
 COPY --from=tmate-binary /binaries/tmate /binaries/tmate
+
+# Copy version manifest for reference
+# This allows operators to inspect which versions are bundled
+COPY config/binary-versions.yaml /binaries/versions.yaml
 
 # Build metadata labels
 ARG BUILD_VERSION
