@@ -8,28 +8,34 @@
 #
 # Version Format: Semantic versioning (MAJOR.MINOR.PATCH)
 
+# Registry configuration - where to pull binary images from
+# Options: "gar" (Google Artifact Registry) or "docker" (Docker Hub)
+# - gar: Used during development/build time (us-west1-docker.pkg.dev/gar-setup/docker)
+# - docker: Used during release time (docker.io/harness)
+registry: "docker"
+
 binaries:
   lite-engine:
-    version: "1.0.0"
+    version: "1.0.0-main-822a72"
     image: "harness/harness-vm-runner-lite-engine"
     description: "Harness CI execution engine"
 
   plugin:
-    version: "1.0.0"
+    version: "v3.9.5-beta"
     image: "harness/harness-vm-runner-plugin"
     description: "Plugin system for extending functionality"
 
   auto-injection:
-    version: "1.0.0"
+    version: "1.0.16"
     image: "harness/harness-vm-runner-auto-injection"
     description: "Auto-injection for build instrumentation"
 
   hcli:
-    version: "1.0.0"
+    version: "latest"
     image: "harness/harness-vm-runner-hcli"
     description: "Harness CLI for annotations and step integration"
 
   tmate:
-    version: "1.0.0"
+    version: "1.0"
     image: "harness/harness-vm-runner-tmate"
     description: "Terminal sharing for debugging support"

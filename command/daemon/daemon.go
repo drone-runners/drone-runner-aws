@@ -34,6 +34,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/engine/linter"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/store/database"
+	"github.com/drone-runners/drone-runner-aws/version"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -64,6 +65,9 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 
 	// setup the global logrus logger.
 	setupLogger(&env)
+
+	// log version information at startup
+	logVersionInfo()
 
 	ctx, cancel := context.WithCancel(nocontext)
 	defer cancel()
@@ -348,4 +352,27 @@ func Register(app *kingpin.Application) {
 	cmd.Flag("pool", "file to seed the pool").
 		Default("").
 		StringVar(&c.poolFile)
+}
+
+func logVersionInfo() {
+	logrus.WithFields(logrus.Fields{
+		"runner_version":          version.Version,
+		"commit":                  version.Commit,
+		"build_time":              version.BuildTime,
+		"branch":                  version.Branch,
+		"binary_registry":         version.BinaryRegistry,
+		"lite_engine_version":     version.LiteEngineVersion,
+		"plugin_version":          version.PluginVersion,
+		"auto_injection_version":  version.AutoInjectionVersion,
+		"hcli_version":            version.HCliVersion,
+		"tmate_version":           version.TmateVersion,
+	}).Info("harness-vm-runner started - expected binary versions")
+
+	logrus.WithFields(logrus.Fields{
+		"lite_engine": version.GetBinaryImage("lite-engine") + ":" + version.LiteEngineVersion,
+		"plugin":      version.GetBinaryImage("plugin") + ":" + version.PluginVersion,
+		"auto_injection": version.GetBinaryImage("auto-injection") + ":" + version.AutoInjectionVersion,
+		"hcli":        version.GetBinaryImage("hcli") + ":" + version.HCliVersion,
+		"tmate":       version.GetBinaryImage("tmate") + ":" + version.TmateVersion,
+	}).Info("binary images to be used in cloud-init")
 }

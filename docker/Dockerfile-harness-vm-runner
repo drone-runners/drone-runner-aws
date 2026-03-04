@@ -29,69 +29,21 @@ ARG COMMIT_SHA
 ARG BRANCH_NAME
 ARG GIT_TAG
 
-# Binary versions - must match go.mod dependencies
-ARG LITE_ENGINE_VERSION=1.0.0
-ARG PLUGIN_VERSION=1.0.0
-ARG AUTO_INJECTION_VERSION=1.0.0
-ARG HCLI_VERSION=1.0.0
-ARG TMATE_VERSION=1.0.0
+# Binary versions for runtime dependencies
+# Lite-engine must match go.mod dependency
+ARG LITE_ENGINE_VERSION=1.0.0-main-822a72
+ARG PLUGIN_VERSION=v3.9.5-beta
+ARG AUTO_INJECTION_VERSION=1.0.16
+ARG HCLI_VERSION=latest
+ARG TMATE_VERSION=1.0
 
-# Validate that go.mod versions match Dockerfile ARG versions
-# This ensures library dependencies are in sync with binary versions
-RUN set -e; \
-    echo "=== Validating binary versions against go.mod ==="; \
-    \
-    # Check lite-engine
-    if grep -q 'github.com/harness/lite-engine' go.mod; then \
-        GOMOD_VERSION=$(grep 'github.com/harness/lite-engine' go.mod | awk '{print $2}' | sed 's/v//'); \
-        echo "lite-engine: go.mod=v${GOMOD_VERSION}, Dockerfile=${LITE_ENGINE_VERSION}"; \
-        if [ "${GOMOD_VERSION}" != "${LITE_ENGINE_VERSION}" ]; then \
-            echo "ERROR: lite-engine version mismatch! Update both go.mod and Dockerfile."; \
-            exit 1; \
-        fi; \
-    fi; \
-    \
-    # Check plugin (if exists in go.mod)
-    if grep -q 'github.com/harness/plugin' go.mod; then \
-        GOMOD_VERSION=$(grep 'github.com/harness/plugin' go.mod | awk '{print $2}' | sed 's/v//'); \
-        echo "plugin: go.mod=v${GOMOD_VERSION}, Dockerfile=${PLUGIN_VERSION}"; \
-        if [ "${GOMOD_VERSION}" != "${PLUGIN_VERSION}" ]; then \
-            echo "ERROR: plugin version mismatch! Update both go.mod and Dockerfile."; \
-            exit 1; \
-        fi; \
-    fi; \
-    \
-    # Check auto-injection (if exists in go.mod)
-    if grep -q 'github.com/harness/auto-injection' go.mod; then \
-        GOMOD_VERSION=$(grep 'github.com/harness/auto-injection' go.mod | awk '{print $2}' | sed 's/v//'); \
-        echo "auto-injection: go.mod=v${GOMOD_VERSION}, Dockerfile=${AUTO_INJECTION_VERSION}"; \
-        if [ "${GOMOD_VERSION}" != "${AUTO_INJECTION_VERSION}" ]; then \
-            echo "ERROR: auto-injection version mismatch! Update both go.mod and Dockerfile."; \
-            exit 1; \
-        fi; \
-    fi; \
-    \
-    # Check hcli (if exists in go.mod)
-    if grep -q 'github.com/harness/hcli' go.mod; then \
-        GOMOD_VERSION=$(grep 'github.com/harness/hcli' go.mod | awk '{print $2}' | sed 's/v//'); \
-        echo "hcli: go.mod=v${GOMOD_VERSION}, Dockerfile=${HCLI_VERSION}"; \
-        if [ "${GOMOD_VERSION}" != "${HCLI_VERSION}" ]; then \
-            echo "ERROR: hcli version mismatch! Update both go.mod and Dockerfile."; \
-            exit 1; \
-        fi; \
-    fi; \
-    \
-    # Check tmate (if exists in go.mod)
-    if grep -q 'github.com/harness/tmate' go.mod; then \
-        GOMOD_VERSION=$(grep 'github.com/harness/tmate' go.mod | awk '{print $2}' | sed 's/v//'); \
-        echo "tmate: go.mod=v${GOMOD_VERSION}, Dockerfile=${TMATE_VERSION}"; \
-        if [ "${GOMOD_VERSION}" != "${TMATE_VERSION}" ]; then \
-            echo "ERROR: tmate version mismatch! Update both go.mod and Dockerfile."; \
-            exit 1; \
-        fi; \
-    fi; \
-    \
-    echo "✓ All binary versions validated successfully"
+# Binary registry - where to pull binaries from (gar or docker)
+ARG BINARY_REGISTRY=docker
+
+# NOTE: Binary versions are decoupled from go.mod versions
+# - go.mod versions: Go library dependencies for compiling the runner
+# - ARG versions: Runtime binary versions pulled from Docker registry
+# These may differ during development/testing
 
 # Build the application for target platform
 # CGO is required for sqlite3 support
@@ -103,7 +55,13 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
               -X 'github.com/drone-runners/drone-runner-aws/version.Version=${BUILD_VERSION}' \
               -X 'github.com/drone-runners/drone-runner-aws/version.Commit=${COMMIT_SHA}' \
               -X 'github.com/drone-runners/drone-runner-aws/version.BuildTime=${BUILD_TIME}' \
-              -X 'github.com/drone-runners/drone-runner-aws/version.Branch=${BRANCH_NAME}'" \
+              -X 'github.com/drone-runners/drone-runner-aws/version.Branch=${BRANCH_NAME}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.LiteEngineVersion=${LITE_ENGINE_VERSION}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.PluginVersion=${PLUGIN_VERSION}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.AutoInjectionVersion=${AUTO_INJECTION_VERSION}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.HCliVersion=${HCLI_VERSION}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.TmateVersion=${TMATE_VERSION}' \
+              -X 'github.com/drone-runners/drone-runner-aws/version.BinaryRegistry=${BINARY_REGISTRY}'" \
     -o /app/harness-vm-runner
 
 # ---------------------------------------------------------#
