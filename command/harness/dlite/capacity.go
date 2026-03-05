@@ -69,5 +69,5 @@ func (t *VMCapacityTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		CapacityReservation:    *capacityReservationResponse,
 	}
 
-	writeSuccessResponse(w, resp)
+	writeSuccessResponse(w, &resp)
 }

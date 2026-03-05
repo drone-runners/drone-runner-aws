@@ -11,7 +11,6 @@ import (
 	"github.com/wings-software/dlite/router"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -162,28 +161,7 @@ func (c *dliteCommand) pollFunc() error {
 	)
 }
 
-// getPoolManager returns the appropriate pool manager based on distributed flag.
-func (c *dliteCommand) getPoolManager(distributed bool) drivers.IManager {
-	// In dlite mode, we always use the distributed pool manager.
-	return c.runner.PoolManager
-}
-
 // getVMService returns the VM service.
 func (c *dliteCommand) getVMService() *harness.VMService {
 	return c.vmService
-}
-
-// getDelegateInfo returns the delegate info.
-func (c *dliteCommand) getDelegateInfo() *poller.DelegateInfo {
-	return c.delegateInfo
-}
-
-// getConfig returns the environment configuration.
-func (c *dliteCommand) getConfig() interface{} {
-	return c.runner.Config
-}
-
-// getMetrics returns the metrics.
-func (c *dliteCommand) getMetrics() interface{} {
-	return c.runner.Metrics
 }

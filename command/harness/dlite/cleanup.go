@@ -54,5 +54,5 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	writeSuccessResponse(w, resp)
+	writeSuccessResponse(w, &resp)
 }

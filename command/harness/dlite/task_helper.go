@@ -49,6 +49,6 @@ func writeErrorResponse(w http.ResponseWriter, err error) {
 }
 
 // writeSuccessResponse writes a success response.
-func writeSuccessResponse(w http.ResponseWriter, resp VMTaskExecutionResponse) {
+func writeSuccessResponse(w http.ResponseWriter, resp *VMTaskExecutionResponse) {
 	httphelper.WriteJSON(w, resp, httpOK)
 }

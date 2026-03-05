@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 )
 
@@ -66,7 +64,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start all services.
-	serviceStatuses := t.startServices(ctx, req, setupResp, task.ID, logr)
+	serviceStatuses := t.startServices(ctx, req, setupResp, task.ID)
 
 	// Construct final response.
 	resp := VMTaskExecutionResponse{
@@ -82,7 +80,7 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		InstanceInfo:          setupResp.InstanceInfo,
 	}
 
-	writeSuccessResponse(w, resp)
+	writeSuccessResponse(w, &resp)
 }
 
 // startServices starts all services for the VM.
@@ -91,7 +89,6 @@ func (t *VMInitTask) startServices(
 	req *VMInitRequest,
 	setupResp *harness.SetupVMResponse,
 	taskID string,
-	logr *logrus.Entry,
 ) []VMServiceStatus {
 	serviceStatuses := make([]VMServiceStatus, 0, len(req.Services))
 	vmService := t.c.getVMService()

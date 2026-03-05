@@ -42,7 +42,7 @@ type ManagerConfig struct {
 }
 
 // NewManagerFromConfig creates a new Manager from a ManagerConfig.
-func NewManagerFromConfig(cfg ManagerConfig) *Manager {
+func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 	return &Manager{
 		globalCtx:                    cfg.GlobalCtx,
 		instanceStore:                cfg.InstanceStore,
@@ -138,9 +138,9 @@ func WithRunnerConfig(cfg types.RunnerConfig) ManagerOption {
 }
 
 // WithTmate sets the tmate configuration.
-func WithTmate(t types.Tmate) ManagerOption {
+func WithTmate(t *types.Tmate) ManagerOption {
 	return func(m *Manager) {
-		m.tmate = t
+		m.tmate = *t
 	}
 }
 

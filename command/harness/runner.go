@@ -190,14 +190,14 @@ func (r *Runner) setupDistributedPools() error {
 func (r *Runner) setupStandardPools() error {
 	logrus.Infoln("runner: starting in standard mode")
 
-	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := r.provideStore()
+	stores, err := r.provideStore()
 	if err != nil {
 		return fmt.Errorf("initializing database: %w", err)
 	}
 
-	r.StageOwnerStore = stageOwnerStore
-	r.CapacityReservationStore = capacityReservationStore
-	r.PoolManager = drivers.New(r.ctx, instanceStore, r.Config)
+	r.StageOwnerStore = stores.StageOwnerStore
+	r.CapacityReservationStore = stores.CapacityReservationStore
+	r.PoolManager = drivers.New(r.ctx, stores.InstanceStore, r.Config)
 
 	poolConfig, err := SetupPoolWithEnv(r.ctx, r.Config, r.PoolManager, r.poolFile)
 	if err != nil {
@@ -207,7 +207,7 @@ func (r *Runner) setupStandardPools() error {
 
 	// Register standard metrics.
 	r.Metrics.AddMetricStore(&metric.Store{
-		Store:       instanceStore,
+		Store:       stores.InstanceStore,
 		Query:       nil,
 		Distributed: false,
 	})
@@ -215,18 +215,18 @@ func (r *Runner) setupStandardPools() error {
 	return nil
 }
 
+// storeResult holds the stores returned by provideStore.
+type storeResult struct {
+	InstanceStore            store.InstanceStore
+	StageOwnerStore          store.StageOwnerStore
+	OutboxStore              store.OutboxStore
+	CapacityReservationStore store.CapacityReservationStore
+	UtilizationHistoryStore  store.UtilizationHistoryStore
+}
+
 // provideStore creates database stores based on configuration.
-func (r *Runner) provideStore() (
-	store.InstanceStore,
-	store.StageOwnerStore,
-	store.OutboxStore,
-	store.CapacityReservationStore,
-	store.UtilizationHistoryStore,
-	error,
-) {
-	// Import is done inline to avoid circular dependency issues in the package structure.
-	// In a full refactor, we'd reorganize packages to avoid this.
-	return nil, nil, nil, nil, nil, fmt.Errorf("use database.ProvideStore directly for standard mode")
+func (r *Runner) provideStore() (*storeResult, error) {
+	return nil, fmt.Errorf("use database.ProvideStore directly for standard mode")
 }
 
 // StartScheduler starts the scheduler if it was initialized.

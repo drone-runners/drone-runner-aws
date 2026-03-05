@@ -57,7 +57,7 @@ func New(
 	envConfig *config.EnvConfig,
 ) *Manager {
 	cfg := NewManagerConfigFromEnv(globalContext, instanceStore, envConfig)
-	return NewManagerFromConfig(cfg)
+	return NewManagerFromConfig(&cfg)
 }
 
 // NewManager creates a new Manager with all configuration parameters.
@@ -104,7 +104,7 @@ func NewManager(
 		TmateBinaryURI:               tmateBinaryURI,
 		TmateBinaryFallbackURI:       tmateBinaryFallbackURI,
 	}
-	return NewManagerFromConfig(cfg)
+	return NewManagerFromConfig(&cfg)
 }
 
 // GetPoolSpec returns the pool specification for a given pool name.

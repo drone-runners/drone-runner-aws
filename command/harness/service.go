@@ -52,7 +52,7 @@ type VMServiceConfig struct {
 }
 
 // NewVMService creates a new VMService with the provided configuration.
-func NewVMService(cfg VMServiceConfig) *VMService {
+func NewVMService(cfg *VMServiceConfig) *VMService {
 	return &VMService{
 		poolManager:              cfg.PoolManager,
 		stageOwnerStore:          cfg.StageOwnerStore,
@@ -203,16 +203,16 @@ func WithPoolManager(pm drivers.IManager) VMServiceOption {
 }
 
 // WithStageOwnerStore sets the stage owner store.
-func WithStageOwnerStore(store store.StageOwnerStore) VMServiceOption {
+func WithStageOwnerStore(so store.StageOwnerStore) VMServiceOption {
 	return func(s *VMService) {
-		s.stageOwnerStore = store
+		s.stageOwnerStore = so
 	}
 }
 
 // WithCapacityReservationStore sets the capacity reservation store.
-func WithCapacityReservationStore(store store.CapacityReservationStore) VMServiceOption {
+func WithCapacityReservationStore(crs store.CapacityReservationStore) VMServiceOption {
 	return func(s *VMService) {
-		s.capacityReservationStore = store
+		s.capacityReservationStore = crs
 	}
 }
 
