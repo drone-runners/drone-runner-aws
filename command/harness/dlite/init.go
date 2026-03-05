@@ -2,101 +2,73 @@ package dlite
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/wings-software/dlite/client"
-	"github.com/wings-software/dlite/httphelper"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 )
 
+// Timeout constants for init tasks.
 const (
 	initTimeoutSec        = 30 * 60
 	initTimeoutSecForBYOI = 60 * 60
 )
 
+// VMInitTask handles VM initialization tasks.
 type VMInitTask struct {
 	c *dliteCommand
 }
 
+// VMInitRequest represents the request payload for VM initialization.
 type VMInitRequest struct {
 	SetupVMRequest harness.SetupVMRequest      `json:"setup_vm_request"`
 	Services       []*harness.ExecuteVMRequest `json:"services"`
 	Distributed    bool                        `json:"distributed,omitempty"`
 }
 
+// ServeHTTP handles the VM init task request.
 func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := logrus.New()
-	task := &client.Task{}
-	err := json.NewDecoder(r.Body).Decode(task)
-	if err != nil {
-		log.WithError(err).Error("could not decode VM setup HTTP body")
-		httphelper.WriteBadRequest(w, err)
+	task, taskBytes, logr, ok := decodeTask(w, r)
+	if !ok {
 		return
 	}
-	logr := log.WithField("task_id", task.ID)
-	// Unmarshal the task data
-	taskBytes, err := task.Data.MarshalJSON()
-	if err != nil {
-		logr.WithError(err).Errorln("could not unmarshal task data")
-		httphelper.WriteBadRequest(w, err)
-		return
-	}
+
 	req := &VMInitRequest{}
-	err = json.Unmarshal(taskBytes, req)
-	if err != nil {
-		logr.WithError(err).Errorln("could not unmarshal task request data")
-		httphelper.WriteBadRequest(w, err)
+	if !unmarshalTaskRequest(w, taskBytes, req, logr) {
 		return
 	}
+
+	// Determine timeout based on BYOI setting.
 	timeout := initTimeoutSec
 	if val, ok := req.SetupVMRequest.SetupRequest.Envs["CI_ENABLE_BYOI_HOSTED"]; ok && val == "true" {
 		timeout = initTimeoutSecForBYOI
 	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	accountID := harness.GetAccountID(&req.SetupVMRequest.Context, map[string]string{})
 
-	// Make the setup call
+	// Set correlation ID.
 	req.SetupVMRequest.CorrelationID = task.ID
-	poolManager := t.c.getPoolManager(req.Distributed)
-	setupResp, selectedPoolDriver, err := harness.HandleSetup(
-		ctx, &req.SetupVMRequest, poolManager.GetStageOwnerStore(), poolManager.GetCapacityReservationStore(),
-		t.c.env.Runner.Volumes, t.c.env.Dlite.PoolMapByAccount.Convert(),
-		t.c.env.Runner.Name, t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs,
-		poolManager, t.c.metrics, t.c.env.Settings.FallbackPoolIDs)
+
+	// Get VM service and execute setup.
+	vmService := t.c.getVMService()
+	setupResp, selectedPoolDriver, err := vmService.Setup(ctx, &req.SetupVMRequest)
 	if err != nil {
-		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
+		t.c.runner.Metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not setup VM")
-		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
+		writeErrorResponse(w, err)
 		return
 	}
-	serviceStatuses := []VMServiceStatus{}
-	var status VMServiceStatus
 
-	// Start all the services
-	for i, s := range req.Services {
-		req.Services[i].IPAddress = setupResp.IPAddress
-		req.Services[i].CorrelationID = task.ID
-		status = VMServiceStatus{ID: s.ID, Name: s.Name, Image: s.Image, LogKey: s.LogKey, Status: Running, ErrorMessage: ""}
-		resp, err := harness.HandleStep(ctx, req.Services[i], poolManager.GetStageOwnerStore(), t.c.env.Runner.Volumes,
-			t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs, poolManager, t.c.metrics, false)
-		if err != nil {
-			status.Status = Error
-			status.ErrorMessage = err.Error()
-		} else if resp.Error != "" {
-			status.Status = Error
-			status.ErrorMessage = resp.Error
-		}
-		serviceStatuses = append(serviceStatuses, status)
-	}
+	// Start all services.
+	serviceStatuses := t.startServices(ctx, req, setupResp, task.ID, logr)
 
-	// Construct final response
+	// Construct final response.
 	resp := VMTaskExecutionResponse{
 		ServiceStatuses:        serviceStatuses,
 		IPAddress:              setupResp.IPAddress,
@@ -109,5 +81,46 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		GitspacesPortMappings: setupResp.GitspacesPortMappings,
 		InstanceInfo:          setupResp.InstanceInfo,
 	}
-	httphelper.WriteJSON(w, resp, httpOK)
+
+	writeSuccessResponse(w, resp)
+}
+
+// startServices starts all services for the VM.
+func (t *VMInitTask) startServices(
+	ctx context.Context,
+	req *VMInitRequest,
+	setupResp *harness.SetupVMResponse,
+	taskID string,
+	logr *logrus.Entry,
+) []VMServiceStatus {
+	serviceStatuses := make([]VMServiceStatus, 0, len(req.Services))
+	vmService := t.c.getVMService()
+
+	for i, s := range req.Services {
+		// Set IP and correlation ID.
+		req.Services[i].IPAddress = setupResp.IPAddress
+		req.Services[i].CorrelationID = taskID
+
+		status := VMServiceStatus{
+			ID:           s.ID,
+			Name:         s.Name,
+			Image:        s.Image,
+			LogKey:       s.LogKey,
+			Status:       Running,
+			ErrorMessage: "",
+		}
+
+		resp, err := vmService.Step(ctx, req.Services[i], false)
+		if err != nil {
+			status.Status = Error
+			status.ErrorMessage = err.Error()
+		} else if resp.Error != "" {
+			status.Status = Error
+			status.ErrorMessage = resp.Error
+		}
+
+		serviceStatuses = append(serviceStatuses, status)
+	}
+
+	return serviceStatuses
 }

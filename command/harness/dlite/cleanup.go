@@ -2,60 +2,50 @@ package dlite
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
-
-	"github.com/sirupsen/logrus"
-	"github.com/wings-software/dlite/client"
-	"github.com/wings-software/dlite/httphelper"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
 )
 
+// VMCleanupTask handles VM cleanup/destroy tasks.
 type VMCleanupTask struct {
 	c *dliteCommand
 }
 
+// ServeHTTP handles the VM cleanup task request.
 func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context()) // TODO: Get this from http Request
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	log := logrus.New()
-	task := &client.Task{}
-	err := json.NewDecoder(r.Body).Decode(task)
-	if err != nil {
-		log.WithError(err).Error("could not decode VM cleanup HTTP body")
-		httphelper.WriteBadRequest(w, err)
+
+	_, taskBytes, logr, ok := decodeTask(w, r)
+	if !ok {
 		return
 	}
-	logr := log.WithField("task_id", task.ID)
-	// Unmarshal the task data
-	taskBytes, err := task.Data.MarshalJSON()
-	if err != nil {
-		logr.WithError(err).Error("could not unmarshal task data")
-		httphelper.WriteBadRequest(w, err)
-		return
-	}
+
 	req := &harness.VMCleanupRequest{}
-	err = json.Unmarshal(taskBytes, req)
-	if err != nil {
-		logr.WithError(err).Error("could not unmarshal task request data")
-		httphelper.WriteBadRequest(w, err)
+	if !unmarshalTaskRequest(w, taskBytes, req, logr) {
 		return
 	}
+
 	accountID := harness.GetAccountID(&req.Context, map[string]string{})
-	poolManager := t.c.getPoolManager(req.Distributed)
+
+	// Handle non-distributed context state cleanup.
 	if !req.Distributed {
 		harness.GetCtxState().Delete(req.StageRuntimeID)
 	}
-	err = harness.HandleDestroy(ctx, req, poolManager.GetStageOwnerStore(), poolManager.GetCapacityReservationStore(),
-		t.c.env.LiteEngine.EnableMock, t.c.env.LiteEngine.MockStepTimeoutSecs, poolManager, t.c.metrics)
+
+	// Execute cleanup.
+	vmService := t.c.getVMService()
+	err := vmService.Destroy(ctx, req)
 	if err != nil {
-		t.c.metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
+		t.c.runner.Metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not destroy VM")
-		httphelper.WriteJSON(w, failedResponse(err.Error()), httpFailed)
+		writeErrorResponse(w, err)
 		return
 	}
+
+	// Construct success response.
 	resp := VMTaskExecutionResponse{
 		CommandExecutionStatus: Success,
 		DelegateMetaInfo: DelegateMetaInfo{
@@ -63,5 +53,6 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ID:       t.c.delegateInfo.ID,
 		},
 	}
-	httphelper.WriteJSON(w, resp, httpOK)
+
+	writeSuccessResponse(w, resp)
 }
