@@ -168,8 +168,8 @@ type flexibleMockDriver struct {
 	ReserveCapacityFunc           func(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error)
 	DestroyCapacityFunc           func(ctx context.Context, capacity *types.CapacityReservation) error
 	CreateFunc                    func(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error)
-	DestroyFunc                   func(ctx context.Context, instances []*types.Instance) error
-	DestroyInstanceAndStorageFunc func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error
+	DestroyFunc                   func(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error)
+	DestroyInstanceAndStorageFunc func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error)
 	HibernateFunc                 func(ctx context.Context, instanceID, poolName, zone string) error
 	StartFunc                     func(ctx context.Context, instance *types.Instance, poolName string) (string, error)
 	SetTagsFunc                   func(ctx context.Context, instance *types.Instance, tags map[string]string) error
@@ -202,18 +202,18 @@ func (m *flexibleMockDriver) Create(ctx context.Context, opts *types.InstanceCre
 	return nil, errors.New("not implemented")
 }
 
-func (m *flexibleMockDriver) Destroy(ctx context.Context, instances []*types.Instance) error {
+func (m *flexibleMockDriver) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	if m.DestroyFunc != nil {
 		return m.DestroyFunc(ctx, instances)
 	}
-	return nil
+	return nil, nil
 }
 
-func (m *flexibleMockDriver) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error {
+func (m *flexibleMockDriver) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error) {
 	if m.DestroyInstanceAndStorageFunc != nil {
 		return m.DestroyInstanceAndStorageFunc(ctx, instances, storageCleanupType)
 	}
-	return nil
+	return nil, nil
 }
 
 func (m *flexibleMockDriver) Hibernate(ctx context.Context, instanceID, poolName, zone string) error {
@@ -1000,7 +1000,7 @@ func TestManager_Destroy(t *testing.T) {
 		instance           *types.Instance
 		storageCleanupType *storage.CleanupType
 		instanceStoreFunc  func(ctx context.Context, id string) (*types.Instance, error)
-		driverFunc         func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error
+		driverFunc         func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error)
 		deleteFunc         func(ctx context.Context, id string) error
 		wantErr            bool
 	}{
@@ -1012,10 +1012,10 @@ func TestManager_Destroy(t *testing.T) {
 				ID:   "inst-123",
 				Name: "instance-123",
 			},
-			driverFunc: func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error {
+			driverFunc: func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error) {
 				assert.Len(t, instances, 1)
 				assert.Equal(t, "inst-123", instances[0].ID)
-				return nil
+				return nil, nil
 			},
 			deleteFunc: func(ctx context.Context, id string) error {
 				assert.Equal(t, "inst-123", id)
@@ -1031,8 +1031,8 @@ func TestManager_Destroy(t *testing.T) {
 			instanceStoreFunc: func(ctx context.Context, id string) (*types.Instance, error) {
 				return &types.Instance{ID: "inst-456", Name: "instance-456"}, nil
 			},
-			driverFunc: func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error {
-				return nil
+			driverFunc: func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error) {
+				return nil, nil
 			},
 			deleteFunc: func(ctx context.Context, id string) error {
 				return nil
@@ -1062,8 +1062,8 @@ func TestManager_Destroy(t *testing.T) {
 			instance: &types.Instance{
 				ID: "inst-123",
 			},
-			driverFunc: func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error {
-				return errors.New("destroy failed")
+			driverFunc: func(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error) {
+				return nil, errors.New("destroy failed")
 			},
 			wantErr: true,
 		},
@@ -1290,7 +1290,7 @@ func TestManager_CleanPools(t *testing.T) {
 		destroyBusy bool
 		destroyFree bool
 		listFunc    func(ctx context.Context, poolName string, query *types.QueryParams) ([]*types.Instance, error)
-		destroyFunc func(ctx context.Context, instances []*types.Instance) error
+		destroyFunc func(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error)
 		deleteFunc  func(ctx context.Context, id string) error
 		wantErr     bool
 	}{
@@ -1305,9 +1305,9 @@ func TestManager_CleanPools(t *testing.T) {
 					{ID: "free-2", State: types.StateCreated},
 				}, nil
 			},
-			destroyFunc: func(ctx context.Context, instances []*types.Instance) error {
+			destroyFunc: func(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 				assert.Len(t, instances, 2)
-				return nil
+				return nil, nil
 			},
 			deleteFunc: func(ctx context.Context, id string) error {
 				assert.Contains(t, []string{"free-1", "free-2"}, id)
@@ -1325,9 +1325,9 @@ func TestManager_CleanPools(t *testing.T) {
 					{ID: "free-1", State: types.StateCreated},
 				}, nil
 			},
-			destroyFunc: func(ctx context.Context, instances []*types.Instance) error {
+			destroyFunc: func(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 				assert.Len(t, instances, 2)
-				return nil
+				return nil, nil
 			},
 			deleteFunc: func(ctx context.Context, id string) error {
 				return nil

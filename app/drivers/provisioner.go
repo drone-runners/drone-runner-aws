@@ -330,7 +330,7 @@ func (m *Manager) setupInstance(
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to store instance")
-		_ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
+		_, _ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
 		return nil, nil, err
 	}
 	return inst, nil, nil
@@ -373,7 +373,7 @@ func (m *Manager) processExistingInstance(
 			inst := common.BuildInstanceFromRequest(*instanceInfo)
 			if isMarkedForInfraReset {
 				storageCleanupType := storage.Detach
-				destroyInstanceErr := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
+				_, destroyInstanceErr := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
 				if destroyInstanceErr != nil {
 					logrus.Warnf(
 						"failed to destroy instance %s: %v",

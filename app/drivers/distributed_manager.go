@@ -149,7 +149,7 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 		WithField("instance_count", len(instancesToDestroy)).
 		WithField("instances", instancesToDestroy).
 		Infoln("cleaning up instances")
-	err := pool.Driver.Destroy(ctx, instancesToDestroy)
+	_, err := pool.Driver.Destroy(ctx, instancesToDestroy)
 	if err != nil {
 		// If destroy fails, we don't proceed to delete them from the DB.
 		// The instances will remain in 'terminating' state for a later retry.
@@ -931,7 +931,7 @@ func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *p
 
 	logr.Infof("distributed dlite: purger: Terminating stale %s instances\n%s", cleanupType, instanceNames)
 
-	err = pool.Driver.Destroy(ctx, instances)
+	_, err = pool.Driver.Destroy(ctx, instances)
 	if err != nil {
 		logr.WithError(err).Errorf("distributed dlite: failed to delete %s instances of pool=%q", cleanupType, pool.Name)
 	}

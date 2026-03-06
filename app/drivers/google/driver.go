@@ -701,23 +701,24 @@ func (p *config) setTags(ctx context.Context, instance *types.Instance,
 	return err
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error {
-	var err error
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error) {
 	if len(instances) == 0 {
-		return errors.New("no instances provided")
+		return nil, errors.New("no instances provided")
 	}
 
 	var failedInstances []*types.Instance
+	var lastErr error
+
 	for _, instance := range instances {
 		logr := logger.FromContext(ctx).
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
 
-		// Use per-iteration error tracking to avoid cross-contamination
+		// Track per-instance failure
 		var instanceFailed bool
 		var instanceErr error
 
@@ -731,7 +732,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			// For other errors (rate limit, API errors), track for retry
 			logr.WithError(getZoneErr).Errorln("google: failed to find instance zone")
 			failedInstances = append(failedInstances, instance)
-			err = getZoneErr
+			lastErr = getZoneErr
 			continue
 		}
 
@@ -754,7 +755,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		}
 
 		if storageCleanupType != nil && *storageCleanupType != "" {
-			if instanceDeleteOperation != nil && !instanceFailed {
+			if instanceDeleteOperation != nil {
 				logr.Info("google: waiting for instance deletion")
 				waitErr := p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
 				if waitErr != nil {
@@ -787,7 +788,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 								Errorln("google: error deleting persistent disk %s", storageIdentifier)
 							instanceFailed = true
 							instanceErr = diskDeletionErr
-							break // Stop trying other disks for this instance
+							break
 						}
 					} else {
 						waitErr := p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
@@ -795,31 +796,31 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 							logr.WithError(waitErr).Errorln("google: could not delete persistent disk %s", storageIdentifier)
 							instanceFailed = true
 							instanceErr = waitErr
-							break // Stop trying other disks for this instance
+							break
 						}
 					}
 				}
 			}
 		}
 
-		// Track failed instance for retry, but continue processing other instances
+		// Track failed instance, but continue processing other instances
 		if instanceFailed {
 			failedInstances = append(failedInstances, instance)
-			err = instanceErr
+			lastErr = instanceErr
 		}
 	}
 
-	// If any instances failed to delete due to transient errors, return error for retry
+	// Return failed instances so callers can handle them appropriately
 	if len(failedInstances) > 0 {
 		failedIDs := make([]string, len(failedInstances))
 		for i, inst := range failedInstances {
 			failedIDs[i] = inst.ID
 		}
-		return fmt.Errorf("google: failed to delete %d instance(s) due to transient errors: %v: %w",
-			len(failedInstances), failedIDs, err)
+		return failedInstances, fmt.Errorf("google: failed to delete %d instance(s): %v: %w",
+			len(failedInstances), failedIDs, lastErr)
 	}
 
-	return err
+	return nil, nil
 }
 
 func (p *config) Hibernate(ctx context.Context, instanceID, _, zone string) error {

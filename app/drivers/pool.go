@@ -31,8 +31,8 @@ type Driver interface {
 	ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.CapacityReservation, err error)
 	DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error)
 	Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error)
-	Destroy(ctx context.Context, instances []*types.Instance) (err error)
-	DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error)
+	Destroy(ctx context.Context, instances []*types.Instance) (failedInstances []*types.Instance, err error)
+	DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (failedInstances []*types.Instance, err error)
 	Hibernate(ctx context.Context, instanceID, poolName, zone string) error
 	Start(ctx context.Context, instance *types.Instance, poolName string) (ipAddress string, err error)
 	SetTags(context.Context, *types.Instance, map[string]string) error

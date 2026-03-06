@@ -74,13 +74,13 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-func (p *config) DestroyInstanceAndStorage(_ context.Context, _ []*types.Instance, _ *storage.CleanupType) (err error) {
+func (p *config) DestroyInstanceAndStorage(_ context.Context, _ []*types.Instance, _ *storage.CleanupType) ([]*types.Instance, error) {
 	time.Sleep(time.Duration(p.destroyWaitSecs) * time.Second)
-	return nil
+	return nil, nil
 }
 
 func (p *config) Hibernate(_ context.Context, _, _, _ string) error {

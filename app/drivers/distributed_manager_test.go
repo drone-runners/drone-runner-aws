@@ -32,15 +32,17 @@ func (m *mockDriver) GetFullyQualifiedImage(ctx context.Context, config *types.V
 func (m *mockDriver) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
 	return nil, nil
 }
-func (m *mockDriver) Destroy(ctx context.Context, instances []*types.Instance) error { return nil }
+func (m *mockDriver) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+	return nil, nil
+}
 func (m *mockDriver) Start(ctx context.Context, instance *types.Instance, poolName string) (string, error) {
 	return "", nil
 }
 func (m *mockDriver) Hibernate(ctx context.Context, instanceID, poolName, zone string) error {
 	return nil
 }
-func (m *mockDriver) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) error {
-	return nil
+func (m *mockDriver) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error) {
+	return nil, nil
 }
 func (m *mockDriver) Logs(ctx context.Context, instanceID string) (string, error) {
 	return "", nil

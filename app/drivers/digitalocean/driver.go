@@ -212,18 +212,18 @@ poller:
 	return instance, err
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-// DestroyInstanceAndStorage destroys the server AWS EC2 instances.
-func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
+// DestroyInstanceAndStorage destroys the server DigitalOcean droplets.
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) ([]*types.Instance, error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)
 	}
 	if len(instanceIDs) == 0 {
-		return fmt.Errorf("no instance ids provided")
+		return nil, fmt.Errorf("no instance ids provided")
 	}
 
 	logr := logger.FromContext(ctx).
@@ -234,18 +234,18 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	for _, instanceID := range instanceIDs {
 		id, err := strconv.Atoi(instanceID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		_, res, err := client.Droplets.Get(ctx, id)
 		if err != nil && res.StatusCode == 404 {
 			logr.WithError(err).
 				Warnln("droplet does not exist")
-			return fmt.Errorf("droplet does not exist '%s'", err)
+			return nil, fmt.Errorf("droplet does not exist '%s'", err)
 		} else if err != nil {
 			logr.WithError(err).
 				Errorln("cannot find droplet")
-			return err
+			return nil, err
 		}
 		logr.Debugln("deleting droplet")
 
@@ -253,12 +253,12 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		if err != nil {
 			logr.WithError(err).
 				Errorln("deleting droplet failed")
-			return err
+			return nil, err
 		}
 		logr.Debugln("droplet deleted")
 	}
 	logr.Traceln("digitalocean: VM terminated")
-	return
+	return nil, nil
 }
 
 func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {

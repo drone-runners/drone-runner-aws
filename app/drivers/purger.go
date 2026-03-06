@@ -94,7 +94,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 							logr.Infof("purger: Terminating %d stale instances\n", len(instances))
 
-							err = pool.Driver.Destroy(ctx, instances)
+							_, err = pool.Driver.Destroy(ctx, instances)
 							if err != nil {
 								return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
 							}
@@ -148,7 +148,7 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 		return nil
 	}
 
-	err = pool.Driver.Destroy(ctx, instances)
+	_, err = pool.Driver.Destroy(ctx, instances)
 	if err != nil {
 		return err
 	}
