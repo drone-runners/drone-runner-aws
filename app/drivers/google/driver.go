@@ -44,6 +44,11 @@ const (
 )
 
 var (
+	// ErrInstanceNotFound is returned when an instance cannot be found in any configured zone.
+	// This is a sentinel error that indicates the instance has been deleted or never existed,
+	// and is safe to skip during cleanup operations.
+	ErrInstanceNotFound = errors.New("google: instance not found in any zone")
+
 	defaultTags = []string{
 		"allow-docker",
 	}
@@ -706,16 +711,22 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		return errors.New("no instances provided")
 	}
 
+	var failedInstances []*types.Instance
 	for _, instance := range instances {
 		logr := logger.FromContext(ctx).
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
 		zone, getZoneErr := p.getZone(ctx, instance)
 		if getZoneErr != nil {
-			logr.WithError(getZoneErr).Errorln(
-				"google: failed to find instance zone",
-				instance.Zone,
-			)
+			// Instance not found is OK - it's already deleted, safe to skip
+			if errors.Is(getZoneErr, ErrInstanceNotFound) {
+				logr.Warnln("google: instance not found, skipping deletion")
+				continue
+			}
+			// For other errors (rate limit, API errors), track for retry
+			logr.WithError(getZoneErr).Errorln("google: failed to find instance zone")
+			failedInstances = append(failedInstances, instance)
+			err = getZoneErr
 			continue
 		}
 
@@ -779,6 +790,17 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			}
 		}
 	}
+
+	// If any instances failed to delete due to transient errors, return error for retry
+	if len(failedInstances) > 0 {
+		failedIDs := make([]string, len(failedInstances))
+		for i, inst := range failedInstances {
+			failedIDs[i] = inst.ID
+		}
+		return fmt.Errorf("google: failed to delete %d instance(s) due to transient errors: %v: %w",
+			len(failedInstances), failedIDs, err)
+	}
+
 	return err
 }
 
@@ -965,6 +987,9 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 
 func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
 	string, error) {
+	var lastErr error
+	allNotFound := true
+
 	for _, zone := range p.zones {
 		_, err := p.getInstance(ctx, p.projectID, zone, instanceID)
 		if err == nil {
@@ -975,12 +1000,24 @@ func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
 			gerr.Code == http.StatusNotFound {
 			continue
 		}
+
+		// Non-404 error (rate limit, API error, etc.) - track it
+		allNotFound = false
+		lastErr = err
 		logger.FromContext(ctx).
 			WithField("instance", instanceID).
 			WithField("zone", zone).
+			WithError(err).
 			Errorln("google: failed to fetch the VM")
 	}
-	return "", fmt.Errorf("failed to find vm")
+
+	// If all zones returned 404, the instance doesn't exist
+	if allNotFound {
+		return "", ErrInstanceNotFound
+	}
+
+	// At least one zone had a non-404 error - return it for retry
+	return "", fmt.Errorf("failed to find instance zone due to API error: %w", lastErr)
 }
 
 func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error {
@@ -1092,6 +1129,10 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 	if instance.Zone == "" {
 		zone, findInstanceZoneErr := p.findInstanceZone(ctx, instance.ID)
 		if findInstanceZoneErr != nil {
+			// Preserve ErrInstanceNotFound sentinel for caller to handle
+			if errors.Is(findInstanceZoneErr, ErrInstanceNotFound) {
+				return "", ErrInstanceNotFound
+			}
 			return "", fmt.Errorf("google: failed to find instance in all zones: %w", findInstanceZoneErr)
 		}
 		return zone, nil
@@ -1102,7 +1143,7 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 	if findInstanceErr != nil {
 		var googleErr *googleapi.Error
 		if errors.As(findInstanceErr, &googleErr) && googleErr.Code == http.StatusNotFound {
-			return "", nil
+			return "", ErrInstanceNotFound
 		}
 		return "", fmt.Errorf(
 			"google: failed to find instance in zone %s, error: %w",
