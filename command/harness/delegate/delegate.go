@@ -1,70 +1,26 @@
 package delegate
 
 import (
-	"context"
-	"encoding/json"
-	"io"
-	"net/http"
-
-	"github.com/drone-runners/drone-runner-aws/command/harness/common"
-
 	loghistory "github.com/drone/runner-go/logger/history"
-	"github.com/drone/runner-go/server"
-	"github.com/drone/signal"
-	"github.com/go-chi/chi/v5"
-	"github.com/joho/godotenv"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"github.com/wings-software/dlite/httphelper"
-	"golang.org/x/sync/errgroup"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
-	"github.com/drone-runners/drone-runner-aws/app/httprender"
-	"github.com/drone-runners/drone-runner-aws/app/scheduler"
-	errors "github.com/drone-runners/drone-runner-aws/app/types"
-	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness"
-	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/metric"
-	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/store/database"
 )
 
+// delegateCommand represents the delegate command configuration.
 type delegateCommand struct {
-	envFile                  string
-	env                      config.EnvConfig
-	poolFile                 string
-	poolManager              drivers.IManager
-	metrics                  *metric.Metrics
-	stageOwnerStore          store.StageOwnerStore
-	capacityReservationStore store.CapacityReservationStore
-	scheduler                *scheduler.Scheduler
+	envFile  string
+	poolFile string
 }
 
-func (c *delegateCommand) delegateListener() http.Handler {
-	mux := chi.NewMux()
-
-	mux.Use(harness.Middleware)
-
-	mux.Post("/pool_owner", c.handlePoolOwner)
-	mux.Post("/setup", c.handleSetup)
-	mux.Post("/destroy", c.handleDestroy)
-	mux.Post("/step", c.handleStep)
-	mux.Post("/suspend", c.handleSuspend)
-	mux.Mount("/metrics", promhttp.Handler())
-	mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "OK") //nolint: errcheck
-	})
-
-	return mux
-}
-
+// RegisterDelegate registers the delegate command with kingpin.
 func RegisterDelegate(app *kingpin.Application) {
 	c := new(delegateCommand)
-
-	c.poolManager = &drivers.Manager{}
 
 	cmd := app.Command("delegate", "starts the delegate").
 		Action(c.run)
@@ -74,128 +30,81 @@ func RegisterDelegate(app *kingpin.Application) {
 		StringVar(&c.poolFile)
 }
 
+// run executes the delegate command.
 func (c *delegateCommand) run(*kingpin.ParseContext) error {
-	// load environment variables from file.
-	envError := godotenv.Load(c.envFile)
-	if envError != nil {
-		logrus.WithError(envError).
-			Warnf("delegate: failed to load environment variables from file: %s", c.envFile)
-	}
-	// load the configuration from the environment
-	env, err := config.FromEnviron()
-	if err != nil {
+	// Create runner with delegate mode.
+	runner := harness.NewRunner(
+		harness.WithMode(harness.ModeDelegate),
+		harness.WithPoolFile(c.poolFile),
+	)
+
+	// Load configuration.
+	if err := runner.LoadConfig(c.envFile); err != nil {
 		return err
 	}
-	if env.Settings.HarnessTestBinaryURI == "" {
-		env.Settings.HarnessTestBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/split_tests"
-	}
-	if env.Settings.AutoInjectionBinaryURI == "" {
-		env.Settings.AutoInjectionBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.16"
-	}
-	c.env = env
-	// setup the global logrus logger.
-	harness.SetupLogger(&c.env)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// listen for termination signals to gracefully shutdown the runner.
-	ctx = signal.WithContextFunc(ctx, func() {
-		println("received signal, terminating process")
-		cancel()
-	})
-
-	// Initialize metrics
-	c.metrics = metric.RegisterMetrics()
-
-	// Check if distributed mode is enabled
-	if c.env.Database.DistributedMode {
-		logrus.Infoln("delegate: Starting in distributed mode (using dlite internals)")
-		if err := c.setupDistributedMode(ctx); err != nil {
-			return err
-		}
-	} else {
-		if err := c.setupStandardMode(ctx); err != nil {
-			return err
-		}
+	// Initialize runner (context, signals, metrics).
+	if err := runner.Initialize(); err != nil {
+		return err
 	}
 
-	shouldCleanBusyVMs := true
-	if c.poolManager.GetRunnerConfig().HA {
-		shouldCleanBusyVMs = false
+	// Setup pools based on mode (standard or distributed).
+	if err := c.setupPools(runner); err != nil {
+		return err
 	}
 
-	defer harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, shouldCleanBusyVMs, true) //nolint: errcheck
-
-	// Update metrics running count
-	c.metrics.UpdateRunningCount(ctx)
-	if c.env.Database.DistributedMode {
-		c.metrics.UpdateWarmPoolCount(ctx)
-	}
-
-	// Start the scheduler if initialized (distributed mode)
-	if c.scheduler != nil {
-		c.scheduler.Start()
-	}
-
+	// Setup log history hook.
 	hook := loghistory.New()
 	logrus.AddHook(hook)
 
-	var g errgroup.Group
-	runnerServer := server.Server{
-		Addr:    c.env.Server.Port,
-		Handler: c.delegateListener(),
-	}
-
-	logrus.WithField("addr", runnerServer.Addr).
+	// Log startup info.
+	logrus.WithField("addr", runner.Config.Server.Port).
 		WithField("kind", resource.Kind).
 		WithField("type", resource.Type).
-		WithField("distributed_mode", c.env.Database.DistributedMode).
+		WithField("distributed_mode", runner.Config.Database.DistributedMode).
 		Infoln("starting the server")
 
-	g.Go(func() error {
-		<-ctx.Done()
-		return harness.Cleanup(c.env.Settings.ReusePool, c.poolManager, shouldCleanBusyVMs, true)
-	})
+	// Create VM service and HTTP handlers.
+	vmService := harness.NewVMServiceFromRunner(runner)
+	handlers := harness.NewHTTPHandlers(vmService)
 
-	g.Go(func() error {
-		<-ctx.Done()
-		if c.scheduler != nil {
-			c.scheduler.Stop()
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		return runnerServer.ListenAndServe(ctx)
-	})
-
-	waitErr := g.Wait()
-	if waitErr != nil {
-		logrus.WithError(waitErr).
-			Errorln("shutting down the server")
-	}
-	return waitErr
+	// Run the server.
+	return runner.Run(handlers.Router())
 }
 
-// setupStandardMode initializes the delegate in standard (non-distributed) mode
-func (c *delegateCommand) setupStandardMode(ctx context.Context) error {
-	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := database.ProvideStore(c.env.Database.Driver, c.env.Database.Datasource) //nolint:dogsled
+// setupPools initializes pools based on the distributed mode setting.
+func (c *delegateCommand) setupPools(runner *harness.Runner) error {
+	if runner.Config.Database.DistributedMode {
+		return c.setupDistributedMode(runner)
+	}
+	return c.setupStandardMode(runner)
+}
+
+// setupStandardMode initializes the delegate in standard (non-distributed) mode.
+func (c *delegateCommand) setupStandardMode(runner *harness.Runner) error {
+	logrus.Infoln("delegate: starting in standard mode")
+
+	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := database.ProvideStore(
+		runner.Config.Database.Driver,
+		runner.Config.Database.Datasource,
+	)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 		return err
 	}
 
-	c.stageOwnerStore = stageOwnerStore
-	c.capacityReservationStore = capacityReservationStore
-	c.poolManager = drivers.New(ctx, instanceStore, &c.env)
+	runner.StageOwnerStore = stageOwnerStore
+	runner.CapacityReservationStore = capacityReservationStore
+	runner.PoolManager = drivers.New(runner.Context(), instanceStore, runner.Config)
 
-	_, err = harness.SetupPoolWithEnv(ctx, &c.env, c.poolManager, c.poolFile)
+	poolConfig, err := harness.SetupPoolWithEnv(runner.Context(), runner.Config, runner.PoolManager, c.poolFile)
 	if err != nil {
 		return err
 	}
+	runner.PoolConfig = poolConfig
 
-	// Register standard metrics
-	c.metrics.AddMetricStore(&metric.Store{
+	// Register standard metrics.
+	runner.Metrics.AddMetricStore(&metric.Store{
 		Store:       instanceStore,
 		Query:       nil,
 		Distributed: false,
@@ -204,176 +113,30 @@ func (c *delegateCommand) setupStandardMode(ctx context.Context) error {
 	return nil
 }
 
-// setupDistributedMode initializes the delegate in distributed mode (using dlite internals)
-func (c *delegateCommand) setupDistributedMode(ctx context.Context) error {
+// setupDistributedMode initializes the delegate in distributed mode.
+func (c *delegateCommand) setupDistributedMode(runner *harness.Runner) error {
+	logrus.Infoln("delegate: starting in distributed mode (using dlite internals)")
+
 	result, err := harness.SetupDistributedMode(
 		harness.DistributedSetupConfig{
-			Ctx:      ctx,
-			Env:      &c.env,
+			Ctx:      runner.Context(),
+			Env:      runner.Config,
 			PoolFile: c.poolFile,
-			Metrics:  c.metrics,
+			Metrics:  runner.Metrics,
 		},
 	)
 	if err != nil {
 		return err
 	}
 
-	c.poolManager = result.PoolManager
-	c.stageOwnerStore = result.StageOwnerStore
-	c.capacityReservationStore = result.CapacityReservationStore
-	c.scheduler = result.Scheduler
+	runner.PoolManager = result.PoolManager
+	runner.StageOwnerStore = result.StageOwnerStore
+	runner.CapacityReservationStore = result.CapacityReservationStore
+	runner.Scheduler = result.Scheduler
+	runner.PoolConfig = result.PoolConfig
 
-	// Register distributed metrics
-	harness.RegisterDistributedMetrics(ctx, c.metrics, result, c.env.Runner.Name)
+	// Register distributed metrics.
+	harness.RegisterDistributedMetrics(runner.Context(), runner.Metrics, result, runner.Config.Runner.Name)
 
 	return nil
-}
-
-func (c *delegateCommand) handlePoolOwner(w http.ResponseWriter, r *http.Request) {
-	poolName := r.URL.Query().Get("pool")
-	if poolName == "" {
-		httprender.BadRequest(w, "mandatory URL parameter 'pool' is missing", nil)
-		return
-	}
-
-	type poolOwnerResponse struct {
-		Owner bool `json:"owner"`
-	}
-
-	if !c.poolManager.Exists(poolName) {
-		httprender.OK(w, poolOwnerResponse{Owner: false})
-		return
-	}
-
-	stageID := r.URL.Query().Get("stageId")
-	if stageID != "" {
-		entity, err := c.stageOwnerStore.Find(context.Background(), stageID)
-		if err != nil {
-			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Error("failed to find the stage in store")
-			httprender.OK(w, poolOwnerResponse{Owner: false})
-			return
-		}
-
-		if entity.PoolName != poolName {
-			logrus.WithError(err).WithField("pool", poolName).WithField("stageId", stageID).Errorf("found stage with different pool: %s", entity.PoolName)
-			httprender.OK(w, poolOwnerResponse{Owner: false})
-			return
-		}
-	}
-
-	httprender.OK(w, poolOwnerResponse{Owner: true})
-}
-
-func (c *delegateCommand) handleSetup(w http.ResponseWriter, r *http.Request) {
-	req := &harness.SetupVMRequest{}
-	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		logrus.WithError(err).Error("could not decode request body")
-		httprender.BadRequest(w, err.Error(), nil)
-		return
-	}
-	ctx := r.Context()
-	resp, _, err := harness.HandleSetup(
-		ctx,
-		req,
-		c.stageOwnerStore,
-		c.capacityReservationStore,
-		c.env.Runner.Volumes,
-		c.env.Dlite.PoolMapByAccount.Convert(),
-		c.env.Runner.Name,
-		c.env.LiteEngine.EnableMock,
-		c.env.LiteEngine.MockStepTimeoutSecs,
-		c.poolManager,
-		c.metrics,
-		c.env.Settings.FallbackPoolIDs,
-	)
-
-	if err != nil {
-		logrus.WithField("stage_runtime_id", req.ID).WithError(err).Error("could not setup VM")
-		writeError(w, err)
-		return
-	}
-	httprender.OK(w, resp)
-}
-
-func (c *delegateCommand) handleStep(w http.ResponseWriter, r *http.Request) {
-	req := &harness.ExecuteVMRequest{}
-	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		logrus.WithError(err).Error("could not decode VM step execute request body")
-		httprender.BadRequest(w, err.Error(), nil)
-		return
-	}
-	ctx := r.Context()
-	resp, err := harness.HandleStep(ctx, req, c.stageOwnerStore, c.env.Runner.Volumes,
-		c.env.LiteEngine.EnableMock, c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager, c.metrics, false)
-	if err != nil {
-		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("step_id", req.ID).
-			WithError(err).Error("could not execute step on VM")
-		writeError(w, err)
-		return
-	}
-	httprender.OK(w, resp)
-}
-
-func (c *delegateCommand) handleSuspend(writer http.ResponseWriter, request *http.Request) {
-	req := &harness.SuspendVMRequest{}
-	if err := json.NewDecoder(request.Body).Decode(req); err != nil {
-		logrus.WithError(err).Error("could not decode suspend request body")
-		httprender.BadRequest(writer, err.Error(), nil)
-		return
-	}
-	ctx := request.Context()
-	err := harness.HandleSuspend(ctx, req, c.env.LiteEngine.EnableMock, c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager)
-	if err != nil {
-		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithError(err).Error("could not suspend VM")
-		writeError(writer, err)
-		return
-	}
-	writer.WriteHeader(http.StatusOK)
-}
-
-func (c *delegateCommand) handleDestroy(w http.ResponseWriter, r *http.Request) {
-	// TODO: Change the java object to match VmCleanupRequest
-	rs := &struct {
-		ID                 string              `json:"id"`
-		InstanceID         string              `json:"instance_id"`
-		PoolID             string              `json:"pool_id"`
-		CorrelationID      string              `json:"correlation_id"`
-		InstanceInfo       common.InstanceInfo `json:"instance_info"`
-		StorageCleanupType storage.CleanupType `json:"storage_cleanup_type"`
-	}{}
-	if err := json.NewDecoder(r.Body).Decode(rs); err != nil {
-		logrus.WithError(err).Error("could not decode VM destroy request body")
-		httprender.BadRequest(w, err.Error(), nil)
-		return
-	}
-	logrus.Infoln("Received destroy request with taskId " + rs.CorrelationID)
-
-	req := &harness.VMCleanupRequest{
-		PoolID:             rs.PoolID,
-		StageRuntimeID:     rs.ID,
-		InstanceInfo:       rs.InstanceInfo,
-		StorageCleanupType: rs.StorageCleanupType,
-	}
-	req.Context.TaskID = rs.CorrelationID
-
-	ctx := r.Context()
-	err := harness.HandleDestroy(ctx, req, c.stageOwnerStore, c.capacityReservationStore, c.env.LiteEngine.EnableMock,
-		c.env.LiteEngine.MockStepTimeoutSecs, c.poolManager, c.metrics)
-	if err != nil {
-		logrus.WithField("stage_runtime_id", req.StageRuntimeID).WithField("task_id", rs.CorrelationID).WithError(err).Error("could not destroy VM")
-		writeError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-func writeError(w http.ResponseWriter, err error) {
-	switch err.(type) {
-	case *errors.BadRequestError:
-		httphelper.WriteBadRequest(w, err)
-	case *errors.NotFoundError:
-		httphelper.WriteNotFound(w, err)
-	default:
-		httphelper.WriteInternalError(w, err)
-	}
 }
