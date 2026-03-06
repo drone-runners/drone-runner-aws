@@ -1,0 +1,29 @@
+# First Stage: Build environment with Go and dependencies
+FROM golang:1.24 as builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy go module files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the application
+# CGO is required for sqlite3 support
+RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/harness-vm-runner
+#Second Stage: Final lightweight image
+FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21
+WORKDIR /app
+RUN chown -R nobody:nobody /app
+RUN apk --no-cache add ca-certificates
+RUN touch database.sqlite3 && chmod 777 /app/database.sqlite3
+COPY --from=builder /app/harness-vm-runner ./harness-vm-runner
+RUN chmod 777  ./harness-vm-runner
+EXPOSE 3000
+ENTRYPOINT ["/app/harness-vm-runner"]
