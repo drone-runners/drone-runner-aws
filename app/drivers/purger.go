@@ -94,11 +94,23 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 
 							logr.Infof("purger: Terminating %d stale instances\n", len(instances))
 
-							_, err = pool.Driver.Destroy(ctx, instances)
+							failedInstances, err := pool.Driver.Destroy(ctx, instances)
 							if err != nil {
-								return fmt.Errorf("failed to delete instances of pool=%q error: %w", pool.Name, err)
+								logr.WithError(err).Warnf("purger: failed to delete some instances of pool=%q", pool.Name)
 							}
+
+							// Build a set of failed instance IDs for quick lookup
+							failedIDs := make(map[string]bool)
+							for _, inst := range failedInstances {
+								failedIDs[inst.ID] = true
+							}
+
+							// Only delete successfully destroyed instances from database
 							for _, instance := range instances {
+								if failedIDs[instance.ID] {
+									logr.Warnf("purger: skipping db delete for failed instance %s", instance.ID)
+									continue
+								}
 								derr := m.Delete(ctx, instance.ID)
 								if derr != nil {
 									return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
@@ -148,16 +160,32 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 		return nil
 	}
 
-	_, err = pool.Driver.Destroy(ctx, instances)
+	failedInstances, err := pool.Driver.Destroy(ctx, instances)
 	if err != nil {
-		return err
+		logrus.WithError(err).Warnf("cleanPool: failed to delete some instances")
 	}
 
+	// Build a set of failed instance IDs for quick lookup
+	failedIDs := make(map[string]bool)
+	for _, inst := range failedInstances {
+		failedIDs[inst.ID] = true
+	}
+
+	// Only delete successfully destroyed instances from database
 	for _, inst := range instances {
+		if failedIDs[inst.ID] {
+			logrus.Warnf("cleanPool: skipping db delete for failed instance %s", inst.ID)
+			continue
+		}
 		err = m.Delete(ctx, inst.ID)
 		if err != nil {
 			return err
 		}
+	}
+
+	// Return error if any instances failed
+	if len(failedInstances) > 0 {
+		return fmt.Errorf("failed to destroy %d instance(s)", len(failedInstances))
 	}
 
 	return nil

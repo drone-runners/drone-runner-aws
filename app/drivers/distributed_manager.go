@@ -149,31 +149,43 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 		WithField("instance_count", len(instancesToDestroy)).
 		WithField("instances", instancesToDestroy).
 		Infoln("cleaning up instances")
-	_, err := pool.Driver.Destroy(ctx, instancesToDestroy)
+	failedInstances, err := pool.Driver.Destroy(ctx, instancesToDestroy)
 	if err != nil {
-		// If destroy fails, we don't proceed to delete them from the DB.
-		// The instances will remain in 'terminating' state for a later retry.
-		return fmt.Errorf("failed to destroy instances in pool %q: %w", pool.Name, err)
+		logrus.WithError(err).Warnf("failed to destroy some instances in pool %q", pool.Name)
 	}
 
-	// 3. Delete the instances from the database after they are destroyed
-	instanceIDs := make([]string, len(instancesToDestroy))
-	for i, instance := range instancesToDestroy {
-		instanceIDs[i] = instance.ID
+	// Build a set of failed instance IDs for quick lookup
+	failedIDs := make(map[string]bool)
+	for _, inst := range failedInstances {
+		failedIDs[inst.ID] = true
 	}
 
-	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-	deleteSQL, args, err := builder.Delete("instances").Where(squirrel.Eq{"instance_id": instanceIDs}).ToSql()
-	if err != nil {
-		return fmt.Errorf("failed to build delete query for cleaned instances: %w", err)
+	// 3. Delete only successfully destroyed instances from the database
+	var successfulIDs []string
+	var successfulInstances []*types.Instance
+	for _, instance := range instancesToDestroy {
+		if failedIDs[instance.ID] {
+			logrus.Warnf("skipping db delete for failed instance %s", instance.ID)
+			continue
+		}
+		successfulIDs = append(successfulIDs, instance.ID)
+		successfulInstances = append(successfulInstances, instance)
 	}
 
-	_, err = d.instanceStore.DeleteAndReturn(ctx, deleteSQL, args...)
-	if err != nil {
-		return fmt.Errorf("failed to delete destroyed instances from database: %w", err)
+	if len(successfulIDs) > 0 {
+		builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+		deleteSQL, args, err := builder.Delete("instances").Where(squirrel.Eq{"instance_id": successfulIDs}).ToSql()
+		if err != nil {
+			return fmt.Errorf("failed to build delete query for cleaned instances: %w", err)
+		}
+
+		_, err = d.instanceStore.DeleteAndReturn(ctx, deleteSQL, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete destroyed instances from database: %w", err)
+		}
 	}
 
-	d.destroyCapacity(ctx, instancesToDestroy)
+	d.destroyCapacity(ctx, successfulInstances)
 
 	return nil
 }
@@ -931,13 +943,27 @@ func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *p
 
 	logr.Infof("distributed dlite: purger: Terminating stale %s instances\n%s", cleanupType, instanceNames)
 
-	_, err = pool.Driver.Destroy(ctx, instances)
+	failedInstances, err := pool.Driver.Destroy(ctx, instances)
 	if err != nil {
 		logr.WithError(err).Errorf("distributed dlite: failed to delete %s instances of pool=%q", cleanupType, pool.Name)
 	}
 
-	d.destroyCapacity(ctx, instances)
-	return instances, nil
+	// Build a set of failed instance IDs for quick lookup
+	failedIDs := make(map[string]bool)
+	for _, inst := range failedInstances {
+		failedIDs[inst.ID] = true
+	}
+
+	// Only destroy capacity for successfully deleted instances
+	var successfulInstances []*types.Instance
+	for _, inst := range instances {
+		if !failedIDs[inst.ID] {
+			successfulInstances = append(successfulInstances, inst)
+		}
+	}
+
+	d.destroyCapacity(ctx, successfulInstances)
+	return successfulInstances, nil
 }
 
 func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*types.Instance) {
