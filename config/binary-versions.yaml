@@ -12,30 +12,35 @@
 # Options: "gar" (Google Artifact Registry) or "docker" (Docker Hub)
 # - gar: Used during development/build time (us-west1-docker.pkg.dev/gar-setup/docker)
 # - docker: Used during release time (docker.io/harness)
-registry: "docker"
+registry: "gar"
 
 binaries:
   lite-engine:
-    version: "1.0.0-main-822a72"
+    version: "1.0.0"
     image: "harness/harness-vm-runner-lite-engine"
     description: "Harness CI execution engine"
 
   plugin:
-    version: "v3.9.5-beta"
+    version: "1.0.0"
     image: "harness/harness-vm-runner-plugin"
     description: "Plugin system for extending functionality"
 
   auto-injection:
-    version: "1.0.16"
+    version: "1.0.0-main-5eefd8"
     image: "harness/harness-vm-runner-auto-injection"
     description: "Auto-injection for build instrumentation"
 
   hcli:
-    version: "latest"
+    version: "1.1.0"
     image: "harness/harness-vm-runner-hcli"
     description: "Harness CLI for annotations and step integration"
 
   tmate:
-    version: "1.0"
+    version: "1.1.0"
     image: "harness/harness-vm-runner-tmate"
     description: "Terminal sharing for debugging support"
+
+  envman:
+    version: "1.3.0"
+    image: "harness/harness-vm-runner-envman"
+    description: "Environment variable manager for build context"

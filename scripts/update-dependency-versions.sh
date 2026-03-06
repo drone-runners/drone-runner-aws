@@ -48,6 +48,7 @@ PLUGIN_VERSION=$(yq eval '.binaries.plugin.version' "${BINARY_VERSIONS_YAML}")
 AUTO_INJECTION_VERSION=$(yq eval '.binaries.auto-injection.version' "${BINARY_VERSIONS_YAML}")
 HCLI_VERSION=$(yq eval '.binaries.hcli.version' "${BINARY_VERSIONS_YAML}")
 TMATE_VERSION=$(yq eval '.binaries.tmate.version' "${BINARY_VERSIONS_YAML}")
+ENVMAN_VERSION=$(yq eval '.binaries.envman.version' "${BINARY_VERSIONS_YAML}")
 
 echo ""
 echo "Binary versions from config/binary-versions.yaml:"
@@ -56,6 +57,7 @@ echo "  plugin:          ${PLUGIN_VERSION}"
 echo "  auto-injection:  ${AUTO_INJECTION_VERSION}"
 echo "  hcli:            ${HCLI_VERSION}"
 echo "  tmate:           ${TMATE_VERSION}"
+echo "  envman:          ${ENVMAN_VERSION}"
 echo ""
 
 # Determine registry prefix
@@ -107,6 +109,7 @@ if [[ -f "${RUNNER_DOCKERFILE}" ]]; then
     update_arg "${RUNNER_DOCKERFILE}" "AUTO_INJECTION_VERSION" "${AUTO_INJECTION_VERSION}"
     update_arg "${RUNNER_DOCKERFILE}" "HCLI_VERSION" "${HCLI_VERSION}"
     update_arg "${RUNNER_DOCKERFILE}" "TMATE_VERSION" "${TMATE_VERSION}"
+    update_arg "${RUNNER_DOCKERFILE}" "ENVMAN_VERSION" "${ENVMAN_VERSION}"
     update_arg "${RUNNER_DOCKERFILE}" "BINARY_REGISTRY" "${REGISTRY}"
 
     echo "✓ Updated ${RUNNER_DOCKERFILE}"
@@ -123,6 +126,7 @@ if [[ -f "${BINARIES_DOCKERFILE}" ]]; then
     update_arg "${BINARIES_DOCKERFILE}" "AUTO_INJECTION_VERSION" "${AUTO_INJECTION_VERSION}"
     update_arg "${BINARIES_DOCKERFILE}" "HCLI_VERSION" "${HCLI_VERSION}"
     update_arg "${BINARIES_DOCKERFILE}" "TMATE_VERSION" "${TMATE_VERSION}"
+    update_arg "${BINARIES_DOCKERFILE}" "ENVMAN_VERSION" "${ENVMAN_VERSION}"
 
     # Update FROM lines to use correct registry
     update_from_registry "${BINARIES_DOCKERFILE}" "${REGISTRY_PREFIX}"
@@ -143,6 +147,7 @@ echo "  plugin:          ${PLUGIN_VERSION}"
 echo "  auto-injection:  ${AUTO_INJECTION_VERSION}"
 echo "  hcli:            ${HCLI_VERSION}"
 echo "  tmate:           ${TMATE_VERSION}"
+echo "  envman:          ${ENVMAN_VERSION}"
 echo ""
 echo "Updated files:"
 echo "  • ${RUNNER_DOCKERFILE}"
