@@ -11,20 +11,22 @@
 # creating VMs and binaries are extracted and injected via cloud-init.
 
 # Binary versions - must match binary-versions.yaml
-ARG LITE_ENGINE_VERSION=1.0.0-main-822a72
-ARG PLUGIN_VERSION=v3.9.5-beta
-ARG AUTO_INJECTION_VERSION=1.0.16
-ARG HCLI_VERSION=latest
-ARG TMATE_VERSION=1.0
+ARG LITE_ENGINE_VERSION=1.0.0
+ARG PLUGIN_VERSION=1.0.0
+ARG AUTO_INJECTION_VERSION=1.0.0-main-5eefd8
+ARG HCLI_VERSION=1.1.0
+ARG TMATE_VERSION=1.1.0
+ARG ENVMAN_VERSION=1.3.0
 
 # ---------------------------------------------------------#
 #           Pull binary component images                   #
 # ---------------------------------------------------------#
-FROM harness/harness-vm-runner-lite-engine:${LITE_ENGINE_VERSION} as lite-engine-binary
-FROM harness/harness-vm-runner-plugin:${PLUGIN_VERSION} as plugin-binary
-FROM harness/harness-vm-runner-auto-injection:${AUTO_INJECTION_VERSION} as auto-injection-binary
-FROM harness/harness-vm-runner-hcli:${HCLI_VERSION} as hcli-binary
-FROM harness/harness-vm-runner-tmate:${TMATE_VERSION} as tmate-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-lite-engine:${LITE_ENGINE_VERSION} as lite-engine-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-plugin:${PLUGIN_VERSION} as plugin-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-auto-injection:${AUTO_INJECTION_VERSION} as auto-injection-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-hcli:${HCLI_VERSION} as hcli-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-tmate:${TMATE_VERSION} as tmate-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_VERSION} as envman-binary
 
 # ---------------------------------------------------------#
 #                Create Binaries Bundle Image              #
@@ -40,6 +42,7 @@ COPY --from=plugin-binary /binaries/plugin /binaries/plugin
 COPY --from=auto-injection-binary /binaries/auto-injection /binaries/auto-injection
 COPY --from=hcli-binary /binaries/hcli /binaries/hcli
 COPY --from=tmate-binary /binaries/tmate /binaries/tmate
+COPY --from=envman-binary /binaries/envman /binaries/envman
 
 # Copy version manifest for reference
 # This allows operators to inspect which versions are bundled
@@ -55,6 +58,7 @@ ARG PLUGIN_VERSION
 ARG AUTO_INJECTION_VERSION
 ARG HCLI_VERSION
 ARG TMATE_VERSION
+ARG ENVMAN_VERSION
 
 LABEL org.opencontainers.image.title="Harness VM Runner Binaries"
 LABEL org.opencontainers.image.description="Binary bundle for Harness VM Runner"
@@ -72,3 +76,4 @@ LABEL PLUGIN_VERSION="${PLUGIN_VERSION}"
 LABEL AUTO_INJECTION_VERSION="${AUTO_INJECTION_VERSION}"
 LABEL HCLI_VERSION="${HCLI_VERSION}"
 LABEL TMATE_VERSION="${TMATE_VERSION}"
+LABEL ENVMAN_VERSION="${ENVMAN_VERSION}"
