@@ -716,6 +716,11 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		logr := logger.FromContext(ctx).
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
+
+		// Use per-iteration error tracking to avoid cross-contamination
+		var instanceFailed bool
+		var instanceErr error
+
 		zone, getZoneErr := p.getZone(ctx, instance)
 		if getZoneErr != nil {
 			// Instance not found is OK - it's already deleted, safe to skip
@@ -741,23 +746,26 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 					logr.WithError(deleteInstanceErr).Warnln("google: VM not found")
 				} else {
 					logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
-					err = deleteInstanceErr
+					instanceFailed = true
+					instanceErr = deleteInstanceErr
 				}
 			}
 			logr.Info("google: sent delete instance request")
 		}
 
 		if storageCleanupType != nil && *storageCleanupType != "" {
-			if instanceDeleteOperation != nil {
+			if instanceDeleteOperation != nil && !instanceFailed {
 				logr.Info("google: waiting for instance deletion")
-				err = p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
-			}
-			if err != nil {
-				logr.WithError(err).Errorln("google: could not delete instance. skipping disk deletion")
-				return err
+				waitErr := p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
+				if waitErr != nil {
+					logr.WithError(waitErr).Errorln("google: could not delete instance. skipping disk deletion")
+					instanceFailed = true
+					instanceErr = waitErr
+				}
 			}
 
-			if *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
+			// Only attempt disk deletion if instance deletion succeeded
+			if !instanceFailed && *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
 				logr.Info("google: deleting persistent disk")
 				storageIdentifiers := strings.Split(instance.StorageIdentifier, ",")
 				for _, storageIdentifier := range storageIdentifiers {
@@ -776,18 +784,28 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 								Warnln("google: persistent disk %s not found", storageIdentifier)
 						} else {
 							logr.WithError(diskDeletionErr).
-								Errorln("google: error finding persistent disk %s", storageIdentifier)
-							return err
+								Errorln("google: error deleting persistent disk %s", storageIdentifier)
+							instanceFailed = true
+							instanceErr = diskDeletionErr
+							break // Stop trying other disks for this instance
 						}
 					} else {
-						err = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
-						if err != nil {
-							logr.WithError(err).Errorln("google: could not delete persistent disk %s", storageIdentifier)
-							return err
+						waitErr := p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
+						if waitErr != nil {
+							logr.WithError(waitErr).Errorln("google: could not delete persistent disk %s", storageIdentifier)
+							instanceFailed = true
+							instanceErr = waitErr
+							break // Stop trying other disks for this instance
 						}
 					}
 				}
 			}
+		}
+
+		// Track failed instance for retry, but continue processing other instances
+		if instanceFailed {
+			failedInstances = append(failedInstances, instance)
+			err = instanceErr
 		}
 	}
 
