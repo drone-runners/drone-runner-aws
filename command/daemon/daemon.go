@@ -356,23 +356,23 @@ func Register(app *kingpin.Application) {
 
 func logVersionInfo() {
 	logrus.WithFields(logrus.Fields{
-		"runner_version":          version.Version,
-		"commit":                  version.Commit,
-		"build_time":              version.BuildTime,
-		"branch":                  version.Branch,
-		"binary_registry":         version.BinaryRegistry,
-		"lite_engine_version":     version.LiteEngineVersion,
-		"plugin_version":          version.PluginVersion,
-		"auto_injection_version":  version.AutoInjectionVersion,
-		"hcli_version":            version.HCliVersion,
-		"tmate_version":           version.TmateVersion,
+		"runner_version":         version.Version,
+		"commit":                 version.Commit,
+		"build_time":             version.BuildTime,
+		"branch":                 version.Branch,
+		"binary_registry":        version.BinaryRegistry,
+		"lite_engine_version":    version.LiteEngineVersion,
+		"plugin_version":         version.PluginVersion,
+		"auto_injection_version": version.AutoInjectionVersion,
+		"hcli_version":           version.HCliVersion,
+		"tmate_version":          version.TmateVersion,
 	}).Info("harness-vm-runner started - expected binary versions")
 
 	logrus.WithFields(logrus.Fields{
-		"lite_engine": version.GetBinaryImage("lite-engine") + ":" + version.LiteEngineVersion,
-		"plugin":      version.GetBinaryImage("plugin") + ":" + version.PluginVersion,
+		"lite_engine":    version.GetBinaryImage("lite-engine") + ":" + version.LiteEngineVersion,
+		"plugin":         version.GetBinaryImage("plugin") + ":" + version.PluginVersion,
 		"auto_injection": version.GetBinaryImage("auto-injection") + ":" + version.AutoInjectionVersion,
-		"hcli":        version.GetBinaryImage("hcli") + ":" + version.HCliVersion,
-		"tmate":       version.GetBinaryImage("tmate") + ":" + version.TmateVersion,
+		"hcli":           version.GetBinaryImage("hcli") + ":" + version.HCliVersion,
+		"tmate":          version.GetBinaryImage("tmate") + ":" + version.TmateVersion,
 	}).Info("binary images to be used in cloud-init")
 }

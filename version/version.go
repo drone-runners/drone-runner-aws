@@ -90,7 +90,7 @@ func ValidateBinariesCompatibility(binariesBundleVersion string) error {
 	}
 
 	if binariesBundleVersion != Version {
-		return fmt.Errorf("binaries bundle version mismatch: runner=%s, binaries=%s. This may cause compatibility issues.", Version, binariesBundleVersion)
+		return fmt.Errorf("binaries bundle version mismatch: runner=%s, binaries=%s, this may cause compatibility issues", Version, binariesBundleVersion)
 	}
 
 	return nil
@@ -98,16 +98,16 @@ func ValidateBinariesCompatibility(binariesBundleVersion string) error {
 
 // BinaryVersionInfo holds version information for a binary pulled from image labels
 type BinaryVersionInfo struct {
-	LiteEngineVersion     string
-	PluginVersion         string
-	AutoInjectionVersion  string
-	HCliVersion           string
-	TmateVersion          string
+	LiteEngineVersion    string
+	PluginVersion        string
+	AutoInjectionVersion string
+	HCliVersion          string
+	TmateVersion         string
 }
 
 // ValidateIndividualBinaries checks if individual binary versions from image labels match expected versions
 // This is used when binaries are pulled separately (not as a bundle)
-func ValidateIndividualBinaries(pulled BinaryVersionInfo) []error {
+func ValidateIndividualBinaries(pulled *BinaryVersionInfo) []error {
 	var errs []error
 
 	if LiteEngineVersion != "" && pulled.LiteEngineVersion != "" && pulled.LiteEngineVersion != LiteEngineVersion {
