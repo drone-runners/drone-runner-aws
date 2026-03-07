@@ -107,9 +107,14 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 		instance = instanceFromStore
 	}
 
-	err := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
+	failedInstances, err := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
 	if err != nil {
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
+	}
+
+	// If this instance failed, it will be in failedInstances
+	if len(failedInstances) > 0 {
+		return fmt.Errorf("provision: instance %q failed to destroy", instance.ID)
 	}
 
 	if derr := m.Delete(ctx, instance.ID); derr != nil {

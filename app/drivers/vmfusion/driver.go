@@ -250,17 +250,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return instance, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) ([]*types.Instance, error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)
 	}
 	if len(instanceIDs) == 0 {
-		return errors.New("no instance IDs provided")
+		return nil, errors.New("no instance IDs provided")
 	}
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
@@ -269,13 +269,13 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	for _, vmxPath := range instanceIDs {
 		// stop & delete VM
 		_, _, _ = vmrun("stop", vmxPath)
-		_, _, err = vmrun("deleteVM", vmxPath)
+		_, _, err := vmrun("deleteVM", vmxPath)
 		if err != nil {
 			logr.WithError(err).Errorln("VMFusion: error deleting VM")
-			return err
+			return nil, err
 		}
 	}
-	return
+	return nil, nil
 }
 
 func (p *config) Hibernate(_ context.Context, _, _, _ string) error {

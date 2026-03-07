@@ -349,11 +349,11 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return &instanceMap, nil
 }
 
-func (c *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (c *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	return c.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
+func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) ([]*types.Instance, error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)
@@ -369,7 +369,7 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		c.resourceGroupName = defaultResourceGroup
 	}
 	if len(instanceIDs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Check if using existing network (don't delete VNet if so)
@@ -383,17 +383,17 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 
 		poller, err := c.service.BeginDelete(ctx, c.resourceGroupName, instanceID, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		_, err = poller.PollUntilDone(ctx, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		logr.Info("azure: begin delete VM")
 		err = c.deleteNetworkInterface(ctx, networkInterfaceName)
 		if err != nil {
 			logr.Errorln(err)
-			return err
+			return nil, err
 		}
 		logr.Info("azure: deleted network interface: ", networkInterfaceName)
 
@@ -402,7 +402,7 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			err = c.deletePublicIP(ctx, publicIPName)
 			if err != nil {
 				logr.Errorln(err)
-				return err
+				return nil, err
 			}
 			logr.Info("azure: deleted public ip: ", publicIPName)
 		}
@@ -412,19 +412,19 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			err = c.deleteVirtualNetWork(ctx, vnetName)
 			if err != nil {
 				logr.Errorln(err)
-				return err
+				return nil, err
 			}
 			logr.Info("azure: deleted virtual network: ", vnetName)
 		}
 		err = c.deleteDisk(ctx, diskName)
 		if err != nil {
 			logr.Errorln(err)
-			return err
+			return nil, err
 		}
 		logr.Info("azure: deleted disk: ", diskName)
 		logr.Info("azure: VM deleted")
 	}
-	return nil
+	return nil, nil
 }
 
 func (c *config) Hibernate(_ context.Context, _, _, _ string) error {

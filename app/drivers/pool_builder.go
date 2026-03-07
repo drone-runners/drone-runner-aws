@@ -67,7 +67,7 @@ func (m *Manager) buildPool(
 			instances[i] = instFree[i]
 		}
 
-		err := pool.Driver.Destroy(ctx, instances)
+		_, err := pool.Driver.Destroy(ctx, instances)
 		if err != nil {
 			logr.WithError(err).Errorln("build pool: failed to destroy excess instances")
 		}
