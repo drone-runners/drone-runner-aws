@@ -212,11 +212,11 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
+		var variantID string
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
-		variantID := "default"
-		if instance != nil {
-			variantID = instance.VariantID
+		if variantID == "" {
+			variantID = "default"
 		}
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -419,11 +419,12 @@ func handleSetup(
 	instance *types.Instance,
 	warmed bool,
 	hibernated bool,
+	variantID string,
 	err error,
 ) {
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
-		return nil, false, false, fmt.Errorf("could not find pool: %s", pool)
+		return nil, false, false, "", fmt.Errorf("could not find pool: %s", pool)
 	}
 
 	if reservedCapacity != nil {
@@ -466,8 +467,9 @@ func handleSetup(
 		reservedCapacity,
 		false,
 	)
+	variantID = machineConfig.VariantID
 	if err != nil {
-		return nil, false, false, fmt.Errorf("failed to provision instance: %w", err)
+		return nil, false, false, variantID, fmt.Errorf("failed to provision instance: %w", err)
 	}
 
 	ilog := internalLogr.WithField("pool_id", pool).
@@ -538,7 +540,7 @@ func handleSetup(
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
 			go cleanUpInstanceFn(false)
-			return nil, false, false, fmt.Errorf("failed to start the instance up: %w", err)
+			return nil, false, false, variantID, fmt.Errorf("failed to start the instance up: %w", err)
 		}
 		ilog.Tracef("instance %s is started", instance.ID)
 		hibernated = true
@@ -549,20 +551,20 @@ func handleSetup(
 	err = poolManager.Update(ctx, instance)
 	if err != nil {
 		go cleanUpInstanceFn(false)
-		return nil, false, false, fmt.Errorf("failed to tag: %w", err)
+		return nil, false, false, variantID, fmt.Errorf("failed to tag: %w", err)
 	}
 
 	err = poolManager.SetInstanceTags(ctx, pool, instance, r.Tags)
 	if err != nil {
 		go cleanUpInstanceFn(false)
-		return nil, false, false, fmt.Errorf("failed to add tags to the instance: %w", err)
+		return nil, false, false, variantID, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 
 	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port,
 		enableMock, mockTimeout)
 	if err != nil {
 		go cleanUpInstanceFn(false)
-		return nil, false, false, fmt.Errorf("failed to create LE client: %w", err)
+		return nil, false, false, variantID, fmt.Errorf("failed to create LE client: %w", err)
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
 	ilog.Traceln("running healthcheck and waiting for an ok response")
@@ -578,7 +580,7 @@ func handleSetup(
 	}); err != nil {
 		printError(buildLog, "Machine health check failed")
 		go cleanUpInstanceFn(true)
-		return nil, false, false, fmt.Errorf("failed to call lite-engine retry health: %w", err)
+		return nil, false, false, variantID, fmt.Errorf("failed to call lite-engine retry health: %w", err)
 	}
 
 	printOK(buildLog, "Machine health check passed")
@@ -594,8 +596,8 @@ func handleSetup(
 	if err != nil {
 		printError(buildLog, "Machine setup failed")
 		go cleanUpInstanceFn(true)
-		return nil, false, false, fmt.Errorf("failed to call setup lite-engine: %w", err)
+		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
-	return instance, warmed, hibernated, nil
+	return instance, warmed, hibernated, variantID, nil
 }
