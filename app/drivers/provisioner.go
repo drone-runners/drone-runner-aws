@@ -115,7 +115,7 @@ func (m *Manager) provisionFromPool(
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, string, error) {
+) (instance *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, err error) {
 	pool.Lock()
 
 	busy, free, _, _, err := m.list(ctx, pool, query)

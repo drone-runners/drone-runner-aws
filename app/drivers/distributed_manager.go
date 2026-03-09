@@ -313,8 +313,8 @@ func (d *DistributedManager) provisionFromPool(
 
 	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
-		inst, hotpool, err := d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
-		return inst, nil, hotpool, variantID, err
+		resInst, hotpool, resErr := d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
+		return resInst, nil, hotpool, variantID, resErr
 	}
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
