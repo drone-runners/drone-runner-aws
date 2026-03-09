@@ -33,7 +33,7 @@ func (m *Manager) Provision(
 	isMarkedForInfraReset bool,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, string, error) {
+) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, err error) {
 	pool, err := m.validatePool(poolName)
 	if err != nil {
 		return nil, nil, false, "", err

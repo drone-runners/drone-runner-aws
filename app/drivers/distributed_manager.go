@@ -56,7 +56,7 @@ func (d *DistributedManager) Provision(
 	isMarkedForInfraReset bool,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, string, error) {
+) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, err error) {
 	pool, err := d.validatePool(poolName)
 	if err != nil {
 		return nil, nil, false, "", err
@@ -253,11 +253,11 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, error) {
+) (*types.Instance, bool, error) {
 	if reservedCapacity.InstanceID != "" {
 		inst, err := d.Find(ctx, reservedCapacity.InstanceID)
 		if err == nil {
-			return inst, nil, true, nil
+			return inst, true, nil
 		}
 		logger.FromContext(ctx).
 			WithField("pool", poolName).
@@ -281,9 +281,9 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 		isCapacityTask,
 	)
 	if err != nil {
-		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+		return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
-	return inst, nil, false, nil
+	return inst, false, nil
 }
 
 // provisionFromPool overrides the Manager's provisionFromPool method to use FindAndClaim for distributed coordination
@@ -298,12 +298,9 @@ func (d *DistributedManager) provisionFromPool(
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, string, error) {
+) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, retErr error) {
 	// Variant filtering: select the best matching variant based on machineConfig
-	var (
-		selectedVariant *types.PoolVariant
-		variantID       string
-	)
+	var selectedVariant *types.PoolVariant
 	if len(pool.PoolVariants) > 0 {
 		selectedVariant = d.filterVariant(ctx, pool, machineConfig)
 		if selectedVariant != nil {
@@ -316,8 +313,8 @@ func (d *DistributedManager) provisionFromPool(
 
 	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
-		inst, cap, hotpool, err := d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
-		return inst, cap, hotpool, variantID, err
+		inst, hotpool, err := d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
+		return inst, nil, hotpool, variantID, err
 	}
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
