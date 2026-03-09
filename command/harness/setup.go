@@ -215,9 +215,6 @@ func HandleSetup(
 		var variantID string
 		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
-		if variantID == "" {
-			variantID = "default"
-		}
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
 			platform.OS,

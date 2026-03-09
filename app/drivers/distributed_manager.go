@@ -300,8 +300,10 @@ func (d *DistributedManager) provisionFromPool(
 	isCapacityTask bool,
 ) (*types.Instance, *types.CapacityReservation, bool, string, error) {
 	// Variant filtering: select the best matching variant based on machineConfig
-	var selectedVariant *types.PoolVariant
-	variantID := ""
+	var (
+		selectedVariant *types.PoolVariant
+		variantID       string
+	)
 	if len(pool.PoolVariants) > 0 {
 		selectedVariant = d.filterVariant(ctx, pool, machineConfig)
 		if selectedVariant != nil {
@@ -324,12 +326,9 @@ func (d *DistributedManager) provisionFromPool(
 		PoolName:             poolName,
 		MachineType:          machineConfig.MachineType,
 		NestedVirtualization: machineConfig.NestedVirtualization,
+		VariantID:            variantID,
 	}
 
-	// Set VariantID: use the selected variant's ID if available, otherwise use defaultVariantID
-	if selectedVariant == nil && len(pool.PoolVariants) > 0 {
-		queryParams.VariantID = defaultVariantID
-	}
 	if machineConfig.VMImageConfig != nil {
 		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
 		queryParams.ImageName = fullyQualifiedImageName
