@@ -214,7 +214,7 @@ func HandleSetup(
 		_, _, poolDriver := poolManager.Inspect(p)
 		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
-		variantID := ""
+		variantID := "default"
 		if instance != nil {
 			variantID = instance.VariantID
 		}
