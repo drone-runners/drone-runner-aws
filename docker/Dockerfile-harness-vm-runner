@@ -1,7 +1,7 @@
 # ---------------------------------------------------------#
 #                   Get certificates                       #
 # ---------------------------------------------------------#
-FROM --platform=$BUILDPLATFORM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21 as cert-image
+FROM --platform=$BUILDPLATFORM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21.2 as cert-image
 RUN apk --update add ca-certificates
 
 # ---------------------------------------------------------#
@@ -69,9 +69,23 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # ---------------------------------------------------------#
 #                   Create final image                     #
 # ---------------------------------------------------------#
-FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21
+FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21.2
+
+# User/Group configuration (configurable via build args for Helm chart compatibility)
+ARG USER_ID=65534
+ARG GROUP_ID=65534
+ARG USER_NAME=harness
+ARG GROUP_NAME=harness
+
+# Create non-root user for security compliance (CIS Docker Benchmark 4.1)
+RUN addgroup -g ${GROUP_ID} ${GROUP_NAME} && \
+    adduser -D -u ${USER_ID} -G ${GROUP_NAME} ${USER_NAME}
 
 RUN apk add -U --no-cache curl ca-certificates
+
+# Create directories with correct ownership
+RUN mkdir -p /app /data && \
+    chown -R ${USER_NAME}:${GROUP_NAME} /app /data
 
 WORKDIR /app
 VOLUME /data
@@ -81,7 +95,10 @@ ENV HARNESS_PLATFORM_OS=linux
 ENV HARNESS_PLATFORM_ARCH=amd64
 
 COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /app/harness-vm-runner /bin/harness-vm-runner
+COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /app/harness-vm-runner /bin/harness-vm-runner
+
+# Switch to non-root user (Kubernetes can override via securityContext)
+USER ${USER_ID}:${GROUP_ID}
 
 # Build metadata labels
 ARG BUILD_VERSION

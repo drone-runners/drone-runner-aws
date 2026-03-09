@@ -1,8 +1,20 @@
-FROM alpine:3.21 as alpine
+FROM alpine:3.21.2 as alpine
 RUN apk add -U --no-cache ca-certificates
 
-FROM alpine:3.21
+FROM alpine:3.21.2
+
+# User/Group configuration (configurable via build args for Helm chart compatibility)
+ARG USER_ID=65534
+ARG GROUP_ID=65534
+ARG USER_NAME=harness
+ARG GROUP_NAME=harness
+
+# Create non-root user for security compliance (CIS Docker Benchmark 4.1)
+RUN addgroup -g ${GROUP_ID} ${GROUP_NAME} && \
+    adduser -D -u ${USER_ID} -G ${GROUP_NAME} ${USER_NAME}
+
 RUN apk add -U --no-cache curl
+
 EXPOSE 3000
 
 ENV GODEBUG netdns=go
@@ -13,5 +25,9 @@ COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 LABEL com.centurylinklabs.watchtower.stop-signal="SIGINT"
 
-ADD release/linux/arm64/drone-runner-aws-linux-arm64 /bin/drone-runner-aws
+ADD --chown=${USER_NAME}:${GROUP_NAME} release/linux/arm64/drone-runner-aws-linux-arm64 /bin/drone-runner-aws
+
+# Switch to non-root user (Kubernetes can override via securityContext)
+USER ${USER_ID}:${GROUP_ID}
+
 ENTRYPOINT ["/bin/drone-runner-aws"]
