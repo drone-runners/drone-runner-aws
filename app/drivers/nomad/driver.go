@@ -674,13 +674,13 @@ func cleanupStorage(vm, storageIdentifier string, storageCleanupType *storage.Cl
 	return cephStorageScriptEncoded, cephStorageScriptPath, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	storageCleanupType := storage.Delete
 	return p.DestroyInstanceAndStorage(ctx, instances, &storageCleanupType)
 }
 
 // DestroyInstanceAndStorage destroys the VM in the bare metal machine
-func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) (err error) {
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, storageCleanupType *storage.CleanupType) ([]*types.Instance, error) {
 	for _, instance := range instances {
 		var job *api.Job
 		var jobID string
@@ -697,26 +697,26 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			WithField("job_id", jobID).WithField("resource_job_id", resourceJobID)
 
 		logr.Debugln("scheduler: freeing up resources ... ")
-		err = p.deregisterJob(logr, resourceJobID, false)
+		err := p.deregisterJob(logr, resourceJobID, false)
 		if err == nil {
 			logr.Debugln("scheduler: freed up resources")
 		} else {
 			logr.WithError(err).Errorln("scheduler: could not free up resources")
 		}
 		logr.Infoln("scheduler: freed up resources, submitting destroy job")
-		_, _, err := p.client.Jobs().Register(job, nil)
+		_, _, err = p.client.Jobs().Register(job, nil)
 		if err != nil {
 			logr.WithError(err).Errorln("scheduler: could not register destroy job")
-			return err
+			return nil, err
 		}
 		logr.Debugln("scheduler: started polling for destroy job")
 		_, err = p.pollForJob(ctx, jobID, logr, p.nomadConfig.DestroyTimeout, false, []JobStatus{Dead})
 		if err != nil {
 			logr.WithError(err).Errorln("scheduler: could not complete destroy job")
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func (p *config) Logs(ctx context.Context, instanceID string) (string, error) {

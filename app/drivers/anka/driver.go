@@ -209,17 +209,17 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	return instance, nil
 }
 
-func (p *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (p *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
+func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) ([]*types.Instance, error) {
 	var instanceIDs []string
 	for _, instance := range instances {
 		instanceIDs = append(instanceIDs, instance.ID)
 	}
 	if len(instanceIDs) == 0 {
-		return
+		return nil, nil
 	}
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceIDs).
@@ -228,13 +228,13 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	for _, id := range instanceIDs {
 		// stop & delete VM
 		cmdDelete := commandDeleteVM(ctx, id)
-		_, err = cmdDelete.CombinedOutput()
+		_, err := cmdDelete.CombinedOutput()
 		if err != nil {
 			logr.WithError(err).Errorln("Anka: error deleting VM")
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func (p *config) Hibernate(ctx context.Context, _, _, _ string) error {

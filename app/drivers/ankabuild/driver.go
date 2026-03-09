@@ -216,13 +216,13 @@ func (c *config) FindVM(ctx context.Context, id string, retryInterval time.Durat
 	}
 }
 
-func (c *config) Destroy(ctx context.Context, instances []*types.Instance) (err error) {
+func (c *config) Destroy(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
 	return c.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
-func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) (err error) {
+func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*types.Instance, _ *storage.CleanupType) ([]*types.Instance, error) {
 	if len(instances) == 0 {
-		return
+		return nil, nil
 	}
 	var instanceIDs []string
 	for _, instance := range instances {
@@ -233,13 +233,13 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		WithField("driver", types.AnkaBuild)
 
 	for _, id := range instanceIDs {
-		err = c.ankaClient.VMDelete(ctx, id)
+		err := c.ankaClient.VMDelete(ctx, id)
 		if err != nil {
 			logr.WithError(err).Errorln("Anka Build: error deleting VM")
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func (c *config) Hibernate(_ context.Context, _, _, _ string) error {

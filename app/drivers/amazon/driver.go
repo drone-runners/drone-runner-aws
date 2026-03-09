@@ -729,55 +729,75 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	return instance, nil
 }
 
-func (p *amazonConfig) Destroy(ctx context.Context, instances []*drtypes.Instance) (err error) {
+func (p *amazonConfig) Destroy(ctx context.Context, instances []*drtypes.Instance) ([]*drtypes.Instance, error) {
 	return p.DestroyInstanceAndStorage(ctx, instances, nil)
 }
 
 // DestroyInstanceAndStorage destroys the server AWS EC2 instances.
+// Returns failed instances so callers can handle them appropriately.
 func (p *amazonConfig) DestroyInstanceAndStorage(
 	ctx context.Context,
 	instances []*drtypes.Instance,
 	storageCleanupType *storage.CleanupType,
-) (err error) {
-	var instanceIDs []string
-	for _, instance := range instances {
-		instanceIDs = append(instanceIDs, instance.ID)
-	}
-	if len(instanceIDs) == 0 {
-		return fmt.Errorf("no instance IDs provided")
+) ([]*drtypes.Instance, error) {
+	if len(instances) == 0 {
+		return nil, fmt.Errorf("no instance IDs provided")
 	}
 
 	client := p.service
+	var failedInstances []*drtypes.Instance
+	var lastErr error
 
-	logr := logger.FromContext(ctx).
-		WithField("id", instanceIDs).
-		WithField("driver", drtypes.Amazon)
+	// Process instances one by one to track individual failures
+	for _, instance := range instances {
+		logr := logger.FromContext(ctx).
+			WithField("id", instance.ID).
+			WithField("driver", drtypes.Amazon)
 
-	awsIDs := instanceIDs
-
-	var volumesToDelete []string
-	if storageCleanupType != nil && *storageCleanupType == storage.Delete {
-		vols, findVolumesErr := p.findPersistentVolumes(ctx, instances, logr)
-		if findVolumesErr != nil {
-			return findVolumesErr
+		var volumesToDelete []string
+		if storageCleanupType != nil && *storageCleanupType == storage.Delete {
+			vols, findVolumesErr := p.findPersistentVolumes(ctx, []*drtypes.Instance{instance}, logr)
+			if findVolumesErr != nil {
+				logr.WithError(findVolumesErr).Errorln("amazon: failed to find persistent volumes")
+				failedInstances = append(failedInstances, instance)
+				lastErr = findVolumesErr
+				continue
+			}
+			volumesToDelete = vols
 		}
-		volumesToDelete = vols
+
+		_, err := client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: []string{instance.ID}})
+		if err != nil {
+			err = fmt.Errorf("failed to terminate instance %s: %v", instance.ID, err)
+			logr.Error(err)
+			failedInstances = append(failedInstances, instance)
+			lastErr = err
+			continue
+		}
+
+		logr.Traceln("amazon: VM terminated")
+
+		if storageCleanupType != nil {
+			cleanupErr := p.cleanupVolumes(ctx, []string{instance.ID}, *storageCleanupType, volumesToDelete)
+			if cleanupErr != nil {
+				logr.WithError(cleanupErr).Errorln("amazon: failed to cleanup volumes")
+				failedInstances = append(failedInstances, instance)
+				lastErr = cleanupErr
+				continue
+			}
+		}
 	}
 
-	_, err = client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: awsIDs})
-	if err != nil {
-		err = fmt.Errorf("failed to terminate instances: %v", err)
-		logr.Error(err)
-		return err
+	if len(failedInstances) > 0 {
+		failedIDs := make([]string, len(failedInstances))
+		for i, inst := range failedInstances {
+			failedIDs[i] = inst.ID
+		}
+		return failedInstances, fmt.Errorf("amazon: failed to delete %d instance(s): %v: %w",
+			len(failedInstances), failedIDs, lastErr)
 	}
 
-	logr.Traceln("amazon: VM terminated")
-
-	if storageCleanupType != nil {
-		return p.cleanupVolumes(ctx, awsIDs, *storageCleanupType, volumesToDelete)
-	}
-
-	return nil
+	return nil, nil
 }
 
 func (p *amazonConfig) Logs(ctx context.Context, instanceID string) (string, error) {
