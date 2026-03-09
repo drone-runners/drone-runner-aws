@@ -266,7 +266,7 @@ func handleCapacityReservation(
 		machineConfig.Zones = []string{r.Zone}
 	}
 
-	_, capacityReservation, warmed, err = poolManager.Provision(
+	_, capacityReservation, warmed, _, err = poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),

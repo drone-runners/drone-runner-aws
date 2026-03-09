@@ -452,7 +452,7 @@ func handleSetup(
 		machineConfig.Zones = []string{r.Zone}
 	}
 
-	instance, _, warmed, err = poolManager.Provision(
+	instance, _, warmed, variantID, err = poolManager.Provision(
 		ctx,
 		pool,
 		poolManager.GetTLSServerName(),
@@ -467,7 +467,6 @@ func handleSetup(
 		reservedCapacity,
 		false,
 	)
-	variantID = machineConfig.VariantID
 	if err != nil {
 		return nil, false, false, variantID, fmt.Errorf("failed to provision instance: %w", err)
 	}

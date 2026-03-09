@@ -33,15 +33,15 @@ func (m *Manager) Provision(
 	isMarkedForInfraReset bool,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, error) {
+) (*types.Instance, *types.CapacityReservation, bool, string, error) {
 	pool, err := m.validatePool(poolName)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, "", err
 	}
 
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
 		if gsErr := m.validateGitspaceDriverCompatibility(pool); gsErr != nil {
-			return nil, nil, false, gsErr
+			return nil, nil, false, "", gsErr
 		}
 		existingInstance, _, gsErr := m.processExistingInstance(
 			ctx,
@@ -55,10 +55,10 @@ func (m *Manager) Provision(
 			timeout,
 			isMarkedForInfraReset,
 		)
-		return existingInstance, nil, false, gsErr
+		return existingInstance, nil, false, "", gsErr
 	}
 
-	instance, _, hotpool, err := m.provisionFromPool(
+	instance, _, hotpool, _, err := m.provisionFromPool(
 		ctx,
 		pool,
 		query,
@@ -81,7 +81,7 @@ func (m *Manager) Provision(
 			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", nil, nil, nil, timeout, nil)
 		}(m.globalCtx)
 	}
-	return instance, nil, hotpool, err
+	return instance, nil, hotpool, "", err
 }
 
 func (m *Manager) validatePool(poolName string) (*poolEntry, error) {
@@ -115,13 +115,13 @@ func (m *Manager) provisionFromPool(
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, error) {
+) (*types.Instance, *types.CapacityReservation, bool, string, error) {
 	pool.Lock()
 
 	busy, free, _, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		pool.Unlock()
-		return nil, nil, false, fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
+		return nil, nil, false, "", fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
 	}
 
 	logger.FromContext(ctx).
@@ -136,14 +136,14 @@ func (m *Manager) provisionFromPool(
 	if len(free) == 0 {
 		pool.Unlock()
 		if canCreate := strategy.CanCreate(pool.MinSize, pool.MaxSize, len(busy), len(free)); !canCreate {
-			return nil, nil, false, ErrorNoInstanceAvailable
+			return nil, nil, false, "", ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
 		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, machineConfig, true, gitspaceAgentConfig, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
 		if err != nil {
-			return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+			return nil, nil, false, "", fmt.Errorf("provision: failed to create instance: %w", err)
 		}
-		return inst, nil, false, nil
+		return inst, nil, false, "", nil
 	}
 
 	sort.Slice(free, func(i, j int) bool {
@@ -163,10 +163,10 @@ func (m *Manager) provisionFromPool(
 	err = m.instanceStore.Update(ctx, inst)
 	if err != nil {
 		pool.Unlock()
-		return nil, nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+		return nil, nil, false, "", fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 	pool.Unlock()
-	return inst, nil, true, nil
+	return inst, nil, true, "", nil
 }
 
 // setupInstance creates a new VM instance.

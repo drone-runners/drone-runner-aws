@@ -25,7 +25,7 @@ type InstanceProvisioner interface {
 		isMarkedForInfraReset bool,
 		reservedCapacity *types.CapacityReservation,
 		isCapacityTask bool,
-	) (*types.Instance, *types.CapacityReservation, bool, error)
+	) (*types.Instance, *types.CapacityReservation, bool, string, error)
 
 	// Destroy destroys an instance in a pool.
 	Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
