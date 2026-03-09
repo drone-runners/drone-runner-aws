@@ -214,6 +214,10 @@ func HandleSetup(
 		_, _, poolDriver := poolManager.Inspect(p)
 		instance, warmed, hibernated, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
+		variantID := ""
+		if instance != nil {
+			variantID = instance.VariantID
+		}
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
 			platform.OS,
@@ -226,6 +230,7 @@ func HandleSetup(
 			r.VMImageConfig.ImageName,
 			strconv.FormatBool(warmed),
 			strconv.FormatBool(hibernated),
+			variantID,
 		).Observe(setupTime.Seconds())
 		if poolErr != nil {
 			internalLogr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")

@@ -344,7 +344,7 @@ func WaitDurationCount() *prometheus.HistogramVec {
 			Help:    "Waiting time needed to successfully allocate a machine in a pool",
 			Buckets: []float64{0.5, 1, 3, 5, 15, 30, 60, 300, 600},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated"},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated", "variant_id"},
 	)
 }
 
