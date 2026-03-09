@@ -72,18 +72,16 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM alpine:3.21.2
 
 # User/Group configuration (configurable via build args for Helm chart compatibility)
+# Note: Alpine already has 'nobody' user/group with UID/GID 65534
 ARG USER_ID=65534
 ARG GROUP_ID=65534
-ARG USER_NAME=harness
-ARG GROUP_NAME=harness
+ARG USER_NAME=nobody
+ARG GROUP_NAME=nobody
 
-# Create non-root user for security compliance (CIS Docker Benchmark 4.1)
-RUN addgroup -g ${GROUP_ID} ${GROUP_NAME} && \
-    adduser -D -u ${USER_ID} -G ${GROUP_NAME} ${USER_NAME}
+# Update all packages to get latest security patches (including OpenSSL 3.3.6-r0)
+RUN apk update && apk upgrade --no-cache && apk add --no-cache curl ca-certificates
 
-RUN apk add -U --no-cache curl ca-certificates
-
-# Create directories with correct ownership
+# Create directories with correct ownership for non-root user (CIS Docker Benchmark 4.1)
 RUN mkdir -p /app /data && \
     chown -R ${USER_NAME}:${GROUP_NAME} /app /data
 
