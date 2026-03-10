@@ -56,10 +56,10 @@ func (d *DistributedManager) Provision(
 	isMarkedForInfraReset bool,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, error) {
+) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, err error) {
 	pool, err := d.validatePool(poolName)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, "", err
 	}
 	return d.provisionFromPool(
 		ctx,
@@ -253,11 +253,11 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, error) {
+) (*types.Instance, bool, error) {
 	if reservedCapacity.InstanceID != "" {
 		inst, err := d.Find(ctx, reservedCapacity.InstanceID)
 		if err == nil {
-			return inst, nil, true, nil
+			return inst, true, nil
 		}
 		logger.FromContext(ctx).
 			WithField("pool", poolName).
@@ -281,9 +281,9 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 		isCapacityTask,
 	)
 	if err != nil {
-		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+		return nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
-	return inst, nil, false, nil
+	return inst, false, nil
 }
 
 // provisionFromPool overrides the Manager's provisionFromPool method to use FindAndClaim for distributed coordination
@@ -298,21 +298,23 @@ func (d *DistributedManager) provisionFromPool(
 	poolName string,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
-) (*types.Instance, *types.CapacityReservation, bool, error) {
+) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, retErr error) {
 	// Variant filtering: select the best matching variant based on machineConfig
 	var selectedVariant *types.PoolVariant
 	if len(pool.PoolVariants) > 0 {
 		selectedVariant = d.filterVariant(ctx, pool, machineConfig)
 		if selectedVariant != nil {
-			// Apply variant configuration to machineConfig
 			d.applyVariantToMachineConfig(machineConfig, selectedVariant)
+			variantID = selectedVariant.VariantID
+		} else {
+			variantID = defaultVariantID
 		}
-		// If no variant found, continue with default machineConfig
 	}
 
 	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
-		return d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
+		resInst, hotpool, resErr := d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
+		return resInst, nil, hotpool, variantID, resErr
 	}
 
 	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
@@ -321,12 +323,9 @@ func (d *DistributedManager) provisionFromPool(
 		PoolName:             poolName,
 		MachineType:          machineConfig.MachineType,
 		NestedVirtualization: machineConfig.NestedVirtualization,
+		VariantID:            variantID,
 	}
 
-	// Set VariantID: use the selected variant's ID if available, otherwise use defaultVariantID
-	if selectedVariant == nil && len(pool.PoolVariants) > 0 {
-		queryParams.VariantID = defaultVariantID
-	}
 	if machineConfig.VMImageConfig != nil {
 		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
 		queryParams.ImageName = fullyQualifiedImageName
@@ -335,14 +334,14 @@ func (d *DistributedManager) provisionFromPool(
 	// Try to find and claim a free instance atomically
 	inst, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
 	if err != nil && err != sql.ErrNoRows {
-		return nil, nil, false, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
+		return nil, nil, false, variantID, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
 	}
 
 	// If we successfully claimed an instance, update it and return
 	if inst != nil {
 		inst.OwnerID = ownerID
 		if err = d.instanceStore.Update(ctx, inst); err != nil {
-			return nil, nil, false, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+			return nil, nil, false, variantID, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 		}
 		logger.FromContext(ctx).
 			WithField("pool", poolName).
@@ -365,14 +364,10 @@ func (d *DistributedManager) provisionFromPool(
 			InstanceID: inst.ID,
 			PoolName:   poolName,
 		}
-		return inst, capacity, true, nil
+		return inst, capacity, true, variantID, nil
 	}
 
 	// Case 3: No available hotpool instance → create new (shared for capacity and init tasks)
-	// In distributed mode, we don't check pool capacity limits since:
-	// 1. Pool MaxSize is typically per-runner, but we'd be checking against global counts
-	// 2. FindAndClaim already provides natural backpressure through database constraints
-	// 3. Infrastructure limits (cloud quotas, etc.) will provide the real boundaries
 	logger.FromContext(ctx).
 		WithField("pool", poolName).
 		WithField("hotpool", false).
@@ -393,11 +388,11 @@ func (d *DistributedManager) provisionFromPool(
 	)
 	if err != nil {
 		if isCapacityTask {
-			return nil, nil, false, err
+			return nil, nil, false, variantID, err
 		}
-		return nil, nil, false, fmt.Errorf("provision: failed to create instance: %w", err)
+		return nil, nil, false, variantID, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
-	return inst, capacity, false, nil
+	return inst, capacity, false, variantID, nil
 }
 
 // filterVariant selects the best matching variant based on machineConfig criteria
