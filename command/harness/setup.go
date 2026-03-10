@@ -147,6 +147,7 @@ func HandleSetup(
 		fallback   bool
 		warmed     bool
 		hibernated bool
+		variantID  string
 	)
 
 	var owner string
@@ -212,7 +213,6 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		var variantID string
 		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
