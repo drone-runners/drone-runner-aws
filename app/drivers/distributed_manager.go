@@ -372,6 +372,7 @@ func (d *DistributedManager) provisionFromPool(
 	logger.FromContext(ctx).
 		WithField("pool", poolName).
 		WithField("hotpool", false).
+		WithField("variant_id", variantID).
 		Traceln("provision: no hotpool instances available, creating new instance")
 
 	inst, capacity, err := d.setupInstance(ctx,
