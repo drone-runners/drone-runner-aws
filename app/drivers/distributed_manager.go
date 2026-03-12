@@ -347,6 +347,7 @@ func (d *DistributedManager) provisionFromPool(
 			WithField("pool", poolName).
 			WithField("instance_id", inst.ID).
 			WithField("hotpool", true).
+			WithField("variant_id", variantID).
 			Traceln("provision: claimed hotpool instance")
 
 		d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
