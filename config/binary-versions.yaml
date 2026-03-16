@@ -8,6 +8,10 @@
 #
 # Version Format: Semantic versioning (MAJOR.MINOR.PATCH)
 
+# Runner version - used for Helm chart version and appVersion
+runner:
+  version: "1.5.0"
+
 # Registry configuration - where to pull binary images from
 # Options: "gar" (Google Artifact Registry) or "docker" (Docker Hub)
 # - gar: Used during development/build time (us-west1-docker.pkg.dev/gar-setup/docker)

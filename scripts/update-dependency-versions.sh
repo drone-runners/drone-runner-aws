@@ -22,6 +22,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BINARY_VERSIONS_YAML="${REPO_ROOT}/config/binary-versions.yaml"
 RUNNER_DOCKERFILE="${REPO_ROOT}/docker/Dockerfile-harness-vm-runner"
 BINARIES_DOCKERFILE="${REPO_ROOT}/docker/Dockerfile-harness-vm-runner-binaries"
+HELM_CHART="${REPO_ROOT}/chart/Chart.yaml"
 
 echo "=== Syncing binary versions from config/binary-versions.yaml ==="
 echo ""
@@ -37,6 +38,10 @@ if ! command -v yq &> /dev/null; then
     echo "ERROR: yq is required to parse YAML. Install it with: brew install yq"
     exit 1
 fi
+
+# Extract runner version
+RUNNER_VERSION=$(yq eval '.runner.version' "${BINARY_VERSIONS_YAML}")
+echo "Runner version: ${RUNNER_VERSION}"
 
 # Extract registry setting
 REGISTRY=$(yq eval '.registry' "${BINARY_VERSIONS_YAML}")
@@ -136,12 +141,26 @@ else
     echo "WARNING: ${BINARIES_DOCKERFILE} not found"
 fi
 
+# Update Helm Chart
+if [[ -f "${HELM_CHART}" ]]; then
+    echo "Updating ${HELM_CHART}..."
+
+    # Update both version and appVersion to match runner version
+    yq eval -i ".version = \"${RUNNER_VERSION}\"" "${HELM_CHART}"
+    yq eval -i ".appVersion = \"${RUNNER_VERSION}\"" "${HELM_CHART}"
+
+    echo "✓ Updated ${HELM_CHART}"
+else
+    echo "WARNING: ${HELM_CHART} not found"
+fi
+
 echo ""
 echo "=== Summary ==="
 echo "Source of truth: ${BINARY_VERSIONS_YAML}"
+echo "Runner version: ${RUNNER_VERSION}"
 echo "Registry: ${REGISTRY} (${REGISTRY_PREFIX})"
 echo ""
-echo "Updated versions:"
+echo "Binary versions:"
 echo "  lite-engine:     ${LITE_ENGINE_VERSION}"
 echo "  plugin:          ${PLUGIN_VERSION}"
 echo "  auto-injection:  ${AUTO_INJECTION_VERSION}"
@@ -152,9 +171,10 @@ echo ""
 echo "Updated files:"
 echo "  • ${RUNNER_DOCKERFILE}"
 echo "  • ${BINARIES_DOCKERFILE}"
+echo "  • ${HELM_CHART}"
 echo ""
 echo "Next steps:"
-echo "  1. Review changes: git diff docker/"
+echo "  1. Review changes: git diff docker/ chart/"
 echo "  2. Build runner: docker build -f docker/Dockerfile-harness-vm-runner ."
 echo "  3. Build binaries: docker build -f docker/Dockerfile-harness-vm-runner-binaries ."
-echo "  4. Commit: git add docker/ && git commit -m 'sync: update binary versions from config/binary-versions.yaml'"
+echo "  4. Commit: git add config/ docker/ chart/ && git commit -m 'sync: update versions from config/binary-versions.yaml'"
