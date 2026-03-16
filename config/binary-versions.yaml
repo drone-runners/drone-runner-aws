@@ -21,7 +21,7 @@ binaries:
     description: "Harness CI execution engine"
 
   plugin:
-    version: "1.0.0"
+    version: "1.2.0"
     image: "harness/harness-vm-runner-plugin"
     description: "Plugin system for extending functionality"
 
