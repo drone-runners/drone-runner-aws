@@ -26,7 +26,7 @@ binaries:
     description: "Plugin system for extending functionality"
 
   auto-injection:
-    version: "1.0.0-main-5eefd8"
+    version: "1.0.0"
     image: "harness/harness-vm-runner-auto-injection"
     description: "Auto-injection for build instrumentation"
 
