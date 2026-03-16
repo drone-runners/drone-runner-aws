@@ -170,11 +170,11 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 		instanceIDs[i] = inst.ID
 	}
 	logrus.WithFields(logrus.Fields{
-		"pool":          pool.Name,
-		"instance_ids":  instanceIDs,
+		"pool":           pool.Name,
+		"instance_ids":   instanceIDs,
 		"instance_count": len(instances),
-		"destroy_busy":  destroyBusy,
-		"destroy_free":  destroyFree,
+		"destroy_busy":   destroyBusy,
+		"destroy_free":   destroyFree,
 	}).Infoln("cleanPool: destroying instances")
 
 	failedInstances, err := pool.Driver.Destroy(ctx, instances)

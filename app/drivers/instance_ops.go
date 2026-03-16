@@ -14,19 +14,22 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
+// callerPathDepth is the number of path components to keep when shortening file paths.
+const callerPathDepth = 3
+
 // getCallerInfo returns the file:line of the caller (skipping the specified number of frames).
 func getCallerInfo(skip int) string {
 	_, file, line, ok := runtime.Caller(skip)
 	if !ok {
 		return "unknown"
 	}
-	// Get just the last two path components for readability
+	// Get just the last path components for readability
 	short := file
 	count := 0
 	for i := len(file) - 1; i >= 0; i-- {
 		if file[i] == '/' {
 			count++
-			if count == 3 {
+			if count == callerPathDepth {
 				short = file[i+1:]
 				break
 			}
@@ -116,10 +119,10 @@ func (m *Manager) Update(ctx context.Context, instance *types.Instance) error {
 
 // Destroy destroys an instance in a pool.
 func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error {
-	caller := getCallerInfo(2)
+	caller := getCallerInfo(2) //nolint:mnd
 	logr := logrus.WithFields(logrus.Fields{
-		"pool":          poolName,
-		"instance_id":   instanceID,
+		"pool":           poolName,
+		"instance_id":    instanceID,
 		"destroy_caller": caller,
 	})
 
@@ -142,7 +145,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 	}
 
 	logr = logr.WithFields(logrus.Fields{
-		"instance_name": instance.Name,
+		"instance_name":  instance.Name,
 		"instance_state": string(instance.State),
 		"instance_zone":  instance.Zone,
 	})
@@ -172,7 +175,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 
 // DestroyCapacity destroys a capacity reservation.
 func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.CapacityReservation) error {
-	caller := getCallerInfo(2)
+	caller := getCallerInfo(2) //nolint:mnd
 
 	if reservedCapacity == nil || reservedCapacity.PoolName == "" {
 		logrus.WithField("destroy_caller", caller).Infoln("destroy_capacity: skipping, reservation is nil or has no pool name")
