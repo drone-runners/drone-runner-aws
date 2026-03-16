@@ -443,7 +443,25 @@ echo "Cleaning up vm startup and cloudinit script"
 rm %s %s
 
 echo "Doing lite-engine healthcheck"
-nc -zv $(/opt/homebrew/bin/tart ip %s) 9079
+MAX_RETRIES=5
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    VM_IP=$(/opt/homebrew/bin/tart ip %s --wait 10 2>/dev/null || true)
+    if [ -n "$VM_IP" ]; then
+        if nc -zv "$VM_IP" 9079 2>&1; then
+            echo "Lite-engine health check passed on $VM_IP"
+            break
+        fi
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    echo "Health check attempt $RETRY_COUNT/$MAX_RETRIES failed, retrying in 5s..."
+    sleep 5
+done
+
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    echo "Lite-engine health check failed after $MAX_RETRIES attempts"
+    exit 1
+fi
 `, vmStartupScriptPath, cloudInitScriptPath, vmID)
 }
 
