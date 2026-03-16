@@ -78,6 +78,16 @@ runcmd:
   - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
   - systemctl restart systemd-resolved
   
+  {{ if eq .Platform.Arch "arm64" }}
+  # Configure chrony to step clock immediately for large offsets (fixes clock skew after hibernate resume on ARM64)
+  - |
+    if command -v chronyc >/dev/null 2>&1; then
+      echo "makestep 1 -1" >> /etc/chrony/chrony.conf
+      systemctl restart chrony
+      chronyc -a makestep
+    fi
+  {{ end }}
+
   # Open healthcheck port
   - ufw allow 9079
   
