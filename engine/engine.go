@@ -170,13 +170,14 @@ func (e *Engine) Destroy(ctx context.Context, specv runtime.Spec) error {
 		WithField("id", instanceID).
 		WithField("ip", instanceIP)
 
-	logr.Infof("destroying instance %s", instanceID)
+	logr.WithField("destroy_caller", "engine:pipeline_destroy").
+		Infof("destroying instance %s", instanceID)
 
 	if err := poolMngr.Destroy(ctx, poolName, instanceID, nil, nil); err != nil {
 		logr.WithError(err).Errorln("cannot destroy the instance")
 		return err
 	}
-	logr.Traceln("destroyed instance")
+	logr.Infoln("destroyed instance")
 
 	return nil
 }

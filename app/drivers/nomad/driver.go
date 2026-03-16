@@ -403,6 +403,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		defer func() {
 			go p.getAllocationsForJob(logr, initJobID)
 			// Destroy the VM if it's in a partially created state
+			logr.WithField("destroy_caller", "nomad_driver:init_job_poll_failed").
+				Infoln("destroy: destroying VM after init job poll failure")
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
 		return nil, fmt.Errorf("scheduler: could not poll for init job status, failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
@@ -413,6 +415,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if err != nil {
 		defer func() {
 			go p.getAllocationsForJob(logr, initJobID)
+			logr.WithField("destroy_caller", "nomad_driver:init_task_group_failed").
+				Infoln("destroy: destroying VM after init task group failure")
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
 		return nil, fmt.Errorf("scheduler: init job failed with error: %s on ip: %s, resource_job_id: %s, init_job_id: %s, vm: %s", err, ip, resourceJobID, initJobID, vm)
@@ -430,6 +434,8 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if job == nil || isTerminal(job) {
 		defer func() {
 			go p.getAllocationsForJob(logr, resourceJobID)
+			logr.WithField("destroy_caller", "nomad_driver:resource_job_terminal").
+				Infoln("destroy: destroying VM after resource job reached terminal state")
 			go p.Destroy(context.Background(), []*types.Instance{instance}) //nolint:errcheck
 		}()
 		return nil, fmt.Errorf("scheduler: resource job reached unexpected terminal status, removing VM, resource_job_id: %s, init_job_id: %s, vm: %s", resourceJobID, initJobID, vm)

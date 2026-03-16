@@ -146,6 +146,8 @@ func HandleCapacityReservation(
 			capacity.StageID = stageRuntimeID
 			capacity.ReservationState = types.CapacityReservationStateCreated
 			if cerr := crs.Create(noContext, capacity); cerr != nil {
+				internalLogr.WithField("destroy_caller", "capacity_handler:store_create_failed").
+					Infoln("destroy_capacity: destroying capacity reservation after store create failure")
 				if derr := poolManager.DestroyCapacity(noContext, capacity); derr != nil {
 					internalLogr.WithError(derr).Errorln("failed to cleanup capacity reservation on failure")
 				}

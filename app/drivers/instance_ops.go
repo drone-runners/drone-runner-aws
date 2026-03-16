@@ -3,6 +3,7 @@ package drivers
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/drone/runner-go/logger"
@@ -12,6 +13,27 @@ import (
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
+
+// getCallerInfo returns the file:line of the caller (skipping the specified number of frames).
+func getCallerInfo(skip int) string {
+	_, file, line, ok := runtime.Caller(skip)
+	if !ok {
+		return "unknown"
+	}
+	// Get just the last two path components for readability
+	short := file
+	count := 0
+	for i := len(file) - 1; i >= 0; i-- {
+		if file[i] == '/' {
+			count++
+			if count == 3 {
+				short = file[i+1:]
+				break
+			}
+		}
+	}
+	return fmt.Sprintf("%s:%d", short, line)
+}
 
 // Find finds an instance by ID.
 func (m *Manager) Find(ctx context.Context, instanceID string) (*types.Instance, error) {
@@ -94,68 +116,109 @@ func (m *Manager) Update(ctx context.Context, instance *types.Instance) error {
 
 // Destroy destroys an instance in a pool.
 func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error {
+	caller := getCallerInfo(2)
+	logr := logrus.WithFields(logrus.Fields{
+		"pool":          poolName,
+		"instance_id":   instanceID,
+		"destroy_caller": caller,
+	})
+
+	logr.Infoln("destroy: initiating instance destroy")
+
 	pool := m.poolMap[poolName]
 	if pool == nil {
+		logr.Errorln("destroy: pool not found")
 		return fmt.Errorf("provision: pool name %q not found", poolName)
 	}
 
 	if instance == nil {
+		logr.Infoln("destroy: instance not provided, fetching from store")
 		instanceFromStore, err := m.Find(ctx, instanceID)
 		if err != nil || instanceFromStore == nil {
+			logr.WithError(err).Errorln("destroy: failed to find instance in store")
 			return fmt.Errorf("provision: failed to find instance %q: %w", instanceID, err)
 		}
 		instance = instanceFromStore
 	}
 
+	logr = logr.WithFields(logrus.Fields{
+		"instance_name": instance.Name,
+		"instance_state": string(instance.State),
+		"instance_zone":  instance.Zone,
+	})
+	if storageCleanupType != nil {
+		logr = logr.WithField("storage_cleanup_type", string(*storageCleanupType))
+	}
+	logr.Infoln("destroy: calling driver DestroyInstanceAndStorage")
+
 	failedInstances, err := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
 	if err != nil {
+		logr.WithError(err).Errorln("destroy: driver DestroyInstanceAndStorage failed")
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
 	}
 
 	// If this instance failed, it will be in failedInstances
 	if len(failedInstances) > 0 {
+		logr.Errorln("destroy: instance reported in failedInstances by driver")
 		return fmt.Errorf("provision: instance %q failed to destroy", instance.ID)
 	}
 
 	if derr := m.Delete(ctx, instance.ID); derr != nil {
-		logrus.Warnf("failed to delete instance %s from store with err: %s", instance.ID, derr)
+		logr.WithError(derr).Warnln("destroy: failed to delete instance from store after successful destroy")
 	}
-	logrus.WithField("instance", instance.ID).Infof("instance destroyed")
+	logr.Infoln("destroy: instance destroyed successfully")
 	return nil
 }
 
 // DestroyCapacity destroys a capacity reservation.
 func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.CapacityReservation) error {
+	caller := getCallerInfo(2)
+
 	if reservedCapacity == nil || reservedCapacity.PoolName == "" {
+		logrus.WithField("destroy_caller", caller).Infoln("destroy_capacity: skipping, reservation is nil or has no pool name")
 		return nil
 	}
 
+	logr := logrus.WithFields(logrus.Fields{
+		"pool":             reservedCapacity.PoolName,
+		"stage_runtime_id": reservedCapacity.StageID,
+		"reservation_id":   reservedCapacity.ReservationID,
+		"instance_id":      reservedCapacity.InstanceID,
+		"destroy_caller":   caller,
+	})
+
+	logr.Infoln("destroy_capacity: initiating capacity reservation destroy")
+
 	pool, err := m.validatePool(reservedCapacity.PoolName)
 	if err != nil {
-		logrus.Warnf("provision: pool name %q not found", reservedCapacity.PoolName)
+		logr.Warnln("destroy_capacity: pool not found")
 		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
 	}
 
-	logr := logger.FromContext(ctx).
-		WithField("pool", reservedCapacity.PoolName).
-		WithField("runtimeId", reservedCapacity.StageID)
-
 	// Destroy associated instance if exists
 	if reservedCapacity.InstanceID != "" {
+		logr.Infoln("destroy_capacity: destroying associated instance")
 		if err := m.Destroy(ctx, reservedCapacity.PoolName, reservedCapacity.InstanceID, nil, nil); err != nil {
-			logrus.Warnf("failed to destroy instance %s from store with err: %s", reservedCapacity.InstanceID, err)
+			logr.WithError(err).Warnln("destroy_capacity: failed to destroy associated instance")
 		}
 	}
 
 	if reservedCapacity.ReservationID != "" {
+		logr.Infoln("destroy_capacity: calling driver DestroyCapacity")
 		// Destroy the actual capacity reservation
 		if err := pool.Driver.DestroyCapacity(ctx, reservedCapacity); err != nil {
-			logr.Warnln("provision: failed to destroy reserved capacity")
+			logr.WithError(err).Warnln("destroy_capacity: driver DestroyCapacity failed")
 			return err
 		}
+		logr.Infoln("destroy_capacity: driver DestroyCapacity succeeded")
 	}
 	// Delete the capacity reservation record
-	m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, logr)
+	logr.Infoln("destroy_capacity: deleting capacity reservation record")
+	ctxLogr := logger.FromContext(ctx).
+		WithField("pool", reservedCapacity.PoolName).
+		WithField("runtimeId", reservedCapacity.StageID)
+	m.deleteCapacityReservationRecord(ctx, reservedCapacity.StageID, ctxLogr)
+	logr.Infoln("destroy_capacity: capacity reservation destroyed successfully")
 	return nil
 }
 

@@ -303,6 +303,11 @@ func (s *Scaler) scaleDown(
 		}
 
 		// Destroy the claimed instance
+		logr.WithFields(logrus.Fields{
+			"instance_id":    inst.ID,
+			"instance_state": string(inst.State),
+			"destroy_caller": "scaler:scale_down",
+		}).Infoln("scaler: destroying excess instance")
 		if err := s.manager.Destroy(ctx, poolName, inst.ID, inst, nil); err != nil {
 			logr.WithError(err).WithField("instance_id", inst.ID).
 				Errorln("scaler: failed to destroy instance")

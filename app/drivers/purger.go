@@ -92,7 +92,12 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 								return nil
 							}
 
-							logr.Infof("purger: Terminating %d stale instances\n", len(instances))
+							instanceIDs := make([]string, len(instances))
+							for i, inst := range instances {
+								instanceIDs[i] = inst.ID
+							}
+							logr.WithField("instance_ids", instanceIDs).
+								Infof("purger: Terminating %d stale instances", len(instances))
 
 							failedInstances, err := pool.Driver.Destroy(ctx, instances)
 							if err != nil {
@@ -159,6 +164,18 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 	if len(instances) == 0 {
 		return nil
 	}
+
+	instanceIDs := make([]string, len(instances))
+	for i, inst := range instances {
+		instanceIDs[i] = inst.ID
+	}
+	logrus.WithFields(logrus.Fields{
+		"pool":          pool.Name,
+		"instance_ids":  instanceIDs,
+		"instance_count": len(instances),
+		"destroy_busy":  destroyBusy,
+		"destroy_free":  destroyFree,
+	}).Infoln("cleanPool: destroying instances")
 
 	failedInstances, err := pool.Driver.Destroy(ctx, instances)
 	if err != nil {
