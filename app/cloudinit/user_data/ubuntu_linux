@@ -80,7 +80,9 @@ runcmd:
   
   {{ if eq .Platform.Arch "arm64" }}
   # Configure chrony to always step clock for large offsets (fixes clock skew after hibernate resume on ARM64).
+  # ARM64 uses arch_sys_counter which doesn't auto-adjust after GCP suspend/resume (unlike x86 kvm-clock).
   # Must replace the default "makestep 1 3" (step only first 3 updates) since chrony ignores duplicate directives.
+  # The actual clock step after resume is handled by lite-engine during setup.
   - |
     if command -v chronyc >/dev/null 2>&1; then
       sed -i 's/^makestep 1 3$/makestep 1 -1/' /etc/chrony/chrony.conf
