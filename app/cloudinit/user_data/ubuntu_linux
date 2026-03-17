@@ -79,10 +79,11 @@ runcmd:
   - systemctl restart systemd-resolved
   
   {{ if eq .Platform.Arch "arm64" }}
-  # Configure chrony to step clock immediately for large offsets (fixes clock skew after hibernate resume on ARM64)
+  # Configure chrony to always step clock for large offsets (fixes clock skew after hibernate resume on ARM64).
+  # Must replace the default "makestep 1 3" (step only first 3 updates) since chrony ignores duplicate directives.
   - |
     if command -v chronyc >/dev/null 2>&1; then
-      echo "makestep 1 -1" >> /etc/chrony/chrony.conf
+      sed -i 's/^makestep 1 3$/makestep 1 -1/' /etc/chrony/chrony.conf
       systemctl restart chrony
       chronyc -a makestep
     fi
