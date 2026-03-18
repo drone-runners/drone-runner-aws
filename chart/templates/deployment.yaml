@@ -61,7 +61,7 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: ["/app/drone-runner-aws", "dlite", "--pool=/etc/config/pool.yml"]
         securityContext:
-          {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- toYaml .Values.containerSecurityContext | nindent 12 }}
         resources:
           limits:
             memory: 2Gi

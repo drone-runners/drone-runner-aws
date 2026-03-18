@@ -1,2 +1,8 @@
-DOCKER_FILE_PATH: /harness/drone-runner-aws/docker/Dockerfile.linux.amd64-devspace
+DOCKER_FILE_PATH: /harness/drone-runner-aws/docker/Dockerfile-harness-vm-runner
 HELM_CHART_SOURCE_DIRECTORY: /harness/drone-runner-aws/chart
+CONTEXT_PATH: /harness/drone-runner-aws
+ADDITIONAL_IMAGES:
+  - NAME: harness-vm-runner-binaries
+    DOCKER_FILE_PATH: /harness/drone-runner-aws/docker/Dockerfile-harness-vm-runner-binaries
+    HELM_VALUE_KEY: binariesImage
+    CONTEXT_PATH: /harness/drone-runner-aws
