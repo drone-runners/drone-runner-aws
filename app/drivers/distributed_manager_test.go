@@ -167,7 +167,7 @@ func TestFilterVariants(t *testing.T) {
 			expectedIDs: []string{"variant-2"},
 		},
 		{
-			name: "multiple variants match resource class, no refined match, returns all by resource class",
+			name: "multiple variants match resource class, no refined match, returns nil",
 			variants: []types.PoolVariant{
 				{
 					SetupInstanceParams: types.SetupInstanceParams{
@@ -192,7 +192,7 @@ func TestFilterVariants(t *testing.T) {
 					ImageName: "centos-7",
 				},
 			},
-			expectedIDs: []string{"variant-1", "variant-2"}, // Falls back to all resource class matches
+			expectedIDs: nil, // No refined match, returns nil
 		},
 		{
 			name: "exact match with all criteria",
