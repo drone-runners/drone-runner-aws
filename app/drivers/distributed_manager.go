@@ -299,81 +299,96 @@ func (d *DistributedManager) provisionFromPool(
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, retErr error) {
-	// Variant filtering: select the best matching variant based on machineConfig
-	var selectedVariant *types.PoolVariant
+	// Variant filtering: select all matching variants in priority order based on machineConfig
+	var matchedVariants []*types.PoolVariant
 	if len(pool.PoolVariants) > 0 {
-		selectedVariant = d.filterVariant(ctx, pool, machineConfig)
-		if selectedVariant != nil {
-			d.applyVariantToMachineConfig(machineConfig, selectedVariant)
-			variantID = selectedVariant.VariantID
-		} else {
-			variantID = defaultVariantID
+		matchedVariants = d.filterVariants(ctx, pool, machineConfig)
+		if len(matchedVariants) > 0 {
+			// Apply the first (highest priority) variant config for new instance creation
+			d.applyVariantToMachineConfig(machineConfig, matchedVariants[0])
 		}
 	}
 
 	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
 		resInst, hotpool, resErr := d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
-		return resInst, nil, hotpool, variantID, resErr
+		return resInst, nil, hotpool, resInst.VariantID, resErr
 	}
 
-	// Case 2: Try to claim from hotpool (shared for capacity and init tasks)
+	// Case 2: Try to claim from hotpool across all matching variants (in priority order)
 	allowedStates := []types.InstanceState{types.StateCreated}
-	queryParams := &types.QueryParams{
-		PoolName:             poolName,
-		MachineType:          machineConfig.MachineType,
-		NestedVirtualization: machineConfig.NestedVirtualization,
-		VariantID:            variantID,
-	}
 
-	if machineConfig.VMImageConfig != nil {
-		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
-		queryParams.ImageName = fullyQualifiedImageName
-	}
-
-	// Try to find and claim a free instance atomically
-	inst, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, nil, false, variantID, fmt.Errorf("provision: failed to find and claim instance in %q pool: %w", poolName, err)
-	}
-
-	// If we successfully claimed an instance, update it and return
-	if inst != nil {
-		inst.OwnerID = ownerID
-		if err = d.instanceStore.Update(ctx, inst); err != nil {
-			return nil, nil, false, variantID, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+	variantsToTry := make([]string, 0, len(matchedVariants)+1)
+	if len(matchedVariants) > 0 {
+		for _, v := range matchedVariants {
+			variantsToTry = append(variantsToTry, v.VariantID)
 		}
-		logger.FromContext(ctx).
-			WithField("pool", poolName).
-			WithField("instance_id", inst.ID).
-			WithField("hotpool", true).
-			WithField("variant_id", variantID).
-			Traceln("provision: claimed hotpool instance")
-
-		d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
-			ImageName:            inst.Image,
-			NestedVirtualization: inst.EnableNestedVirtualization,
-			MachineType:          inst.Size,
-			Hibernate:            inst.IsHibernated,
-			Zones:                []string{inst.Zone},
-			VariantID:            inst.VariantID,
-			DiskSize:             machineConfig.DiskSize,
-			DiskType:             machineConfig.DiskType,
-			ResourceClass:        machineConfig.ResourceClass,
-		})
-		capacity := &types.CapacityReservation{
-			InstanceID: inst.ID,
-			PoolName:   poolName,
-		}
-		return inst, capacity, true, variantID, nil
+	} else {
+		variantsToTry = append(variantsToTry, defaultVariantID)
 	}
 
-	// Case 3: No available hotpool instance → create new (shared for capacity and init tasks)
+	for _, candidateVariantID := range variantsToTry {
+		queryParams := &types.QueryParams{
+			PoolName:             poolName,
+			MachineType:          machineConfig.MachineType,
+			NestedVirtualization: machineConfig.NestedVirtualization,
+			VariantID:            candidateVariantID,
+		}
+
+		if machineConfig.VMImageConfig != nil {
+			fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
+			queryParams.ImageName = fullyQualifiedImageName
+		}
+
+		// Try to find and claim a free instance atomically
+		inst, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, nil, false, candidateVariantID, fmt.Errorf("provision: failed to find and claim instance in %q pool for variant %q: %w", poolName, candidateVariantID, err)
+		}
+
+		// If we successfully claimed an instance, update it and return
+		if inst != nil {
+			inst.OwnerID = ownerID
+			if err = d.instanceStore.Update(ctx, inst); err != nil {
+				return nil, nil, false, candidateVariantID, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+			}
+			logger.FromContext(ctx).
+				WithField("pool", poolName).
+				WithField("instance_id", inst.ID).
+				WithField("hotpool", true).
+				WithField("variant_id", candidateVariantID).
+				Traceln("provision: claimed hotpool instance")
+
+			d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
+				ImageName:            inst.Image,
+				NestedVirtualization: inst.EnableNestedVirtualization,
+				MachineType:          inst.Size,
+				Hibernate:            inst.IsHibernated,
+				Zones:                []string{inst.Zone},
+				VariantID:            inst.VariantID,
+				DiskSize:             machineConfig.DiskSize,
+				DiskType:             machineConfig.DiskType,
+				ResourceClass:        machineConfig.ResourceClass,
+			})
+			capacity := &types.CapacityReservation{
+				InstanceID: inst.ID,
+				PoolName:   poolName,
+			}
+			return inst, capacity, true, candidateVariantID, nil
+		}
+	}
+
+	// set the variant ID to the first variant in the list
+	variantID = variantsToTry[0]
+	machineConfig.VariantID = variantID
+
+	// Case 3: No available hotpool instance across any variant → create new (using first variant's config)
 	logger.FromContext(ctx).
 		WithField("pool", poolName).
 		WithField("hotpool", false).
 		WithField("variant_id", variantID).
-		Traceln("provision: no hotpool instances available, creating new instance")
+		WithField("variants_tried", variantsToTry).
+		Traceln("provision: no hotpool instances available across any matching variant, creating new instance")
 
 	inst, capacity, err := d.setupInstance(ctx,
 		pool,
@@ -397,8 +412,11 @@ func (d *DistributedManager) provisionFromPool(
 	return inst, capacity, false, variantID, nil
 }
 
-// filterVariant selects the best matching variant based on machineConfig criteria
-func (d *DistributedManager) filterVariant(ctx context.Context, pool *poolEntry, machineConfig *types.MachineConfig) *types.PoolVariant {
+// filterVariants returns all matching variants in priority order based on machineConfig criteria.
+// Variants matching image and nested virtualization are returned first (refined matches),
+// followed by variants matching only resource class (fallback matches).
+// The order within each group preserves the original pool configuration order.
+func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry, machineConfig *types.MachineConfig) []*types.PoolVariant {
 	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
 
 	// Step 1: Filter by ResourceClass (required)
@@ -445,26 +463,19 @@ func (d *DistributedManager) filterVariant(ctx context.Context, pool *poolEntry,
 	// Use refined candidates if any were found, otherwise fall back to resource class matches
 	finalCandidates := refinedCandidates
 	if len(finalCandidates) == 0 {
-		finalCandidates = candidatesByResourceClass
 		logr.WithField("resource_class", machineConfig.ResourceClass).
-			Debugln("provision: no variants matched image/nested_virt filters, using resource_class matches only")
+			Debugln("provision: no variants matched image/nested_virt filters")
+		return nil
 	}
 
-	// Step 3: If multiple variants remain, log them and return the first one
-	if len(finalCandidates) > 1 {
-		variantIDs := make([]string, len(finalCandidates))
-		for i := range finalCandidates {
-			variantIDs[i] = finalCandidates[i].VariantID
-		}
-		logr.WithField("variant_ids", variantIDs).
-			WithField("selected", finalCandidates[0].VariantID).
-			Infoln("provision: multiple variants matched, selecting first one")
-	} else {
-		logr.WithField("variant_id", finalCandidates[0].VariantID).
-			Debugln("provision: selected variant")
+	variantIDs := make([]string, len(finalCandidates))
+	for i := range finalCandidates {
+		variantIDs[i] = finalCandidates[i].VariantID
 	}
+	logr.WithField("variant_ids", variantIDs).
+		Debugln("provision: matched variants in priority order")
 
-	return finalCandidates[0]
+	return finalCandidates
 }
 
 // applyVariantToMachineConfig applies the selected variant's configuration to machineConfig

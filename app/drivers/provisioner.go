@@ -315,7 +315,7 @@ func (m *Manager) setupInstance(
 	if machineConfig != nil && machineConfig.VariantID != "" {
 		inst.VariantID = machineConfig.VariantID
 	} else {
-		inst.VariantID = "default"
+		inst.VariantID = defaultVariantID
 	}
 
 	if inst.Labels == nil {
