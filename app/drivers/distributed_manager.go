@@ -317,6 +317,8 @@ func (d *DistributedManager) provisionFromPool(
 
 	// Case 2: Try to claim from hotpool across all matching variants (in priority order)
 	allowedStates := []types.InstanceState{types.StateCreated}
+	var err error
+	var capacity *types.CapacityReservation
 
 	variantsToTry := make([]string, 0, len(matchedVariants)+1)
 	if len(matchedVariants) > 0 {
@@ -341,7 +343,7 @@ func (d *DistributedManager) provisionFromPool(
 		}
 
 		// Try to find and claim a free instance atomically
-		inst, err := d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
+		inst, err = d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
 		if err != nil && err != sql.ErrNoRows {
 			return nil, nil, false, candidateVariantID, fmt.Errorf("provision: failed to find and claim instance in %q pool for variant %q: %w", poolName, candidateVariantID, err)
 		}
@@ -370,7 +372,7 @@ func (d *DistributedManager) provisionFromPool(
 				DiskType:             machineConfig.DiskType,
 				ResourceClass:        machineConfig.ResourceClass,
 			})
-			capacity := &types.CapacityReservation{
+			capacity = &types.CapacityReservation{
 				InstanceID: inst.ID,
 				PoolName:   poolName,
 			}
@@ -390,7 +392,7 @@ func (d *DistributedManager) provisionFromPool(
 		WithField("variants_tried", variantsToTry).
 		Traceln("provision: no hotpool instances available across any matching variant, creating new instance")
 
-	inst, capacity, err := d.setupInstance(ctx,
+	inst, capacity, err = d.setupInstance(ctx,
 		pool,
 		tlsServerName,
 		ownerID,
