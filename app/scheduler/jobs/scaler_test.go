@@ -825,7 +825,7 @@ func TestScalerTriggerJob_CreatesPoolSpecificJobs(t *testing.T) {
 }
 
 func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
-	store := NewMockOutboxStore()
+	outboxStore := NewMockOutboxStore()
 
 	// Create a scale job for a specific pool and window
 	poolName := "pool-1"
@@ -846,13 +846,13 @@ func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
 		Status:    types.OutboxJobStatusPending,
 	}
 
-	err := store.Create(context.Background(), job)
+	err := outboxStore.Create(context.Background(), job)
 	if err != nil {
 		t.Fatalf("failed to create job: %v", err)
 	}
 
 	// Find the job for the correct pool and window
-	found, err := store.FindScaleJobForWindow(context.Background(), poolName, windowStart)
+	found, err := outboxStore.FindScaleJobForWindow(context.Background(), poolName, windowStart)
 	if err != nil {
 		t.Fatalf("failed to find job: %v", err)
 	}
@@ -866,7 +866,7 @@ func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
 	}
 
 	// Try to find a job for a different window (same pool)
-	notFound, err := store.FindScaleJobForWindow(context.Background(), poolName, windowStart+1800)
+	notFound, err := outboxStore.FindScaleJobForWindow(context.Background(), poolName, windowStart+1800)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -876,7 +876,7 @@ func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
 	}
 
 	// Try to find a job for a different pool (same window)
-	notFoundDifferentPool, err := store.FindScaleJobForWindow(context.Background(), "pool-2", windowStart)
+	notFoundDifferentPool, err := outboxStore.FindScaleJobForWindow(context.Background(), "pool-2", windowStart)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
