@@ -424,59 +424,61 @@ func (d *DistributedManager) provisionFromPool(
 }
 
 // filterVariants returns all matching variants in priority order based on machineConfig criteria.
-// Variants matching image and nested virtualization are returned first (refined matches),
-// followed by variants matching only resource class (fallback matches).
-// The order within each group preserves the original pool configuration order.
+// Step 1: Filter by ResourceClass AND NestedVirtualization (both required). Returns nil if no matches.
+// Step 2: Optionally refine by ImageName (best-effort). If no image filter is provided or no
+// variants match the image filter, falls back to step 1 results.
+// The order preserves the original pool configuration order.
 func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry, machineConfig *types.MachineConfig) []*types.PoolVariant {
 	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
 
-	// Step 1: Filter by ResourceClass (required)
-	var candidatesByResourceClass []*types.PoolVariant
+	// Step 1: Filter by ResourceClass AND NestedVirtualization (both required)
+	var candidates []*types.PoolVariant
 	for i := range pool.PoolVariants {
-		if pool.PoolVariants[i].ResourceClass == machineConfig.ResourceClass {
-			candidatesByResourceClass = append(candidatesByResourceClass, &pool.PoolVariants[i])
+		if pool.PoolVariants[i].ResourceClass == machineConfig.ResourceClass &&
+			pool.PoolVariants[i].NestedVirtualization == machineConfig.NestedVirtualization {
+			candidates = append(candidates, &pool.PoolVariants[i])
 		}
 	}
 
-	if len(candidatesByResourceClass) == 0 {
+	if len(candidates) == 0 {
 		logr.WithField("resource_class", machineConfig.ResourceClass).
-			Warnln("provision: no variants found matching resource_class")
+			WithField("nested_virtualization", machineConfig.NestedVirtualization).
+			Warnln("provision: no variants found matching resource_class and nested_virtualization")
 		return nil
 	}
 
-	// Step 2: Further filter by ImageName and NestedVirtualization (optional but preferred)
+	// Step 2: Optionally refine by ImageName (best-effort)
 	var fullyQualifiedImageName string
 	if machineConfig.VMImageConfig != nil && machineConfig.VMImageConfig.ImageName != "" {
 		fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
 	}
 
-	var refinedCandidates []*types.PoolVariant
-	for _, variant := range candidatesByResourceClass {
-		matchesImage := true
-		matchesNestedVirt := true
+	if fullyQualifiedImageName == "" {
+		variantIDs := make([]string, len(candidates))
+		for i := range candidates {
+			variantIDs[i] = candidates[i].VariantID
+		}
+		logr.WithField("variant_ids", variantIDs).
+			Debugln("provision: matched variants by resource_class and nested_virtualization")
+		return candidates
+	}
 
-		// Check image name if both are specified
-		if fullyQualifiedImageName != "" && variant.ImageName != "" {
+	var imageMatchedCandidates []*types.PoolVariant
+	for _, variant := range candidates {
+		if variant.ImageName != "" {
 			variantFullyQualifiedImage, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
-			matchesImage = (variantFullyQualifiedImage == fullyQualifiedImageName)
-		}
-
-		// Check nested virtualization if specified in variant
-		if variant.NestedVirtualization != machineConfig.NestedVirtualization {
-			matchesNestedVirt = false
-		}
-
-		if matchesImage && matchesNestedVirt {
-			refinedCandidates = append(refinedCandidates, variant)
+			if variantFullyQualifiedImage == fullyQualifiedImageName {
+				imageMatchedCandidates = append(imageMatchedCandidates, variant)
+			}
 		}
 	}
 
-	// Use refined candidates if any were found, otherwise fall back to resource class matches
-	finalCandidates := refinedCandidates
+	finalCandidates := imageMatchedCandidates
 	if len(finalCandidates) == 0 {
 		logr.WithField("resource_class", machineConfig.ResourceClass).
-			Debugln("provision: no variants matched image/nested_virt filters")
-		return nil
+			WithField("image_name", fullyQualifiedImageName).
+			Debugln("provision: no variants matched image filter, falling back to resource_class and nested_virtualization matches")
+		finalCandidates = candidates
 	}
 
 	variantIDs := make([]string, len(finalCandidates))
