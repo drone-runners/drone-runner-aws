@@ -167,7 +167,7 @@ func TestFilterVariants(t *testing.T) {
 			expectedIDs: []string{"variant-2"},
 		},
 		{
-			name: "multiple variants match resource class, no refined match, returns nil",
+			name: "image filter no match falls back to resource class and nested virt matches",
 			variants: []types.PoolVariant{
 				{
 					SetupInstanceParams: types.SetupInstanceParams{
@@ -192,7 +192,7 @@ func TestFilterVariants(t *testing.T) {
 					ImageName: "centos-7",
 				},
 			},
-			expectedIDs: nil, // No refined match, returns nil
+			expectedIDs: []string{"variant-1", "variant-2"}, // Falls back to step 1 results
 		},
 		{
 			name: "exact match with all criteria",
@@ -245,6 +245,141 @@ func TestFilterVariants(t *testing.T) {
 				},
 			},
 			expectedIDs: []string{"variant-1", "variant-2", "variant-3"},
+		},
+		{
+			name: "resource class matches but nested virt mismatch returns nil",
+			variants: []types.PoolVariant{
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:            "variant-1",
+						ResourceClass:        "medium",
+						NestedVirtualization: false,
+					},
+				},
+			},
+			machineConfig: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					ResourceClass:        "medium",
+					NestedVirtualization: true,
+				},
+			},
+			expectedIDs: nil,
+		},
+		{
+			name: "resource class and nested virt match without image filter returns all",
+			variants: []types.PoolVariant{
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:            "variant-1",
+						ResourceClass:        "large",
+						NestedVirtualization: true,
+						ImageName:            "ubuntu-20.04",
+					},
+				},
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:            "variant-2",
+						ResourceClass:        "large",
+						NestedVirtualization: true,
+						ImageName:            "ubuntu-22.04",
+					},
+				},
+			},
+			machineConfig: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					ResourceClass:        "large",
+					NestedVirtualization: true,
+				},
+			},
+			expectedIDs: []string{"variant-1", "variant-2"},
+		},
+		{
+			name: "image filter matches subset of step 1 candidates",
+			variants: []types.PoolVariant{
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-1",
+						ResourceClass: "large",
+						ImageName:     "ubuntu-20.04",
+					},
+				},
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-2",
+						ResourceClass: "large",
+						ImageName:     "ubuntu-22.04",
+					},
+				},
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-3",
+						ResourceClass: "large",
+						ImageName:     "ubuntu-22.04",
+					},
+				},
+			},
+			machineConfig: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					ResourceClass: "large",
+				},
+				VMImageConfig: &spec.VMImageConfig{
+					ImageName: "ubuntu-22.04",
+				},
+			},
+			expectedIDs: []string{"variant-2", "variant-3"},
+		},
+		{
+			name: "variant with empty image name excluded from image matches but included in fallback",
+			variants: []types.PoolVariant{
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-1",
+						ResourceClass: "medium",
+					},
+				},
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-2",
+						ResourceClass: "medium",
+						ImageName:     "ubuntu-22.04",
+					},
+				},
+			},
+			machineConfig: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					ResourceClass: "medium",
+				},
+				VMImageConfig: &spec.VMImageConfig{
+					ImageName: "ubuntu-22.04",
+				},
+			},
+			expectedIDs: []string{"variant-2"},
+		},
+		{
+			name: "all variants have empty image name with image filter falls back to step 1",
+			variants: []types.PoolVariant{
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-1",
+						ResourceClass: "small",
+					},
+				},
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-2",
+						ResourceClass: "small",
+					},
+				},
+			},
+			machineConfig: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					ResourceClass: "small",
+				},
+				VMImageConfig: &spec.VMImageConfig{
+					ImageName: "ubuntu-22.04",
+				},
+			},
+			expectedIDs: []string{"variant-1", "variant-2"},
 		},
 	}
 
