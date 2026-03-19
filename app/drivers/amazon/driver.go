@@ -101,7 +101,8 @@ type amazonConfig struct {
 
 	// AMI cache
 	amiCache  *AMICache
-	enableC4D bool
+	enableC4D              bool
+	skipCloudInitPackages bool
 }
 
 const (
@@ -600,6 +601,7 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	logr.Traceln("amazon: provisioning VM")
 
 	opts.EnableC4D = p.enableC4D
+	opts.SkipCloudInitPackages = p.skipCloudInitPackages
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {

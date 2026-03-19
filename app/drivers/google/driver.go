@@ -90,6 +90,7 @@ type config struct {
 	labels                     map[string]string
 	enableNestedVirtualization bool
 	enableC4D                  bool
+	skipCloudInitPackages      bool
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -433,6 +434,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	}
 
 	opts.EnableC4D = p.enableC4D
+	opts.SkipCloudInitPackages = p.skipCloudInitPackages
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {

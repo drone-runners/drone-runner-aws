@@ -235,3 +235,9 @@ func WithEnableC4D(enableC4D bool) Option {
 		p.enableC4D = enableC4D
 	}
 }
+
+func WithSkipCloudInitPackages(skip bool) Option {
+	return func(p *config) {
+		p.skipCloudInitPackages = skip
+	}
+}
