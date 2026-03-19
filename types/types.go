@@ -352,6 +352,7 @@ type UtilizationRecord struct {
 	ID             int64  `db:"id" json:"id"`
 	Pool           string `db:"pool_name" json:"pool"`
 	VariantID      string `db:"variant_id" json:"variant_id"`
+	ImageName      string `db:"image_name" json:"image_name"`
 	InUseInstances int    `db:"in_use_instances" json:"in_use_instances"`
 	RecordedAt     int64  `db:"recorded_at" json:"recorded_at"`
 }

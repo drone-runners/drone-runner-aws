@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/drone-runners/drone-runner-aws/app/predictor"
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // MockPredictor is a mock implementation of predictor.Predictor for testing.
 type MockPredictor struct {
-	predictions map[string]int // key: "poolName:variantID" -> predicted instances
+	predictions map[string]int // key: "poolName:variantID:imageName" -> predicted instances
 }
 
 func NewMockPredictor() *MockPredictor {
@@ -22,11 +23,15 @@ func NewMockPredictor() *MockPredictor {
 }
 
 func (m *MockPredictor) SetPrediction(poolName, variantID string, instances int) {
-	m.predictions[poolName+":"+variantID] = instances
+	m.predictions[poolName+":"+variantID+":"] = instances
+}
+
+func (m *MockPredictor) SetPredictionForImage(poolName, variantID, imageName string, instances int) {
+	m.predictions[poolName+":"+variantID+":"+imageName] = instances
 }
 
 func (m *MockPredictor) Predict(ctx context.Context, input *predictor.PredictionInput) (*predictor.PredictionResult, error) {
-	key := input.PoolName + ":" + input.VariantID
+	key := input.PoolName + ":" + input.VariantID + ":" + input.ImageName
 	if instances, ok := m.predictions[key]; ok {
 		return &predictor.PredictionResult{RecommendedInstances: instances}, nil
 	}
@@ -121,8 +126,85 @@ func (m *MockInstanceStore) CountByPoolAndVariant(ctx context.Context, status ty
 	return result, nil
 }
 
+func (m *MockInstanceStore) CountByPoolVariantAndImage(ctx context.Context, status types.InstanceState) (map[string]map[string]map[string]int, error) {
+	result := make(map[string]map[string]map[string]int)
+	for _, inst := range m.instances {
+		if inst.State == status {
+			if result[inst.Pool] == nil {
+				result[inst.Pool] = make(map[string]map[string]int)
+			}
+			if result[inst.Pool][inst.VariantID] == nil {
+				result[inst.Pool][inst.VariantID] = make(map[string]int)
+			}
+			result[inst.Pool][inst.VariantID][inst.Image]++
+		}
+	}
+	return result, nil
+}
+
 func (m *MockInstanceStore) AddInstance(instance *types.Instance) {
 	m.instances = append(m.instances, instance)
+}
+
+// MockUtilizationHistoryStore is a mock implementation of store.UtilizationHistoryStore for testing.
+type MockUtilizationHistoryStore struct {
+	records []types.UtilizationRecord
+}
+
+func NewMockUtilizationHistoryStore() *MockUtilizationHistoryStore {
+	return &MockUtilizationHistoryStore{
+		records: make([]types.UtilizationRecord, 0),
+	}
+}
+
+func (m *MockUtilizationHistoryStore) Create(ctx context.Context, record *types.UtilizationRecord) error {
+	m.records = append(m.records, *record)
+	return nil
+}
+
+func (m *MockUtilizationHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool, variantID, imageName string, ranges []store.TimeRange) ([][]types.UtilizationRecord, error) {
+	result := make([][]types.UtilizationRecord, len(ranges))
+	for i, r := range ranges {
+		var records []types.UtilizationRecord
+		for _, rec := range m.records {
+			if rec.Pool == pool && rec.VariantID == variantID &&
+				rec.ImageName == imageName &&
+				rec.RecordedAt >= r.StartTime && rec.RecordedAt <= r.EndTime {
+				records = append(records, rec)
+			}
+		}
+		result[i] = records
+	}
+	return result, nil
+}
+
+func (m *MockUtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error) {
+	imageSet := make(map[string]bool)
+	for _, rec := range m.records {
+		if rec.Pool == pool && rec.VariantID == variantID &&
+			rec.RecordedAt >= since && rec.InUseInstances > 0 {
+			imageSet[rec.ImageName] = true
+		}
+	}
+	var images []string
+	for img := range imageSet {
+		images = append(images, img)
+	}
+	return images, nil
+}
+
+func (m *MockUtilizationHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
+	var remaining []types.UtilizationRecord
+	var deleted int64
+	for _, r := range m.records {
+		if r.RecordedAt >= timestamp {
+			remaining = append(remaining, r)
+		} else {
+			deleted++
+		}
+	}
+	m.records = remaining
+	return deleted, nil
 }
 
 // MockOutboxStore is a mock implementation of store.OutboxStore for testing.
@@ -401,29 +483,33 @@ func TestScaler_GetFreeInstanceCountsForPool(t *testing.T) {
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
 
-	// Add some test instances
+	// Add some test instances with image names
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-1",
 		Pool:      "pool-1",
 		VariantID: "default",
+		Image:     "image-a",
 		State:     types.StateCreated,
 	})
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-2",
 		Pool:      "pool-1",
 		VariantID: "default",
+		Image:     "image-a",
 		State:     types.StateHibernating,
 	})
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-3",
 		Pool:      "pool-1",
 		VariantID: "variant-1",
+		Image:     "image-b",
 		State:     types.StateCreated,
 	})
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-4",
 		Pool:      "pool-1",
 		VariantID: "default",
+		Image:     "image-a",
 		State:     types.StateInUse, // Should not be counted as free
 	})
 
@@ -436,21 +522,21 @@ func TestScaler_GetFreeInstanceCountsForPool(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
 
 	counts, err := scaler.getFreeInstanceCountsForPool(context.Background(), pool)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Check default variant: should have 2 free (1 created + 1 hibernating)
-	if counts["default"] != 2 {
-		t.Errorf("expected 2 free instances for default variant, got %d", counts["default"])
+	// Check default variant, image-a: should have 2 free (1 created + 1 hibernating)
+	if counts["default"]["image-a"] != 2 {
+		t.Errorf("expected 2 free instances for default/image-a, got %d", counts["default"]["image-a"])
 	}
 
-	// Check variant-1: should have 1 free
-	if counts["variant-1"] != 1 {
-		t.Errorf("expected 1 free instance for variant-1, got %d", counts["variant-1"])
+	// Check variant-1, image-b: should have 1 free
+	if counts["variant-1"]["image-b"] != 1 {
+		t.Errorf("expected 1 free instance for variant-1/image-b, got %d", counts["variant-1"]["image-b"])
 	}
 }
 
@@ -472,7 +558,7 @@ func TestScaler_ScaleUp(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
 
 	// Current free: 0, Predicted: 5 -> Should scale up by 5
 	now := time.Now()
@@ -517,7 +603,7 @@ func TestScaler_RespectMinSize(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
 
 	// Current free: 0, Predicted: 0, MinSize: 3 -> Should scale up to 3
 	now := time.Now()
@@ -565,7 +651,7 @@ func TestScaler_NoScalingNeeded(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
 
 	// Current free: 2, Predicted: 2 -> No scaling needed
 	now := time.Now()
@@ -611,7 +697,7 @@ func TestScaler_WithVariants(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
 
 	now := time.Now()
 	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())

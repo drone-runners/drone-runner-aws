@@ -159,6 +159,7 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 		ctx,
 		input.PoolName,
 		input.VariantID,
+		input.ImageName,
 		ranges,
 	)
 	if err != nil {
@@ -223,6 +224,7 @@ func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Cont
 		ctx,
 		input.PoolName,
 		input.VariantID,
+		input.ImageName,
 		ranges,
 	)
 	if err != nil {

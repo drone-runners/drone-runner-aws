@@ -36,12 +36,13 @@ func (m *MockHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64)
 	return deleted, nil
 }
 
-func (m *MockHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool, variantID string, ranges []store.TimeRange) ([][]types.UtilizationRecord, error) {
+func (m *MockHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool, variantID, imageName string, ranges []store.TimeRange) ([][]types.UtilizationRecord, error) {
 	result := make([][]types.UtilizationRecord, len(ranges))
 	for i, r := range ranges {
 		var records []types.UtilizationRecord
 		for _, rec := range m.records {
 			if rec.Pool == pool && rec.VariantID == variantID &&
+				rec.ImageName == imageName &&
 				rec.RecordedAt >= r.StartTime && rec.RecordedAt <= r.EndTime {
 				records = append(records, rec)
 			}
@@ -49,6 +50,21 @@ func (m *MockHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool,
 		result[i] = records
 	}
 	return result, nil
+}
+
+func (m *MockHistoryStore) GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error) {
+	imageSet := make(map[string]bool)
+	for _, rec := range m.records {
+		if rec.Pool == pool && rec.VariantID == variantID &&
+			rec.RecordedAt >= since && rec.InUseInstances > 0 {
+			imageSet[rec.ImageName] = true
+		}
+	}
+	var images []string
+	for img := range imageSet {
+		images = append(images, img)
+	}
+	return images, nil
 }
 
 func TestEMAWeekendDecayPredictor_Name(t *testing.T) {

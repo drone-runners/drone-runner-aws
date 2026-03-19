@@ -11,6 +11,7 @@ type PredictionInput struct {
 	StartTimestamp int64
 	EndTimestamp   int64
 	VariantID      string
+	ImageName      string
 }
 
 // PredictionResult contains the output of a prediction.

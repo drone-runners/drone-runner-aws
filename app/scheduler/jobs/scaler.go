@@ -20,6 +20,9 @@ const (
 	DefaultWindowDuration = 30 * time.Minute
 	// DefaultLeadTime is how long before a window to start scaling
 	DefaultLeadTime = 5 * time.Minute
+	// DefaultActiveImageLookbackDays is how many days to look back when discovering active images.
+	// Images with no utilization in this period are considered obsolete and not predicted for.
+	DefaultActiveImageLookbackDays = 7
 )
 
 // ScalablePool represents a pool and its variants that can be scaled.
@@ -41,6 +44,7 @@ type Scaler struct {
 	manager       *drivers.DistributedManager
 	predictor     predictor.Predictor
 	instanceStore store.InstanceStore
+	historyStore  store.UtilizationHistoryStore
 	outboxStore   store.OutboxStore
 	config        types.ScalerConfig
 	poolsToScale  []ScalablePool
@@ -52,6 +56,7 @@ func NewScaler(
 	manager *drivers.DistributedManager,
 	pred predictor.Predictor,
 	instanceStore store.InstanceStore,
+	historyStore store.UtilizationHistoryStore,
 	outboxStore store.OutboxStore,
 	config types.ScalerConfig,
 	pools []ScalablePool,
@@ -68,6 +73,7 @@ func NewScaler(
 		manager:       manager,
 		predictor:     pred,
 		instanceStore: instanceStore,
+		historyStore:  historyStore,
 		outboxStore:   outboxStore,
 		config:        config,
 		poolsToScale:  pools,
@@ -104,62 +110,106 @@ func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, wi
 		return nil
 	}
 
-	// Get current free instance counts for this pool
-	freeCountsByPoolVariant, err := s.getFreeInstanceCountsForPool(ctx, *targetPool)
+	// Get current free instance counts for this pool, grouped by (variant, image)
+	freeCountsByVariantImage, err := s.getFreeInstanceCountsForPool(ctx, *targetPool)
 	if err != nil {
 		return fmt.Errorf("scaler: failed to get free instance counts: %w", err)
 	}
 
-	s.scalePoolInternal(ctx, *targetPool, windowStart, windowEnd, freeCountsByPoolVariant)
+	s.scalePoolInternal(ctx, *targetPool, windowStart, windowEnd, freeCountsByVariantImage)
 
 	logrus.WithField("pool", poolName).Infoln("scaler: scaling operation completed for pool")
 	return nil
 }
 
 // scalePoolInternal scales a single pool and its variants.
+// It discovers active images per variant and scales each (variant, image) combination independently.
 func (s *Scaler) scalePoolInternal(
 	ctx context.Context,
 	pool ScalablePool,
 	windowStart, windowEnd int64,
-	freeCountsByVariant map[string]int,
+	freeCountsByVariantImage map[string]map[string]int,
 ) {
 	logr := logrus.WithField("pool", pool.Name)
 
 	// Scale the default variant (pool itself)
-	if err := s.scaleVariant(ctx, pool, "default", pool.MinSize, nil, windowStart, windowEnd, freeCountsByVariant); err != nil {
-		logr.WithError(err).Errorln("scaler: failed to scale default variant")
-	}
+	s.scaleVariantForActiveImages(ctx, pool, "default", pool.MinSize, nil, windowStart, windowEnd, freeCountsByVariantImage)
 
 	// Scale each variant
 	for i := range pool.Variants {
 		variant := &pool.Variants[i]
 		params := variant.Params // Copy to avoid pointer issues
-		if err := s.scaleVariant(ctx, pool, params.VariantID, variant.MinSize, &params, windowStart, windowEnd, freeCountsByVariant); err != nil {
-			logr.WithError(err).WithField("variant_id", params.VariantID).
-				Errorln("scaler: failed to scale variant")
-		}
+		s.scaleVariantForActiveImages(ctx, pool, params.VariantID, variant.MinSize, &params, windowStart, windowEnd, freeCountsByVariantImage)
 	}
+
+	logr.Debugln("scaler: finished scaling all variants and images")
 }
 
-// scaleVariant scales a single variant within a pool.
-func (s *Scaler) scaleVariant(
+// scaleVariantForActiveImages discovers active images for a variant and scales each (variant, image) pair.
+func (s *Scaler) scaleVariantForActiveImages(
 	ctx context.Context,
 	pool ScalablePool,
 	variantID string,
 	minSize int,
 	params *types.SetupInstanceParams,
 	windowStart, windowEnd int64,
-	freeCountsByVariant map[string]int,
-) error {
+	freeCountsByVariantImage map[string]map[string]int,
+) {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       pool.Name,
 		"variant_id": variantID,
 	})
 
-	// Get prediction for this pool/variant
+	// Discover active images from utilization history
+	since := time.Now().AddDate(0, 0, -DefaultActiveImageLookbackDays).Unix()
+	activeImages, err := s.historyStore.GetActiveImages(ctx, pool.Name, variantID, since)
+	if err != nil {
+		logr.WithError(err).Errorln("scaler: failed to get active images")
+		// Fall back to scaling without image dimension (use empty string)
+		activeImages = []string{""}
+	}
+
+	if len(activeImages) == 0 {
+		// No active images found — scale with empty image (pool default)
+		activeImages = []string{""}
+	}
+
+	// Distribute min size across images: first image gets the min, rest get 0
+	// This ensures the pool minimum is maintained without over-provisioning
+	for i, imageName := range activeImages {
+		imageMinSize := 0
+		if i == 0 {
+			imageMinSize = minSize
+		}
+
+		if err := s.scaleVariant(ctx, pool, variantID, imageName, imageMinSize, params, windowStart, windowEnd, freeCountsByVariantImage); err != nil {
+			logr.WithError(err).WithField("image_name", imageName).
+				Errorln("scaler: failed to scale variant for image")
+		}
+	}
+}
+
+// scaleVariant scales a single (variant, image) combination within a pool.
+func (s *Scaler) scaleVariant(
+	ctx context.Context,
+	pool ScalablePool,
+	variantID, imageName string,
+	minSize int,
+	params *types.SetupInstanceParams,
+	windowStart, windowEnd int64,
+	freeCountsByVariantImage map[string]map[string]int,
+) error {
+	logr := logrus.WithFields(logrus.Fields{
+		"pool":       pool.Name,
+		"variant_id": variantID,
+		"image_name": imageName,
+	})
+
+	// Get prediction for this pool/variant/image
 	prediction, err := s.predictor.Predict(ctx, &predictor.PredictionInput{
 		PoolName:       pool.Name,
 		VariantID:      variantID,
+		ImageName:      imageName,
 		StartTimestamp: windowStart,
 		EndTimestamp:   windowEnd,
 	})
@@ -167,10 +217,12 @@ func (s *Scaler) scaleVariant(
 		return fmt.Errorf("failed to get prediction: %w", err)
 	}
 
-	// Get current free count
+	// Get current free count for this (variant, image) combination
 	currentFree := 0
-	if count, ok := freeCountsByVariant[variantID]; ok {
-		currentFree = count
+	if imageCounts, ok := freeCountsByVariantImage[variantID]; ok {
+		if count, ok := imageCounts[imageName]; ok {
+			currentFree = count
+		}
 	}
 
 	// Ensure we never go below min size
@@ -202,10 +254,10 @@ func (s *Scaler) scaleVariant(
 
 	if delta > 0 {
 		// Scale up: create instances
-		s.scaleUp(ctx, pool, variantID, params, delta)
+		s.scaleUp(ctx, pool, variantID, imageName, params, delta)
 	} else if delta < 0 {
 		// Scale down: destroy excess instances
-		s.scaleDown(ctx, pool.Name, variantID, -delta)
+		s.scaleDown(ctx, pool.Name, variantID, imageName, -delta)
 	}
 
 	return nil
@@ -215,13 +267,14 @@ func (s *Scaler) scaleVariant(
 func (s *Scaler) scaleUp(
 	ctx context.Context,
 	pool ScalablePool,
-	variantID string,
+	variantID, imageName string,
 	params *types.SetupInstanceParams,
 	count int,
 ) {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       pool.Name,
 		"variant_id": variantID,
+		"image_name": imageName,
 		"count":      count,
 	})
 
@@ -232,10 +285,14 @@ func (s *Scaler) scaleUp(
 		// Build setup params - create a copy to avoid modifying the original
 		setupParams := &types.SetupInstanceParams{
 			VariantID: variantID,
+			ImageName: imageName,
 		}
 		if params != nil {
 			paramsCopy := *params
 			paramsCopy.VariantID = variantID
+			if imageName != "" {
+				paramsCopy.ImageName = imageName
+			}
 			setupParams = &paramsCopy
 		}
 
@@ -269,12 +326,13 @@ func (s *Scaler) scaleUp(
 // scaleDown destroys excess free instances.
 func (s *Scaler) scaleDown(
 	ctx context.Context,
-	poolName, variantID string,
+	poolName, variantID, imageName string,
 	count int,
 ) {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       poolName,
 		"variant_id": variantID,
+		"image_name": imageName,
 		"count":      count,
 	})
 
@@ -285,6 +343,7 @@ func (s *Scaler) scaleDown(
 	queryParams := &types.QueryParams{
 		PoolName:  poolName,
 		VariantID: variantID,
+		ImageName: imageName,
 	}
 
 	allowedStates := []types.InstanceState{types.StateCreated, types.StateHibernating}
@@ -320,21 +379,24 @@ func (s *Scaler) scaleDown(
 	logr.WithField("destroyed_count", destroyedCount).Infoln("scaler: scale down complete")
 }
 
-// getFreeInstanceCountsForPool returns a map of variant -> free count for a specific pool.
-func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool ScalablePool) (map[string]int, error) {
+// getFreeInstanceCountsForPool returns a nested map of variant -> image -> free count for a specific pool.
+func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool ScalablePool) (map[string]map[string]int, error) {
 	instances, err := s.instanceStore.List(ctx, pool.Name, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list instances for pool %s: %w", pool.Name, err)
 	}
 
-	variantCounts := make(map[string]int)
+	variantImageCounts := make(map[string]map[string]int)
 	for _, inst := range instances {
 		if inst.State == types.StateCreated || inst.State == types.StateHibernating {
-			variantCounts[inst.VariantID]++
+			if variantImageCounts[inst.VariantID] == nil {
+				variantImageCounts[inst.VariantID] = make(map[string]int)
+			}
+			variantImageCounts[inst.VariantID][inst.Image]++
 		}
 	}
 
-	return variantCounts, nil
+	return variantImageCounts, nil
 }
 
 // isPoolDisabled checks if the given pool name is in the disabled pools list.

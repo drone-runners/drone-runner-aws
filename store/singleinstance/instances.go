@@ -61,3 +61,7 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 func (s InstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
 	panic("implement me")
 }
+
+func (s InstanceStore) CountByPoolVariantAndImage(ctx context.Context, status types.InstanceState) (map[string]map[string]map[string]int, error) {
+	panic("implement me")
+}
