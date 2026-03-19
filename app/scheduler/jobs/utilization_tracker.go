@@ -59,40 +59,36 @@ func (j *UtilizationTrackerJob) Execute(ctx context.Context) error {
 	now := time.Now().Unix()
 
 	// Single DB call for all pools, variants, and images
-	counts, err := j.instanceStore.CountByPoolVariantAndImage(ctx, types.StateInUse)
+	counts, err := j.instanceStore.CountGroupedInstances(ctx, types.StateInUse)
 	if err != nil {
 		return err
 	}
 
-	for poolName, variantCounts := range counts {
-		for variantID, imageCounts := range variantCounts {
-			for imageName, count := range imageCounts {
-				record := &types.UtilizationRecord{
-					Pool:           poolName,
-					VariantID:      variantID,
-					ImageName:      imageName,
-					InUseInstances: count,
-					RecordedAt:     now,
-				}
-
-				if err := j.historyStore.Create(ctx, record); err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-						"pool":       poolName,
-						"variant_id": variantID,
-						"image_name": imageName,
-						"count":      count,
-					}).Errorln("failed to create utilization record")
-					continue
-				}
-
-				logrus.WithFields(logrus.Fields{
-					"pool":       poolName,
-					"variant_id": variantID,
-					"image_name": imageName,
-					"count":      count,
-				}).Debugln("recorded utilization")
-			}
+	for _, c := range counts {
+		record := &types.UtilizationRecord{
+			Pool:           c.Pool,
+			VariantID:      c.VariantID,
+			ImageName:      c.ImageName,
+			InUseInstances: c.Count,
+			RecordedAt:     now,
 		}
+
+		if err := j.historyStore.Create(ctx, record); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"pool":       c.Pool,
+				"variant_id": c.VariantID,
+				"image_name": c.ImageName,
+				"count":      c.Count,
+			}).Errorln("failed to create utilization record")
+			continue
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"pool":       c.Pool,
+			"variant_id": c.VariantID,
+			"image_name": c.ImageName,
+			"count":      c.Count,
+		}).Debugln("recorded utilization")
 	}
 
 	return nil

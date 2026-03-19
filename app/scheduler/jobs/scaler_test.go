@@ -113,30 +113,30 @@ func (m *MockInstanceStore) FindAndClaim(
 	return nil, nil
 }
 
-func (m *MockInstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
-	result := make(map[string]map[string]int)
+func (m *MockInstanceStore) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
+	counts := make(map[string]map[string]map[string]int)
 	for _, inst := range m.instances {
 		if inst.State == status {
-			if result[inst.Pool] == nil {
-				result[inst.Pool] = make(map[string]int)
+			if counts[inst.Pool] == nil {
+				counts[inst.Pool] = make(map[string]map[string]int)
 			}
-			result[inst.Pool][inst.VariantID]++
+			if counts[inst.Pool][inst.VariantID] == nil {
+				counts[inst.Pool][inst.VariantID] = make(map[string]int)
+			}
+			counts[inst.Pool][inst.VariantID][inst.Image]++
 		}
 	}
-	return result, nil
-}
-
-func (m *MockInstanceStore) CountByPoolVariantAndImage(ctx context.Context, status types.InstanceState) (map[string]map[string]map[string]int, error) {
-	result := make(map[string]map[string]map[string]int)
-	for _, inst := range m.instances {
-		if inst.State == status {
-			if result[inst.Pool] == nil {
-				result[inst.Pool] = make(map[string]map[string]int)
+	var result []types.InstanceCount
+	for pool, variants := range counts {
+		for variant, images := range variants {
+			for image, count := range images {
+				result = append(result, types.InstanceCount{
+					Pool:      pool,
+					VariantID: variant,
+					ImageName: image,
+					Count:     count,
+				})
 			}
-			if result[inst.Pool][inst.VariantID] == nil {
-				result[inst.Pool][inst.VariantID] = make(map[string]int)
-			}
-			result[inst.Pool][inst.VariantID][inst.Image]++
 		}
 	}
 	return result, nil

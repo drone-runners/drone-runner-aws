@@ -20,9 +20,6 @@ const (
 	DefaultWindowDuration = 30 * time.Minute
 	// DefaultLeadTime is how long before a window to start scaling
 	DefaultLeadTime = 5 * time.Minute
-	// DefaultActiveImageLookbackDays is how many days to look back when discovering active images.
-	// Images with no utilization in this period are considered obsolete and not predicted for.
-	DefaultActiveImageLookbackDays = 7
 )
 
 // ScalablePool represents a pool and its variants that can be scaled.
@@ -161,7 +158,7 @@ func (s *Scaler) scaleVariantForActiveImages(
 	})
 
 	// Discover active images from utilization history
-	since := time.Now().AddDate(0, 0, -DefaultActiveImageLookbackDays).Unix()
+	since := time.Now().AddDate(0, 0, -s.config.ActiveImageLookbackDays).Unix()
 	activeImages, err := s.historyStore.GetActiveImages(ctx, pool.Name, variantID, since)
 	if err != nil {
 		logr.WithError(err).Errorln("scaler: failed to get active images")

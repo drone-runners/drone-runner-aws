@@ -362,49 +362,8 @@ SET
 WHERE instance_id   = :instance_id
 `
 
-// CountByPoolAndVariant returns instance counts grouped by pool and variant_id.
-func (s InstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
-	stmt := builder.Select(
-		"COALESCE(instance_pool, '') as pool",
-		"COALESCE(variant_id, '') as variant_id",
-		"COUNT(*) as count",
-	).From("instances").
-		GroupBy("instance_pool", "variant_id")
-
-	if status != "" {
-		stmt = stmt.Where(squirrel.Eq{"instance_state": status})
-	}
-
-	query, args, err := stmt.ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build count query: %w", err)
-	}
-
-	type result struct {
-		Pool      string `db:"pool"`
-		VariantID string `db:"variant_id"`
-		Count     int    `db:"count"`
-	}
-
-	var results []result
-	if err := s.db.SelectContext(ctx, &results, query, args...); err != nil {
-		return nil, fmt.Errorf("failed to count instances: %w", err)
-	}
-
-	// Build nested map: pool -> variant_id -> count
-	counts := make(map[string]map[string]int)
-	for _, r := range results {
-		if counts[r.Pool] == nil {
-			counts[r.Pool] = make(map[string]int)
-		}
-		counts[r.Pool][r.VariantID] = r.Count
-	}
-
-	return counts, nil
-}
-
-// CountByPoolVariantAndImage returns instance counts grouped by pool, variant_id, and image.
-func (s InstanceStore) CountByPoolVariantAndImage(ctx context.Context, status types.InstanceState) (map[string]map[string]map[string]int, error) {
+// CountGroupedInstances returns instance counts grouped by pool, variant_id, and image.
+func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
 	stmt := builder.Select(
 		"COALESCE(instance_pool, '') as pool",
 		"COALESCE(variant_id, '') as variant_id",
@@ -422,29 +381,10 @@ func (s InstanceStore) CountByPoolVariantAndImage(ctx context.Context, status ty
 		return nil, fmt.Errorf("failed to build count query: %w", err)
 	}
 
-	type result struct {
-		Pool      string `db:"pool"`
-		VariantID string `db:"variant_id"`
-		Image     string `db:"image"`
-		Count     int    `db:"count"`
-	}
-
-	var results []result
+	var results []types.InstanceCount
 	if err := s.db.SelectContext(ctx, &results, query, args...); err != nil {
 		return nil, fmt.Errorf("failed to count instances: %w", err)
 	}
 
-	// Build nested map: pool -> variant_id -> image -> count
-	counts := make(map[string]map[string]map[string]int)
-	for _, r := range results {
-		if counts[r.Pool] == nil {
-			counts[r.Pool] = make(map[string]map[string]int)
-		}
-		if counts[r.Pool][r.VariantID] == nil {
-			counts[r.Pool][r.VariantID] = make(map[string]int)
-		}
-		counts[r.Pool][r.VariantID][r.Image] = r.Count
-	}
-
-	return counts, nil
+	return results, nil
 }

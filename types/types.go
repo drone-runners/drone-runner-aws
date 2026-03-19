@@ -333,6 +333,16 @@ type ScalerConfig struct {
 	DryRun bool
 	// DisabledPools is a list of pool names that should be skipped during scaling
 	DisabledPools []string
+	// ActiveImageLookbackDays is how many days to look back when discovering active images (default: 2)
+	ActiveImageLookbackDays int
+}
+
+// InstanceCount holds an instance count grouped by pool, variant, and image.
+type InstanceCount struct {
+	Pool      string `db:"pool"`
+	VariantID string `db:"variant_id"`
+	ImageName string `db:"image"`
+	Count     int    `db:"count"`
 }
 
 // MachineConfig contains machine-level configuration properties

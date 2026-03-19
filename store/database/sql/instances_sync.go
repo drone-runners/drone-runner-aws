@@ -65,13 +65,7 @@ func (i InstanceStoreSync) DeleteAndReturn(ctx context.Context, query string, ar
 	panic("implement me")
 }
 
-func (i InstanceStoreSync) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	panic("implement me")
-}
-
-func (i InstanceStoreSync) CountByPoolVariantAndImage(ctx context.Context, status types.InstanceState) (map[string]map[string]map[string]int, error) {
+func (i InstanceStoreSync) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	panic("implement me")

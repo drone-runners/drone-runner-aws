@@ -16,8 +16,7 @@ type InstanceStore interface {
 	Purge(context.Context) error
 	DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error)
 	FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error)
-	CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error)
-	CountByPoolVariantAndImage(ctx context.Context, status types.InstanceState) (map[string]map[string]map[string]int, error)
+	CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error)
 }
 
 type StageOwnerStore interface {

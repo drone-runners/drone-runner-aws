@@ -28,7 +28,7 @@ type mockInstanceStore struct {
 	DeleteFunc                func(ctx context.Context, id string) error
 	UpdateFunc                func(ctx context.Context, instance *types.Instance) error
 	FindAndClaimFunc          func(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error)
-	CountByPoolAndVariantFunc func(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error)
+	CountGroupedInstancesFunc func(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error)
 }
 
 func (m *mockInstanceStore) Find(ctx context.Context, id string) (*types.Instance, error) {
@@ -87,14 +87,10 @@ func (m *mockInstanceStore) FindAndClaim(
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockInstanceStore) CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error) {
-	if m.CountByPoolAndVariantFunc != nil {
-		return m.CountByPoolAndVariantFunc(ctx, status)
+func (m *mockInstanceStore) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
+	if m.CountGroupedInstancesFunc != nil {
+		return m.CountGroupedInstancesFunc(ctx, status)
 	}
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockInstanceStore) CountByPoolVariantAndImage(ctx context.Context, status types.InstanceState) (map[string]map[string]map[string]int, error) {
 	return nil, errors.New("not implemented")
 }
 
