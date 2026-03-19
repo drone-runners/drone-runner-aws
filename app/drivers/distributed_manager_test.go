@@ -67,7 +67,7 @@ func (m *mockDriver) CanHibernate() bool {
 	return false
 }
 
-func TestFilterVariant(t *testing.T) {
+func TestFilterVariants(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	log.Logger.SetLevel(logrus.FatalLevel) // Suppress logs during tests
 	ctx := logger.WithContext(context.Background(), logger.Logrus(log))
@@ -76,7 +76,7 @@ func TestFilterVariant(t *testing.T) {
 		name          string
 		variants      []types.PoolVariant
 		machineConfig *types.MachineConfig
-		expectedID    string // empty string means nil expected
+		expectedIDs   []string // empty slice means nil expected
 	}{
 		{
 			name: "single variant matching resource class",
@@ -93,7 +93,7 @@ func TestFilterVariant(t *testing.T) {
 					ResourceClass: "small",
 				},
 			},
-			expectedID: "variant-1",
+			expectedIDs: []string{"variant-1"},
 		},
 		{
 			name: "no variant matching resource class returns nil",
@@ -110,7 +110,7 @@ func TestFilterVariant(t *testing.T) {
 					ResourceClass: "large",
 				},
 			},
-			expectedID: "",
+			expectedIDs: nil,
 		},
 		{
 			name: "multiple variants, filter by resource class and nested virt",
@@ -136,7 +136,7 @@ func TestFilterVariant(t *testing.T) {
 					NestedVirtualization: true,
 				},
 			},
-			expectedID: "variant-2",
+			expectedIDs: []string{"variant-2"},
 		},
 		{
 			name: "multiple variants, filter by resource class and image name",
@@ -164,10 +164,10 @@ func TestFilterVariant(t *testing.T) {
 					ImageName: "ubuntu-22.04",
 				},
 			},
-			expectedID: "variant-2",
+			expectedIDs: []string{"variant-2"},
 		},
 		{
-			name: "multiple variants match resource class, no refined match, returns first",
+			name: "multiple variants match resource class, no refined match, returns nil",
 			variants: []types.PoolVariant{
 				{
 					SetupInstanceParams: types.SetupInstanceParams{
@@ -192,7 +192,7 @@ func TestFilterVariant(t *testing.T) {
 					ImageName: "centos-7",
 				},
 			},
-			expectedID: "variant-1", // Falls back to first resource class match
+			expectedIDs: nil, // No refined match, returns nil
 		},
 		{
 			name: "exact match with all criteria",
@@ -215,7 +215,36 @@ func TestFilterVariant(t *testing.T) {
 					ImageName: "custom-image",
 				},
 			},
-			expectedID: "variant-1",
+			expectedIDs: []string{"variant-1"},
+		},
+		{
+			name: "returns all matching variants in order",
+			variants: []types.PoolVariant{
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-1",
+						ResourceClass: "medium",
+					},
+				},
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-2",
+						ResourceClass: "medium",
+					},
+				},
+				{
+					SetupInstanceParams: types.SetupInstanceParams{
+						VariantID:     "variant-3",
+						ResourceClass: "medium",
+					},
+				},
+			},
+			machineConfig: &types.MachineConfig{
+				SetupInstanceParams: types.SetupInstanceParams{
+					ResourceClass: "medium",
+				},
+			},
+			expectedIDs: []string{"variant-1", "variant-2", "variant-3"},
 		},
 	}
 
@@ -230,17 +259,26 @@ func TestFilterVariant(t *testing.T) {
 			}
 
 			dm := &DistributedManager{}
-			result := dm.filterVariant(ctx, pool, tt.machineConfig)
+			results := dm.filterVariants(ctx, pool, tt.machineConfig)
 
-			if tt.expectedID == "" {
-				if result != nil {
-					t.Errorf("Expected nil result, got variant %s", result.VariantID)
+			if tt.expectedIDs == nil {
+				if results != nil {
+					t.Errorf("Expected nil result, got %d variants", len(results))
 				}
-			} else {
-				if result == nil {
-					t.Errorf("Expected variant %s, got nil", tt.expectedID)
-				} else if result.VariantID != tt.expectedID {
-					t.Errorf("Expected variant %s, got %s", tt.expectedID, result.VariantID)
+				return
+			}
+
+			if len(results) != len(tt.expectedIDs) {
+				resultIDs := make([]string, len(results))
+				for i, r := range results {
+					resultIDs[i] = r.VariantID
+				}
+				t.Fatalf("Expected %d variants %v, got %d variants %v", len(tt.expectedIDs), tt.expectedIDs, len(results), resultIDs)
+			}
+
+			for i, expectedID := range tt.expectedIDs {
+				if results[i].VariantID != expectedID {
+					t.Errorf("Variant[%d]: expected %s, got %s", i, expectedID, results[i].VariantID)
 				}
 			}
 		})
