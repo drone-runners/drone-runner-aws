@@ -176,6 +176,7 @@ type InstanceCreateOpts struct {
 	DriverName                   string
 	Timeout                      int64
 	EnableC4D                    bool
+	SkipCloudInitPackages        bool
 	CapacityReservation          *CapacityReservation
 	NestedVirtualization         bool
 	EnvmanBinaryURI              string

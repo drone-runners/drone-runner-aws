@@ -41,6 +41,7 @@ type (
 		tmateBinaryURI               string
 		tmateBinaryFallbackURI       string
 		env                          string
+		skipCloudInitPackages        bool
 	}
 
 	poolEntry struct {

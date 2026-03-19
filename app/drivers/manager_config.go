@@ -39,6 +39,7 @@ type ManagerConfig struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	SkipCloudInitPackages        bool
 }
 
 // NewManagerFromConfig creates a new Manager from a ManagerConfig.
@@ -64,6 +65,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		envmanBinaryFallbackURI:      cfg.EnvmanBinaryFallbackURI,
 		tmateBinaryURI:               cfg.TmateBinaryURI,
 		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
+		skipCloudInitPackages:        cfg.SkipCloudInitPackages,
 	}
 }
 
@@ -89,6 +91,7 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		EnvmanBinaryFallbackURI:      envConfig.Settings.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
 		TmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
+		SkipCloudInitPackages:        envConfig.Settings.SkipCloudInitPackages,
 	}
 }
 
