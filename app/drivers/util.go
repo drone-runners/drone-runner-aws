@@ -3,6 +3,7 @@ package drivers
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -18,7 +19,12 @@ func getCallerInfo(skip int) string {
 	if !ok {
 		return "unknown"
 	}
+	return fmt.Sprintf("%s:%d", shortCallerPath(file), line)
+}
+
+func shortCallerPath(file string) string {
 	// Get just the last path components for readability
+	file = strings.ReplaceAll(filepath.ToSlash(file), "\\", "/")
 	short := file
 	count := 0
 	for i := len(file) - 1; i >= 0; i-- {
@@ -30,7 +36,7 @@ func getCallerInfo(skip int) string {
 			}
 		}
 	}
-	return fmt.Sprintf("%s:%d", short, line)
+	return short
 }
 
 func IsHosted(ctx context.Context) bool {
