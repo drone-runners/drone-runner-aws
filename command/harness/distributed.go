@@ -50,29 +50,11 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	}
 
 	// Create a distributed manager
+	managerCfg := drivers.NewManagerConfigFromEnv(cfg.Ctx, instanceStore, cfg.Env)
+	managerCfg.StageOwnerStore = stageOwnerStore
+	managerCfg.CapacityReservationStore = capacityReservationStore
 	poolManager := drivers.NewDistributedManager(
-		drivers.NewManager(
-			cfg.Ctx,
-			instanceStore,
-			stageOwnerStore,
-			capacityReservationStore,
-			types.Tmate(cfg.Env.Tmate),
-			cfg.Env.Runner.Name,
-			cfg.Env.LiteEngine.Path,
-			cfg.Env.Settings.HarnessTestBinaryURI,
-			cfg.Env.Settings.PluginBinaryURI,
-			cfg.Env.Settings.AutoInjectionBinaryURI,
-			cfg.Env.LiteEngine.FallbackPath,
-			cfg.Env.Settings.PluginBinaryFallbackURI,
-			types.RunnerConfig(cfg.Env.RunnerConfig),
-			cfg.Env.Settings.AnnotationsBinaryURI,
-			cfg.Env.Settings.AnnotationsBinaryFallbackURI,
-			cfg.Env.Settings.EnvmanBinaryURI,
-			cfg.Env.Settings.EnvmanBinaryFallbackURI,
-			cfg.Env.Settings.TmateBinaryURI,
-			cfg.Env.Settings.TmateBinaryFallbackURI,
-			cfg.Env.Settings.Env,
-		),
+		drivers.NewManagerFromConfig(&managerCfg),
 		outboxStore,
 	)
 
