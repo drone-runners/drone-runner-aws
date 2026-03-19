@@ -296,8 +296,3 @@ func WithEnableC4D(enableC4D bool) Option {
 	}
 }
 
-func WithSkipCloudInitPackages(skip bool) Option {
-	return func(p *amazonConfig) {
-		p.skipCloudInitPackages = skip
-	}
-}

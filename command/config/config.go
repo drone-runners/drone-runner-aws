@@ -54,8 +54,7 @@ type (
 		Hibernate     bool              `json:"hibernate,omitempty"`
 		User          string            `json:"user,omitempty" yaml:"user,omitempty"`
 		ZoneDetails   []ZoneInfo        `json:"zone_details,omitempty" yaml:"zone_details,omitempty"` // Deprecated
-		EnableC4D              bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
-		SkipCloudInitPackages bool              `json:"skip_cloud_init_packages,omitempty" yaml:"skip_cloud_init_packages,omitempty"`
+		EnableC4D     bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 	}
 
 	ZoneInfo struct {
@@ -230,7 +229,6 @@ type (
 		Hibernate                  bool              `json:"hibernate,omitempty"`
 		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
 		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
-		SkipCloudInitPackages      bool              `json:"skip_cloud_init_packages,omitempty" yaml:"skip_cloud_init_packages,omitempty"`
 	}
 
 	GoogleAccount struct {
@@ -447,6 +445,7 @@ type EnvConfig struct {
 		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
 		TmateBinaryFallbackURI       string   `envconfig:"DRONE_TMATE_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
 		FallbackPoolIDs              []string `envconfig:"DRONE_FALLBACK_POOL_IDS"`
+		SkipCloudInitPackages        bool     `envconfig:"DRONE_SKIP_CLOUD_INIT_PACKAGES" default:"false"`
 	}
 
 	LiteEngine struct {

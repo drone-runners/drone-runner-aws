@@ -123,7 +123,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 					return a.ZoneDetails
 				}()),
 				amazon.WithEnableC4D(a.EnableC4D),
-			amazon.WithSkipCloudInitPackages(a.SkipCloudInitPackages),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
@@ -206,7 +205,6 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				}),
 				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
 				google.WithEnableC4D(g.EnableC4D),
-			google.WithSkipCloudInitPackages(g.SkipCloudInitPackages),
 			)
 			if err != nil {
 				return nil, err
