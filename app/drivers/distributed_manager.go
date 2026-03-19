@@ -145,10 +145,18 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 	}
 
 	// 2. Destroy the claimed instances
-	logrus.WithField("pool", pool.Name).
-		WithField("instance_count", len(instancesToDestroy)).
-		WithField("instances", instancesToDestroy).
-		Infoln("cleaning up instances")
+	instanceIDs := make([]string, len(instancesToDestroy))
+	for i, inst := range instancesToDestroy {
+		instanceIDs[i] = inst.ID
+	}
+	logrus.WithFields(logrus.Fields{
+		"pool":           pool.Name,
+		"instance_count": len(instancesToDestroy),
+		"instance_ids":   instanceIDs,
+		"destroy_busy":   destroyBusy,
+		"destroy_free":   destroyFree,
+		"destroy_caller": "distributed_cleanPool",
+	}).Infoln("cleaning up instances")
 	failedInstances, err := pool.Driver.Destroy(ctx, instancesToDestroy)
 	if err != nil {
 		logrus.WithError(err).Warnf("failed to destroy some instances in pool %q", pool.Name)
@@ -263,7 +271,8 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 			WithField("pool", poolName).
 			WithField("instance_id", reservedCapacity.InstanceID).
 			WithField("hotpool", true).
-			Warnln("provision: failed to get instance from reserved warm pool")
+			WithField("destroy_caller", "distributed_provision:reserved_instance_not_found").
+			Warnln("provision: failed to get instance from reserved warm pool, destroying capacity")
 		_ = d.DestroyCapacity(ctx, reservedCapacity)
 		reservedCapacity = nil
 	}
@@ -579,7 +588,11 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 		ctx := d.globalCtx
 		// Step 1: Wait for instance connectivity
 		if !d.waitForInstanceConnectivity(ctx, tlsServerName, inst.ID) {
-			logrus.WithField("instanceID", inst.ID).Errorln("connectivity check failed, destroying instance and scheduling async setup")
+			logrus.WithFields(logrus.Fields{
+				"instanceID":     inst.ID,
+				"pool":           pool.Name,
+				"destroy_caller": "distributed_hibernator:connectivity_check_failed",
+			}).Errorln("connectivity check failed, destroying instance and scheduling async setup")
 			if derr := d.Destroy(ctx, pool.Name, inst.ID, inst, nil); derr != nil {
 				logrus.WithError(derr).WithField("instanceID", inst.ID).Errorln("failed to cleanup instance after connectivity failure")
 			}
@@ -913,14 +926,24 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 	}
 
 	stageIDs := make([]string, len(capacitiesToDelete))
+	reservationIDs := make([]string, len(capacitiesToDelete))
+	instanceIDs := make([]string, len(capacitiesToDelete))
+	reservationStates := make([]string, len(capacitiesToDelete))
 	for i, c := range capacitiesToDelete {
 		stageIDs[i] = c.StageID
+		reservationIDs[i] = c.ReservationID
+		instanceIDs[i] = c.InstanceID
+		reservationStates[i] = string(c.ReservationState)
 	}
 	logger.FromContext(ctx).
 		WithField("pool", pool.Name).
 		WithField("count", len(capacitiesToDelete)).
 		WithField("stage_ids", stageIDs).
-		Infof("distributed dlite: purger: cleaning up stale capacity reservations")
+		WithField("reservation_ids", reservationIDs).
+		WithField("instance_ids", instanceIDs).
+		WithField("reservation_states", reservationStates).
+		WithField("destroy_caller", "distributed_purger:capacity_cleanup").
+		Infof("distributed dlite: purger: cleaning up %d stale capacity reservations", len(capacitiesToDelete))
 
 	d.destroyCapacityFromReservation(ctx, capacitiesToDelete)
 }
@@ -951,7 +974,9 @@ func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *p
 		instanceNames = append(instanceNames, instance.Name)
 	}
 
-	logr.Infof("distributed dlite: purger: Terminating stale %s instances\n%s", cleanupType, instanceNames)
+	logr.WithField("instance_names", instanceNames).
+		WithField("destroy_caller", "distributed_purger:"+cleanupType).
+		Infof("distributed dlite: purger: Terminating %d stale %s instances", len(instances), cleanupType)
 
 	failedInstances, err := pool.Driver.Destroy(ctx, instances)
 	if err != nil {
@@ -983,9 +1008,15 @@ func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*t
 			if instance.Stage != "" {
 				capacity, _ := d.capacityReservationStore.Find(ctx, instance.Stage)
 				if capacity != nil {
+					logrus.WithFields(logrus.Fields{
+						"instance_id":      instance.ID,
+						"stage_runtime_id": instance.Stage,
+						"reservation_id":   capacity.ReservationID,
+						"destroy_caller":   "distributed_destroyCapacity:post_instance_destroy",
+					}).Infoln("destroy_capacity: destroying capacity reservation for destroyed instance")
 					err := d.DestroyCapacity(ctx, capacity)
 					if err != nil {
-						logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
+						logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store", capacity.StageID)
 					}
 				}
 			}
@@ -998,9 +1029,15 @@ func (d *DistributedManager) destroyCapacityFromReservation(ctx context.Context,
 		// traverse the instances and destroy the capacity reservation
 		for _, capacity := range capacities {
 			if capacity != nil {
+				logrus.WithFields(logrus.Fields{
+					"stage_runtime_id": capacity.StageID,
+					"reservation_id":   capacity.ReservationID,
+					"pool":             capacity.PoolName,
+					"destroy_caller":   "distributed_destroyCapacityFromReservation:stale_reservation",
+				}).Infoln("destroy_capacity: destroying stale capacity reservation")
 				err := d.DestroyCapacity(ctx, capacity)
 				if err != nil {
-					logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store\n", capacity.StageID)
+					logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store", capacity.StageID)
 				}
 			}
 		}

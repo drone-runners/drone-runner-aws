@@ -256,6 +256,11 @@ func HandleSetup(
 		_, findErr := s.Find(noContext, stageRuntimeID)
 		if findErr != nil {
 			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
+				internalLogr.WithFields(logrus.Fields{
+					"instance_id":    instance.ID,
+					"pool":           selectedPool,
+					"destroy_caller": "setup:stage_owner_create_failed",
+				}).Infoln("destroy: cleaning up instance and capacity after stage owner create failure")
 				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil); derr != nil {
 					internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
 				}
@@ -521,6 +526,11 @@ func handleSetup(
 				}
 			}
 		}
+		ilog.WithFields(logrus.Fields{
+			"instance_id":    instanceID,
+			"pool":           pool,
+			"destroy_caller": "setup:le_health_check_failed",
+		}).Infoln("destroy: cleaning up instance and capacity after LE health check failure")
 		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil)
 		if err != nil {
 			ilog.WithError(err).Errorln("failed to cleanup instance on setup failure")

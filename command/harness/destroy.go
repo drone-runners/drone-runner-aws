@@ -112,6 +112,9 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		if crs != nil {
 			capacity, err = crs.Find(ctx, r.StageRuntimeID)
 			if err == nil {
+				logr.WithField("destroy_caller", "destroy_handler:deferred_capacity_cleanup").
+					WithField("reservation_id", capacity.ReservationID).
+					Infoln("destroy_capacity: deferred capacity reservation cleanup")
 				if err := poolManager.DestroyCapacity(ctx, capacity); err != nil {
 					logr.WithError(err).Errorln("failed to destroy capacity reservation")
 				}
@@ -134,7 +137,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 	logr = AddContext(logr, &r.Context, map[string]string{})
 
-	logr.Infoln("starting the destroy process")
+	logr.WithField("destroy_caller", "destroy_handler:api_request").
+		Infoln("starting the destroy process")
 
 	var inst *types.Instance
 	err := common.ValidateStructForKeys(r.InstanceInfo, []string{"ID", "Zone", "PoolName", "StorageIdentifier"})
@@ -209,12 +213,13 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		}
 	}
 
-	logr.Infoln("successfully invoked lite engine cleanup, destroying instance")
+	logr.WithField("destroy_caller", "destroy_handler:api_request").
+		Infoln("successfully invoked lite engine cleanup, destroying instance")
 
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
 		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
-	logr.Infoln("destroyed instance")
+	logr.Infoln("destroy_handler: instance destroyed successfully")
 
 	envState().Delete(r.StageRuntimeID)
 

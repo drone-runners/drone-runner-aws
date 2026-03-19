@@ -49,7 +49,11 @@ func (m *Manager) setupInstanceWithHibernate(
 
 		// Step 1: Wait for instance connectivity
 		if !m.waitForInstanceConnectivity(ctx, tlsServerName, inst.ID) {
-			logrus.WithField("instanceID", inst.ID).Errorln("connectivity check failed, destroying instance")
+			logrus.WithFields(logrus.Fields{
+				"instanceID":     inst.ID,
+				"pool":           pool.Name,
+				"destroy_caller": "hibernator:connectivity_check_failed",
+			}).Errorln("connectivity check failed, destroying instance")
 			if derr := m.Destroy(ctx, pool.Name, inst.ID, inst, nil); derr != nil {
 				logrus.WithError(derr).WithField("instanceID", inst.ID).Errorln("failed to cleanup instance after connectivity failure")
 			}

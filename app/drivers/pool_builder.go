@@ -67,6 +67,12 @@ func (m *Manager) buildPool(
 			instances[i] = instFree[i]
 		}
 
+		instanceIDs := make([]string, len(instances))
+		for i, inst := range instances {
+			instanceIDs[i] = inst.ID
+		}
+		logr.WithField("instance_ids", instanceIDs).
+			Infof("build pool: destroying %d excess instances", shouldRemove)
 		_, err := pool.Driver.Destroy(ctx, instances)
 		if err != nil {
 			logr.WithError(err).Errorln("build pool: failed to destroy excess instances")
