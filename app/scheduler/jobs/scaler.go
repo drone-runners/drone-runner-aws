@@ -381,7 +381,7 @@ func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool Scalable
 
 	counts := make(map[InstanceKey]int)
 	for _, inst := range instances {
-		if inst.State == types.StateCreated || inst.State == types.StateHibernating {
+		if inst.State == types.StateCreated || inst.State == types.StateHibernating || inst.State == types.StateProvisioning {
 			key := InstanceKey{VariantID: inst.VariantID, ImageName: inst.Image}
 			counts[key]++
 		}
