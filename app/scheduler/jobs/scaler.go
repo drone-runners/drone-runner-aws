@@ -178,15 +178,8 @@ func (s *Scaler) scaleVariantForActiveImages(
 		activeImages = []string{""}
 	}
 
-	// Distribute min size across images: first image gets the min, rest get 0
-	// This ensures the pool minimum is maintained without over-provisioning
-	for i, imageName := range activeImages {
-		imageMinSize := 0
-		if i == 0 {
-			imageMinSize = minSize
-		}
-
-		if err := s.scaleVariant(ctx, pool, variantID, imageName, imageMinSize, params, windowStart, windowEnd, freeCounts); err != nil {
+	for _, imageName := range activeImages {
+		if err := s.scaleVariant(ctx, pool, variantID, imageName, minSize, params, windowStart, windowEnd, freeCounts); err != nil {
 			logr.WithError(err).WithField("image_name", imageName).
 				Errorln("scaler: failed to scale variant for image")
 		}
