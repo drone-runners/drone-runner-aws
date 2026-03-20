@@ -530,13 +530,15 @@ func TestScaler_GetFreeInstanceCountsForPool(t *testing.T) {
 	}
 
 	// Check default variant, image-a: should have 2 free (1 created + 1 hibernating)
-	if counts["default"]["image-a"] != 2 {
-		t.Errorf("expected 2 free instances for default/image-a, got %d", counts["default"]["image-a"])
+	keyDefaultA := InstanceKey{VariantID: "default", ImageName: "image-a"}
+	if counts[keyDefaultA] != 2 {
+		t.Errorf("expected 2 free instances for default/image-a, got %d", counts[keyDefaultA])
 	}
 
 	// Check variant-1, image-b: should have 1 free
-	if counts["variant-1"]["image-b"] != 1 {
-		t.Errorf("expected 1 free instance for variant-1/image-b, got %d", counts["variant-1"]["image-b"])
+	keyVariant1B := InstanceKey{VariantID: "variant-1", ImageName: "image-b"}
+	if counts[keyVariant1B] != 1 {
+		t.Errorf("expected 1 free instance for variant-1/image-b, got %d", counts[keyVariant1B])
 	}
 }
 

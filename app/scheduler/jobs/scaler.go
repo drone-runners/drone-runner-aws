@@ -36,6 +36,13 @@ type ScalableVariant struct {
 	Params  types.SetupInstanceParams
 }
 
+// InstanceKey identifies a unique combination of dimensions for counting free instances.
+// Add new fields here when new scaling dimensions are introduced.
+type InstanceKey struct {
+	VariantID string
+	ImageName string
+}
+
 // Scaler handles scaling pools up and down based on predictions.
 type Scaler struct {
 	manager       *drivers.DistributedManager
@@ -108,12 +115,12 @@ func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, wi
 	}
 
 	// Get current free instance counts for this pool, grouped by (variant, image)
-	freeCountsByVariantImage, err := s.getFreeInstanceCountsForPool(ctx, *targetPool)
+	freeCounts, err := s.getFreeInstanceCountsForPool(ctx, *targetPool)
 	if err != nil {
 		return fmt.Errorf("scaler: failed to get free instance counts: %w", err)
 	}
 
-	s.scalePoolInternal(ctx, *targetPool, windowStart, windowEnd, freeCountsByVariantImage)
+	s.scalePoolInternal(ctx, *targetPool, windowStart, windowEnd, freeCounts)
 
 	logrus.WithField("pool", poolName).Infoln("scaler: scaling operation completed for pool")
 	return nil
@@ -125,18 +132,18 @@ func (s *Scaler) scalePoolInternal(
 	ctx context.Context,
 	pool ScalablePool,
 	windowStart, windowEnd int64,
-	freeCountsByVariantImage map[string]map[string]int,
+	freeCounts map[InstanceKey]int,
 ) {
 	logr := logrus.WithField("pool", pool.Name)
 
 	// Scale the default variant (pool itself)
-	s.scaleVariantForActiveImages(ctx, pool, "default", pool.MinSize, nil, windowStart, windowEnd, freeCountsByVariantImage)
+	s.scaleVariantForActiveImages(ctx, pool, "default", pool.MinSize, nil, windowStart, windowEnd, freeCounts)
 
 	// Scale each variant
 	for i := range pool.Variants {
 		variant := &pool.Variants[i]
 		params := variant.Params // Copy to avoid pointer issues
-		s.scaleVariantForActiveImages(ctx, pool, params.VariantID, variant.MinSize, &params, windowStart, windowEnd, freeCountsByVariantImage)
+		s.scaleVariantForActiveImages(ctx, pool, params.VariantID, variant.MinSize, &params, windowStart, windowEnd, freeCounts)
 	}
 
 	logr.Debugln("scaler: finished scaling all variants and images")
@@ -150,7 +157,7 @@ func (s *Scaler) scaleVariantForActiveImages(
 	minSize int,
 	params *types.SetupInstanceParams,
 	windowStart, windowEnd int64,
-	freeCountsByVariantImage map[string]map[string]int,
+	freeCounts map[InstanceKey]int,
 ) {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       pool.Name,
@@ -179,7 +186,7 @@ func (s *Scaler) scaleVariantForActiveImages(
 			imageMinSize = minSize
 		}
 
-		if err := s.scaleVariant(ctx, pool, variantID, imageName, imageMinSize, params, windowStart, windowEnd, freeCountsByVariantImage); err != nil {
+		if err := s.scaleVariant(ctx, pool, variantID, imageName, imageMinSize, params, windowStart, windowEnd, freeCounts); err != nil {
 			logr.WithError(err).WithField("image_name", imageName).
 				Errorln("scaler: failed to scale variant for image")
 		}
@@ -194,7 +201,7 @@ func (s *Scaler) scaleVariant(
 	minSize int,
 	params *types.SetupInstanceParams,
 	windowStart, windowEnd int64,
-	freeCountsByVariantImage map[string]map[string]int,
+	freeCounts map[InstanceKey]int,
 ) error {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       pool.Name,
@@ -214,13 +221,9 @@ func (s *Scaler) scaleVariant(
 		return fmt.Errorf("failed to get prediction: %w", err)
 	}
 
-	// Get current free count for this (variant, image) combination
-	currentFree := 0
-	if imageCounts, ok := freeCountsByVariantImage[variantID]; ok {
-		if count, ok := imageCounts[imageName]; ok {
-			currentFree = count
-		}
-	}
+	// Get current free count for this instance key combination
+	key := InstanceKey{VariantID: variantID, ImageName: imageName}
+	currentFree := freeCounts[key]
 
 	// Ensure we never go below min size
 	targetCount := prediction.RecommendedInstances
@@ -376,24 +379,22 @@ func (s *Scaler) scaleDown(
 	logr.WithField("destroyed_count", destroyedCount).Infoln("scaler: scale down complete")
 }
 
-// getFreeInstanceCountsForPool returns a nested map of variant -> image -> free count for a specific pool.
-func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool ScalablePool) (map[string]map[string]int, error) {
+// getFreeInstanceCountsForPool returns free instance counts keyed by InstanceKey for a specific pool.
+func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool ScalablePool) (map[InstanceKey]int, error) {
 	instances, err := s.instanceStore.List(ctx, pool.Name, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list instances for pool %s: %w", pool.Name, err)
 	}
 
-	variantImageCounts := make(map[string]map[string]int)
+	counts := make(map[InstanceKey]int)
 	for _, inst := range instances {
 		if inst.State == types.StateCreated || inst.State == types.StateHibernating {
-			if variantImageCounts[inst.VariantID] == nil {
-				variantImageCounts[inst.VariantID] = make(map[string]int)
-			}
-			variantImageCounts[inst.VariantID][inst.Image]++
+			key := InstanceKey{VariantID: inst.VariantID, ImageName: inst.Image}
+			counts[key]++
 		}
 	}
 
-	return variantImageCounts, nil
+	return counts, nil
 }
 
 // isPoolDisabled checks if the given pool name is in the disabled pools list.
