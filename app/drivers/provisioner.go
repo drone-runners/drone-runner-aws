@@ -251,6 +251,8 @@ func (m *Manager) setupInstance(
 	createOptions.EnvmanBinaryFallbackURI = m.envmanBinaryFallbackURI
 	createOptions.TmateBinaryURI = m.tmateBinaryURI
 	createOptions.TmateBinaryFallbackURI = m.tmateBinaryFallbackURI
+	createOptions.OtelEnabled = m.otelEnabled
+	createOptions.OtelEndpoint = m.otelEndpoint
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:                   agentConfig.Secret,

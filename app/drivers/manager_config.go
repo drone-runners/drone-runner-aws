@@ -40,6 +40,8 @@ type ManagerConfig struct {
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
 	SkipCloudInitPackages        bool
+	OtelEnabled                  bool
+	OtelEndpoint                 string
 }
 
 // NewManagerFromConfig creates a new Manager from a ManagerConfig.
@@ -66,6 +68,8 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		tmateBinaryURI:               cfg.TmateBinaryURI,
 		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
 		skipCloudInitPackages:        cfg.SkipCloudInitPackages,
+		otelEnabled:                  cfg.OtelEnabled,
+		otelEndpoint:                 cfg.OtelEndpoint,
 	}
 }
 
@@ -92,6 +96,8 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
 		TmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
 		SkipCloudInitPackages:        envConfig.Settings.SkipCloudInitPackages,
+		OtelEnabled:                  envConfig.Settings.OtelEnabled,
+		OtelEndpoint:                 envConfig.Settings.OtelEndpoint,
 	}
 }
 

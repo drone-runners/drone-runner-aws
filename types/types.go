@@ -183,6 +183,8 @@ type InstanceCreateOpts struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	OtelEnabled                  bool
+	OtelEndpoint                 string
 }
 
 // Platform defines the target platform.

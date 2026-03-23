@@ -260,6 +260,56 @@ runcmd:
   - echo "CLOUD_DRIVER={{ .DriverName }}" >> /root/.env
   - /usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &
   
+  {{ if and .OtelEnabled .OtelEndpoint }}
+  # Install and start OTel Collector for log forwarding
+  - |
+    OTEL_VERSION="0.148.0"
+    ARCH="{{ .Platform.Arch }}"
+    wget -nv "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${ARCH}.deb" -O /tmp/otelcol.deb && \
+    dpkg -i /tmp/otelcol.deb && rm /tmp/otelcol.deb || echo "Failed to install otelcol-contrib"
+  - |
+    mkdir -p /etc/otelcol-contrib
+    cat > /etc/otelcol-contrib/config.yaml <<'OTELEOF'
+    receivers:
+      filelog:
+        include:
+          - /var/log/lite-engine.log
+        start_at: beginning
+        include_file_path: true
+        operators:
+          - type: json_parser
+            if: 'body matches "^\\{.*"'
+            on_error: send
+          - type: regex_parser
+            if: 'body matches "^time="'
+            regex: '^time="(?P<time>[^"]+)" level=(?P<level>[^ ]+) msg="(?P<msg>[^"]*)"'
+            on_error: send
+    processors:
+      batch:
+        timeout: 2s
+        send_batch_size: 500
+      resource:
+        attributes:
+          - key: service.name
+            value: lite-engine-vm
+            action: insert
+          - key: infra.type
+            value: vm
+            action: insert
+    exporters:
+      otlp_http:
+        endpoint: {{ .OtelEndpoint }}
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [batch, resource]
+          exporters: [otlp_http]
+    OTELEOF
+  - systemctl enable otelcol-contrib 2>/dev/null || true
+  - systemctl start otelcol-contrib 2>/dev/null || nohup /usr/bin/otelcol-contrib --config /etc/otelcol-contrib/config.yaml > /var/log/otelcol.log 2>&1 &
+  {{ end }}
+  
   # Setup tmate if enabled
   {{ if .Tmate.Enabled }}
   - mkdir /addon

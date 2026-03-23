@@ -45,6 +45,8 @@ type Params struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	OtelEnabled                  bool
+	OtelEndpoint                 string
 }
 
 var funcs = map[string]interface{}{

@@ -445,12 +445,14 @@ type EnvConfig struct {
 		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
 		TmateBinaryFallbackURI       string   `envconfig:"DRONE_TMATE_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
 		FallbackPoolIDs              []string `envconfig:"DRONE_FALLBACK_POOL_IDS"`
+		OtelEnabled                  bool     `envconfig:"DRONE_VM_OTEL_ENABLED" default:"false"`
+		OtelEndpoint                 string   `envconfig:"DRONE_VM_OTEL_ENDPOINT"`
 		SkipCloudInitPackages        bool     `envconfig:"DRONE_SKIP_CLOUD_INIT_PACKAGES" default:"false"`
 	}
 
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.162-debug-dual-2/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.162-debug-dual-2/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.162-debug-dual-3/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.162-debug-dual-3/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}

@@ -40,6 +40,8 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		EnvmanBinaryFallbackURI:      opts.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               opts.TmateBinaryURI,
 		TmateBinaryFallbackURI:       opts.TmateBinaryFallbackURI,
+		OtelEnabled:                  opts.OtelEnabled,
+		OtelEndpoint:                 opts.OtelEndpoint,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
 		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
