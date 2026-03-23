@@ -5,6 +5,26 @@ import (
 	"testing"
 )
 
+const (
+	zoneUSCentral1A = "us-central1-a"
+	zoneUSCentral1B = "us-central1-b"
+	zoneUSCentral1C = "us-central1-c"
+	zoneUSEast1B    = "us-east1-b"
+	zoneUSWest1A    = "us-west1-a"
+	zoneUSWest1C    = "us-west1-c"
+	zoneEuropeW1B   = "europe-west1-b"
+
+	networkVPCCentral        = "projects/proj/global/networks/vpc-central"
+	networkVPCEast           = "projects/proj/global/networks/vpc-east"
+	networkDefaultVPC        = "projects/proj/global/networks/default-vpc"
+	networkVPC1              = "projects/proj/global/networks/vpc-1"
+	subnetworkCentral        = "projects/proj/regions/us-central1/subnetworks/sub-central"
+	subnetworkEast           = "projects/proj/regions/us-east1/subnetworks/sub-east"
+	subnetworkDefaultCentral = "projects/proj/regions/us-east1/subnetworks/default-sub"
+
+	tagTag1 = "tag-1"
+)
+
 // --- selectNetwork ---
 
 func TestSelectNetwork_NoNetworkConfigs_FallsBackToSingleFields(t *testing.T) {
@@ -12,7 +32,7 @@ func TestSelectNetwork_NoNetworkConfigs_FallsBackToSingleFields(t *testing.T) {
 		network:    "my-vpc",
 		subnetwork: "my-subnet",
 		tags:       []string{"tag-a"},
-		zones:      []string{"us-central1-a"},
+		zones:      []string{zoneUSCentral1A},
 	}
 
 	nc := p.selectNetwork("")
@@ -26,7 +46,7 @@ func TestSelectNetwork_NoNetworkConfigs_FallsBackToSingleFields(t *testing.T) {
 	if len(nc.tags) != 1 || nc.tags[0] != "tag-a" {
 		t.Errorf("tags: want [tag-a], got %v", nc.tags)
 	}
-	if len(nc.zones) != 1 || nc.zones[0] != "us-central1-a" {
+	if len(nc.zones) != 1 || nc.zones[0] != zoneUSCentral1A {
 		t.Errorf("zones: want [us-central1-a], got %v", nc.zones)
 	}
 }
@@ -34,12 +54,12 @@ func TestSelectNetwork_NoNetworkConfigs_FallsBackToSingleFields(t *testing.T) {
 func TestSelectNetwork_WithZone_MatchesEntry(t *testing.T) {
 	p := &config{
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{"us-east1-b", "us-east1-c"}},
-			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{"us-central1-a", "us-central1-b"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{zoneUSEast1B, "us-east1-c"}},
+			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{zoneUSCentral1A, zoneUSCentral1B}},
 		},
 	}
 
-	nc := p.selectNetwork("us-central1-a")
+	nc := p.selectNetwork(zoneUSCentral1A)
 
 	if nc.network != "vpc-central" {
 		t.Errorf("want vpc-central, got %s", nc.network)
@@ -49,8 +69,8 @@ func TestSelectNetwork_WithZone_MatchesEntry(t *testing.T) {
 func TestSelectNetwork_WithZone_NoMatch_FallsBackToFirst(t *testing.T) {
 	p := &config{
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", zones: []string{"us-east1-b"}},
-			{network: "vpc-central", zones: []string{"us-central1-a"}},
+			{network: "vpc-east", zones: []string{zoneUSEast1B}},
+			{network: "vpc-central", zones: []string{zoneUSCentral1A}},
 		},
 	}
 
@@ -116,11 +136,11 @@ func TestSelectNetwork_RoundRobin_Concurrent(t *testing.T) {
 // --- allZones ---
 
 func TestAllZones_NoNetworkConfigs(t *testing.T) {
-	p := &config{zones: []string{"us-central1-a", "us-central1-b"}}
+	p := &config{zones: []string{zoneUSCentral1A, zoneUSCentral1B}}
 
 	zones := p.allZones()
 
-	if len(zones) != 2 || zones[0] != "us-central1-a" || zones[1] != "us-central1-b" {
+	if len(zones) != 2 || zones[0] != zoneUSCentral1A || zones[1] != zoneUSCentral1B {
 		t.Errorf("want pool zones, got %v", zones)
 	}
 }
@@ -129,14 +149,14 @@ func TestAllZones_FromNetworkConfigs_Deduplicated(t *testing.T) {
 	p := &config{
 		zones: []string{"fallback-zone"},
 		networkConfigs: []networkConfig{
-			{zones: []string{"us-east1-b", "us-central1-a"}},
-			{zones: []string{"us-central1-a", "us-west1-a"}}, // us-central1-a is a duplicate
+			{zones: []string{zoneUSEast1B, zoneUSCentral1A}},
+			{zones: []string{zoneUSCentral1A, zoneUSWest1A}}, // us-central1-a is a duplicate
 		},
 	}
 
 	zones := p.allZones()
 
-	expected := map[string]bool{"us-east1-b": true, "us-central1-a": true, "us-west1-a": true}
+	expected := map[string]bool{zoneUSEast1B: true, zoneUSCentral1A: true, zoneUSWest1A: true}
 	if len(zones) != len(expected) {
 		t.Fatalf("want %d zones, got %d: %v", len(expected), len(zones), zones)
 	}
@@ -168,10 +188,10 @@ func TestResolve_SimpleNames_FullyQualified(t *testing.T) {
 	nc := &networkConfig{
 		network:    "my-vpc",
 		subnetwork: "my-subnet",
-		tags:       []string{"tag-1", "tag-2"},
+		tags:       []string{tagTag1, "tag-2"},
 	}
 
-	network, subnetwork, zone, tags := nc.resolve("my-project", "us-central1-a", getRegion)
+	network, subnetwork, zone, tags := nc.resolve("my-project", zoneUSCentral1A, getRegion)
 
 	if network != "projects/my-project/global/networks/my-vpc" {
 		t.Errorf("network: got %s", network)
@@ -179,10 +199,10 @@ func TestResolve_SimpleNames_FullyQualified(t *testing.T) {
 	if subnetwork != "projects/my-project/regions/us-central1/subnetworks/my-subnet" {
 		t.Errorf("subnetwork: got %s", subnetwork)
 	}
-	if zone != "us-central1-a" {
+	if zone != zoneUSCentral1A {
 		t.Errorf("zone: want us-central1-a, got %s", zone)
 	}
-	if len(tags) != 2 || tags[0] != "tag-1" {
+	if len(tags) != 2 || tags[0] != tagTag1 {
 		t.Errorf("tags: got %v", tags)
 	}
 }
@@ -194,7 +214,7 @@ func TestResolve_FullyQualifiedPaths_PassedThrough(t *testing.T) {
 		tags:       []string{"custom-tag"},
 	}
 
-	network, subnetwork, _, _ := nc.resolve("my-project", "us-central1-a", getRegion)
+	network, subnetwork, _, _ := nc.resolve("my-project", zoneUSCentral1A, getRegion)
 
 	if network != "projects/other-project/global/networks/custom" {
 		t.Errorf("network should pass through, got %s", network)
@@ -209,7 +229,7 @@ func TestResolve_EmptyFields(t *testing.T) {
 		tags: []string{"tag"},
 	}
 
-	network, subnetwork, zone, _ := nc.resolve("proj", "us-central1-a", getRegion)
+	network, subnetwork, zone, _ := nc.resolve("proj", zoneUSCentral1A, getRegion)
 
 	if network != "" {
 		t.Errorf("network: want empty, got %s", network)
@@ -217,7 +237,7 @@ func TestResolve_EmptyFields(t *testing.T) {
 	if subnetwork != "" {
 		t.Errorf("subnetwork: want empty, got %s", subnetwork)
 	}
-	if zone != "us-central1-a" {
+	if zone != zoneUSCentral1A {
 		t.Errorf("zone: want us-central1-a, got %s", zone)
 	}
 }
@@ -225,12 +245,12 @@ func TestResolve_EmptyFields(t *testing.T) {
 func TestResolve_NoZoneFallback_PicksFromEntry(t *testing.T) {
 	nc := &networkConfig{
 		network: "vpc",
-		zones:   []string{"us-west1-a"},
+		zones:   []string{zoneUSWest1A},
 	}
 
-	_, _, zone, _ := nc.resolve("proj", "", getRegion)
+	_, _, zone, _ := nc.resolve("proj", "", getRegion) //nolint:dogsled
 
-	if zone != "us-west1-a" {
+	if zone != zoneUSWest1A {
 		t.Errorf("zone: want us-west1-a, got %s", zone)
 	}
 }
@@ -239,12 +259,12 @@ func TestResolve_RegionZone_OverridesEntryZones(t *testing.T) {
 	nc := &networkConfig{
 		network:    "vpc",
 		subnetwork: "sub",
-		zones:      []string{"us-east1-b", "us-east1-c"},
+		zones:      []string{zoneUSEast1B, "us-east1-c"},
 	}
 
-	_, subnetwork, zone, _ := nc.resolve("proj", "us-central1-a", getRegion)
+	_, subnetwork, zone, _ := nc.resolve("proj", zoneUSCentral1A, getRegion)
 
-	if zone != "us-central1-a" {
+	if zone != zoneUSCentral1A {
 		t.Errorf("zone: want us-central1-a (passed in), got %s", zone)
 	}
 	// subnetwork region should use the passed-in zone, not entry zones
@@ -261,7 +281,7 @@ func TestResolve_MultipleEntryZones_PicksOne(t *testing.T) {
 
 	seen := map[string]bool{}
 	for i := 0; i < 100; i++ {
-		_, _, zone, _ := nc.resolve("proj", "", getRegion)
+		_, _, zone, _ := nc.resolve("proj", "", getRegion) //nolint:dogsled
 		seen[zone] = true
 	}
 
@@ -330,17 +350,17 @@ func TestSelectAndResolve_NoConfigs_SingleFields(t *testing.T) {
 		network:    "default-vpc",
 		subnetwork: "default-sub",
 		tags:       []string{"allow-dlite"},
-		zones:      []string{"us-central1-a", "us-central1-b"},
+		zones:      []string{zoneUSCentral1A, zoneUSCentral1B},
 	}
 
 	nc := p.selectNetwork("")
 	network, subnetwork, zone, tags := nc.resolve(p.projectID, "", p.GetRegion)
 
-	if network != "projects/proj/global/networks/default-vpc" {
+	if network != networkDefaultVPC {
 		t.Errorf("network: got %s", network)
 	}
 	// Zone should be picked from entry zones
-	if zone != "us-central1-a" && zone != "us-central1-b" {
+	if zone != zoneUSCentral1A && zone != zoneUSCentral1B {
 		t.Errorf("zone: want one of pool zones, got %s", zone)
 	}
 	if subnetwork == "" {
@@ -355,21 +375,21 @@ func TestSelectAndResolve_WithConfigs_ZoneMatch(t *testing.T) {
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east-tag"}, zones: []string{"us-east1-b"}},
-			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central-tag"}, zones: []string{"us-central1-a"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east-tag"}, zones: []string{zoneUSEast1B}},
+			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central-tag"}, zones: []string{zoneUSCentral1A}},
 		},
 	}
 
-	nc := p.selectNetwork("us-central1-a")
-	network, subnetwork, zone, tags := nc.resolve(p.projectID, "us-central1-a", p.GetRegion)
+	nc := p.selectNetwork(zoneUSCentral1A)
+	network, subnetwork, zone, tags := nc.resolve(p.projectID, zoneUSCentral1A, p.GetRegion)
 
-	if network != "projects/proj/global/networks/vpc-central" {
+	if network != networkVPCCentral {
 		t.Errorf("network: got %s", network)
 	}
-	if subnetwork != "projects/proj/regions/us-central1/subnetworks/sub-central" {
+	if subnetwork != subnetworkCentral {
 		t.Errorf("subnetwork: got %s", subnetwork)
 	}
-	if zone != "us-central1-a" {
+	if zone != zoneUSCentral1A {
 		t.Errorf("zone: got %s", zone)
 	}
 	if len(tags) != 1 || tags[0] != "central-tag" {
@@ -381,8 +401,8 @@ func TestSelectAndResolve_WithConfigs_RoundRobin_PicksZone(t *testing.T) {
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
-			{network: "vpc-a", subnetwork: "sub-a", tags: []string{"a"}, zones: []string{"us-east1-b"}},
-			{network: "vpc-b", subnetwork: "sub-b", tags: []string{"b"}, zones: []string{"us-west1-a"}},
+			{network: "vpc-a", subnetwork: "sub-a", tags: []string{"a"}, zones: []string{zoneUSEast1B}},
+			{network: "vpc-b", subnetwork: "sub-b", tags: []string{"b"}, zones: []string{zoneUSWest1A}},
 		},
 	}
 
@@ -396,7 +416,7 @@ func TestSelectAndResolve_WithConfigs_RoundRobin_PicksZone(t *testing.T) {
 	if sub1 != "projects/proj/regions/us-east1/subnetworks/sub-a" {
 		t.Errorf("call 1 subnetwork: got %s", sub1)
 	}
-	if zone1 != "us-east1-b" {
+	if zone1 != zoneUSEast1B {
 		t.Errorf("call 1 zone: got %s", zone1)
 	}
 	if tags1[0] != "a" {
@@ -410,7 +430,7 @@ func TestSelectAndResolve_WithConfigs_RoundRobin_PicksZone(t *testing.T) {
 	if net2 != "projects/proj/global/networks/vpc-b" {
 		t.Errorf("call 2 network: got %s", net2)
 	}
-	if zone2 != "us-west1-a" {
+	if zone2 != zoneUSWest1A {
 		t.Errorf("call 2 zone: got %s", zone2)
 	}
 }
@@ -419,7 +439,7 @@ func TestSelectAndResolve_CapacityReservationZone_OverridesRoundRobin(t *testing
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{"us-east1-b"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{zoneUSEast1B}},
 			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{"us-central1-c"}},
 		},
 	}
@@ -429,7 +449,7 @@ func TestSelectAndResolve_CapacityReservationZone_OverridesRoundRobin(t *testing
 	nc := p.selectNetwork("us-central1-c")
 	network, _, zone, _ := nc.resolve(p.projectID, "us-central1-c", p.GetRegion)
 
-	if network != "projects/proj/global/networks/vpc-central" {
+	if network != networkVPCCentral {
 		t.Errorf("want vpc-central for reservation zone, got %s", network)
 	}
 	if zone != "us-central1-c" {
@@ -446,21 +466,21 @@ func TestResolveNetworkAndZone_NoConfigs_NoRequestZones(t *testing.T) {
 		projectID:  "proj",
 		network:    "default-vpc",
 		subnetwork: "default-sub",
-		tags:       []string{"tag-1"},
-		zones:      []string{"us-central1-a", "us-central1-b"},
+		tags:       []string{tagTag1},
+		zones:      []string{zoneUSCentral1A, zoneUSCentral1B},
 	}
 
 	zone, network, _, tags := p.resolveNetworkAndZone("", nil)
 
 	// No networkConfigs fallback creates a networkConfig with p.zones,
 	// so resolve picks a random zone from the entry
-	if zone != "us-central1-a" && zone != "us-central1-b" {
+	if zone != zoneUSCentral1A && zone != zoneUSCentral1B {
 		t.Errorf("zone: want one of pool zones, got %s", zone)
 	}
-	if network != "projects/proj/global/networks/default-vpc" {
+	if network != networkDefaultVPC {
 		t.Errorf("network: got %s", network)
 	}
-	if len(tags) != 1 || tags[0] != "tag-1" {
+	if len(tags) != 1 || tags[0] != tagTag1 {
 		t.Errorf("tags: got %v", tags)
 	}
 }
@@ -470,23 +490,23 @@ func TestResolveNetworkAndZone_NoConfigs_WithRequestZones(t *testing.T) {
 		projectID:  "proj",
 		network:    "default-vpc",
 		subnetwork: "default-sub",
-		tags:       []string{"tag-1"},
-		zones:      []string{"us-central1-a"},
+		tags:       []string{tagTag1},
+		zones:      []string{zoneUSCentral1A},
 	}
 
-	zone, network, subnetwork, tags := p.resolveNetworkAndZone("", []string{"us-east1-b"})
+	zone, network, subnetwork, tags := p.resolveNetworkAndZone("", []string{zoneUSEast1B})
 
-	if zone != "us-east1-b" {
+	if zone != zoneUSEast1B {
 		t.Errorf("zone: want us-east1-b (from request), got %s", zone)
 	}
-	if network != "projects/proj/global/networks/default-vpc" {
+	if network != networkDefaultVPC {
 		t.Errorf("network: got %s", network)
 	}
 	// Subnetwork region should be derived from the request zone
 	if subnetwork != "projects/proj/regions/us-east1/subnetworks/default-sub" {
 		t.Errorf("subnetwork: got %s", subnetwork)
 	}
-	if len(tags) != 1 || tags[0] != "tag-1" {
+	if len(tags) != 1 || tags[0] != tagTag1 {
 		t.Errorf("tags: got %v", tags)
 	}
 }
@@ -497,10 +517,10 @@ func TestResolveNetworkAndZone_NoConfigs_ReservationZone_OverridesRequestZone(t 
 		network:    "my-vpc",
 		subnetwork: "my-sub",
 		tags:       []string{"t"},
-		zones:      []string{"us-central1-a"},
+		zones:      []string{zoneUSCentral1A},
 	}
 
-	zone, _, subnetwork, _ := p.resolveNetworkAndZone("us-west1-c", []string{"us-east1-b"})
+	zone, _, subnetwork, _ := p.resolveNetworkAndZone("us-west1-c", []string{zoneUSEast1B})
 
 	// Reservation zone has highest priority
 	if zone != "us-west1-c" {
@@ -515,12 +535,12 @@ func TestResolveNetworkAndZone_NoConfigs_ReservationZone_OverridesRequestZone(t 
 func TestResolveNetworkAndZone_NoConfigs_EmptyNetwork(t *testing.T) {
 	p := &config{
 		projectID: "proj",
-		zones:     []string{"us-central1-a"},
+		zones:     []string{zoneUSCentral1A},
 	}
 
 	zone, network, subnetwork, _ := p.resolveNetworkAndZone("", nil)
 
-	if zone != "us-central1-a" {
+	if zone != zoneUSCentral1A {
 		t.Errorf("zone: got %s", zone)
 	}
 	if network != "" {
@@ -538,15 +558,15 @@ func TestResolveNetworkAndZone_WithConfigs_NoRequestZones_RoundRobin(t *testing.
 		projectID: "proj",
 		zones:     []string{"fallback-zone"},
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{"us-east1-b"}},
-			{network: "vpc-west", subnetwork: "sub-west", tags: []string{"west"}, zones: []string{"us-west1-a"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{zoneUSEast1B}},
+			{network: "vpc-west", subnetwork: "sub-west", tags: []string{"west"}, zones: []string{zoneUSWest1A}},
 		},
 	}
 
 	// First call: round-robin picks vpc-east
 	zone1, net1, sub1, tags1 := p.resolveNetworkAndZone("", nil)
 
-	if zone1 != "us-east1-b" {
+	if zone1 != zoneUSEast1B {
 		t.Errorf("call 1 zone: want us-east1-b, got %s", zone1)
 	}
 	if net1 != "projects/proj/global/networks/vpc-east" {
@@ -562,7 +582,7 @@ func TestResolveNetworkAndZone_WithConfigs_NoRequestZones_RoundRobin(t *testing.
 	// Second call: round-robin picks vpc-west
 	zone2, net2, _, tags2 := p.resolveNetworkAndZone("", nil)
 
-	if zone2 != "us-west1-a" {
+	if zone2 != zoneUSWest1A {
 		t.Errorf("call 2 zone: want us-west1-a, got %s", zone2)
 	}
 	if net2 != "projects/proj/global/networks/vpc-west" {
@@ -577,21 +597,21 @@ func TestResolveNetworkAndZone_WithConfigs_RequestZone_MatchesEntry(t *testing.T
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{"us-east1-b", "us-east1-c"}},
-			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{"us-central1-a", "us-central1-c"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{zoneUSEast1B, "us-east1-c"}},
+			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{zoneUSCentral1A, "us-central1-c"}},
 		},
 	}
 
-	zone, net, sub, tags := p.resolveNetworkAndZone("", []string{"us-central1-a"})
+	zone, net, sub, tags := p.resolveNetworkAndZone("", []string{zoneUSCentral1A})
 
 	// Request zone us-central1-a matches vpc-central
-	if zone != "us-central1-a" {
+	if zone != zoneUSCentral1A {
 		t.Errorf("zone: want us-central1-a, got %s", zone)
 	}
-	if net != "projects/proj/global/networks/vpc-central" {
+	if net != networkVPCCentral {
 		t.Errorf("network: want vpc-central, got %s", net)
 	}
-	if sub != "projects/proj/regions/us-central1/subnetworks/sub-central" {
+	if sub != subnetworkCentral {
 		t.Errorf("subnetwork: got %s", sub)
 	}
 	if tags[0] != "central" {
@@ -603,8 +623,8 @@ func TestResolveNetworkAndZone_WithConfigs_RequestZone_NoMatch_FallsBackToFirst(
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{"us-east1-b"}},
-			{network: "vpc-west", subnetwork: "sub-west", tags: []string{"west"}, zones: []string{"us-west1-a"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{zoneUSEast1B}},
+			{network: "vpc-west", subnetwork: "sub-west", tags: []string{"west"}, zones: []string{zoneUSWest1A}},
 		},
 	}
 
@@ -623,7 +643,7 @@ func TestResolveNetworkAndZone_WithConfigs_ReservationZone_MatchesEntry(t *testi
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{"us-east1-b"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{zoneUSEast1B}},
 			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{"us-central1-c"}},
 		},
 	}
@@ -634,10 +654,10 @@ func TestResolveNetworkAndZone_WithConfigs_ReservationZone_MatchesEntry(t *testi
 	if zone != "us-central1-c" {
 		t.Errorf("zone: want us-central1-c, got %s", zone)
 	}
-	if net != "projects/proj/global/networks/vpc-central" {
+	if net != networkVPCCentral {
 		t.Errorf("network: want vpc-central, got %s", net)
 	}
-	if sub != "projects/proj/regions/us-central1/subnetworks/sub-central" {
+	if sub != subnetworkCentral {
 		t.Errorf("subnetwork: got %s", sub)
 	}
 	if tags[0] != "central" {
@@ -649,18 +669,18 @@ func TestResolveNetworkAndZone_WithConfigs_ReservationZone_OverridesRequestZone(
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
-			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{"us-east1-b"}},
-			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{"us-central1-a"}},
+			{network: "vpc-east", subnetwork: "sub-east", tags: []string{"east"}, zones: []string{zoneUSEast1B}},
+			{network: "vpc-central", subnetwork: "sub-central", tags: []string{"central"}, zones: []string{zoneUSCentral1A}},
 		},
 	}
 
-	zone, net, _, _ := p.resolveNetworkAndZone("us-central1-a", []string{"us-east1-b"})
+	zone, net, _, _ := p.resolveNetworkAndZone(zoneUSCentral1A, []string{zoneUSEast1B})
 
 	// Reservation zone takes priority over request zone
-	if zone != "us-central1-a" {
+	if zone != zoneUSCentral1A {
 		t.Errorf("zone: want us-central1-a (reservation), got %s", zone)
 	}
-	if net != "projects/proj/global/networks/vpc-central" {
+	if net != networkVPCCentral {
 		t.Errorf("network: want vpc-central (matched by reservation zone), got %s", net)
 	}
 }
@@ -668,7 +688,7 @@ func TestResolveNetworkAndZone_WithConfigs_ReservationZone_OverridesRequestZone(
 func TestResolveNetworkAndZone_WithConfigs_NoZonesOnEntries_ReturnsEmptyZone(t *testing.T) {
 	p := &config{
 		projectID: "proj",
-		zones:     []string{"us-central1-a"},
+		zones:     []string{zoneUSCentral1A},
 		networkConfigs: []networkConfig{
 			{network: "vpc-1", subnetwork: "sub-1", tags: []string{"t1"}},
 			{network: "vpc-2", subnetwork: "sub-2", tags: []string{"t2"}},
@@ -682,7 +702,7 @@ func TestResolveNetworkAndZone_WithConfigs_NoZonesOnEntries_ReturnsEmptyZone(t *
 		t.Errorf("zone: want empty, got %s", zone)
 	}
 	// Network should still be selected via round-robin
-	if net != "projects/proj/global/networks/vpc-1" {
+	if net != networkVPC1 {
 		t.Errorf("network: want vpc-1 (round-robin), got %s", net)
 	}
 }
@@ -697,7 +717,7 @@ func TestResolveNetworkAndZone_WithConfigs_MultipleZonesOnEntry_PicksOne(t *test
 
 	seen := map[string]bool{}
 	for i := 0; i < 100; i++ {
-		zone, _, _, _ := p.resolveNetworkAndZone("", nil)
+		zone, _, _, _ := p.resolveNetworkAndZone("", nil) //nolint:dogsled
 		seen[zone] = true
 	}
 
@@ -719,19 +739,19 @@ func TestResolveNetworkAndZone_WithConfigs_RoundRobinDoesNotAdvance_WhenZoneMatc
 	}
 
 	// Zone-matched calls should NOT advance the round-robin counter
-	_, net1, _, _ := p.resolveNetworkAndZone("", []string{"z-b"})
-	if net1 != "projects/proj/global/networks/vpc-1" {
+	_, net1, _, _ := p.resolveNetworkAndZone("", []string{"z-b"}) //nolint:dogsled
+	if net1 != networkVPC1 {
 		t.Errorf("call 1: want vpc-1, got %s", net1)
 	}
 
 	// Next call without zone should use round-robin starting from 0 (counter not touched)
-	_, net2, _, _ := p.resolveNetworkAndZone("", nil)
+	_, net2, _, _ := p.resolveNetworkAndZone("", nil) //nolint:dogsled
 	if net2 != "projects/proj/global/networks/vpc-0" {
 		t.Errorf("call 2: want vpc-0 (round-robin start), got %s", net2)
 	}
 
-	_, net3, _, _ := p.resolveNetworkAndZone("", nil)
-	if net3 != "projects/proj/global/networks/vpc-1" {
+	_, net3, _, _ := p.resolveNetworkAndZone("", nil) //nolint:dogsled
+	if net3 != networkVPC1 {
 		t.Errorf("call 3: want vpc-1 (round-robin next), got %s", net3)
 	}
 }
@@ -744,14 +764,14 @@ func TestResolveNetworkAndZone_WithConfigs_FullyQualifiedPaths_PassedThrough(t *
 				network:    "projects/other/global/networks/custom",
 				subnetwork: "projects/other/regions/us-east1/subnetworks/custom-sub",
 				tags:       []string{"custom"},
-				zones:      []string{"us-east1-b"},
+				zones:      []string{zoneUSEast1B},
 			},
 		},
 	}
 
 	zone, net, sub, _ := p.resolveNetworkAndZone("", nil)
 
-	if zone != "us-east1-b" {
+	if zone != zoneUSEast1B {
 		t.Errorf("zone: got %s", zone)
 	}
 	// Fully qualified paths should pass through unchanged
