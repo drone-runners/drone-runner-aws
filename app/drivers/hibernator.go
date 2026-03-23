@@ -7,6 +7,7 @@ import (
 
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/harness/lite-engine/engine/spec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -23,7 +24,8 @@ func (m *Manager) setupInstanceWithHibernate(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID string,
-	machineConfig *types.MachineConfig,
+	setupParams *types.SetupInstanceParams,
+	vmImageConfig *spec.VMImageConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
@@ -33,7 +35,8 @@ func (m *Manager) setupInstanceWithHibernate(
 		pool,
 		tlsServerName,
 		ownerID,
-		machineConfig,
+		setupParams,
+		vmImageConfig,
 		false,
 		agentConfig,
 		storageConfig,

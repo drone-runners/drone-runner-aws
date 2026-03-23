@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/drone/runner-go/logger"
@@ -61,6 +62,14 @@ var (
 	}
 )
 
+// networkConfig holds a network/subnetwork/tags/zones combination.
+type networkConfig struct {
+	network    string
+	subnetwork string
+	tags       []string
+	zones      []string
+}
+
 type config struct {
 	init sync.Once
 
@@ -90,6 +99,137 @@ type config struct {
 	labels                     map[string]string
 	enableNestedVirtualization bool
 	enableC4D                  bool
+	networkConfigs             []networkConfig
+	networkConfigIndex         uint64
+}
+
+// resolveNetworkAndZone determines the final zone, network, subnetwork, and tags for an instance.
+// reservationZone is the zone from a capacity reservation (may be empty).
+// requestZones is opts.Zones from the request (may be empty).
+//
+// Zone priority: reservationZone > requestZones[0] > network config zone > pool RandomZone.
+// Network priority: networkConfigs (zone-matched or round-robin) > single network/subnetwork/tags.
+func (p *config) resolveNetworkAndZone(reservationZone string, requestZones []string) (zone, network, subnetwork string, tags []string) {
+	zone = reservationZone
+
+	// Fallback to the first zone from the request
+	if zone == "" && len(requestZones) > 0 {
+		zone = requestZones[0]
+	}
+
+	// Select network (zone-matched if zone is known, round-robin otherwise)
+	selected := p.selectNetwork(zone)
+
+	// Resolve fully qualified paths; may pick a zone from the network entry
+	var resolvedZone string
+	network, subnetwork, resolvedZone, tags = selected.resolve(p.projectID, zone, p.GetRegion)
+	if zone == "" && resolvedZone != "" {
+		zone = resolvedZone
+	}
+	return zone, network, subnetwork, tags
+}
+
+// selectNetwork returns the network entry to use for an instance.
+//
+// When networkConfigs is empty, it falls back to the single network/subnetwork/tags fields.
+// When networkConfigs is set:
+//   - If zone is known (e.g. from a capacity reservation), pick the first entry whose
+//     zones list contains that zone. If none match, fall back to the first entry.
+//   - If zone is unknown, pick the next entry via atomic round-robin.
+func (p *config) selectNetwork(zone string) *networkConfig {
+	if len(p.networkConfigs) == 0 {
+		return &networkConfig{
+			network:    p.network,
+			subnetwork: p.subnetwork,
+			tags:       p.tags,
+			zones:      p.zones,
+		}
+	}
+
+	if zone != "" {
+		for i := range p.networkConfigs {
+			for _, z := range p.networkConfigs[i].zones {
+				if z == zone {
+					return &p.networkConfigs[i]
+				}
+			}
+		}
+		// No entry lists this zone — fall back to first entry (zone-agnostic use)
+		return &p.networkConfigs[0]
+	}
+
+	// No zone constraint — round-robin
+	nc := p.nextNetworkConfig()
+	return &nc
+}
+
+// nextNetworkConfig picks the next network config using atomic round-robin.
+func (p *config) nextNetworkConfig() networkConfig {
+	n := uint64(len(p.networkConfigs))
+	start := time.Now()
+	for {
+		current := atomic.LoadUint64(&p.networkConfigIndex)
+		next := (current + 1) % n
+		if atomic.CompareAndSwapUint64(&p.networkConfigIndex, current, next) {
+			return p.networkConfigs[current]
+		}
+		if time.Since(start) > 10*time.Second {
+			return p.networkConfigs[rand.Intn(len(p.networkConfigs))] //nolint:gosec
+		}
+	}
+}
+
+// allZones returns a deduplicated list of zones across all network configs.
+// Falls back to p.zones when no network configs are defined.
+func (p *config) allZones() []string {
+	if len(p.networkConfigs) == 0 {
+		return p.zones
+	}
+	seen := make(map[string]bool)
+	var zones []string
+	for _, nc := range p.networkConfigs {
+		for _, z := range nc.zones {
+			if !seen[z] {
+				seen[z] = true
+				zones = append(zones, z)
+			}
+		}
+	}
+	if len(zones) == 0 {
+		return p.zones
+	}
+	return zones
+}
+
+// resolve builds fully qualified GCP resource paths and picks a random zone from the entry.
+// fallbackZone is used for subnetwork region derivation when the entry has no zones.
+func (nc *networkConfig) resolve(projectID, regionZone string, getRegion func(string) string) (network, subnetwork, zone string, tags []string) {
+	tags = nc.tags
+
+	if regionZone == "" && len(nc.zones) > 0 {
+		zone = nc.zones[rand.Intn(len(nc.zones))] //nolint:gosec
+	} else if regionZone != "" {
+		zone = regionZone
+	}
+
+	if nc.network != "" {
+		if strings.LastIndex(nc.network, "/") == -1 {
+			network = fmt.Sprintf("projects/%s/global/networks/%s", projectID, nc.network)
+		} else {
+			network = nc.network
+		}
+	}
+
+	if nc.subnetwork != "" {
+		if strings.LastIndex(nc.subnetwork, "/") == -1 {
+			subnetwork = fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s",
+				projectID, getRegion(zone), nc.subnetwork)
+		} else {
+			subnetwork = nc.subnetwork
+		}
+	}
+
+	return network, subnetwork, zone, tags
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -181,19 +321,21 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 	// Determine zones to try
 	var zonesToTry []string
-	if len(opts.Zones) > 0 {
-		// If specific zones requested, only try those zones
-		zonesToTry = make([]string, len(opts.Zones))
-		copy(zonesToTry, opts.Zones)
+	if len(p.networkConfigs) > 0 {
+		// Round-robin: pick the next network config and use its zones
+		nc := p.nextNetworkConfig()
+		zonesToTry = make([]string, len(nc.zones))
+		copy(zonesToTry, nc.zones)
+		rand.Shuffle(len(zonesToTry), func(i, j int) { //nolint:gosec
+			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
+		})
 	} else {
-		// Randomize zone order to distribute load
 		zonesToTry = make([]string, len(p.zones))
 		copy(zonesToTry, p.zones)
+		rand.Shuffle(len(zonesToTry), func(i, j int) { //nolint:gosec
+			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
+		})
 	}
-
-	rand.Shuffle(len(zonesToTry), func(i, j int) {
-		zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
-	})
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Google).
@@ -248,6 +390,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 			InstanceID:    "", // Will be set when instance is created
 			ReservationID: reservationName,
 			CreatedAt:     time.Now().Unix(),
+			Zone:          zone,
 		}, nil
 	}
 
@@ -260,7 +403,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 func (p *config) findReservationZone(ctx context.Context, reservationID string) (zone string, err error) {
 	logr := logger.FromContext(ctx)
 
-	for _, z := range p.zones {
+	for _, z := range p.allZones() {
 		_, err := p.service.Reservations.Get(p.projectID, z, reservationID).Context(ctx).Do()
 		if err == nil {
 			return z, nil
@@ -289,14 +432,18 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 
 	logr.Debugln("google: deleting capacity reservation")
 
-	// Find the zone for this reservation
-	zone, err := p.findReservationZone(ctx, capacity.ReservationID)
-	if err != nil {
-		logr.Warnln("google: capacity reservation not found in any zone")
-		return nil
+	// Use stored zone, fall back to API lookup
+	zone := capacity.Zone
+	if zone == "" {
+		var findErr error
+		zone, findErr = p.findReservationZone(ctx, capacity.ReservationID)
+		if findErr != nil {
+			logr.Warnln("google: capacity reservation not found in any zone")
+			return nil
+		}
 	}
 
-	logr.WithField("zone", zone).Debugln("google: found capacity reservation")
+	logr.WithField("zone", zone).Debugln("google: deleting capacity reservation in zone")
 
 	// Delete the reservation
 	op, err := p.service.Reservations.Delete(p.projectID, zone, capacity.ReservationID).Context(ctx).Do()
@@ -336,37 +483,30 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 //nolint:gocyclo
 func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
-	// opts.Zones has highest priority - pick the first zone if specified
+	// Step 1: Resolve capacity reservation zone (if any)
 	var zone string
-	if len(opts.Zones) > 0 {
-		zone = opts.Zones[0]
-	}
-	// If capacity reservation is provided, verify it's in the zone we're using
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
-		reservationZone, reservationErr := p.findReservationZone(ctx, opts.CapacityReservation.ReservationID)
-		if reservationErr != nil {
-			// Error finding reservation - disable it
-			logger.FromContext(ctx).
-				WithError(reservationErr).
-				WithField("reservation", opts.CapacityReservation.ReservationID).
-				Warnln("google: capacity reservation lookup failed, proceeding without reservation")
-			opts.CapacityReservation = nil
-		} else if zone != "" && reservationZone != zone {
-			// Reservation is in different zone - disable it
-			logger.FromContext(ctx).
-				WithField("reservation", opts.CapacityReservation.ReservationID).
-				WithField("reservation_zone", reservationZone).
-				WithField("requested_zone", zone).
-				Warnln("google: capacity reservation zone mismatch, proceeding without reservation")
-			opts.CapacityReservation = nil
-		} else if reservationZone != "" {
-			zone = reservationZone
+		if opts.CapacityReservation.Zone != "" {
+			// Use stored zone directly
+			zone = opts.CapacityReservation.Zone
+		} else {
+			// Fallback: look up zone via API (for reservations created before zone was stored)
+			reservationZone, reservationErr := p.findReservationZone(ctx, opts.CapacityReservation.ReservationID)
+			if reservationErr != nil {
+				logger.FromContext(ctx).
+					WithError(reservationErr).
+					WithField("reservation", opts.CapacityReservation.ReservationID).
+					Warnln("google: capacity reservation lookup failed, proceeding without reservation")
+				opts.CapacityReservation = nil
+			} else {
+				zone = reservationZone
+			}
 		}
 	}
 
-	if zone == "" {
-		zone = p.RandomZone()
-	}
+	// Step 2-3: Select network, resolve zone
+	zone, resolvedNetwork, resolvedSubnetwork, resolvedTags := p.resolveNetworkAndZone(zone, opts.Zones)
+
 	machineType := p.size
 	if opts.MachineType != "" {
 		machineType = opts.MachineType
@@ -401,26 +541,6 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				Name: "External NAT",
 				Type: "ONE_TO_ONE_NAT",
 			},
-		}
-	}
-	network := ""
-	if p.network != "" {
-		slash := strings.LastIndex(p.network, "/")
-		if slash == -1 {
-			network = fmt.Sprintf("projects/%s/global/networks/%s",
-				p.projectID, p.network)
-		} else {
-			network = p.network
-		}
-	}
-	subnet := ""
-	if p.subnetwork != "" {
-		slash := strings.LastIndex(p.subnetwork, "/")
-		if slash == -1 {
-			subnet = fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s",
-				p.projectID, p.GetRegion(zone), p.subnetwork)
-		} else {
-			subnet = p.subnetwork
 		}
 	}
 
@@ -511,8 +631,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		CanIpForward:            false,
 		NetworkInterfaces: []*compute.NetworkInterface{
 			{
-				Network:       network,
-				Subnetwork:    subnet,
+				Network:       resolvedNetwork,
+				Subnetwork:    resolvedSubnetwork,
 				AccessConfigs: networkConfig,
 			},
 		},
@@ -523,7 +643,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		},
 		DeletionProtection: false,
 		Tags: &compute.Tags{
-			Items: p.tags,
+			Items: resolvedTags,
 		},
 		Labels: p.labels,
 	}

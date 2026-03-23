@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/drone/runner-go/logger"
+	"github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -34,7 +35,8 @@ func (m *Manager) buildPool(
 		*poolEntry,
 		string,
 		string,
-		*types.MachineConfig,
+		*types.SetupInstanceParams,
+		*spec.VMImageConfig,
 		*types.GitspaceAgentConfig,
 		*types.StorageConfig,
 		int64,
@@ -91,7 +93,7 @@ func (m *Manager) buildPool(
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", nil, nil, nil, 0, nil)
+			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", nil, nil, nil, nil, 0, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				if setupInstanceAsync != nil {
@@ -131,7 +133,8 @@ func (m *Manager) buildPoolWithVariants(
 		*poolEntry,
 		string,
 		string,
-		*types.MachineConfig,
+		*types.SetupInstanceParams,
+		*spec.VMImageConfig,
 		*types.GitspaceAgentConfig,
 		*types.StorageConfig,
 		int64,
@@ -145,9 +148,8 @@ func (m *Manager) buildPoolWithVariants(
 		variant := &pool.PoolVariants[idx]
 		// Get variant params (VariantID should already be set from YAML through embedding)
 		variantParams := variant.SetupInstanceParams
-
-		// Convert SetupInstanceParams to MachineConfig
-		variantConfig := m.setupInstanceParamsToMachineConfig(&variantParams)
+		variantSetupParams := deepCopySetupParams(&variantParams)
+		variantVMImageConfig := vmImageConfigFromSetupParams(variantSetupParams)
 
 		logr = logr.
 			WithField("variant_id", variantParams.VariantID).
@@ -169,10 +171,10 @@ func (m *Manager) buildPoolWithVariants(
 		wg.Add(instanceCount)
 
 		for i := 0; i < instanceCount; i++ {
-			go func(ctx context.Context, logr logger.Logger, variantParams *types.SetupInstanceParams, machineConfig *types.MachineConfig) {
+			go func(ctx context.Context, logr logger.Logger, variantParams *types.SetupInstanceParams, setupParams *types.SetupInstanceParams, vmImageConfig *spec.VMImageConfig) {
 				defer wg.Done()
 
-				inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", machineConfig, nil, nil, 0, nil)
+				inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, vmImageConfig, nil, nil, 0, nil)
 				if err != nil {
 					logr.WithError(err).Errorln("build pool with variants: failed to create instance")
 					if setupInstanceAsync != nil {
@@ -185,9 +187,9 @@ func (m *Manager) buildPoolWithVariants(
 					WithField("pool", pool.Name).
 					WithField("id", inst.ID).
 					WithField("name", inst.Name).
-					WithField("variant_id", machineConfig.VariantID).
+					WithField("variant_id", setupParams.VariantID).
 					Infoln("build pool with variants: created new instance")
-			}(ctx, logr, &variantParams, variantConfig)
+			}(ctx, logr, &variantParams, variantSetupParams, variantVMImageConfig)
 		}
 
 		wg.Wait()

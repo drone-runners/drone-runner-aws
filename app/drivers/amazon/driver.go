@@ -375,6 +375,7 @@ func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.Instan
 		InstanceID:    "",
 		ReservationID: reservationID,
 		CreatedAt:     time.Now().Unix(),
+		Zone:          reqCfg.availabilityZone,
 	}, nil
 }
 
@@ -938,12 +939,19 @@ func (p *amazonConfig) getDynamicConfig(opts *drtypes.InstanceCreateOpts) (*requ
 		volumeType:       p.volumeType,
 	}
 
-	// Override with request-specific values
+	// Determine the target zone: request zones > capacity reservation zone > round-robin
+	var targetZone string
 	if len(opts.Zones) > 0 {
-		cfg.availabilityZone = opts.Zones[0]
+		targetZone = opts.Zones[0]
+	} else if opts.CapacityReservation != nil && opts.CapacityReservation.Zone != "" {
+		targetZone = opts.CapacityReservation.Zone
+	}
+
+	if targetZone != "" {
+		cfg.availabilityZone = targetZone
 		// Find matching subnet for the zone
 		for _, zoneDetail := range p.zoneDetails {
-			if zoneDetail.AvailabilityZone == opts.Zones[0] {
+			if zoneDetail.AvailabilityZone == targetZone {
 				cfg.subnet = zoneDetail.SubnetID
 				break
 			}

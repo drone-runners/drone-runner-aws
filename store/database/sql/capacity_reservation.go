@@ -61,6 +61,7 @@ func (s CapacityReservationStore) List(
 		"reservation_id",
 		"created_at",
 		"reservation_state",
+		"zone",
 	).From("capacity_reservation")
 
 	if params != nil {
@@ -110,6 +111,7 @@ func (s CapacityReservationStore) List(
 			&capacity.ReservationID,
 			&capacity.CreatedAt,
 			&capacity.ReservationState,
+			&capacity.Zone,
 		)
 		if scanErr != nil {
 			return nil, fmt.Errorf("error scanning capacity reservation: %w", scanErr)
@@ -187,7 +189,7 @@ UPDATE capacity_reservation
 SET reservation_state = $%d
 FROM candidate
 WHERE capacity_reservation.stage_id = candidate.cr_stage_id
-RETURNING capacity_reservation.stage_id, pool_name, instance_id, reservation_id, created_at, reservation_state
+RETURNING capacity_reservation.stage_id, pool_name, instance_id, reservation_id, created_at, reservation_state, zone
 `, subSQL, len(subArgs)+1)
 
 	// Append newState to args
@@ -210,6 +212,7 @@ RETURNING capacity_reservation.stage_id, pool_name, instance_id, reservation_id,
 			&capacity.ReservationID,
 			&capacity.CreatedAt,
 			&capacity.ReservationState,
+			&capacity.Zone,
 		)
 		if scanErr != nil {
 			return nil, fmt.Errorf("error scanning capacity reservation: %w", scanErr)
@@ -235,6 +238,7 @@ SELECT
 ,reservation_id
 ,created_at
 ,reservation_state
+,zone
 FROM capacity_reservation
 `
 const capacityReservationInsert = `
@@ -245,6 +249,7 @@ INSERT INTO capacity_reservation (
 ,reservation_id
 ,created_at
 ,reservation_state
+,zone
 ) values (
  :stage_id
 ,:pool_name
@@ -252,6 +257,7 @@ INSERT INTO capacity_reservation (
 ,:reservation_id
 ,:created_at
 ,:reservation_state
+,:zone
 ) RETURNING stage_id
 `
 

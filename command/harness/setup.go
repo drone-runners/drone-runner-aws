@@ -443,15 +443,13 @@ func handleSetup(
 		RunnerName: runnerName,
 	}
 
-	machineConfig := &types.MachineConfig{
-		VMImageConfig: &r.VMImageConfig,
-		SetupInstanceParams: types.SetupInstanceParams{
-			NestedVirtualization: r.NestedVirtualization,
-			ResourceClass:        r.ResourceClass,
-		},
+	provisionParams := &types.ProvisionParams{
+		VMImageConfig:        &r.VMImageConfig,
+		NestedVirtualization: r.NestedVirtualization,
+		ResourceClass:        r.ResourceClass,
 	}
 	if r.Zone != "" {
-		machineConfig.Zones = []string{r.Zone}
+		provisionParams.Zones = []string{r.Zone}
 	}
 
 	instance, _, warmed, variantID, err = poolManager.Provision(
@@ -459,7 +457,7 @@ func handleSetup(
 		pool,
 		poolManager.GetTLSServerName(),
 		owner,
-		machineConfig,
+		provisionParams,
 		query,
 		&r.GitspaceAgentConfig,
 		&r.StorageConfig,

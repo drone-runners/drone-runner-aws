@@ -16,7 +16,7 @@ type InstanceProvisioner interface {
 	Provision(
 		ctx context.Context,
 		poolName, serverName, ownerID string,
-		machineConfig *types.MachineConfig,
+		provisionParams *types.ProvisionParams,
 		query *types.QueryParams,
 		gitspaceAgentConfig *types.GitspaceAgentConfig,
 		storageConfig *types.StorageConfig,
