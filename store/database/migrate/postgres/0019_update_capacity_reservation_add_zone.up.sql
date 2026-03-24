@@ -1,0 +1,1 @@
+ALTER TABLE capacity_reservation ADD COLUMN IF NOT EXISTS zone VARCHAR(250);

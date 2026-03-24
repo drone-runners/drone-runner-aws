@@ -12,16 +12,16 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
-func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
+func TestDeepCopySetupParams(t *testing.T) {
 	tests := []struct {
-		name     string
-		params   *types.SetupInstanceParams
-		expected *types.MachineConfig
+		name   string
+		params *types.SetupInstanceParams
+		isNil  bool
 	}{
 		{
-			name:     "nil params returns nil",
-			params:   nil,
-			expected: nil,
+			name:   "nil params returns nil",
+			params: nil,
+			isNil:  true,
 		},
 		{
 			name: "basic conversion without zones",
@@ -34,17 +34,6 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 				DiskSize:             100,
 				DiskType:             "pd-ssd",
 			},
-			expected: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					MachineType:          "n2-standard-4",
-					NestedVirtualization: true,
-					Hibernate:            false,
-					VariantID:            "v1",
-					ResourceClass:        "medium",
-					DiskSize:             100,
-					DiskType:             "pd-ssd",
-				},
-			},
 		},
 		{
 			name: "conversion with zones - deep copy",
@@ -52,31 +41,6 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 				MachineType:   "t3.medium",
 				ResourceClass: "small",
 				Zones:         []string{"us-east-1a", "us-east-1b"},
-			},
-			expected: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					MachineType:   "t3.medium",
-					ResourceClass: "small",
-					Zones:         []string{"us-east-1a", "us-east-1b"},
-				},
-			},
-		},
-		{
-			name: "conversion with image name creates VMImageConfig",
-			params: &types.SetupInstanceParams{
-				ImageName:     "ubuntu-22.04",
-				MachineType:   "c2-standard-8",
-				ResourceClass: "large",
-			},
-			expected: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ImageName:     "ubuntu-22.04",
-					MachineType:   "c2-standard-8",
-					ResourceClass: "large",
-				},
-				VMImageConfig: &spec.VMImageConfig{
-					ImageName: "ubuntu-22.04",
-				},
 			},
 		},
 		{
@@ -92,48 +56,14 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 				DiskType:             "pd-extreme",
 				ResourceClass:        "xlarge",
 			},
-			expected: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ImageName:            "custom-image",
-					NestedVirtualization: true,
-					MachineType:          "e2-highcpu-16",
-					Hibernate:            true,
-					Zones:                []string{"europe-west1-a", "europe-west1-b", "europe-west1-c"},
-					VariantID:            "premium-variant",
-					DiskSize:             500,
-					DiskType:             "pd-extreme",
-					ResourceClass:        "xlarge",
-				},
-				VMImageConfig: &spec.VMImageConfig{
-					ImageName: "custom-image",
-				},
-			},
-		},
-		{
-			name: "empty image name does not create VMImageConfig",
-			params: &types.SetupInstanceParams{
-				ImageName:     "",
-				MachineType:   "t2.micro",
-				ResourceClass: "tiny",
-			},
-			expected: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ImageName:     "",
-					MachineType:   "t2.micro",
-					ResourceClass: "tiny",
-				},
-				VMImageConfig: nil,
-			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &Manager{}
-			result := m.setupInstanceParamsToMachineConfig(tt.params)
+			result := deepCopySetupParams(tt.params)
 
-			// Check nil case
-			if tt.expected == nil {
+			if tt.isNil {
 				if result != nil {
 					t.Errorf("Expected nil, got %+v", result)
 				}
@@ -145,67 +75,103 @@ func TestSetupInstanceParamsToMachineConfig(t *testing.T) {
 				return
 			}
 
-			// Check SetupInstanceParams fields
-			if result.MachineType != tt.expected.MachineType {
-				t.Errorf("MachineType: expected %s, got %s", tt.expected.MachineType, result.MachineType)
+			if result.MachineType != tt.params.MachineType {
+				t.Errorf("MachineType: expected %s, got %s", tt.params.MachineType, result.MachineType)
 			}
-			if result.NestedVirtualization != tt.expected.NestedVirtualization {
-				t.Errorf("NestedVirtualization: expected %v, got %v", tt.expected.NestedVirtualization, result.NestedVirtualization)
+			if result.NestedVirtualization != tt.params.NestedVirtualization {
+				t.Errorf("NestedVirtualization: expected %v, got %v", tt.params.NestedVirtualization, result.NestedVirtualization)
 			}
-			if result.Hibernate != tt.expected.Hibernate {
-				t.Errorf("Hibernate: expected %v, got %v", tt.expected.Hibernate, result.Hibernate)
+			if result.Hibernate != tt.params.Hibernate {
+				t.Errorf("Hibernate: expected %v, got %v", tt.params.Hibernate, result.Hibernate)
 			}
-			if result.VariantID != tt.expected.VariantID {
-				t.Errorf("VariantID: expected %s, got %s", tt.expected.VariantID, result.VariantID)
+			if result.VariantID != tt.params.VariantID {
+				t.Errorf("VariantID: expected %s, got %s", tt.params.VariantID, result.VariantID)
 			}
-			if result.ResourceClass != tt.expected.ResourceClass {
-				t.Errorf("ResourceClass: expected %s, got %s", tt.expected.ResourceClass, result.ResourceClass)
+			if result.ResourceClass != tt.params.ResourceClass {
+				t.Errorf("ResourceClass: expected %s, got %s", tt.params.ResourceClass, result.ResourceClass)
 			}
-			if result.DiskSize != tt.expected.DiskSize {
-				t.Errorf("DiskSize: expected %d, got %d", tt.expected.DiskSize, result.DiskSize)
+			if result.DiskSize != tt.params.DiskSize {
+				t.Errorf("DiskSize: expected %d, got %d", tt.params.DiskSize, result.DiskSize)
 			}
-			if result.DiskType != tt.expected.DiskType {
-				t.Errorf("DiskType: expected %s, got %s", tt.expected.DiskType, result.DiskType)
+			if result.DiskType != tt.params.DiskType {
+				t.Errorf("DiskType: expected %s, got %s", tt.params.DiskType, result.DiskType)
 			}
-			if result.ImageName != tt.expected.ImageName {
-				t.Errorf("ImageName: expected %s, got %s", tt.expected.ImageName, result.ImageName)
+			if result.ImageName != tt.params.ImageName {
+				t.Errorf("ImageName: expected %s, got %s", tt.params.ImageName, result.ImageName)
 			}
 
-			// Check Zones (deep copy)
-			if len(result.Zones) != len(tt.expected.Zones) {
-				t.Errorf("Zones length: expected %d, got %d", len(tt.expected.Zones), len(result.Zones))
+			if len(result.Zones) != len(tt.params.Zones) {
+				t.Errorf("Zones length: expected %d, got %d", len(tt.params.Zones), len(result.Zones))
 			} else {
 				for i := range result.Zones {
-					if result.Zones[i] != tt.expected.Zones[i] {
-						t.Errorf("Zones[%d]: expected %s, got %s", i, tt.expected.Zones[i], result.Zones[i])
+					if result.Zones[i] != tt.params.Zones[i] {
+						t.Errorf("Zones[%d]: expected %s, got %s", i, tt.params.Zones[i], result.Zones[i])
 					}
-				}
-			}
-
-			// Check VMImageConfig
-			if tt.expected.VMImageConfig == nil {
-				if result.VMImageConfig != nil {
-					t.Errorf("VMImageConfig: expected nil, got %+v", result.VMImageConfig)
-				}
-			} else {
-				if result.VMImageConfig == nil {
-					t.Errorf("VMImageConfig: expected non-nil, got nil")
-				} else if result.VMImageConfig.ImageName != tt.expected.VMImageConfig.ImageName {
-					t.Errorf("VMImageConfig.ImageName: expected %s, got %s", tt.expected.VMImageConfig.ImageName, result.VMImageConfig.ImageName)
 				}
 			}
 		})
 	}
 }
 
-func TestSetupInstanceParamsToMachineConfig_ZonesImmutability(t *testing.T) {
+func TestVMImageConfigFromSetupParams(t *testing.T) {
+	tests := []struct {
+		name     string
+		params   *types.SetupInstanceParams
+		expected *spec.VMImageConfig
+	}{
+		{
+			name:     "nil params returns nil",
+			params:   nil,
+			expected: nil,
+		},
+		{
+			name: "empty image name returns nil",
+			params: &types.SetupInstanceParams{
+				ImageName: "",
+			},
+			expected: nil,
+		},
+		{
+			name: "image name creates VMImageConfig",
+			params: &types.SetupInstanceParams{
+				ImageName: "ubuntu-22.04",
+			},
+			expected: &spec.VMImageConfig{
+				ImageName: "ubuntu-22.04",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := vmImageConfigFromSetupParams(tt.params)
+
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("Expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Errorf("Expected non-nil, got nil")
+				return
+			}
+
+			if result.ImageName != tt.expected.ImageName {
+				t.Errorf("ImageName: expected %s, got %s", tt.expected.ImageName, result.ImageName)
+			}
+		})
+	}
+}
+
+func TestDeepCopySetupParams_ZonesImmutability(t *testing.T) {
 	// Test that modifying the result's Zones slice doesn't affect the original params
 	params := &types.SetupInstanceParams{
 		Zones: []string{"zone-a", "zone-b"},
 	}
 
-	m := &Manager{}
-	result := m.setupInstanceParamsToMachineConfig(params)
+	result := deepCopySetupParams(params)
 
 	// Modify result's zones
 	if len(result.Zones) > 0 {

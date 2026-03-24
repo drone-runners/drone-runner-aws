@@ -257,15 +257,13 @@ func handleCapacityReservation(
 	timeout := time.Duration(r.ReservationTimeout) * time.Millisecond
 	timeoutSeconds := int64(timeout / time.Second)
 
-	machineConfig := &types.MachineConfig{
-		VMImageConfig: &r.RequestedVMImageConfig,
-		SetupInstanceParams: types.SetupInstanceParams{
-			NestedVirtualization: r.NestedVirtualization,
-			ResourceClass:        r.ResourceClass,
-		},
+	provisionParams := &types.ProvisionParams{
+		VMImageConfig:        &r.RequestedVMImageConfig,
+		NestedVirtualization: r.NestedVirtualization,
+		ResourceClass:        r.ResourceClass,
 	}
 	if r.Zone != "" {
-		machineConfig.Zones = []string{r.Zone}
+		provisionParams.Zones = []string{r.Zone}
 	}
 
 	_, capacityReservation, warmed, _, err = poolManager.Provision(
@@ -273,7 +271,7 @@ func handleCapacityReservation(
 		pool,
 		poolManager.GetTLSServerName(),
 		owner,
-		machineConfig,
+		provisionParams,
 		query,
 		nil,
 		&r.StorageConfig,

@@ -24,7 +24,7 @@ func (m *Manager) Provision(
 	poolName,
 	serverName,
 	ownerID string,
-	machineConfig *types.MachineConfig,
+	provisionParams *types.ProvisionParams,
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -39,6 +39,9 @@ func (m *Manager) Provision(
 		return nil, nil, false, "", err
 	}
 
+	setupParams := provisionParams.ToSetupInstanceParams()
+	vmImageConfig := provisionParams.GetVMImageConfig()
+
 	if m.isGitspaceRequest(gitspaceAgentConfig) {
 		if gsErr := m.validateGitspaceDriverCompatibility(pool); gsErr != nil {
 			return nil, nil, false, "", gsErr
@@ -49,7 +52,8 @@ func (m *Manager) Provision(
 			instanceInfo,
 			serverName,
 			ownerID,
-			machineConfig,
+			setupParams,
+			vmImageConfig,
 			gitspaceAgentConfig,
 			storageConfig,
 			timeout,
@@ -64,7 +68,8 @@ func (m *Manager) Provision(
 		query,
 		serverName,
 		ownerID,
-		machineConfig,
+		setupParams,
+		vmImageConfig,
 		gitspaceAgentConfig,
 		storageConfig,
 		timeout,
@@ -78,7 +83,7 @@ func (m *Manager) Provision(
 	// TODO: Move to outbox
 	if hotpool {
 		go func(ctx context.Context) {
-			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", nil, nil, nil, timeout, nil)
+			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", nil, nil, nil, nil, timeout, nil)
 		}(m.globalCtx)
 	}
 	return instance, nil, hotpool, "", err
@@ -108,7 +113,8 @@ func (m *Manager) provisionFromPool(
 	pool *poolEntry,
 	query *types.QueryParams,
 	serverName, ownerID string,
-	machineConfig *types.MachineConfig,
+	setupParams *types.SetupInstanceParams,
+	vmImageConfig *spec.VMImageConfig,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
@@ -139,7 +145,7 @@ func (m *Manager) provisionFromPool(
 			return nil, nil, false, "", ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, machineConfig, true, gitspaceAgentConfig, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
+		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, setupParams, vmImageConfig, true, gitspaceAgentConfig, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
 		if err != nil {
 			return nil, nil, false, "", fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -176,7 +182,8 @@ func (m *Manager) setupInstance(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID string,
-	machineConfig *types.MachineConfig,
+	setupParams *types.SetupInstanceParams,
+	vmImageConfig *spec.VMImageConfig,
 	inuse bool,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -201,26 +208,25 @@ func (m *Manager) setupInstance(
 	createOptions.PluginBinaryFallbackURI = m.pluginBinaryFallbackURI
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
-	if machineConfig != nil {
-		// Use ResourceClass from machineConfig
-		createOptions.ResourceClass = machineConfig.ResourceClass
-		createOptions.Zones = machineConfig.Zones
-		createOptions.MachineType = machineConfig.MachineType
-		createOptions.NestedVirtualization = machineConfig.NestedVirtualization
-		if machineConfig.VMImageConfig != nil && machineConfig.VMImageConfig.ImageName != "" {
-			createOptions.VMImageConfig = types.VMImageConfig{
-				ImageName:    machineConfig.VMImageConfig.ImageName,
-				Username:     machineConfig.VMImageConfig.Username,
-				Password:     machineConfig.VMImageConfig.Password,
-				ImageVersion: machineConfig.VMImageConfig.ImageVersion,
-			}
+	if setupParams != nil {
+		createOptions.ResourceClass = setupParams.ResourceClass
+		createOptions.Zones = setupParams.Zones
+		createOptions.MachineType = setupParams.MachineType
+		createOptions.NestedVirtualization = setupParams.NestedVirtualization
+	}
+	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
+		createOptions.VMImageConfig = types.VMImageConfig{
+			ImageName:    vmImageConfig.ImageName,
+			Username:     vmImageConfig.Username,
+			Password:     vmImageConfig.Password,
+			ImageVersion: vmImageConfig.ImageVersion,
+		}
 
-			if machineConfig.VMImageConfig.Auth != nil {
-				createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
-					Registry: machineConfig.VMImageConfig.Auth.Address,
-					Username: machineConfig.VMImageConfig.Auth.Username,
-					Password: machineConfig.VMImageConfig.Auth.Password,
-				}
+		if vmImageConfig.Auth != nil {
+			createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
+				Registry: vmImageConfig.Auth.Address,
+				Username: vmImageConfig.Auth.Username,
+				Password: vmImageConfig.Auth.Password,
 			}
 		}
 	}
@@ -234,13 +240,13 @@ func (m *Manager) setupInstance(
 			BootDiskType:       storageConfig.BootDiskType,
 		}
 	}
-	// Set boot disk settings from machineConfig if provided and not already set
-	if machineConfig != nil {
-		if machineConfig.DiskSize != 0 && createOptions.StorageOpts.BootDiskSize == "" {
-			createOptions.StorageOpts.BootDiskSize = fmt.Sprintf("%d", machineConfig.DiskSize)
+	// Set boot disk settings from setupParams if provided and not already set
+	if setupParams != nil {
+		if setupParams.DiskSize != 0 && createOptions.StorageOpts.BootDiskSize == "" {
+			createOptions.StorageOpts.BootDiskSize = fmt.Sprintf("%d", setupParams.DiskSize)
 		}
-		if machineConfig.DiskType != "" && createOptions.StorageOpts.BootDiskType == "" {
-			createOptions.StorageOpts.BootDiskType = machineConfig.DiskType
+		if setupParams.DiskType != "" && createOptions.StorageOpts.BootDiskType == "" {
+			createOptions.StorageOpts.BootDiskType = setupParams.DiskType
 		}
 	}
 	createOptions.SkipCloudInitPackages = m.skipCloudInitPackages
@@ -312,9 +318,9 @@ func (m *Manager) setupInstance(
 
 	inst.RunnerName = m.runnerName
 
-	// Set VariantID from machineConfig ("default" for non-variant instances)
-	if machineConfig != nil && machineConfig.VariantID != "" {
-		inst.VariantID = machineConfig.VariantID
+	// Set VariantID from setupParams ("default" for non-variant instances)
+	if setupParams != nil && setupParams.VariantID != "" {
+		inst.VariantID = setupParams.VariantID
 	} else {
 		inst.VariantID = defaultVariantID
 	}
@@ -366,7 +372,8 @@ func (m *Manager) processExistingInstance(
 	pool *poolEntry,
 	instanceInfo *common.InstanceInfo,
 	serverName, ownerID string,
-	machineConfig *types.MachineConfig,
+	setupParams *types.SetupInstanceParams,
+	vmImageConfig *spec.VMImageConfig,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
@@ -419,7 +426,8 @@ func (m *Manager) processExistingInstance(
 		pool,
 		serverName,
 		ownerID,
-		machineConfig,
+		setupParams,
+		vmImageConfig,
 		true,
 		gitspaceAgentConfig,
 		storageConfig,
@@ -430,27 +438,29 @@ func (m *Manager) processExistingInstance(
 	)
 }
 
-// setupInstanceParamsToMachineConfig converts SetupInstanceParams to MachineConfig.
-func (m *Manager) setupInstanceParamsToMachineConfig(params *types.SetupInstanceParams) *types.MachineConfig {
+// deepCopySetupParams creates a deep copy of SetupInstanceParams, ensuring slice immutability.
+func deepCopySetupParams(params *types.SetupInstanceParams) *types.SetupInstanceParams {
 	if params == nil {
 		return nil
 	}
 
-	machineConfig := &types.MachineConfig{
-		SetupInstanceParams: *params,
-	}
+	result := *params
 
 	// Deep copy Zones slice to ensure immutability
 	if len(params.Zones) > 0 {
-		machineConfig.Zones = make([]string, len(params.Zones))
-		copy(machineConfig.Zones, params.Zones)
+		result.Zones = make([]string, len(params.Zones))
+		copy(result.Zones, params.Zones)
 	}
 
-	if params.ImageName != "" {
-		machineConfig.VMImageConfig = &spec.VMImageConfig{
-			ImageName: params.ImageName,
-		}
-	}
+	return &result
+}
 
-	return machineConfig
+// vmImageConfigFromSetupParams derives a VMImageConfig from SetupInstanceParams.ImageName.
+func vmImageConfigFromSetupParams(params *types.SetupInstanceParams) *spec.VMImageConfig {
+	if params == nil || params.ImageName == "" {
+		return nil
+	}
+	return &spec.VMImageConfig{
+		ImageName: params.ImageName,
+	}
 }

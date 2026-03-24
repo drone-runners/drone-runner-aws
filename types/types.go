@@ -220,6 +220,7 @@ type CapacityReservation struct {
 	ReservationID    string                   `db:"reservation_id" json:"reservation_id"`
 	CreatedAt        int64                    `db:"created_at" json:"created_at"`
 	ReservationState CapacityReservationState `db:"reservation_state" json:"reservation_state"`
+	Zone             string                   `db:"zone" json:"zone,omitempty"`
 }
 
 type GitspaceOpts struct {
@@ -335,11 +336,37 @@ type ScalerConfig struct {
 	DisabledPools []string
 }
 
-// MachineConfig contains machine-level configuration properties
-// It embeds SetupInstanceParams and adds runtime-specific fields
-type MachineConfig struct {
-	SetupInstanceParams
-	VMImageConfig *spec.VMImageConfig
+// ProvisionParams holds parameters from the incoming provision request.
+// These represent what the API caller requested for instance provisioning.
+type ProvisionParams struct {
+	VMImageConfig        *spec.VMImageConfig
+	NestedVirtualization bool
+	ResourceClass        string
+	Zones                []string
+}
+
+// ToSetupInstanceParams converts request-level ProvisionParams to internal SetupInstanceParams.
+func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
+	if p == nil {
+		return nil
+	}
+	s := &SetupInstanceParams{
+		NestedVirtualization: p.NestedVirtualization,
+		ResourceClass:        p.ResourceClass,
+	}
+	if len(p.Zones) > 0 {
+		s.Zones = make([]string, len(p.Zones))
+		copy(s.Zones, p.Zones)
+	}
+	return s
+}
+
+// GetVMImageConfig returns the VMImageConfig from ProvisionParams, or nil if ProvisionParams is nil.
+func (p *ProvisionParams) GetVMImageConfig() *spec.VMImageConfig {
+	if p == nil {
+		return nil
+	}
+	return p.VMImageConfig
 }
 
 type PoolVariant struct {

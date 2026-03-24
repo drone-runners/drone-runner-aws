@@ -13,6 +13,8 @@ import (
 
 	"github.com/drone/runner-go/logger"
 
+	"github.com/harness/lite-engine/engine/spec"
+
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -47,7 +49,7 @@ func (d *DistributedManager) Provision(
 	poolName,
 	serverName,
 	ownerID string,
-	machineConfig *types.MachineConfig,
+	provisionParams *types.ProvisionParams,
 	query *types.QueryParams,
 	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
@@ -66,7 +68,7 @@ func (d *DistributedManager) Provision(
 		pool,
 		serverName,
 		ownerID,
-		machineConfig,
+		provisionParams,
 		gitspaceAgentConfig,
 		storageConfig,
 		timeout,
@@ -229,19 +231,20 @@ func (d *DistributedManager) GetRunnerName() string {
 func (d *DistributedManager) SetupInstanceForPool(
 	ctx context.Context,
 	poolName string,
-	machineConfig *types.MachineConfig,
+	setupParams *types.SetupInstanceParams,
 ) (*types.Instance, error) {
 	pool, ok := d.poolMap[poolName]
 	if !ok {
 		return nil, fmt.Errorf("pool not found: %s", poolName)
 	}
-
+	vmImageConfig := vmImageConfigFromSetupParams(setupParams)
 	return d.setupInstanceWithHibernate(
 		ctx,
 		pool,
 		d.GetTLSServerName(),
 		"",
-		machineConfig,
+		setupParams,
+		vmImageConfig,
 		nil,
 		nil,
 		-1,
@@ -254,7 +257,8 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID string,
-	machineConfig *types.MachineConfig,
+	setupParams *types.SetupInstanceParams,
+	vmImageConfig *spec.VMImageConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
@@ -280,7 +284,8 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 		pool,
 		tlsServerName,
 		ownerID,
-		machineConfig,
+		setupParams,
+		vmImageConfig,
 		true,
 		agentConfig,
 		storageConfig,
@@ -300,7 +305,7 @@ func (d *DistributedManager) provisionFromPool(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID string,
-	machineConfig *types.MachineConfig,
+	provisionParams *types.ProvisionParams,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
@@ -308,19 +313,28 @@ func (d *DistributedManager) provisionFromPool(
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, retErr error) {
-	// Variant filtering: select all matching variants in priority order based on machineConfig
+	// Convert request params to internal setup params
+	setupParams := provisionParams.ToSetupInstanceParams()
+	vmImageConfig := provisionParams.GetVMImageConfig()
+
+	// Variant filtering: select all matching variants in priority order based on provisionParams
 	var matchedVariants []*types.PoolVariant
 	if len(pool.PoolVariants) > 0 {
-		matchedVariants = d.filterVariants(ctx, pool, machineConfig)
+		matchedVariants = d.filterVariants(ctx, pool, provisionParams)
 		if len(matchedVariants) > 0 {
 			// Apply the first (highest priority) variant config for new instance creation
-			d.applyVariantToMachineConfig(machineConfig, matchedVariants[0])
+			applyVariantToSetupParams(setupParams, matchedVariants[0])
 		}
 	}
 
+	// Clear the zones from the setup params for distributed driver to select the zone from the pool
+	setupParams.Zones = []string{}
+
 	// Case 1: Init task with reserved capacity
 	if reservedCapacity != nil {
-		resInst, hotpool, resErr := d.provisionFromReservedCapacity(ctx, pool, tlsServerName, ownerID, machineConfig, agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
+		resInst, hotpool, resErr := d.provisionFromReservedCapacity(
+			ctx, pool, tlsServerName, ownerID, setupParams, vmImageConfig,
+			agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 		if resErr != nil {
 			return nil, nil, false, "", resErr
 		}
@@ -344,13 +358,13 @@ func (d *DistributedManager) provisionFromPool(
 	for _, candidateVariantID := range variantsToTry {
 		queryParams := &types.QueryParams{
 			PoolName:             poolName,
-			MachineType:          machineConfig.MachineType,
-			NestedVirtualization: machineConfig.NestedVirtualization,
+			MachineType:          setupParams.MachineType,
+			NestedVirtualization: setupParams.NestedVirtualization,
 			VariantID:            candidateVariantID,
 		}
 
-		if machineConfig.VMImageConfig != nil {
-			fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
+		if vmImageConfig != nil {
+			fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
 			queryParams.ImageName = fullyQualifiedImageName
 		}
 
@@ -380,9 +394,9 @@ func (d *DistributedManager) provisionFromPool(
 				Hibernate:            inst.IsHibernated,
 				Zones:                []string{inst.Zone},
 				VariantID:            inst.VariantID,
-				DiskSize:             machineConfig.DiskSize,
-				DiskType:             machineConfig.DiskType,
-				ResourceClass:        machineConfig.ResourceClass,
+				DiskSize:             setupParams.DiskSize,
+				DiskType:             setupParams.DiskType,
+				ResourceClass:        setupParams.ResourceClass,
 			})
 			capacity = &types.CapacityReservation{
 				InstanceID: inst.ID,
@@ -394,7 +408,7 @@ func (d *DistributedManager) provisionFromPool(
 
 	// set the variant ID to the first variant in the list
 	variantID = variantsToTry[0]
-	machineConfig.VariantID = variantID
+	setupParams.VariantID = variantID
 
 	// Case 3: No available hotpool instance across any variant → create new (using first variant's config)
 	logger.FromContext(ctx).
@@ -408,7 +422,8 @@ func (d *DistributedManager) provisionFromPool(
 		pool,
 		tlsServerName,
 		ownerID,
-		machineConfig,
+		setupParams,
+		vmImageConfig,
 		true,
 		agentConfig,
 		storageConfig,
@@ -426,34 +441,35 @@ func (d *DistributedManager) provisionFromPool(
 	return inst, capacity, false, variantID, nil
 }
 
-// filterVariants returns all matching variants in priority order based on machineConfig criteria.
+// filterVariants returns all matching variants in priority order based on provisionParams criteria.
 // Step 1: Filter by ResourceClass AND NestedVirtualization (both required). Returns nil if no matches.
 // Step 2: Optionally refine by ImageName (best-effort). If no image filter is provided or no
 // variants match the image filter, falls back to step 1 results.
 // The order preserves the original pool configuration order.
-func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry, machineConfig *types.MachineConfig) []*types.PoolVariant {
+func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry, provisionParams *types.ProvisionParams) []*types.PoolVariant {
 	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
 
 	// Step 1: Filter by ResourceClass AND NestedVirtualization (both required)
 	var candidates []*types.PoolVariant
 	for i := range pool.PoolVariants {
-		if pool.PoolVariants[i].ResourceClass == machineConfig.ResourceClass &&
-			pool.PoolVariants[i].NestedVirtualization == machineConfig.NestedVirtualization {
+		if pool.PoolVariants[i].ResourceClass == provisionParams.ResourceClass &&
+			pool.PoolVariants[i].NestedVirtualization == provisionParams.NestedVirtualization {
 			candidates = append(candidates, &pool.PoolVariants[i])
 		}
 	}
 
 	if len(candidates) == 0 {
-		logr.WithField("resource_class", machineConfig.ResourceClass).
-			WithField("nested_virtualization", machineConfig.NestedVirtualization).
+		logr.WithField("resource_class", provisionParams.ResourceClass).
+			WithField("nested_virtualization", provisionParams.NestedVirtualization).
 			Warnln("provision: no variants found matching resource_class and nested_virtualization")
 		return nil
 	}
 
 	// Step 2: Optionally refine by ImageName (best-effort)
 	var fullyQualifiedImageName string
-	if machineConfig.VMImageConfig != nil && machineConfig.VMImageConfig.ImageName != "" {
-		fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: machineConfig.VMImageConfig.ImageName})
+	vmImageConfig := provisionParams.GetVMImageConfig()
+	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
+		fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
 	}
 
 	if fullyQualifiedImageName == "" {
@@ -478,7 +494,7 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 
 	finalCandidates := imageMatchedCandidates
 	if len(finalCandidates) == 0 {
-		logr.WithField("resource_class", machineConfig.ResourceClass).
+		logr.WithField("resource_class", provisionParams.ResourceClass).
 			WithField("image_name", fullyQualifiedImageName).
 			Debugln("provision: no variants matched image filter, falling back to resource_class and nested_virtualization matches")
 		finalCandidates = candidates
@@ -494,25 +510,20 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 	return finalCandidates
 }
 
-// applyVariantToMachineConfig applies the selected variant's configuration to machineConfig
-func (d *DistributedManager) applyVariantToMachineConfig(machineConfig *types.MachineConfig, variant *types.PoolVariant) {
+// applyVariantToSetupParams applies the selected variant's configuration to setupParams
+func applyVariantToSetupParams(setupParams *types.SetupInstanceParams, variant *types.PoolVariant) {
 	// Override with variant-specific values if they are set
 	if variant.MachineType != "" {
-		machineConfig.MachineType = variant.MachineType
-	}
-	if len(variant.Zones) > 0 {
-		machineConfig.Zones = variant.Zones
+		setupParams.MachineType = variant.MachineType
 	}
 	if variant.DiskSize != 0 {
-		machineConfig.DiskSize = variant.DiskSize
+		setupParams.DiskSize = variant.DiskSize
 	}
 	if variant.DiskType != "" {
-		machineConfig.DiskType = variant.DiskType
+		setupParams.DiskType = variant.DiskType
 	}
 	// Set VariantID for tracking
-	machineConfig.VariantID = variant.VariantID
-	// NestedVirtualization and Hibernate are typically not overridden from variant
-	// as they come from the request, but we could add them if needed
+	setupParams.VariantID = variant.VariantID
 }
 
 // setupInstanceAsync creates an outbox job for setting up the instance
@@ -562,7 +573,8 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 	ctx context.Context,
 	pool *poolEntry,
 	tlsServerName, ownerID string,
-	machineConfig *types.MachineConfig,
+	setupParams *types.SetupInstanceParams,
+	vmImageConfig *spec.VMImageConfig,
 	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
@@ -572,7 +584,8 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 		pool,
 		tlsServerName,
 		ownerID,
-		machineConfig,
+		setupParams,
+		vmImageConfig,
 		false,
 		agentConfig,
 		storageConfig,
@@ -602,11 +615,7 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 				logrus.WithError(derr).WithField("instanceID", inst.ID).Errorln("failed to cleanup instance after connectivity failure")
 			}
 			// Schedule async instance setup to replenish the pool
-			var params *types.SetupInstanceParams
-			if machineConfig != nil {
-				params = &machineConfig.SetupInstanceParams
-			}
-			d.setupInstanceAsync(ctx, pool.Name, d.runnerName, params)
+			d.setupInstanceAsync(ctx, pool.Name, d.runnerName, setupParams)
 			return
 		}
 
@@ -620,8 +629,8 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 
 		// Step 3: Attempt to hibernate the instance
 		shouldHibernate := false
-		if machineConfig != nil && machineConfig.VariantID != "" && machineConfig.VariantID != defaultVariantID {
-			shouldHibernate = machineConfig.Hibernate
+		if setupParams != nil && setupParams.VariantID != "" && setupParams.VariantID != defaultVariantID {
+			shouldHibernate = setupParams.Hibernate
 		} else {
 			shouldHibernate = pool.Driver.CanHibernate()
 		}

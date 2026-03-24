@@ -208,6 +208,15 @@ type (
 		Region string `json:"region,omitempty" yaml:"region,omitempty"`
 	}
 
+	// GoogleNetwork specifies a network/subnetwork/tags/zone combination for a GCP instance.
+	// Multiple entries can be defined and will be used in round-robin fashion.
+	GoogleNetwork struct {
+		Network    string   `json:"network,omitempty" yaml:"network,omitempty"`
+		Subnetwork string   `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
+		Tags       []string `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Zones      []string `json:"zones,omitempty" yaml:"zones,omitempty"`
+	}
+
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
 		Account                    GoogleAccount     `json:"account,omitempty"  yaml:"account"`
@@ -222,6 +231,7 @@ type (
 		Disk                       disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
 		Network                    string            `json:"network,omitempty" yaml:"network,omitempty"`
 		Subnetwork                 string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
+		Networks                   []GoogleNetwork   `json:"networks,omitempty" yaml:"networks,omitempty"`
 		PrivateIP                  bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
 		Zone                       []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
 		Labels                     map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`

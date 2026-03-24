@@ -73,10 +73,10 @@ func TestFilterVariants(t *testing.T) {
 	ctx := logger.WithContext(context.Background(), logger.Logrus(log))
 
 	tests := []struct {
-		name          string
-		variants      []types.PoolVariant
-		machineConfig *types.MachineConfig
-		expectedIDs   []string // empty slice means nil expected
+		name            string
+		variants        []types.PoolVariant
+		provisionParams *types.ProvisionParams
+		expectedIDs     []string // empty slice means nil expected
 	}{
 		{
 			name: "single variant matching resource class",
@@ -88,10 +88,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "small",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "small",
 			},
 			expectedIDs: []string{"variant-1"},
 		},
@@ -105,10 +103,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "large",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "large",
 			},
 			expectedIDs: nil,
 		},
@@ -130,11 +126,9 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass:        "medium",
-					NestedVirtualization: true,
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass:        "medium",
+				NestedVirtualization: true,
 			},
 			expectedIDs: []string{"variant-2"},
 		},
@@ -156,10 +150,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "large",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "large",
 				VMImageConfig: &spec.VMImageConfig{
 					ImageName: "ubuntu-22.04",
 				},
@@ -184,10 +176,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "xlarge",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "xlarge",
 				VMImageConfig: &spec.VMImageConfig{
 					ImageName: "centos-7",
 				},
@@ -206,11 +196,9 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass:        "premium",
-					NestedVirtualization: true,
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass:        "premium",
+				NestedVirtualization: true,
 				VMImageConfig: &spec.VMImageConfig{
 					ImageName: "custom-image",
 				},
@@ -239,10 +227,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "medium",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "medium",
 			},
 			expectedIDs: []string{"variant-1", "variant-2", "variant-3"},
 		},
@@ -257,11 +243,9 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass:        "medium",
-					NestedVirtualization: true,
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass:        "medium",
+				NestedVirtualization: true,
 			},
 			expectedIDs: nil,
 		},
@@ -285,11 +269,9 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass:        "large",
-					NestedVirtualization: true,
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass:        "large",
+				NestedVirtualization: true,
 			},
 			expectedIDs: []string{"variant-1", "variant-2"},
 		},
@@ -318,10 +300,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "large",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "large",
 				VMImageConfig: &spec.VMImageConfig{
 					ImageName: "ubuntu-22.04",
 				},
@@ -345,10 +325,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "medium",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "medium",
 				VMImageConfig: &spec.VMImageConfig{
 					ImageName: "ubuntu-22.04",
 				},
@@ -371,10 +349,8 @@ func TestFilterVariants(t *testing.T) {
 					},
 				},
 			},
-			machineConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					ResourceClass: "small",
-				},
+			provisionParams: &types.ProvisionParams{
+				ResourceClass: "small",
 				VMImageConfig: &spec.VMImageConfig{
 					ImageName: "ubuntu-22.04",
 				},
@@ -394,7 +370,7 @@ func TestFilterVariants(t *testing.T) {
 			}
 
 			dm := &DistributedManager{}
-			results := dm.filterVariants(ctx, pool, tt.machineConfig)
+			results := dm.filterVariants(ctx, pool, tt.provisionParams)
 
 			if tt.expectedIDs == nil {
 				if results != nil {
@@ -420,19 +396,17 @@ func TestFilterVariants(t *testing.T) {
 	}
 }
 
-func TestApplyVariantToMachineConfig(t *testing.T) {
+func TestApplyVariantToSetupParams(t *testing.T) {
 	tests := []struct {
 		name           string
-		initialConfig  *types.MachineConfig
+		initialParams  *types.SetupInstanceParams
 		variant        *types.PoolVariant
-		expectedConfig *types.MachineConfig
+		expectedParams *types.SetupInstanceParams
 	}{
 		{
 			name: "apply machine type",
-			initialConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					MachineType: "",
-				},
+			initialParams: &types.SetupInstanceParams{
+				MachineType: "",
 			},
 			variant: &types.PoolVariant{
 				SetupInstanceParams: types.SetupInstanceParams{
@@ -440,19 +414,15 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 					MachineType: "n2-standard-4",
 				},
 			},
-			expectedConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					MachineType: "n2-standard-4",
-					VariantID:   "v1",
-				},
+			expectedParams: &types.SetupInstanceParams{
+				MachineType: "n2-standard-4",
+				VariantID:   "v1",
 			},
 		},
 		{
-			name: "apply zones",
-			initialConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					Zones: nil,
-				},
+			name: "zones not copied from variant (zones handled at network config level)",
+			initialParams: &types.SetupInstanceParams{
+				Zones: nil,
 			},
 			variant: &types.PoolVariant{
 				SetupInstanceParams: types.SetupInstanceParams{
@@ -460,20 +430,15 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 					Zones:     []string{"us-east1-a", "us-east1-b"},
 				},
 			},
-			expectedConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					Zones:     []string{"us-east1-a", "us-east1-b"},
-					VariantID: "v2",
-				},
+			expectedParams: &types.SetupInstanceParams{
+				VariantID: "v2",
 			},
 		},
 		{
 			name: "apply disk configuration",
-			initialConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					DiskSize: 0,
-					DiskType: "",
-				},
+			initialParams: &types.SetupInstanceParams{
+				DiskSize: 0,
+				DiskType: "",
 			},
 			variant: &types.PoolVariant{
 				SetupInstanceParams: types.SetupInstanceParams{
@@ -482,19 +447,15 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 					DiskType:  "pd-ssd",
 				},
 			},
-			expectedConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					DiskSize:  100,
-					DiskType:  "pd-ssd",
-					VariantID: "v3",
-				},
+			expectedParams: &types.SetupInstanceParams{
+				DiskSize:  100,
+				DiskType:  "pd-ssd",
+				VariantID: "v3",
 			},
 		},
 		{
-			name: "apply all variant fields",
-			initialConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{},
-			},
+			name:          "apply all variant fields except zones",
+			initialParams: &types.SetupInstanceParams{},
 			variant: &types.PoolVariant{
 				SetupInstanceParams: types.SetupInstanceParams{
 					VariantID:   "v4",
@@ -504,23 +465,18 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 					DiskType:    "pd-balanced",
 				},
 			},
-			expectedConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					MachineType: "c2-standard-8",
-					Zones:       []string{"europe-west1-b"},
-					DiskSize:    200,
-					DiskType:    "pd-balanced",
-					VariantID:   "v4",
-				},
+			expectedParams: &types.SetupInstanceParams{
+				MachineType: "c2-standard-8",
+				DiskSize:    200,
+				DiskType:    "pd-balanced",
+				VariantID:   "v4",
 			},
 		},
 		{
 			name: "don't override with empty variant values",
-			initialConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					MachineType: "existing-type",
-					DiskSize:    50,
-				},
+			initialParams: &types.SetupInstanceParams{
+				MachineType: "existing-type",
+				DiskSize:    50,
 			},
 			variant: &types.PoolVariant{
 				SetupInstanceParams: types.SetupInstanceParams{
@@ -529,40 +485,36 @@ func TestApplyVariantToMachineConfig(t *testing.T) {
 					DiskSize:    0,
 				},
 			},
-			expectedConfig: &types.MachineConfig{
-				SetupInstanceParams: types.SetupInstanceParams{
-					MachineType: "existing-type", // Preserved
-					DiskSize:    50,              // Preserved
-					VariantID:   "v5",
-				},
+			expectedParams: &types.SetupInstanceParams{
+				MachineType: "existing-type", // Preserved
+				DiskSize:    50,              // Preserved
+				VariantID:   "v5",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dm := &DistributedManager{}
-			dm.applyVariantToMachineConfig(tt.initialConfig, tt.variant)
+			applyVariantToSetupParams(tt.initialParams, tt.variant)
 
-			// Check all relevant fields
-			if tt.initialConfig.MachineType != tt.expectedConfig.MachineType {
-				t.Errorf("MachineType: expected %s, got %s", tt.expectedConfig.MachineType, tt.initialConfig.MachineType)
+			if tt.initialParams.MachineType != tt.expectedParams.MachineType {
+				t.Errorf("MachineType: expected %s, got %s", tt.expectedParams.MachineType, tt.initialParams.MachineType)
 			}
-			if tt.initialConfig.VariantID != tt.expectedConfig.VariantID {
-				t.Errorf("VariantID: expected %s, got %s", tt.expectedConfig.VariantID, tt.initialConfig.VariantID)
+			if tt.initialParams.VariantID != tt.expectedParams.VariantID {
+				t.Errorf("VariantID: expected %s, got %s", tt.expectedParams.VariantID, tt.initialParams.VariantID)
 			}
-			if tt.initialConfig.DiskSize != tt.expectedConfig.DiskSize {
-				t.Errorf("DiskSize: expected %d, got %d", tt.expectedConfig.DiskSize, tt.initialConfig.DiskSize)
+			if tt.initialParams.DiskSize != tt.expectedParams.DiskSize {
+				t.Errorf("DiskSize: expected %d, got %d", tt.expectedParams.DiskSize, tt.initialParams.DiskSize)
 			}
-			if tt.initialConfig.DiskType != tt.expectedConfig.DiskType {
-				t.Errorf("DiskType: expected %s, got %s", tt.expectedConfig.DiskType, tt.initialConfig.DiskType)
+			if tt.initialParams.DiskType != tt.expectedParams.DiskType {
+				t.Errorf("DiskType: expected %s, got %s", tt.expectedParams.DiskType, tt.initialParams.DiskType)
 			}
-			if len(tt.initialConfig.Zones) != len(tt.expectedConfig.Zones) {
-				t.Errorf("Zones length: expected %d, got %d", len(tt.expectedConfig.Zones), len(tt.initialConfig.Zones))
+			if len(tt.initialParams.Zones) != len(tt.expectedParams.Zones) {
+				t.Errorf("Zones length: expected %d, got %d", len(tt.expectedParams.Zones), len(tt.initialParams.Zones))
 			} else {
-				for i := range tt.initialConfig.Zones {
-					if tt.initialConfig.Zones[i] != tt.expectedConfig.Zones[i] {
-						t.Errorf("Zones[%d]: expected %s, got %s", i, tt.expectedConfig.Zones[i], tt.initialConfig.Zones[i])
+				for i := range tt.initialParams.Zones {
+					if tt.initialParams.Zones[i] != tt.expectedParams.Zones[i] {
+						t.Errorf("Zones[%d]: expected %s, got %s", i, tt.expectedParams.Zones[i], tt.initialParams.Zones[i])
 					}
 				}
 			}

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/harness/lite-engine/engine/spec"
 	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
@@ -221,26 +220,17 @@ func (p *OutboxProcessor) processScaleJob(ctx context.Context, job *types.Outbox
 // processSetupInstanceJob processes a setup instance job
 func (p *OutboxProcessor) processSetupInstanceJob(ctx context.Context, job *types.OutboxJob) error {
 	// Parse job params
-	var machineConfig *types.MachineConfig
+	var setupParams *types.SetupInstanceParams
 	if job.JobParams != nil {
 		var params types.SetupInstanceParams
 		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
 			return fmt.Errorf("failed to unmarshal job params: %w", err)
 		}
-		machineConfig = &types.MachineConfig{
-			SetupInstanceParams: params,
-		}
-
-		// Create VMImageConfig if ImageName is provided
-		if params.ImageName != "" {
-			machineConfig.VMImageConfig = &spec.VMImageConfig{
-				ImageName: params.ImageName,
-			}
-		}
+		setupParams = &params
 	}
 
 	// Setup instance with values from job params
-	_, err := p.manager.SetupInstanceForPool(ctx, job.PoolName, machineConfig)
+	_, err := p.manager.SetupInstanceForPool(ctx, job.PoolName, setupParams)
 	if err != nil {
 		return fmt.Errorf("failed to setup instance: %w", err)
 	}

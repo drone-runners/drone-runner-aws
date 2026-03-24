@@ -181,7 +181,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				return nil, platformErr
 			}
 			instance.Platform = *platform
-			var driver, err = google.New(
+			var googleOpts = []google.Option{
 				google.WithRootDirectory(&instance.Platform),
 				google.WithDiskSize(g.Disk.Size),
 				google.WithDiskType(g.Disk.Type),
@@ -205,7 +205,20 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				}),
 				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
 				google.WithEnableC4D(g.EnableC4D),
-			)
+			}
+			if len(g.Networks) > 0 {
+				var netInputs []google.NetworkConfigInput
+				for _, nc := range g.Networks {
+					netInputs = append(netInputs, google.NetworkConfigInput{
+						Network:    nc.Network,
+						Subnetwork: nc.Subnetwork,
+						Tags:       nc.Tags,
+						Zones:      nc.Zones,
+					})
+				}
+				googleOpts = append(googleOpts, google.WithNetworkConfigs(netInputs))
+			}
+			var driver, err = google.New(googleOpts...)
 			if err != nil {
 				return nil, err
 			}

@@ -235,3 +235,32 @@ func WithEnableC4D(enableC4D bool) Option {
 		p.enableC4D = enableC4D
 	}
 }
+
+// NetworkConfigInput holds the input parameters for a network configuration entry.
+type NetworkConfigInput struct {
+	Network    string
+	Subnetwork string
+	Tags       []string
+	Zones      []string
+}
+
+// WithNetworkConfigs returns an option to set multiple network configurations.
+// When multiple configs are provided, they are selected in round-robin fashion,
+// taking priority over the single Network/Subnetwork/Tags fields.
+func WithNetworkConfigs(configs []NetworkConfigInput) Option {
+	return func(p *config) {
+		for _, c := range configs {
+			nc := networkConfig{
+				network:    c.Network,
+				subnetwork: c.Subnetwork,
+				zones:      c.Zones,
+			}
+			if len(c.Tags) > 0 {
+				nc.tags = c.Tags
+			} else {
+				nc.tags = defaultTags
+			}
+			p.networkConfigs = append(p.networkConfigs, nc)
+		}
+	}
+}
