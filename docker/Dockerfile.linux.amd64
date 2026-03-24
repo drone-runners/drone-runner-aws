@@ -13,6 +13,10 @@ ARG GROUP_NAME=nobody
 # Update all packages to get latest security patches (including OpenSSL 3.3.6-r0)
 RUN apk update && apk upgrade --no-cache && apk add --no-cache curl
 
+# Create /data directory for database and other runtime files
+# This ensures backward compatibility when running as non-root user
+RUN mkdir -p /data && chown ${USER_ID}:${GROUP_ID} /data
+
 EXPOSE 3000
 
 ENV GODEBUG netdns=go
@@ -24,6 +28,10 @@ COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 LABEL com.centurylinklabs.watchtower.stop-signal="SIGINT"
 
 ADD --chown=${USER_NAME}:${GROUP_NAME} release/linux/amd64/drone-runner-aws-linux-amd64 /bin/drone-runner-aws
+
+# Set working directory to /data where nobody user has write permissions
+# Default database.sqlite3 will be created here
+WORKDIR /data
 
 # Switch to non-root user (Kubernetes can override via securityContext)
 USER ${USER_ID}:${GROUP_ID}
