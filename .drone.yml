@@ -46,6 +46,34 @@ steps:
         path: /root/.cache/go-build
     depends_on:
       - build
+  - name: docker image delegate startup test
+    image: docker:dind
+    commands:
+      # Build the Docker image to test with actual USER directive
+      - docker build -f docker/Dockerfile.linux.amd64 -t drone-runner-aws-test:$DRONE_COMMIT .
+      # Test delegate startup with non-root user to verify database permissions
+      # This test ensures the container can create the database when running as nobody user
+      - |
+        docker run --rm \
+          -v $(pwd):/runner \
+          drone-runner-aws-test:$DRONE_COMMIT delegate \
+          --pool /runner/test_files/compiler/drone_pool.yml \
+          > delegate-startup.log 2>&1 &
+        DOCKER_PID=$!
+        sleep 10
+        kill $DOCKER_PID 2>/dev/null || true
+      # Verify database migrations completed
+      - grep -q "migration complete" delegate-startup.log || (echo "Database migrations failed" && cat delegate-startup.log && exit 1)
+      # Verify pool parsing worked
+      - grep -q "Parsing pool" delegate-startup.log || (echo "Pool parsing failed" && cat delegate-startup.log && exit 1)
+      # Verify no database errors
+      - grep -q "Unable to start the database" delegate-startup.log && (echo "Database startup failed" && cat delegate-startup.log && exit 1) || true
+      - echo "Docker image delegate startup test passed"
+    volumes:
+      - name: docker-sock
+        path: /var/run/docker.sock
+    depends_on:
+      - build
   - name: drone compile checks windows and linux
     image: golang:1.24
     commands:
@@ -172,6 +200,9 @@ steps:
 volumes:
   - name: cache
     temp: {}
+  - name: docker-sock
+    host:
+      path: /var/run/docker.sock
 
 ---
 kind: pipeline
