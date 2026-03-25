@@ -1,0 +1,38 @@
+FROM alpine:3.21.2 as alpine
+RUN apk add -U --no-cache ca-certificates
+
+FROM alpine:3.21.2
+
+# Rootless variant - designed for Kubernetes with strict security policies
+# - Uses nobody user (UID/GID 65534)
+# - Works with readOnlyRootFilesystem: true (requires emptyDir mount at /data)
+# - Compatible with runAsUser override via fsGroup: 65534
+# - Explicit database path to avoid WORKDIR-based path confusion
+
+# Create /data directory with group-writable permissions for K8s fsGroup compatibility
+# Users can override runAsUser and set fsGroup: 65534 to write to /data
+RUN mkdir -p /data && chown 65534:65534 /data && chmod 775 /data
+
+EXPOSE 3000
+
+ENV GODEBUG netdns=go
+ENV DRONE_PLATFORM_OS linux
+ENV DRONE_PLATFORM_ARCH arm64
+
+# Set explicit database path to /data/database.sqlite3
+ENV DRONE_DATABASE_DATASOURCE=/data/database.sqlite3
+
+COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+LABEL com.centurylinklabs.watchtower.stop-signal="SIGINT"
+
+ADD release/linux/arm64/drone-runner-aws-linux-arm64 /bin/drone-runner-aws
+RUN chmod 755 /bin/drone-runner-aws
+
+# Set working directory to /data for runtime files
+WORKDIR /data
+
+# Run as nobody user (K8s can override runAsUser via securityContext)
+USER 65534:65534
+
+ENTRYPOINT ["/bin/drone-runner-aws"]

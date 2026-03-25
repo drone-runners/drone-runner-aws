@@ -46,17 +46,17 @@ steps:
         path: /root/.cache/go-build
     depends_on:
       - build
-  - name: docker image delegate startup test
+  - name: docker image rootless delegate startup test
     image: docker:dind
     commands:
-      # Build the Docker image to test with actual USER directive
-      - docker build -f docker/Dockerfile.linux.amd64 -t drone-runner-aws-test:$DRONE_COMMIT .
-      # Test delegate startup with non-root user to verify database permissions
-      # This test ensures the container can create the database when running as nobody user
+      # Build the rootless Docker image to test secure K8s variant
+      - docker build -f docker/Dockerfile.linux.amd64.rootless -t drone-runner-aws-rootless-test:$DRONE_COMMIT .
+      # Test delegate startup with nobody user to verify /data directory and database permissions
+      # This test validates the rootless variant works out of the box without volume configuration
       - |
         docker run --rm \
           -v $(pwd):/runner \
-          drone-runner-aws-test:$DRONE_COMMIT delegate \
+          drone-runner-aws-rootless-test:$DRONE_COMMIT delegate \
           --pool /runner/test_files/compiler/drone_pool.yml \
           > delegate-startup.log 2>&1 &
         DOCKER_PID=$!
@@ -68,7 +68,7 @@ steps:
       - grep -q "Parsing pool" delegate-startup.log || (echo "Pool parsing failed" && cat delegate-startup.log && exit 1)
       # Verify no database errors
       - grep -q "Unable to start the database" delegate-startup.log && (echo "Database startup failed" && cat delegate-startup.log && exit 1) || true
-      - echo "Docker image delegate startup test passed"
+      - echo "Rootless Docker image delegate startup test passed"
     volumes:
       - name: docker-sock
         path: /var/run/docker.sock
