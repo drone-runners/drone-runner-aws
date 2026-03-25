@@ -46,6 +46,34 @@ steps:
         path: /root/.cache/go-build
     depends_on:
       - build
+  - name: docker image rootless delegate startup test
+    image: docker:dind
+    commands:
+      # Build the rootless Docker image to test secure K8s variant
+      - docker build -f docker/Dockerfile.linux.amd64.rootless -t drone-runner-aws-rootless-test:$DRONE_COMMIT .
+      # Test delegate startup with nobody user to verify /data directory and database permissions
+      # This test validates the rootless variant works out of the box without volume configuration
+      - |
+        docker run --rm \
+          -v $(pwd):/runner \
+          drone-runner-aws-rootless-test:$DRONE_COMMIT delegate \
+          --pool /runner/test_files/compiler/drone_pool.yml \
+          > delegate-startup.log 2>&1 &
+        DOCKER_PID=$!
+        sleep 10
+        kill $DOCKER_PID 2>/dev/null || true
+      # Verify database migrations completed
+      - grep -q "migration complete" delegate-startup.log || (echo "Database migrations failed" && cat delegate-startup.log && exit 1)
+      # Verify pool parsing worked
+      - grep -q "Parsing pool" delegate-startup.log || (echo "Pool parsing failed" && cat delegate-startup.log && exit 1)
+      # Verify no database errors
+      - grep -q "Unable to start the database" delegate-startup.log && (echo "Database startup failed" && cat delegate-startup.log && exit 1) || true
+      - echo "Rootless Docker image delegate startup test passed"
+    volumes:
+      - name: docker-sock
+        path: /var/run/docker.sock
+    depends_on:
+      - build
   - name: drone compile checks windows and linux
     image: golang:1.24
     commands:
@@ -172,6 +200,9 @@ steps:
 volumes:
   - name: cache
     temp: {}
+  - name: docker-sock
+    host:
+      path: /var/run/docker.sock
 
 ---
 kind: pipeline
