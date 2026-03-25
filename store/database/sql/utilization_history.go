@@ -26,12 +26,14 @@ func (s *UtilizationHistoryStore) Create(ctx context.Context, record *types.Util
 		Columns(
 			"pool_name",
 			"variant_id",
+			"image_name",
 			"in_use_instances",
 			"recorded_at",
 		).
 		Values(
 			record.Pool,
 			record.VariantID,
+			record.ImageName,
 			record.InUseInstances,
 			record.RecordedAt,
 		).
@@ -67,7 +69,7 @@ type utilizationRecordWithRangeIdx struct {
 
 func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	ctx context.Context,
-	pool, variantID string,
+	pool, variantID, imageName string,
 	ranges []store.TimeRange,
 ) ([][]types.UtilizationRecord, error) {
 	if len(ranges) == 0 {
@@ -83,13 +85,13 @@ func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	for i, r := range ranges {
 		//nolint:mnd
 		subQuery := fmt.Sprintf(
-			"SELECT id, pool_name, variant_id, in_use_instances, recorded_at, %d as range_idx "+
+			"SELECT id, pool_name, variant_id, image_name, in_use_instances, recorded_at, %d as range_idx "+
 				"FROM instance_utilization_history "+
-				"WHERE pool_name = $%d AND variant_id = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
-			i, argIdx, argIdx+1, argIdx+2, argIdx+3,
+				"WHERE pool_name = $%d AND variant_id = $%d AND image_name = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
+			i, argIdx, argIdx+1, argIdx+2, argIdx+3, argIdx+4,
 		)
-		allArgs = append(allArgs, pool, variantID, r.StartTime, r.EndTime)
-		argIdx += 4
+		allArgs = append(allArgs, pool, variantID, imageName, r.StartTime, r.EndTime)
+		argIdx += 5 //nolint:mnd
 		unionParts = append(unionParts, "("+subQuery+")")
 	}
 
@@ -113,6 +115,34 @@ func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	}
 
 	return result, nil
+}
+
+func (s *UtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error) {
+	query := squirrel.Select("DISTINCT image_name").
+		From("instance_utilization_history").
+		Where(squirrel.Eq{"pool_name": pool}).
+		Where(squirrel.Eq{"variant_id": variantID}).
+		Where(squirrel.GtOrEq{"recorded_at": since}).
+		Where(squirrel.Gt{"in_use_instances": 0}).
+		RunWith(s.db).
+		PlaceholderFormat(squirrel.Dollar)
+
+	rows, err := query.QueryContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching active images: %w", err)
+	}
+	defer rows.Close()
+
+	var images []string
+	for rows.Next() {
+		var img string
+		if err := rows.Scan(&img); err != nil {
+			return nil, fmt.Errorf("error scanning image name: %w", err)
+		}
+		images = append(images, img)
+	}
+
+	return images, rows.Err()
 }
 
 func joinWithUnionAll(parts []string) string {

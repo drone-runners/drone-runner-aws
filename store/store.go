@@ -16,7 +16,7 @@ type InstanceStore interface {
 	Purge(context.Context) error
 	DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error)
 	FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error)
-	CountByPoolAndVariant(ctx context.Context, status types.InstanceState) (map[string]map[string]int, error)
+	CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error)
 }
 
 type StageOwnerStore interface {
@@ -62,6 +62,8 @@ type UtilizationHistoryStore interface {
 	Create(ctx context.Context, record *types.UtilizationRecord) error
 	// GetUtilizationHistoryBatch fetches records for multiple time ranges in a single query.
 	// Returns a slice of record slices, where each inner slice corresponds to the time range at the same index.
-	GetUtilizationHistoryBatch(ctx context.Context, pool, variantID string, ranges []TimeRange) ([][]types.UtilizationRecord, error)
+	GetUtilizationHistoryBatch(ctx context.Context, pool, variantID, imageName string, ranges []TimeRange) ([][]types.UtilizationRecord, error)
+	// GetActiveImages returns distinct image names that had non-zero utilization since the given timestamp.
+	GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error)
 	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 }

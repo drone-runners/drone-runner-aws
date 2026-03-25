@@ -109,11 +109,12 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	// Register scaler if enabled and we have the necessary stores
 	if instanceStore != nil && utilizationHistoryStore != nil {
 		scalerConfig := types.ScalerConfig{
-			Enabled:        cfg.Env.Scheduler.Scaler.Enabled,
-			WindowDuration: time.Duration(cfg.Env.Scheduler.Scaler.WindowDurationMins) * time.Minute,
-			LeadTime:       time.Duration(cfg.Env.Scheduler.Scaler.LeadTimeMins) * time.Minute,
-			DryRun:         cfg.Env.Scheduler.Scaler.DryRun,
-			DisabledPools:  cfg.Env.Scheduler.Scaler.DisabledPools,
+			Enabled:                 cfg.Env.Scheduler.Scaler.Enabled,
+			WindowDuration:          time.Duration(cfg.Env.Scheduler.Scaler.WindowDurationMins) * time.Minute,
+			LeadTime:                time.Duration(cfg.Env.Scheduler.Scaler.LeadTimeMins) * time.Minute,
+			DryRun:                  cfg.Env.Scheduler.Scaler.DryRun,
+			DisabledPools:           cfg.Env.Scheduler.Scaler.DisabledPools,
+			ActiveImageLookbackDays: cfg.Env.Scheduler.Scaler.ActiveImageLookbackDays,
 		}
 
 		// Build scalable pools from pool config
@@ -139,6 +140,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			poolManager,
 			pred,
 			instanceStore,
+			utilizationHistoryStore,
 			outboxStore,
 			scalerConfig,
 			scalablePools,
