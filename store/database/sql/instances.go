@@ -367,7 +367,7 @@ func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.I
 	stmt := builder.Select(
 		"COALESCE(instance_pool, '') as pool",
 		"COALESCE(variant_id, '') as variant_id",
-		"COALESCE(instance_image, '') as image",
+		"COALESCE(instance_image, '') as image_name",
 		"COUNT(*) as count",
 	).From("instances").
 		GroupBy("instance_pool", "variant_id", "instance_image")

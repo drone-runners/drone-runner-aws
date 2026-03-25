@@ -341,7 +341,7 @@ type ScalerConfig struct {
 type InstanceCount struct {
 	Pool      string `db:"pool"`
 	VariantID string `db:"variant_id"`
-	ImageName string `db:"image"`
+	ImageName string `db:"image_name"`
 	Count     int    `db:"count"`
 }
 
