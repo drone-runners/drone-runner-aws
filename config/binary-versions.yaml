@@ -48,3 +48,11 @@ binaries:
     version: "1.4.0"
     image: "harness/harness-vm-runner-envman"
     description: "Environment variable manager for build context"
+
+  otelcol-contrib:
+    version: "0.115.1"
+    description: "OpenTelemetry Collector for log forwarding"
+    download_url: "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${VERSION}/otelcol-contrib_${VERSION}_linux_${ARCH}.tar.gz"
+    supported_architectures:
+      - amd64
+      - arm64
