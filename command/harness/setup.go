@@ -84,15 +84,6 @@ func HandleSetup(
 	internalLog := logrus.New()
 	internalLog.SetFormatter(&logrus.JSONFormatter{})
 
-	logrus.WithFields(logrus.Fields{
-		"dual_logging_enabled": r.SetupRequest.LogConfig.DualLoggingEnabled,
-		"log_config_url":       r.SetupRequest.LogConfig.URL,
-		"log_config_account":   r.SetupRequest.LogConfig.AccountID,
-		"pool_id":              r.PoolID,
-		"stage_runtime_id":     stageRuntimeID,
-		"correlation_id":       r.CorrelationID,
-	}).Info("drone-runner-aws setup: received LogConfig from ci-manager")
-
 	var (
 		logr         *logrus.Entry
 		internalLogr *logrus.Entry
