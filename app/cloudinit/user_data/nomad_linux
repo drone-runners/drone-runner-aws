@@ -85,6 +85,10 @@ systemctl reset-failed docker.service
 service docker start
 echo "docker service restarted"
 
+iptables -I OUTPUT 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable || true
+iptables -I DOCKER-USER 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable || true
+ip6tables -I OUTPUT 1 -d fd00:ec2::254/128 -j REJECT --reject-with icmp6-port-unreachable || true
+
 cp /etc/resolv.conf /etc/resolv_orig.conf
 rm /etc/resolv.conf
 echo "nameserver 127.0.0.53" > /etc/resolv.conf 

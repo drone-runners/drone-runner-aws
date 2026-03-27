@@ -93,6 +93,7 @@ try {
 }
 
 New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
+New-NetFirewallRule -DisplayName "BLOCK CLOUD METADATA" -Direction Outbound -RemoteAddress 169.254.169.254 -Action Block -Protocol Any
 Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=`"C:\Program Files\lite-engine\.env`"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
 
 if (${{ .IsHosted }} -eq $true) {

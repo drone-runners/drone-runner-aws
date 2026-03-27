@@ -83,6 +83,13 @@ runcmd:
   # Open healthcheck port
   - ufw allow 9079
   
+  # Block access to cloud metadata service (169.254.169.254) to prevent SSRF-style
+  # data exfiltration. OUTPUT blocks host processes (Run steps), DOCKER-USER blocks
+  # Docker containers (Plugin steps). Rules run after cloud-init reads user-data.
+  - iptables -I OUTPUT 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable
+  - iptables -I DOCKER-USER 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable
+  - ip6tables -I OUTPUT 1 -d fd00:ec2::254/128 -j REJECT --reject-with icmp6-port-unreachable
+  
   {{ if .EnableC4D }}
   # NVMe disk setup
   - |

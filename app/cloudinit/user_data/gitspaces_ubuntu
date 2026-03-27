@@ -32,6 +32,9 @@ runcmd:
 - "export SERVER_KEY_FILE={{ .KeyPath }}"
 - "export CLIENT_CERT_FILE={{ .CaCertPath }}"
 - 'ufw allow 9079'
+- iptables -I OUTPUT 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable
+- iptables -I DOCKER-USER 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable
+- ip6tables -I OUTPUT 1 -d fd00:ec2::254/128 -j REJECT --reject-with icmp6-port-unreachable
 - '(/usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from primary URL.") || (echo "Primary URL failed for lite-engine. Trying fallback URL..." && /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine && echo "Successfully downloaded lite engine binary from fallback URL.")'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .AnnotationsBinaryURI }}

@@ -19,6 +19,9 @@ write_files:
 runcmd:
 - 'sudo service docker start'
 - 'sudo usermod -a -G docker ec2-user'
+- iptables -I OUTPUT 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable
+- iptables -I DOCKER-USER 1 -d 169.254.169.254/32 -j REJECT --reject-with icmp-port-unreachable
+- ip6tables -I OUTPUT 1 -d fd00:ec2::254/128 -j REJECT --reject-with icmp6-port-unreachable
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine || wget --retry-connrefused --tries=10 --waitretry=10 "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/lite-engine'
 - 'chmod 777 /usr/bin/lite-engine'
 {{ if .HarnessTestBinaryURI }}
