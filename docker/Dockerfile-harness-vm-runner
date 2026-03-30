@@ -31,12 +31,12 @@ ARG GIT_TAG
 
 # Binary versions for runtime dependencies
 # Lite-engine must match go.mod dependency
-ARG LITE_ENGINE_VERSION=1.1.0
+ARG LITE_ENGINE_VERSION=1.2.0
 ARG PLUGIN_VERSION=1.3.0
-ARG AUTO_INJECTION_VERSION=1.0.0
+ARG AUTO_INJECTION_VERSION=1.1.0
 ARG HCLI_VERSION=1.3.0
 ARG TMATE_VERSION=1.1.0
-ARG ENVMAN_VERSION=1.4.0
+ARG ENVMAN_VERSION=1.5.0
 
 # Binary registry - where to pull binaries from (gar or docker)
 ARG BINARY_REGISTRY=gar
