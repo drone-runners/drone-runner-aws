@@ -19,15 +19,13 @@ ARG TMATE_VERSION=1.1.0
 ARG ENVMAN_VERSION=1.5.0
 ARG OTEL_VERSION=0.148.0
 # ENABLE_OTEL controls whether otelcol-contrib is bundled in this image.
-# - false (default): binary not included; use OtelPreInstalled=true in cloud-init
-#   when the customer has otelcol-contrib installed in their AMI/VM image.
-# - true: binary is bundled; use OtelPreInstalled=false in cloud-init
-#   so cloud-init extracts it from this image onto the VM.
-# Note: ENABLE_OTEL=true includes known CVEs in transitive deps
-#   (GHSA-p77j-4mvh-x3m3 grpc critical, GHSA-x744-4wpc-v9h2 docker/docker high).
-#   Enable only when log forwarding via OTel is required and CVE risk is accepted.
-# Usage: docker build --build-arg ENABLE_OTEL=true ...
-ARG ENABLE_OTEL=false
+# Defaults to true — the binary is always included so cloud-init can extract
+# it when OtelPreInstalled=false. Set to false only to produce a minimal image
+# without otelcol-contrib (e.g. for environments where CVE exposure must be zero).
+# Note: known CVEs in transitive deps (GHSA-p77j-4mvh-x3m3 grpc critical,
+#   GHSA-x744-4wpc-v9h2 docker/docker high) are present when ENABLE_OTEL=true.
+# Usage: docker build --build-arg ENABLE_OTEL=false ...
+ARG ENABLE_OTEL=true
 
 # ---------------------------------------------------------#
 #           Pull binary component images                   #
