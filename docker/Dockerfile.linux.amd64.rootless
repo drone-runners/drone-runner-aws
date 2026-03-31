@@ -1,13 +1,16 @@
-FROM alpine:3.21.2 as alpine
+FROM alpine:3.23.3 as alpine
 RUN apk add -U --no-cache ca-certificates
 
-FROM alpine:3.21.2
+FROM alpine:3.23.3
 
 # Rootless variant - designed for Kubernetes with strict security policies
 # - Uses nobody user (UID/GID 65534)
 # - Works with readOnlyRootFilesystem: true (requires emptyDir mount at /data)
 # - Compatible with runAsUser override via fsGroup: 65534
 # - Explicit database path to avoid WORKDIR-based path confusion
+
+# Update all packages to get latest security patches
+RUN apk update && apk upgrade --no-cache
 
 # Create /data directory with group-writable permissions for K8s fsGroup compatibility
 # Users can override runAsUser and set fsGroup: 65534 to write to /data
