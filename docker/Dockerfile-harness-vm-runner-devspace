@@ -18,7 +18,7 @@ COPY . .
 # CGO is required for sqlite3 support
 RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/harness-vm-runner
 #Second Stage: Final lightweight image
-FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.21.2
+FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.23.3
 WORKDIR /app
 RUN chown -R nobody:nobody /app
 RUN apk --no-cache add ca-certificates

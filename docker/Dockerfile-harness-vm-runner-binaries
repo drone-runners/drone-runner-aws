@@ -43,7 +43,7 @@ FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_
 #       Download OpenTelemetry Collector Binary            #
 # ---------------------------------------------------------#
 # otel-true: downloads otelcol-contrib when ENABLE_OTEL=true
-FROM alpine:3.21.2 as otel-true
+FROM alpine:3.23.3 as otel-true
 ARG OTEL_VERSION
 ARG TARGETARCH
 RUN apk add --no-cache wget tar && \
@@ -54,7 +54,7 @@ RUN apk add --no-cache wget tar && \
     rm /tmp/otelcol.tar.gz
 
 # otel-false: empty stage when ENABLE_OTEL=false (default)
-FROM alpine:3.21.2 as otel-false
+FROM alpine:3.23.3 as otel-false
 RUN mkdir -p /binaries
 
 # Select stage based on ENABLE_OTEL flag

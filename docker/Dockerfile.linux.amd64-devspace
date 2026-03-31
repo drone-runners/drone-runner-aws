@@ -10,7 +10,7 @@ RUN go mod download && export GOPATH=""
 # Build the application
 RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/drone-runner-aws
 #Second Stage: Final lightweight image
-FROM alpine:3.21.2
+FROM alpine:3.23.3
 WORKDIR /app
 RUN chown -R nobody:nobody /app
 RUN apk --no-cache add ca-certificates
