@@ -1,7 +1,7 @@
 # ---------------------------------------------------------#
 #                   Get certificates                       #
 # ---------------------------------------------------------#
-FROM --platform=$BUILDPLATFORM alpine:3.21.2 as cert-image
+FROM --platform=$BUILDPLATFORM alpine:3.23.3 as cert-image
 RUN apk --update add ca-certificates
 
 # ---------------------------------------------------------#
@@ -69,7 +69,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # ---------------------------------------------------------#
 #                   Create final image                     #
 # ---------------------------------------------------------#
-FROM alpine:3.21.2
+FROM alpine:3.23.3
 
 # User/Group configuration (configurable via build args for Helm chart compatibility)
 # Note: Alpine already has 'nobody' user/group with UID/GID 65534
@@ -78,8 +78,8 @@ ARG GROUP_ID=65534
 ARG USER_NAME=nobody
 ARG GROUP_NAME=nobody
 
-# Update all packages to get latest security patches (including OpenSSL 3.3.6-r0)
-RUN apk update && apk upgrade --no-cache && apk add --no-cache curl ca-certificates
+# Update all packages to get latest security patches
+RUN apk update && apk upgrade --no-cache && apk add --no-cache ca-certificates
 
 # Create directories with correct ownership for non-root user (CIS Docker Benchmark 4.1)
 RUN mkdir -p /app /data && \
