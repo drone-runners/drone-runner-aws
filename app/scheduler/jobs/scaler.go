@@ -236,8 +236,7 @@ func (s *Scaler) scaleVariant(
 
 	// Record metrics
 	if s.metrics != nil {
-		gpu := params != nil && params.GPU
-		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID, metric.ConvertBool(gpu)).Set(float64(prediction.RecommendedInstances))
+		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID).Set(float64(prediction.RecommendedInstances))
 	}
 
 	// If dry run mode is enabled, only record metrics and skip actual scaling

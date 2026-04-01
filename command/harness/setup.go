@@ -228,7 +228,6 @@ func HandleSetup(
 			strconv.FormatBool(warmed),
 			strconv.FormatBool(hibernated),
 			variantID,
-			metric.ConvertBool(instance != nil && instance.GPU),
 		).Observe(setupTime.Seconds())
 		if poolErr != nil {
 			internalLogr.WithField("pool_id", pool).WithError(poolErr).Errorln("could not setup instance")
@@ -242,7 +241,6 @@ func HandleSetup(
 				r.ResourceClass,
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
-				metric.False,
 			).Inc()
 			continue
 		}
@@ -288,7 +286,6 @@ func HandleSetup(
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
 				instance.VariantID,
-				metric.ConvertBool(instance.GPU),
 			).Inc()
 		}
 		internalLogr.WithField("os", instance.OS).
@@ -311,7 +308,6 @@ func HandleSetup(
 			r.VMImageConfig.ImageVersion,
 			r.VMImageConfig.ImageName,
 			"",
-			metric.False,
 		).Inc()
 		if fallback {
 			metrics.PoolFallbackCount.WithLabelValues(
@@ -326,7 +322,6 @@ func HandleSetup(
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
 				"",
-				metric.False,
 			).Inc()
 		}
 		printError(logr, "Init step failed")
@@ -348,7 +343,6 @@ func HandleSetup(
 		r.VMImageConfig.ImageVersion,
 		r.VMImageConfig.ImageName,
 		instance.VariantID,
-		metric.ConvertBool(instance.GPU),
 	).Inc()
 
 	instanceInfo := common.InstanceInfo{
@@ -402,7 +396,6 @@ func HandleSetup(
 		strconv.FormatBool(warmed),
 		strconv.FormatBool(hibernated),
 		instance.VariantID,
-		metric.ConvertBool(instance.GPU),
 	).Observe(totalInitTime.Seconds())
 
 	return resp, selectedPoolDriver, nil
