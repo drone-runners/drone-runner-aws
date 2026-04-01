@@ -904,7 +904,6 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 			Zones:                []string{instance.Zone},
 			Hibernate:            instance.IsHibernated,
 		})
-
 	}
 	return err
 }
