@@ -47,6 +47,7 @@ type label struct {
 	driver    string
 	ownerID   string
 	variantID string
+	gpu       bool
 }
 
 type Store struct {
@@ -93,7 +94,7 @@ func BuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_total",
 			Help: "Total number of completed pipeline executions (failed + successful)",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "resource_class", "address", "image_version", "image_name", "variant_id"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "resource_class", "address", "image_version", "image_name", "variant_id", "gpu"},
 	)
 }
 
@@ -104,7 +105,7 @@ func FailedBuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_errors_total",
 			Help: "Total number of pipeline executions which failed due to system errors",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id", "resource_class", "image_version", "image_name"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "owner_id", "resource_class", "image_version", "image_name", "gpu"},
 	)
 }
 
@@ -115,7 +116,7 @@ func RunningCount() *prometheus.GaugeVec {
 			Name: "harness_ci_pipeline_running_executions",
 			Help: "Total number of running executions",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "state", "distributed", "owner_id", "variant_id"}, // state can be running, in_use, or hibernating
+		[]string{"pool_id", "os", "arch", "driver", "state", "distributed", "owner_id", "variant_id", "gpu"}, // state can be running, in_use, or hibernating
 	)
 }
 
@@ -139,7 +140,7 @@ func WarmPoolCount() *prometheus.GaugeVec {
 			Name: "harness_ci_pipeline_warm_pool_executions",
 			Help: "Total number of warm pool executions",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "state"},
+		[]string{"pool_id", "os", "arch", "driver", "state", "gpu"},
 	)
 }
 
@@ -193,14 +194,14 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 		return
 	}
 	for _, i := range instances {
-		l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider), ownerID: i.OwnerID, variantID: i.VariantID}
+		l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider), ownerID: i.OwnerID, variantID: i.VariantID, gpu: i.GPU}
 		if i.OwnerID != "" {
 			m.RunningPerAccountCount.WithLabelValues(i.OwnerID, i.OS, strconv.FormatBool(metricStore.Distributed)).Inc()
 		}
 		d[l]++
 	}
 	for k, v := range d {
-		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed), k.ownerID, k.variantID).Set(float64(v))
+		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed), k.ownerID, k.variantID, ConvertBool(k.gpu)).Set(float64(v))
 	}
 }
 
@@ -235,6 +236,13 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 		// Get platform and driver information
 		platform, _, driver := metricStore.Manager.Inspect(poolName)
 
+		// Derive GPU flag from pool spec (only Google supports GPU currently)
+		var poolGPU bool
+		if g, ok := poolInstance.Spec.(*config.Google); ok && g != nil {
+			poolGPU = g.GPU
+		}
+		gpuLabel := ConvertBool(poolGPU)
+
 		// Update metrics for busy instances
 		if len(busy) > 0 {
 			m.WarmPoolCount.WithLabelValues(
@@ -243,6 +251,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				platform.Arch,
 				driver,
 				"busy",
+				gpuLabel,
 			).Set(float64(len(busy)))
 		}
 
@@ -262,6 +271,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				platform.Arch,
 				driver,
 				"free",
+				gpuLabel,
 			).Set(float64(len(free) - hibernatedCount))
 		}
 
@@ -273,6 +283,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				platform.Arch,
 				driver,
 				"hibernated",
+				gpuLabel,
 			).Set(float64(hibernatedCount))
 		}
 
@@ -284,6 +295,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				platform.Arch,
 				driver,
 				"hibernating",
+				gpuLabel,
 			).Set(float64(len(hibernating)))
 		}
 
@@ -295,6 +307,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				platform.Arch,
 				driver,
 				"provisioning",
+				gpuLabel,
 			).Set(float64(len(provisioning)))
 		}
 	}
@@ -307,7 +320,7 @@ func PoolFallbackCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_pool_fallbacks",
 			Help: "Total number of fallbacks triggered on the pool",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id", "resource_class", "image_version", "image_name", "variant_id"},
+		[]string{"pool_id", "os", "arch", "driver", "success", "distributed", "owner_id", "resource_class", "image_version", "image_name", "variant_id", "gpu"},
 		// success is true/false depending on whether fallback happened successfully
 	)
 }
@@ -320,7 +333,7 @@ func CPUPercentile() *prometheus.HistogramVec {
 			Help:    "Max CPU usage in the pipeline",
 			Buckets: []float64{30, 50, 70, 90},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "variant_id"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "variant_id", "gpu"},
 	)
 }
 
@@ -332,7 +345,7 @@ func MemoryPercentile() *prometheus.HistogramVec {
 			Help:    "Max memory usage in the pipeline",
 			Buckets: []float64{30, 50, 70, 90},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "variant_id"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "variant_id", "gpu"},
 	)
 }
 
@@ -344,7 +357,7 @@ func WaitDurationCount() *prometheus.HistogramVec {
 			Help:    "Waiting time needed to successfully allocate a machine in a pool",
 			Buckets: []float64{0.5, 1, 3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100, 110, 120, 180, 300, 600},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated", "variant_id"},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated", "variant_id", "gpu"},
 	)
 }
 
@@ -356,7 +369,7 @@ func TotalVMInitDurationCount() *prometheus.HistogramVec {
 			Help:    "Total time needed to successfully allocate a machine",
 			Buckets: []float64{0.5, 1, 3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100, 110, 120, 180, 300, 600},
 		},
-		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated", "variant_id"},
+		[]string{"pool_id", "os", "arch", "driver", "is_fallback", "distributed", "owner_id", "image_version", "image_name", "warmed", "hibernated", "variant_id", "gpu"},
 	)
 }
 
@@ -424,7 +437,7 @@ func ScalerPredictedInstances() *prometheus.GaugeVec {
 			Name: "harness_ci_scaler_predicted_instances",
 			Help: "Predicted number of instances needed for the upcoming window",
 		},
-		[]string{"pool_id", "variant_id"},
+		[]string{"pool_id", "variant_id", "gpu"},
 	)
 }
 
