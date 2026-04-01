@@ -99,6 +99,7 @@ type config struct {
 	labels                     map[string]string
 	enableNestedVirtualization bool
 	enableC4D                  bool
+	gpu                        bool
 	networkConfigs             []networkConfig
 	networkConfigIndex         uint64
 }
@@ -552,6 +553,11 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		EnableNestedVirtualization: enableNestedVirtualization,
 	}
 
+	gpu := opts.GPU
+	if !gpu {
+		gpu = p.gpu
+	}
+
 	opts.EnableC4D = p.enableC4D
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
@@ -638,7 +644,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		},
 		Scheduling: &compute.Scheduling{
 			Preemptible:       false,
-			OnHostMaintenance: "MIGRATE",
+			OnHostMaintenance: onHostMaintenance(gpu),
 			AutomaticRestart:  googleapi.Bool(true),
 		},
 		DeletionProtection: false,
@@ -723,7 +729,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
-	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, image, machineType)
+	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, gpu, image, machineType)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to map VM to instance")
 		return nil, err
@@ -1079,7 +1085,7 @@ func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, disk
 	})
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization bool, image, machineType string) (types.Instance, error) {
+func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization, gpu bool, image, machineType string) (types.Instance, error) {
 	network := vm.NetworkInterfaces[0]
 	instanceIP := ""
 	if p.privateIP {
@@ -1118,6 +1124,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		IsHibernated:               false,
 		Port:                       lehelper.LiteEnginePort,
 		EnableNestedVirtualization: enableNestedVitualization,
+		GPU:                        gpu,
 		StorageIdentifier:          opts.StorageOpts.Identifier,
 		Labels:                     labelsBytes,
 		GitspacePortMappings:       gitspacePortMappings,

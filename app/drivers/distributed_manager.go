@@ -392,6 +392,7 @@ func (d *DistributedManager) provisionFromPool(
 			d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
 				ImageName:            inst.Image,
 				NestedVirtualization: inst.EnableNestedVirtualization,
+				GPU:                  inst.GPU,
 				MachineType:          inst.Size,
 				Hibernate:            inst.IsHibernated,
 				Zones:                []string{inst.Zone},
@@ -536,6 +537,9 @@ func applyVariantToSetupParams(setupParams *types.SetupInstanceParams, variant *
 	}
 	if variant.DiskType != "" {
 		setupParams.DiskType = variant.DiskType
+	}
+	if variant.GPU {
+		setupParams.GPU = true
 	}
 	// Set VariantID for tracking
 	setupParams.VariantID = variant.VariantID
@@ -889,18 +893,18 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	// Execute cleanup and call setupInstanceAsync for each cleaned instance
 	instances, err := d.executeInstanceCleanup(ctx, pool, conditions, "free")
 
-	// Log the instances that are being cleaned up
-	// Don't replenish the stale free instances, predictor will handle that
-	if instances != nil {
-		instanceIDs := make([]string, len(instances))
-		for i, instance := range instances {
-			instanceIDs[i] = instance.ID
-		}
-		logger.FromContext(ctx).
-			WithField("pool", pool.Name).
-			WithField("count", len(instances)).
-			WithField("instance_ids", instanceIDs).
-			Infof("distributed dlite: purger: cleaning up %d stale free instances", len(instances))
+	// Call setupInstanceAsync for each cleaned free instance
+	for _, instance := range instances {
+		d.setupInstanceAsync(ctx, pool.Name, instance.RunnerName, &types.SetupInstanceParams{
+			ImageName:            instance.Image,
+			NestedVirtualization: instance.EnableNestedVirtualization,
+			GPU:                  instance.GPU,
+			MachineType:          instance.Size,
+			VariantID:            instance.VariantID,
+			Zones:                []string{instance.Zone},
+			Hibernate:            instance.IsHibernated,
+		})
+
 	}
 	return err
 }

@@ -205,6 +205,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				}),
 				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
 				google.WithEnableC4D(g.EnableC4D),
+				google.WithGPU(g.GPU),
 			}
 			if len(g.Networks) > 0 {
 				var netInputs []google.NetworkConfigInput

@@ -162,6 +162,10 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"enable_nested_virtualization": true})
 	}
 
+	if params.GPU {
+		subQuery = subQuery.Where(squirrel.Eq{"instance_gpu": true})
+	}
+
 	if params.VariantID != "" {
 		subQuery = subQuery.Where(squirrel.Eq{"variant_id": params.VariantID})
 	}
@@ -269,6 +273,7 @@ const instanceColumns = `
 ,enable_nested_virtualization
 ,runner_name
 ,variant_id
+,instance_gpu
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -309,6 +314,7 @@ INSERT INTO instances (
 ,instance_labels
 ,enable_nested_virtualization
 ,variant_id
+,instance_gpu
 ) values (
  :instance_id
 ,:instance_node_id
@@ -341,6 +347,7 @@ INSERT INTO instances (
 ,:instance_labels
 ,:enable_nested_virtualization
 ,:variant_id
+,:instance_gpu
 ) RETURNING instance_id
 `
 
@@ -368,9 +375,10 @@ func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.I
 		"COALESCE(instance_pool, '') as pool",
 		"COALESCE(variant_id, '') as variant_id",
 		"COALESCE(instance_image, '') as image_name",
+		"COALESCE(instance_gpu, false) as gpu",
 		"COUNT(*) as count",
 	).From("instances").
-		GroupBy("instance_pool", "variant_id", "instance_image")
+		GroupBy("instance_pool", "variant_id", "instance_image", "instance_gpu")
 
 	if status != "" {
 		stmt = stmt.Where(squirrel.Eq{"instance_state": status})
