@@ -11,12 +11,21 @@
 # creating VMs and binaries are extracted and injected via cloud-init.
 
 # Binary versions - must match binary-versions.yaml
-ARG LITE_ENGINE_VERSION=1.0.0
-ARG PLUGIN_VERSION=1.3.0
-ARG AUTO_INJECTION_VERSION=1.0.0
+ARG LITE_ENGINE_VERSION=1.2.0
+ARG PLUGIN_VERSION=1.5.0
+ARG AUTO_INJECTION_VERSION=1.1.0
 ARG HCLI_VERSION=1.3.0
 ARG TMATE_VERSION=1.1.0
-ARG ENVMAN_VERSION=1.4.0
+ARG ENVMAN_VERSION=1.5.0
+ARG OTEL_VERSION=0.148.0
+# ENABLE_OTEL controls whether otelcol-contrib is bundled in this image.
+# Defaults to true — the binary is always included so cloud-init can extract
+# it when OtelPreInstalled=false. Set to false only to produce a minimal image
+# without otelcol-contrib (e.g. for environments where CVE exposure must be zero).
+# Note: known CVEs in transitive deps (GHSA-p77j-4mvh-x3m3 grpc critical,
+#   GHSA-x744-4wpc-v9h2 docker/docker high) are present when ENABLE_OTEL=true.
+# Usage: docker build --build-arg ENABLE_OTEL=false ...
+ARG ENABLE_OTEL=true
 
 # ---------------------------------------------------------#
 #           Pull binary component images                   #
@@ -27,6 +36,27 @@ FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-auto-injection:$
 FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-hcli:${HCLI_VERSION} as hcli-binary
 FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-tmate:${TMATE_VERSION} as tmate-binary
 FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_VERSION} as envman-binary
+
+# ---------------------------------------------------------#
+#       Download OpenTelemetry Collector Binary            #
+# ---------------------------------------------------------#
+# otel-true: downloads otelcol-contrib when ENABLE_OTEL=true
+FROM alpine:3.23.3 as otel-true
+ARG OTEL_VERSION
+ARG TARGETARCH
+RUN apk add --no-cache wget tar && \
+    mkdir -p /binaries && \
+    wget -nv "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${TARGETARCH}.tar.gz" -O /tmp/otelcol.tar.gz && \
+    tar -xzf /tmp/otelcol.tar.gz -C /binaries otelcol-contrib && \
+    chmod +x /binaries/otelcol-contrib && \
+    rm /tmp/otelcol.tar.gz
+
+# otel-false: empty stage when ENABLE_OTEL=false (default)
+FROM alpine:3.23.3 as otel-false
+RUN mkdir -p /binaries
+
+# Select stage based on ENABLE_OTEL flag
+FROM otel-${ENABLE_OTEL} as otel-downloader
 
 # ---------------------------------------------------------#
 #                Create Binaries Bundle Image              #
@@ -43,6 +73,7 @@ COPY --from=auto-injection-binary /binaries/auto-injection /binaries/auto-inject
 COPY --from=hcli-binary /binaries/hcli /binaries/hcli
 COPY --from=tmate-binary /binaries/tmate /binaries/tmate
 COPY --from=envman-binary /binaries/envman /binaries/envman
+COPY --from=otel-downloader /binaries/ /binaries/
 
 # Copy version manifest for reference
 # This allows operators to inspect which versions are bundled
@@ -59,6 +90,7 @@ ARG AUTO_INJECTION_VERSION
 ARG HCLI_VERSION
 ARG TMATE_VERSION
 ARG ENVMAN_VERSION
+ARG OTEL_VERSION
 
 LABEL org.opencontainers.image.title="Harness VM Runner Binaries"
 LABEL org.opencontainers.image.description="Binary bundle for Harness VM Runner"
@@ -77,3 +109,4 @@ LABEL AUTO_INJECTION_VERSION="${AUTO_INJECTION_VERSION}"
 LABEL HCLI_VERSION="${HCLI_VERSION}"
 LABEL TMATE_VERSION="${TMATE_VERSION}"
 LABEL ENVMAN_VERSION="${ENVMAN_VERSION}"
+LABEL OTEL_VERSION="${OTEL_VERSION}"
