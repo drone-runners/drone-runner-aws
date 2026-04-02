@@ -60,7 +60,10 @@ func (s *retryInstanceStore) DeleteAndReturn(ctx context.Context, query string, 
 	})
 }
 
-func (s *retryInstanceStore) FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error) {
+func (s *retryInstanceStore) FindAndClaim(
+	ctx context.Context, params *types.QueryParams, newState types.InstanceState,
+	allowedStates []types.InstanceState, updateStartTime bool,
+) (*types.Instance, error) {
 	return Retry(func() (*types.Instance, error) {
 		return s.inner.FindAndClaim(ctx, params, newState, allowedStates, updateStartTime)
 	})
@@ -180,7 +183,10 @@ func (s *retryCapacityReservationStore) List(ctx context.Context, params *types.
 	})
 }
 
-func (s *retryCapacityReservationStore) FindAndClaim(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+func (s *retryCapacityReservationStore) FindAndClaim(
+	ctx context.Context, params *types.CapacityReservationQueryParams,
+	newState types.CapacityReservationState, allowedStates []types.CapacityReservationState,
+) ([]*types.CapacityReservation, error) {
 	return Retry(func() ([]*types.CapacityReservation, error) {
 		return s.inner.FindAndClaim(ctx, params, newState, allowedStates)
 	})

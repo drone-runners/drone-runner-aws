@@ -102,7 +102,9 @@ func ProvideSQLUtilizationHistoryStore(db *sqlx.DB) store.UtilizationHistoryStor
 }
 
 //nolint:gocritic
-func ProvideStore(driver, datasource string, poolCfg *DBConnConfig) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) {
+func ProvideStore(
+	driver, datasource string, poolCfg *DBConnConfig,
+) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) {
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
