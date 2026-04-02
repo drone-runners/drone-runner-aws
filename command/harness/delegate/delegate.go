@@ -87,6 +87,7 @@ func (c *delegateCommand) setupStandardMode(runner *harness.Runner) error {
 	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := database.ProvideStore(
 		runner.Config.Database.Driver,
 		runner.Config.Database.Datasource,
+		nil,
 	)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")

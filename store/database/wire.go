@@ -28,7 +28,7 @@ const (
 )
 
 // ProvideSQLDatabase provides a database connection.
-func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
+func ProvideSQLDatabase(driver, datasource string, poolCfg *DBConnConfig) (*sqlx.DB, error) {
 	switch driver {
 	case SingleInstance:
 		// use a single instance db, as we only need one machine
@@ -39,6 +39,7 @@ func ProvideSQLDatabase(driver, datasource string) (*sqlx.DB, error) {
 		return ConnectSQL(
 			driver,
 			datasource,
+			poolCfg,
 		)
 	}
 }
@@ -101,7 +102,7 @@ func ProvideSQLUtilizationHistoryStore(db *sqlx.DB) store.UtilizationHistoryStor
 }
 
 //nolint:gocritic
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) {
+func ProvideStore(driver, datasource string, poolCfg *DBConnConfig) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) {
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
@@ -110,9 +111,31 @@ func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOw
 		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil, nil
 	}
 
-	db, err := ProvideSQLDatabase(driver, datasource)
+	db, err := ProvideSQLDatabase(driver, datasource, poolCfg)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
-	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), ProvideSQLCapacityReservationStore(db), ProvideSQLUtilizationHistoryStore(db), nil
+
+	instanceStore := ProvideSQLInstanceStore(db)
+	stageOwnerStore := ProvideSQLStageOwnerStore(db)
+	outboxStore := ProvideSQLOutboxStore(db)
+	capacityStore := ProvideSQLCapacityReservationStore(db)
+	utilizationStore := ProvideSQLUtilizationHistoryStore(db)
+
+	// Wrap with retry logic for Postgres (handles transient errors during RDS failover)
+	if driver == Postgres {
+		instanceStore = NewRetryInstanceStore(instanceStore)
+		stageOwnerStore = NewRetryStageOwnerStore(stageOwnerStore)
+		if outboxStore != nil {
+			outboxStore = NewRetryOutboxStore(outboxStore)
+		}
+		if capacityStore != nil {
+			capacityStore = NewRetryCapacityReservationStore(capacityStore)
+		}
+		if utilizationStore != nil {
+			utilizationStore = NewRetryUtilizationHistoryStore(utilizationStore)
+		}
+	}
+
+	return instanceStore, stageOwnerStore, outboxStore, capacityStore, utilizationStore, nil
 }

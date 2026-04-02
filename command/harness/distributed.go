@@ -40,9 +40,17 @@ type DistributedSetupConfig struct {
 func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, error) {
 	logrus.Infoln("Starting postgres database for distributed mode")
 
+	poolCfg := &database.DBConnConfig{
+		MaxOpenConns:    cfg.Env.DistributedMode.MaxOpenConns,
+		MaxIdleConns:    cfg.Env.DistributedMode.MaxIdleConns,
+		ConnMaxLifetime: time.Duration(cfg.Env.DistributedMode.ConnMaxLifetimeSecs) * time.Second,
+		ConnMaxIdleTime: time.Duration(cfg.Env.DistributedMode.ConnMaxIdleTimeSecs) * time.Second,
+	}
+
 	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, err := database.ProvideStore(
 		cfg.Env.DistributedMode.Driver,
 		cfg.Env.DistributedMode.Datasource,
+		poolCfg,
 	)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
