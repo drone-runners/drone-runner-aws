@@ -24,8 +24,9 @@ func IsTransientDBError(err error) bool {
 	if errors.As(err, &pqErr) {
 		// Class 08 = Connection Exception
 		// Class 57 = Operator Intervention (includes failover restart)
+		// 25006   = READ_ONLY_SQL_TRANSACTION (standby receives write during failover)
 		code := string(pqErr.Code)
-		if strings.HasPrefix(code, "08") || strings.HasPrefix(code, "57") {
+		if strings.HasPrefix(code, "08") || strings.HasPrefix(code, "57") || code == "25006" {
 			return true
 		}
 	}
@@ -51,6 +52,9 @@ func IsTransientDBError(err error) bool {
 		"driver: bad connection",
 		"no connection",
 		"unexpected eof",
+		"recovery",
+		"read-write",
+		"read-only",
 	}
 	for _, pattern := range transientPatterns {
 		if strings.Contains(errMsg, pattern) {
@@ -67,7 +71,7 @@ func Retry[T any](fn func() (T, error)) (T, error) {
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = 500 * time.Millisecond
 	bo.MaxInterval = 5 * time.Second
-	bo.MaxElapsedTime = 30 * time.Second
+	bo.MaxElapsedTime = 50 * time.Second
 	bo.Multiplier = 2
 
 	var result T
