@@ -4,6 +4,8 @@
 
 This runner provisions instances in various clouds for both mac, windows and Linux. It also sets up the lite-engine and installs git. The installation of Docker on the instances allows the running of the build in Hybrid mode: where Drone Plugins can run or build steps in container along with build steps on the instance operating system. Pools of hot swappable EC2 instances are created on startup of the runner to improve build spin up time.
 
+> **Note:** For Harness CI infrastructure requirements and supported platforms, refer to the [Harness CI documentation](https://developer.harness.io/docs/continuous-integration).
+
 ## Development Setup
 
 ### Git Hooks
