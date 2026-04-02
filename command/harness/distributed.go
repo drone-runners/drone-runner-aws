@@ -41,7 +41,6 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	logrus.Infoln("Starting postgres database for distributed mode")
 
 	poolCfg := &database.DBConnConfig{
-		MaxOpenConns:    cfg.Env.DistributedMode.MaxOpenConns,
 		MaxIdleConns:    cfg.Env.DistributedMode.MaxIdleConns,
 		ConnMaxLifetime: time.Duration(cfg.Env.DistributedMode.ConnMaxLifetimeSecs) * time.Second,
 		ConnMaxIdleTime: time.Duration(cfg.Env.DistributedMode.ConnMaxIdleTimeSecs) * time.Second,

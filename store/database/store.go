@@ -16,7 +16,6 @@ var _ = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
 // DBConnConfig holds connection pool settings for the database.
 type DBConnConfig struct {
-	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 	ConnMaxIdleTime time.Duration
@@ -30,7 +29,6 @@ func ConnectSQL(driver, datasource string, poolCfg *DBConnConfig) (*sqlx.DB, err
 	}
 
 	if poolCfg != nil {
-		db.SetMaxOpenConns(poolCfg.MaxOpenConns)
 		db.SetMaxIdleConns(poolCfg.MaxIdleConns)
 		db.SetConnMaxLifetime(poolCfg.ConnMaxLifetime)
 		db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
