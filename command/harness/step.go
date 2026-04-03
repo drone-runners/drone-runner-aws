@@ -64,7 +64,7 @@ func HandleStep(ctx context.Context,
 	var inst *types.Instance
 	err := common.ValidateStruct(r.InstanceInfo)
 	if err != nil {
-		logr.Infof("Instance information is not passed to the VM Execute Request, fetching it from the DB: %v", err)
+		logr.Debugf("Instance information is not passed to the VM Execute Request, fetching it from the DB: %v", err)
 		entity, findStageOwnerErr := s.Find(ctx, r.StageRuntimeID)
 		if findStageOwnerErr != nil || entity == nil {
 			return nil, errors.Wrap(

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -332,6 +331,12 @@ func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.Instan
 	logr.WithField("platform", instancePlatform).Debugln("amazon: using platform for capacity reservation")
 
 	// Create the capacity reservation
+	logr.WithField("zone", reqCfg.availabilityZone).
+		WithField("instance_type", reqCfg.size).
+		WithField("subnet", reqCfg.subnet).
+		WithField("platform", instancePlatform).
+		Traceln("amazon: [multi-az] creating capacity reservation in zone")
+
 	input := &ec2.CreateCapacityReservationInput{
 		InstanceType:          aws.String(reqCfg.size),
 		InstancePlatform:      types.CapacityReservationInstancePlatform(instancePlatform),
@@ -523,6 +528,16 @@ func (p *amazonConfig) buildRunInstancesInput(
 		}
 	}
 
+	logr := logger.FromContext(context.Background()).
+		WithField("pool", opts.PoolName)
+	logr.WithField("zone", reqCfg.availabilityZone).
+		WithField("subnet", reqCfg.subnet).
+		WithField("instance_type", reqCfg.size).
+		WithField("ami", resolvedAMI).
+		WithField("volume_size", reqCfg.volumeSize).
+		WithField("volume_type", reqCfg.volumeType).
+		Traceln("amazon: [multi-az] RunInstances input parameters")
+
 	return in
 }
 
@@ -653,10 +668,26 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 		return nil, fmt.Errorf("created instance has nil InstanceId")
 	}
 
+	awsInstance := runResult.Instances[0]
 	logr = logr.
 		WithField("id", *awsInstanceID)
 
 	logr.Debugln("amazon: [provision] created instance")
+
+	// Log the actual zone and subnet AWS placed the instance in
+	actualZone := ""
+	actualSubnet := ""
+	if awsInstance.Placement != nil && awsInstance.Placement.AvailabilityZone != nil {
+		actualZone = *awsInstance.Placement.AvailabilityZone
+	}
+	if awsInstance.SubnetId != nil {
+		actualSubnet = *awsInstance.SubnetId
+	}
+	logr.WithField("requested_zone", reqCfg.availabilityZone).
+		WithField("requested_subnet", reqCfg.subnet).
+		WithField("actual_zone", actualZone).
+		WithField("actual_subnet", actualSubnet).
+		Traceln("amazon: [multi-az] instance placement confirmation")
 
 	// poll the amazon endpoint for server updates and exit when a network address is allocated.
 	var amazonInstance *types.Instance
@@ -941,42 +972,57 @@ func (p *amazonConfig) getDynamicConfig(opts *drtypes.InstanceCreateOpts) (*requ
 
 	// Determine the target zone: request zones > capacity reservation zone > round-robin
 	var targetZone string
+	var zoneSource string
 	if len(opts.Zones) > 0 {
 		targetZone = opts.Zones[0]
+		zoneSource = "request"
 	} else if opts.CapacityReservation != nil && opts.CapacityReservation.Zone != "" {
 		targetZone = opts.CapacityReservation.Zone
+		zoneSource = "capacity_reservation"
 	}
+
+	logr := logger.FromContext(context.Background()).
+		WithField("pool", opts.PoolName)
 
 	if targetZone != "" {
 		cfg.availabilityZone = targetZone
+		logr.WithField("zone", targetZone).
+			WithField("source", zoneSource).
+			Traceln("amazon: [multi-az] zone selected from request")
 		// Find matching subnet for the zone
+		subnetFound := false
 		for _, zoneDetail := range p.zoneDetails {
 			if zoneDetail.AvailabilityZone == targetZone {
 				cfg.subnet = zoneDetail.SubnetID
+				subnetFound = true
+				logr.WithField("zone", targetZone).
+					WithField("subnet", zoneDetail.SubnetID).
+					Traceln("amazon: [multi-az] matched subnet for requested zone")
 				break
 			}
+		}
+		if !subnetFound && len(p.zoneDetails) > 0 {
+			logr.WithField("zone", targetZone).
+				WithField("fallback_subnet", cfg.subnet).
+				Warnln("amazon: [multi-az] no subnet found in zone_details for requested zone, using pool default")
 		}
 	} else if len(p.zoneDetails) > 0 {
-		// Round-robin selection of availability zone and subnet
+		// Round-robin selection of availability zone and subnet using atomic increment
+		// to guarantee even distribution under concurrent goroutine access
 		numZones := uint64(len(p.zoneDetails))
-		start := time.Now()
-		for {
-			current := atomic.LoadUint64(&p.zoneIndex)
-			next := (current + 1) % numZones
-			if atomic.CompareAndSwapUint64(&p.zoneIndex, current, next) {
-				zoneDetail := p.zoneDetails[current]
-				cfg.availabilityZone = zoneDetail.AvailabilityZone
-				cfg.subnet = zoneDetail.SubnetID
-				break
-			}
-			// Fallback to random selection if CAS loop takes too long
-			if time.Since(start) > 10*time.Second {
-				zoneDetail := p.zoneDetails[rand.Intn(len(p.zoneDetails))] //nolint:gosec
-				cfg.availabilityZone = zoneDetail.AvailabilityZone
-				cfg.subnet = zoneDetail.SubnetID
-				break
-			}
-		}
+		idx := atomic.AddUint64(&p.zoneIndex, 1) - 1
+		zoneDetail := p.zoneDetails[idx%numZones]
+		cfg.availabilityZone = zoneDetail.AvailabilityZone
+		cfg.subnet = zoneDetail.SubnetID
+		logr.WithField("zone", zoneDetail.AvailabilityZone).
+			WithField("subnet", zoneDetail.SubnetID).
+			WithField("round_robin_index", idx).
+			WithField("num_zones", numZones).
+			Traceln("amazon: [multi-az] zone selected via round-robin")
+	} else {
+		logr.WithField("zone", cfg.availabilityZone).
+			WithField("subnet", cfg.subnet).
+			Traceln("amazon: [multi-az] using pool default zone (no zone_details configured)")
 	}
 
 	if opts.MachineType != "" {
@@ -1341,6 +1387,13 @@ func (p *amazonConfig) createPersistentDisks(
 		}
 
 		// Create the volume
+		logr := logger.FromContext(ctx).WithField("pool", opts.PoolName)
+		logr.WithField("disk_name", diskName).
+			WithField("zone", reqCfg.availabilityZone).
+			WithField("volume_size", volumeSize).
+			WithField("volume_type", opts.StorageOpts.Type).
+			Traceln("amazon: [multi-az] creating persistent disk in zone")
+
 		volumeOutput, err := p.service.CreateVolume(ctx, createVolumeInput)
 		if err != nil {
 			// Cleanup already created volumes

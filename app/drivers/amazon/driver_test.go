@@ -3,6 +3,7 @@ package amazon
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
 
+	cf "github.com/drone-runners/drone-runner-aws/command/config"
 	drtypes "github.com/drone-runners/drone-runner-aws/types"
 )
 
@@ -546,4 +548,234 @@ func TestCanHibernate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGetDynamicConfig_RoundRobinEvenDistribution tests that round-robin distributes
+// evenly across zones when called sequentially.
+func TestGetDynamicConfig_RoundRobinEvenDistribution(t *testing.T) {
+	zones := []cf.ZoneInfo{
+		{AvailabilityZone: "us-east-1a", SubnetID: "subnet-aaa"},
+		{AvailabilityZone: "us-east-1b", SubnetID: "subnet-bbb"},
+		{AvailabilityZone: "us-east-1c", SubnetID: "subnet-ccc"},
+	}
+
+	p := &amazonConfig{
+		availabilityZone: "us-east-1a",
+		subnet:           "subnet-default",
+		size:             "m5.xlarge",
+		volumeSize:       100,
+		volumeType:       "gp3",
+		zoneDetails:      zones,
+		zoneIndex:        0,
+	}
+
+	counts := map[string]int{}
+	totalCalls := 30
+
+	for i := 0; i < totalCalls; i++ {
+		cfg, err := p.getDynamicConfig(&drtypes.InstanceCreateOpts{
+			PoolName: "test-pool",
+		})
+		assert.NoError(t, err)
+		counts[cfg.availabilityZone]++
+	}
+
+	// Each zone should get exactly totalCalls/numZones = 10
+	for _, zone := range zones {
+		assert.Equal(t, totalCalls/len(zones), counts[zone.AvailabilityZone],
+			"zone %s should get %d calls", zone.AvailabilityZone, totalCalls/len(zones))
+	}
+}
+
+// TestGetDynamicConfig_RoundRobinConcurrent tests even distribution under concurrent
+// goroutine access — the exact bug scenario that atomic.AddUint64 fixes.
+func TestGetDynamicConfig_RoundRobinConcurrent(t *testing.T) {
+	zones := []cf.ZoneInfo{
+		{AvailabilityZone: "us-east-1a", SubnetID: "subnet-aaa"},
+		{AvailabilityZone: "us-east-1b", SubnetID: "subnet-bbb"},
+		{AvailabilityZone: "us-east-1c", SubnetID: "subnet-ccc"},
+	}
+
+	p := &amazonConfig{
+		availabilityZone: "us-east-1a",
+		subnet:           "subnet-default",
+		size:             "m5.xlarge",
+		volumeSize:       100,
+		volumeType:       "gp3",
+		zoneDetails:      zones,
+		zoneIndex:        0,
+	}
+
+	var mu sync.Mutex
+	counts := map[string]int{}
+	numGoroutines := 300
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			cfg, err := p.getDynamicConfig(&drtypes.InstanceCreateOpts{
+				PoolName: "test-pool",
+			})
+			assert.NoError(t, err)
+			mu.Lock()
+			counts[cfg.availabilityZone]++
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	// Each zone should get exactly numGoroutines/numZones = 100
+	for _, zone := range zones {
+		assert.Equal(t, numGoroutines/len(zones), counts[zone.AvailabilityZone],
+			"zone %s should get %d calls under concurrency", zone.AvailabilityZone, numGoroutines/len(zones))
+	}
+}
+
+// TestGetDynamicConfig_SingleZone tests round-robin with only one zone.
+func TestGetDynamicConfig_SingleZone(t *testing.T) {
+	p := &amazonConfig{
+		availabilityZone: "us-east-1a",
+		subnet:           "subnet-default",
+		size:             "m5.xlarge",
+		volumeSize:       100,
+		volumeType:       "gp3",
+		zoneDetails: []cf.ZoneInfo{
+			{AvailabilityZone: "us-east-1b", SubnetID: "subnet-bbb"},
+		},
+		zoneIndex: 0,
+	}
+
+	for i := 0; i < 5; i++ {
+		cfg, err := p.getDynamicConfig(&drtypes.InstanceCreateOpts{PoolName: "test-pool"})
+		assert.NoError(t, err)
+		assert.Equal(t, "us-east-1b", cfg.availabilityZone)
+		assert.Equal(t, "subnet-bbb", cfg.subnet)
+	}
+}
+
+// TestGetDynamicConfig_EmptyZoneDetails tests fallback to pool defaults when no
+// zoneDetails are configured.
+func TestGetDynamicConfig_EmptyZoneDetails(t *testing.T) {
+	p := &amazonConfig{
+		availabilityZone: "us-west-2a",
+		subnet:           "subnet-default",
+		size:             "m5.xlarge",
+		volumeSize:       100,
+		volumeType:       "gp3",
+		zoneDetails:      nil,
+	}
+
+	cfg, err := p.getDynamicConfig(&drtypes.InstanceCreateOpts{PoolName: "test-pool"})
+	assert.NoError(t, err)
+	assert.Equal(t, "us-west-2a", cfg.availabilityZone, "should use pool default zone")
+	assert.Equal(t, "subnet-default", cfg.subnet, "should use pool default subnet")
+}
+
+// TestGetDynamicConfig_ZonePriority tests that request zones take priority over
+// capacity reservation zone, which takes priority over round-robin.
+func TestGetDynamicConfig_ZonePriority(t *testing.T) {
+	zones := []cf.ZoneInfo{
+		{AvailabilityZone: "us-east-1a", SubnetID: "subnet-aaa"},
+		{AvailabilityZone: "us-east-1b", SubnetID: "subnet-bbb"},
+		{AvailabilityZone: "us-east-1c", SubnetID: "subnet-ccc"},
+	}
+
+	p := &amazonConfig{
+		availabilityZone: "us-east-1a",
+		subnet:           "subnet-default",
+		size:             "m5.xlarge",
+		volumeSize:       100,
+		volumeType:       "gp3",
+		zoneDetails:      zones,
+		zoneIndex:        0,
+	}
+
+	// Request zone takes top priority
+	cfg, err := p.getDynamicConfig(&drtypes.InstanceCreateOpts{
+		PoolName: "test-pool",
+		Zones:    []string{"us-east-1c"},
+		CapacityReservation: &drtypes.CapacityReservation{
+			Zone: "us-east-1b",
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "us-east-1c", cfg.availabilityZone, "request zone should take priority")
+	assert.Equal(t, "subnet-ccc", cfg.subnet, "should match subnet for requested zone")
+
+	// Capacity reservation zone is second priority
+	cfg, err = p.getDynamicConfig(&drtypes.InstanceCreateOpts{
+		PoolName: "test-pool",
+		CapacityReservation: &drtypes.CapacityReservation{
+			Zone: "us-east-1b",
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "us-east-1b", cfg.availabilityZone, "capacity reservation zone should be used when no request zone")
+	assert.Equal(t, "subnet-bbb", cfg.subnet, "should match subnet for capacity reservation zone")
+}
+
+// TestGetDynamicConfig_SubnetMatchForRequestedZone tests that when a zone is requested,
+// the correct subnet is looked up from zoneDetails.
+func TestGetDynamicConfig_SubnetMatchForRequestedZone(t *testing.T) {
+	zones := []cf.ZoneInfo{
+		{AvailabilityZone: "us-east-1a", SubnetID: "subnet-aaa"},
+		{AvailabilityZone: "us-east-1b", SubnetID: "subnet-bbb"},
+	}
+
+	p := &amazonConfig{
+		availabilityZone: "us-east-1a",
+		subnet:           "subnet-default",
+		size:             "m5.xlarge",
+		volumeSize:       100,
+		volumeType:       "gp3",
+		zoneDetails:      zones,
+	}
+
+	// Requesting a zone that exists in zoneDetails should find the matching subnet
+	cfg, err := p.getDynamicConfig(&drtypes.InstanceCreateOpts{
+		PoolName: "test-pool",
+		Zones:    []string{"us-east-1b"},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "us-east-1b", cfg.availabilityZone)
+	assert.Equal(t, "subnet-bbb", cfg.subnet, "should match subnet from zoneDetails")
+
+	// Requesting a zone NOT in zoneDetails should fall back to pool default subnet
+	cfg, err = p.getDynamicConfig(&drtypes.InstanceCreateOpts{
+		PoolName: "test-pool",
+		Zones:    []string{"us-east-1z"},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "us-east-1z", cfg.availabilityZone)
+	assert.Equal(t, "subnet-default", cfg.subnet, "should fall back to pool default subnet for unknown zone")
+}
+
+// TestGetDynamicConfig_RoundRobinSetsSubnet verifies that round-robin sets both
+// the zone and its corresponding subnet from zoneDetails.
+func TestGetDynamicConfig_RoundRobinSetsSubnet(t *testing.T) {
+	zones := []cf.ZoneInfo{
+		{AvailabilityZone: "us-east-1a", SubnetID: "subnet-aaa"},
+		{AvailabilityZone: "us-east-1b", SubnetID: "subnet-bbb"},
+	}
+
+	p := &amazonConfig{
+		availabilityZone: "us-east-1a",
+		subnet:           "subnet-default",
+		size:             "m5.xlarge",
+		volumeSize:       100,
+		volumeType:       "gp3",
+		zoneDetails:      zones,
+		zoneIndex:        0,
+	}
+
+	cfg1, _ := p.getDynamicConfig(&drtypes.InstanceCreateOpts{PoolName: "test-pool"})
+	cfg2, _ := p.getDynamicConfig(&drtypes.InstanceCreateOpts{PoolName: "test-pool"})
+
+	assert.Equal(t, "us-east-1a", cfg1.availabilityZone)
+	assert.Equal(t, "subnet-aaa", cfg1.subnet)
+	assert.Equal(t, "us-east-1b", cfg2.availabilityZone)
+	assert.Equal(t, "subnet-bbb", cfg2.subnet)
 }

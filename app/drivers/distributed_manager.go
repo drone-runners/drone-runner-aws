@@ -625,7 +625,17 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 			logrus.WithError(updateErr).WithField("instanceID", inst.ID).Errorln("failed to update instance state to created")
 			return
 		}
-		logrus.WithField("instanceID", inst.ID).Infoln("instance connectivity verified, state updated to created")
+		logrus.WithFields(logrus.Fields{
+			"instanceID": inst.ID,
+			"name":       inst.Name,
+			"ip":         inst.Address,
+			"pool":       pool.Name,
+			"zone":       inst.Zone,
+			"region":     inst.Region,
+			"stage":      inst.Stage,
+			"owner":      inst.OwnerID,
+			"provider":   inst.Provider,
+		}).Debugln("instance connectivity verified, state updated to created")
 
 		// Step 3: Attempt to hibernate the instance
 		shouldHibernate := false
@@ -713,7 +723,16 @@ func (d *DistributedManager) hibernate(
 		return fmt.Errorf("hibernate: failed to update hibernated instance %s of %q pool: %w", claimedInstance.ID, poolName, err)
 	}
 
-	logrus.WithField("instanceID", claimedInstance.ID).Infoln("hibernate complete")
+	logrus.WithFields(logrus.Fields{
+		"instanceID": claimedInstance.ID,
+		"name":       claimedInstance.Name,
+		"ip":         claimedInstance.Address,
+		"pool":       poolName,
+		"zone":       claimedInstance.Zone,
+		"region":     claimedInstance.Region,
+		"stage":      claimedInstance.Stage,
+		"provider":   claimedInstance.Provider,
+	}).Infoln("hibernate complete")
 	return nil
 }
 
