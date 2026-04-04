@@ -22,20 +22,20 @@ type EMAWeekendDecayPredictor struct {
 // PredictorConfig contains configuration parameters for the predictor.
 type PredictorConfig struct { //nolint:revive
 	// EMAPeriod is the number of data points to consider for EMA calculation.
-	// Default: 12 (e.g., 12 hours if data is recorded hourly)
+	// Default: 3 (alpha = 2/4 = 0.5, highly responsive to recent data)
 	EMAPeriod int
 
 	// EMAWeight is the weight given to EMA vs historical data (0.0 to 1.0).
-	// Higher values favor recent trends. Default: 0.4
+	// Higher values favor recent trends. Default: 0.85
 	EMAWeight float64
 
 	// WeekDecayFactors are the decay weights for week 1, 2, and 3 ago.
 	// Week 1 gets highest weight, Week 3 gets lowest.
-	// Default: [0.5, 0.3, 0.2]
+	// Default: [0.85, 0.10, 0.05]
 	WeekDecayFactors [3]float64
 
-	// SafetyBuffer is a percentage buffer added to predictions (e.g., 0.1 = 10%).
-	// Default: 0.1
+	// SafetyBuffer is a percentage buffer added to predictions (e.g., 0.15 = 15%).
+	// Default: 0.15
 	SafetyBuffer float64
 
 	// MinInstances is the minimum number of instances to recommend.
@@ -43,24 +43,24 @@ type PredictorConfig struct { //nolint:revive
 	MinInstances int
 
 	// MaxLookbackDays is the maximum number of days to look back to find weekday data.
-	// Default: 9 (to ensure we capture at least 5 weekdays)
+	// Default: 4 (to ensure we capture at least 2 weekdays)
 	MaxLookbackDays int
 
 	// TargetWeekdays is the number of weekdays to use for EMA calculation.
-	// Default: 5
+	// Default: 2
 	TargetWeekdays int
 }
 
 // DefaultPredictorConfig returns a PredictorConfig with sensible defaults.
 func DefaultPredictorConfig() PredictorConfig {
 	return PredictorConfig{
-		EMAPeriod:        12,
-		EMAWeight:        0.4,
-		WeekDecayFactors: [3]float64{0.5, 0.3, 0.2},
-		SafetyBuffer:     0.1,
+		EMAPeriod:        3,
+		EMAWeight:        0.85,
+		WeekDecayFactors: [3]float64{0.85, 0.10, 0.05},
+		SafetyBuffer:     0.15,
 		MinInstances:     0,
-		MaxLookbackDays:  9,
-		TargetWeekdays:   5,
+		MaxLookbackDays:  4,
+		TargetWeekdays:   2,
 	}
 }
 
@@ -270,20 +270,10 @@ func (p *EMAWeekendDecayPredictor) calculatePeakUtilization(records []types.Util
 
 // combineValues combines EMA and historical values using configured weights.
 func (p *EMAWeekendDecayPredictor) combineValues(emaValue, historicalValue float64) float64 {
-	// Handle cases where one or both values might be zero
-	if emaValue == 0 && historicalValue == 0 {
-		return 0
-	}
-
-	if emaValue == 0 {
-		return historicalValue
-	}
-
-	if historicalValue == 0 {
-		return emaValue
-	}
-
 	// Combine using configured weights
 	// EMAWeight determines how much we trust recent trends vs historical patterns
+	// When EMA is 0 (e.g. variant load dropped to zero), the weighted formula
+	// naturally produces a low value (only historicalValue * (1-EMAWeight))
+	// instead of falling back to 100% historical.
 	return p.config.EMAWeight*emaValue + (1-p.config.EMAWeight)*historicalValue
 }

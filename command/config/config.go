@@ -426,12 +426,12 @@ type EnvConfig struct {
 			ActiveImageLookbackDays int      `envconfig:"DLITE_SCHEDULER_SCALER_ACTIVE_IMAGE_LOOKBACK_DAYS" default:"2"`
 		}
 		Predictor struct {
-			EMAPeriod       int     `envconfig:"DLITE_PREDICTOR_EMA_PERIOD" default:"12"`
-			EMAWeight       float64 `envconfig:"DLITE_PREDICTOR_EMA_WEIGHT" default:"0.4"`
-			SafetyBuffer    float64 `envconfig:"DLITE_PREDICTOR_SAFETY_BUFFER" default:"0.1"`
+			EMAPeriod       int     `envconfig:"DLITE_PREDICTOR_EMA_PERIOD" default:"3"`
+			EMAWeight       float64 `envconfig:"DLITE_PREDICTOR_EMA_WEIGHT" default:"0.85"`
+			SafetyBuffer    float64 `envconfig:"DLITE_PREDICTOR_SAFETY_BUFFER" default:"0.15"`
 			MinInstances    int     `envconfig:"DLITE_PREDICTOR_MIN_INSTANCES" default:"0"`
-			MaxLookbackDays int     `envconfig:"DLITE_PREDICTOR_MAX_LOOKBACK_DAYS" default:"9"`
-			TargetWeekdays  int     `envconfig:"DLITE_PREDICTOR_TARGET_WEEKDAYS" default:"5"`
+			MaxLookbackDays int     `envconfig:"DLITE_PREDICTOR_MAX_LOOKBACK_DAYS" default:"4"`
+			TargetWeekdays  int     `envconfig:"DLITE_PREDICTOR_TARGET_WEEKDAYS" default:"2"`
 		}
 	}
 
@@ -533,9 +533,9 @@ func (c EnvConfig) Passwords() types.Passwords {
 // PredictorConfig returns a predictor.PredictorConfig with values from the environment configuration
 func (c *EnvConfig) PredictorConfig() [3]float64 {
 	return [3]float64{
-		0.5,
-		0.3,
-		0.2,
+		0.85,
+		0.10,
+		0.05,
 	}
 }
 
