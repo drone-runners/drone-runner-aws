@@ -363,10 +363,12 @@ func (d *DistributedManager) provisionFromPool(
 			VariantID:            candidateVariantID,
 		}
 
+		imageConfig := &types.VMImageConfig{}
 		if vmImageConfig != nil {
-			fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
-			queryParams.ImageName = fullyQualifiedImageName
+			imageConfig.ImageName = vmImageConfig.ImageName
 		}
+		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
+		queryParams.ImageName = fullyQualifiedImageName
 
 		// Try to find and claim a free instance atomically
 		inst, err = d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
@@ -468,9 +470,11 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 	// Step 2: Optionally refine by ImageName (best-effort)
 	var fullyQualifiedImageName string
 	vmImageConfig := provisionParams.GetVMImageConfig()
-	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
-		fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
+	imageConfig := &types.VMImageConfig{}
+	if vmImageConfig != nil {
+		imageConfig.ImageName = vmImageConfig.ImageName
 	}
+	fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
 
 	if fullyQualifiedImageName == "" {
 		variantIDs := make([]string, len(candidates))
