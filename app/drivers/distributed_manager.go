@@ -445,8 +445,10 @@ func (d *DistributedManager) provisionFromPool(
 
 // filterVariants returns all matching variants in priority order based on provisionParams criteria.
 // Step 1: Filter by ResourceClass AND NestedVirtualization (both required). Returns nil if no matches.
-// Step 2: Optionally refine by ImageName (best-effort). If no image filter is provided or no
-// variants match the image filter, falls back to step 1 results.
+// Step 2: When the provision request has a non-empty fully qualified image name, refine by image:
+// variants with a matching image name are preferred; otherwise variants with no image name are used.
+// If nothing qualifies in step 2, returns nil (no fallback to all step-1 candidates).
+// When the provision image is empty, step 2 is skipped and step 1 candidates are returned.
 // The order preserves the original pool configuration order.
 func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry, provisionParams *types.ProvisionParams) []*types.PoolVariant {
 	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
@@ -506,22 +508,21 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 		imageMatchedCandidates = noImageName
 	}
 
-	finalCandidates := imageMatchedCandidates
-	if len(finalCandidates) == 0 {
+	if len(imageMatchedCandidates) == 0 {
 		logr.WithField("resource_class", provisionParams.ResourceClass).
 			WithField("image_name", fullyQualifiedImageName).
-			Debugln("provision: no variants matched image filter, falling back to resource_class and nested_virtualization matches")
-		finalCandidates = candidates
+			Debugln("provision: no variants matched image filter")
+		return nil
 	}
 
-	variantIDs := make([]string, len(finalCandidates))
-	for i := range finalCandidates {
-		variantIDs[i] = finalCandidates[i].VariantID
+	variantIDs := make([]string, len(imageMatchedCandidates))
+	for i := range imageMatchedCandidates {
+		variantIDs[i] = imageMatchedCandidates[i].VariantID
 	}
 	logr.WithField("variant_ids", variantIDs).
 		Debugln("provision: matched variants in priority order")
 
-	return finalCandidates
+	return imageMatchedCandidates
 }
 
 // applyVariantToSetupParams applies the selected variant's configuration to setupParams

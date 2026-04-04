@@ -159,7 +159,7 @@ func TestFilterVariants(t *testing.T) {
 			expectedIDs: []string{"variant-2"},
 		},
 		{
-			name: "image filter no match falls back to resource class and nested virt matches",
+			name: "image filter no match returns nil when all variants pin a different image",
 			variants: []types.PoolVariant{
 				{
 					SetupInstanceParams: types.SetupInstanceParams{
@@ -182,7 +182,7 @@ func TestFilterVariants(t *testing.T) {
 					ImageName: "centos-7",
 				},
 			},
-			expectedIDs: []string{"variant-1", "variant-2"}, // Falls back to step 1 results
+			expectedIDs: nil,
 		},
 		{
 			name: "exact match with all criteria",
