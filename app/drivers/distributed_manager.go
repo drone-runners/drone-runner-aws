@@ -387,12 +387,14 @@ func (d *DistributedManager) provisionFromPool(
 				WithField("variant_id", candidateVariantID).
 				Traceln("provision: claimed hotpool instance")
 
+			// Backfill with empty Zones so round-robin selects the zone,
+			// rather than pinning to the consumed instance's zone which
+			// causes uneven distribution over time.
 			d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
 				ImageName:            inst.Image,
 				NestedVirtualization: inst.EnableNestedVirtualization,
 				MachineType:          inst.Size,
 				Hibernate:            inst.IsHibernated,
-				Zones:                []string{inst.Zone},
 				VariantID:            inst.VariantID,
 				DiskSize:             setupParams.DiskSize,
 				DiskType:             setupParams.DiskType,
