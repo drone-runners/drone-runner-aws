@@ -355,20 +355,20 @@ func (d *DistributedManager) provisionFromPool(
 		variantsToTry = append(variantsToTry, defaultVariantID)
 	}
 
+	imageConfig := &types.VMImageConfig{}
+	if vmImageConfig != nil {
+		imageConfig.ImageName = vmImageConfig.ImageName
+	}
+	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
+
 	for _, candidateVariantID := range variantsToTry {
 		queryParams := &types.QueryParams{
 			PoolName:             poolName,
 			MachineType:          setupParams.MachineType,
 			NestedVirtualization: setupParams.NestedVirtualization,
 			VariantID:            candidateVariantID,
+			ImageName:            fullyQualifiedImageName,
 		}
-
-		imageConfig := &types.VMImageConfig{}
-		if vmImageConfig != nil {
-			imageConfig.ImageName = vmImageConfig.ImageName
-		}
-		fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
-		queryParams.ImageName = fullyQualifiedImageName
 
 		// Try to find and claim a free instance atomically
 		inst, err = d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
@@ -482,7 +482,7 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 			variantIDs[i] = candidates[i].VariantID
 		}
 		logr.WithField("variant_ids", variantIDs).
-			Debugln("provision: matched variants by resource_class and nested_virtualization")
+			Debugln("provision: fully qualified image name is empty, returning variants by resource_class and nested_virtualization")
 		return candidates
 	}
 
