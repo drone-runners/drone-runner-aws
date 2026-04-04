@@ -486,14 +486,24 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 		return candidates
 	}
 
-	var imageMatchedCandidates []*types.PoolVariant
+	var matched []*types.PoolVariant
+	var noImageName []*types.PoolVariant
 	for _, variant := range candidates {
-		if variant.ImageName != "" {
-			variantFullyQualifiedImage, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
-			if variantFullyQualifiedImage == fullyQualifiedImageName {
-				imageMatchedCandidates = append(imageMatchedCandidates, variant)
-			}
+		if variant.ImageName == "" {
+			noImageName = append(noImageName, variant)
+			continue
 		}
+		variantFQ, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
+		if variantFQ == fullyQualifiedImageName {
+			matched = append(matched, variant)
+		}
+	}
+
+	var imageMatchedCandidates []*types.PoolVariant
+	if len(matched) > 0 {
+		imageMatchedCandidates = matched
+	} else {
+		imageMatchedCandidates = noImageName
 	}
 
 	finalCandidates := imageMatchedCandidates
