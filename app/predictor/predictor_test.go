@@ -435,13 +435,13 @@ func TestCombineValues(t *testing.T) {
 			name:       "ema only",
 			ema:        10,
 			historical: 0,
-			expected:   4, // 0.4*10 + 0.6*0 = 4
+			expected:   4, // EMAWeight*10 + (1-EMAWeight)*0
 		},
 		{
 			name:       "historical only",
 			ema:        0,
 			historical: 10,
-			expected:   6, // 0.4*0 + 0.6*10 = 6
+			expected:   6, // EMAWeight*0 + (1-EMAWeight)*10
 		},
 		{
 			name:       "both values - weighted combination",
