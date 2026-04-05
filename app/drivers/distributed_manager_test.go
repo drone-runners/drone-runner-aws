@@ -514,19 +514,31 @@ func TestFilterVariants_Prod_LinuxAmd64(t *testing.T) {
 		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_small_hw_ubuntu24", ResourceClass: "small", MachineType: "c2-standard-16", NestedVirtualization: true, ImageName: ubuntu24Image}},
 		// --- medium_hw ---
 		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_medium_hw", ResourceClass: "medium", MachineType: "c2-standard-16", NestedVirtualization: true}},
-		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_medium_hw_ubuntu24", ResourceClass: "medium", MachineType: "c2-standard-16", NestedVirtualization: true, ImageName: ubuntu24Image}},
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_medium_hw_ubuntu24", ResourceClass: "medium", MachineType: "c2-standard-16",
+			NestedVirtualization: true, ImageName: ubuntu24Image,
+		}},
 		// --- large_hw ---
 		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large_hw", ResourceClass: "large", MachineType: "c2-standard-30", NestedVirtualization: true}},
 		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large_hw_ubuntu24", ResourceClass: "large", MachineType: "c2-standard-30", NestedVirtualization: true, ImageName: ubuntu24Image}},
 		// --- xlarge_hw ---
 		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_xlarge_hw", ResourceClass: "xlarge", MachineType: "c2-standard-60", NestedVirtualization: true}},
-		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_xlarge_hw_ubuntu24", ResourceClass: "xlarge", MachineType: "c2-standard-60", NestedVirtualization: true, ImageName: ubuntu24Image}},
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_xlarge_hw_ubuntu24", ResourceClass: "xlarge", MachineType: "c2-standard-60",
+			NestedVirtualization: true, ImageName: ubuntu24Image,
+		}},
 		// --- xxlarge_hw ---
 		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_xxlarge_hw", ResourceClass: "xxlarge", MachineType: "c4-standard-96", NestedVirtualization: true}},
-		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_xxlarge_hw_ubuntu24", ResourceClass: "xxlarge", MachineType: "c4-standard-96", NestedVirtualization: true, ImageName: ubuntu24Image}},
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_xxlarge_hw_ubuntu24", ResourceClass: "xxlarge", MachineType: "c4-standard-96",
+			NestedVirtualization: true, ImageName: ubuntu24Image,
+		}},
 		// --- xxxlarge_hw ---
 		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_xxxlarge_hw", ResourceClass: "xxxlarge", MachineType: "c4-standard-96", NestedVirtualization: true}},
-		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_xxxlarge_hw_ubuntu24", ResourceClass: "xxxlarge", MachineType: "c4-standard-96", NestedVirtualization: true, ImageName: ubuntu24Image}},
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_xxxlarge_hw_ubuntu24", ResourceClass: "xxxlarge", MachineType: "c4-standard-96",
+			NestedVirtualization: true, ImageName: ubuntu24Image,
+		}},
 	}
 
 	tests := []struct {
