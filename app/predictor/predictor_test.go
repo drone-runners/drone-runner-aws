@@ -158,7 +158,10 @@ func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
 }
 
 func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
-	now := time.Now()
+	// Fixed weekday (Wednesday UTC) so EMA weekday lookbacks overlap the 24h
+	// synthetic data; with time.Now() on Monday, past-weekday EMA windows fall
+	// outside that window and EMA becomes 0, making the assertion flaky.
+	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
 	var records []types.UtilizationRecord
 
 	// Recent data (past 24 hours) - 10 instances avg
