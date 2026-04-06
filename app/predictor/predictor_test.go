@@ -214,11 +214,11 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 	}
 
 	// Should blend EMA (around 10) with historical weighted avg
-	// Historical: (20*0.5 + 15*0.3 + 12*0.2) / 1.0 = 16.9
-	// Combined: 0.4*10 + 0.6*16.9 = 14.14
-	// With 10% safety buffer: ~15.5, ceil = 16
-	if result.RecommendedInstances < 10 || result.RecommendedInstances > 20 {
-		t.Errorf("expected recommended instances between 10-20, got %d", result.RecommendedInstances)
+	// Historical: (20*0.85 + 15*0.10 + 12*0.05) / 1.0 = 19.1
+	// Combined: 0.85*10 + 0.15*19.1 = 11.365
+	// With 15% safety buffer: ~13.07, ceil = 14
+	if result.RecommendedInstances < 10 || result.RecommendedInstances > 25 {
+		t.Errorf("expected recommended instances between 10-25, got %d", result.RecommendedInstances)
 	}
 }
 
@@ -343,32 +343,32 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 func TestDefaultPredictorConfig(t *testing.T) {
 	config := DefaultPredictorConfig()
 
-	if config.EMAPeriod != 12 {
-		t.Errorf("expected EMAPeriod 12, got %d", config.EMAPeriod)
+	if config.EMAPeriod != 3 {
+		t.Errorf("expected EMAPeriod 3, got %d", config.EMAPeriod)
 	}
-	if config.EMAWeight != 0.4 {
-		t.Errorf("expected EMAWeight 0.4, got %f", config.EMAWeight)
+	if config.EMAWeight != 0.85 {
+		t.Errorf("expected EMAWeight 0.85, got %f", config.EMAWeight)
 	}
-	if config.WeekDecayFactors[0] != 0.5 {
-		t.Errorf("expected week 1 decay 0.5, got %f", config.WeekDecayFactors[0])
+	if config.WeekDecayFactors[0] != 0.85 {
+		t.Errorf("expected week 1 decay 0.85, got %f", config.WeekDecayFactors[0])
 	}
-	if config.WeekDecayFactors[1] != 0.3 {
-		t.Errorf("expected week 2 decay 0.3, got %f", config.WeekDecayFactors[1])
+	if config.WeekDecayFactors[1] != 0.10 {
+		t.Errorf("expected week 2 decay 0.10, got %f", config.WeekDecayFactors[1])
 	}
-	if config.WeekDecayFactors[2] != 0.2 {
-		t.Errorf("expected week 3 decay 0.2, got %f", config.WeekDecayFactors[2])
+	if config.WeekDecayFactors[2] != 0.05 {
+		t.Errorf("expected week 3 decay 0.05, got %f", config.WeekDecayFactors[2])
 	}
-	if config.SafetyBuffer != 0.1 {
-		t.Errorf("expected SafetyBuffer 0.1, got %f", config.SafetyBuffer)
+	if config.SafetyBuffer != 0.15 {
+		t.Errorf("expected SafetyBuffer 0.15, got %f", config.SafetyBuffer)
 	}
 	if config.MinInstances != 0 {
 		t.Errorf("expected MinInstances 0, got %d", config.MinInstances)
 	}
-	if config.MaxLookbackDays != 9 {
-		t.Errorf("expected MaxLookbackDays 9, got %d", config.MaxLookbackDays)
+	if config.MaxLookbackDays != 4 {
+		t.Errorf("expected MaxLookbackDays 4, got %d", config.MaxLookbackDays)
 	}
-	if config.TargetWeekdays != 5 {
-		t.Errorf("expected TargetWeekdays 5, got %d", config.TargetWeekdays)
+	if config.TargetWeekdays != 2 {
+		t.Errorf("expected TargetWeekdays 2, got %d", config.TargetWeekdays)
 	}
 }
 
@@ -435,13 +435,13 @@ func TestCombineValues(t *testing.T) {
 			name:       "ema only",
 			ema:        10,
 			historical: 0,
-			expected:   10,
+			expected:   4, // EMAWeight*10 + (1-EMAWeight)*0
 		},
 		{
 			name:       "historical only",
 			ema:        0,
 			historical: 10,
-			expected:   10,
+			expected:   6, // EMAWeight*0 + (1-EMAWeight)*10
 		},
 		{
 			name:       "both values - weighted combination",
