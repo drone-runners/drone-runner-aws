@@ -355,17 +355,19 @@ func (d *DistributedManager) provisionFromPool(
 		variantsToTry = append(variantsToTry, defaultVariantID)
 	}
 
+	imageConfig := &types.VMImageConfig{}
+	if vmImageConfig != nil {
+		imageConfig.ImageName = vmImageConfig.ImageName
+	}
+	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
+
 	for _, candidateVariantID := range variantsToTry {
 		queryParams := &types.QueryParams{
 			PoolName:             poolName,
 			MachineType:          setupParams.MachineType,
 			NestedVirtualization: setupParams.NestedVirtualization,
 			VariantID:            candidateVariantID,
-		}
-
-		if vmImageConfig != nil {
-			fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
-			queryParams.ImageName = fullyQualifiedImageName
+			ImageName:            fullyQualifiedImageName,
 		}
 
 		// Try to find and claim a free instance atomically
@@ -443,8 +445,10 @@ func (d *DistributedManager) provisionFromPool(
 
 // filterVariants returns all matching variants in priority order based on provisionParams criteria.
 // Step 1: Filter by ResourceClass AND NestedVirtualization (both required). Returns nil if no matches.
-// Step 2: Optionally refine by ImageName (best-effort). If no image filter is provided or no
-// variants match the image filter, falls back to step 1 results.
+// Step 2: When the provision request has a non-empty fully qualified image name, refine by image:
+// variants with a matching image name are preferred; otherwise variants with no image name are used.
+// If nothing qualifies in step 2, returns nil (no fallback to all step-1 candidates).
+// When the provision image is empty, step 2 is skipped and step 1 candidates are returned.
 // The order preserves the original pool configuration order.
 func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry, provisionParams *types.ProvisionParams) []*types.PoolVariant {
 	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
@@ -468,9 +472,11 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 	// Step 2: Optionally refine by ImageName (best-effort)
 	var fullyQualifiedImageName string
 	vmImageConfig := provisionParams.GetVMImageConfig()
-	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
-		fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: vmImageConfig.ImageName})
+	imageConfig := &types.VMImageConfig{}
+	if vmImageConfig != nil {
+		imageConfig.ImageName = vmImageConfig.ImageName
 	}
+	fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
 
 	if fullyQualifiedImageName == "" {
 		variantIDs := make([]string, len(candidates))
@@ -478,36 +484,45 @@ func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry
 			variantIDs[i] = candidates[i].VariantID
 		}
 		logr.WithField("variant_ids", variantIDs).
-			Debugln("provision: matched variants by resource_class and nested_virtualization")
+			Debugln("provision: fully qualified image name is empty, returning variants by resource_class and nested_virtualization")
 		return candidates
 	}
 
-	var imageMatchedCandidates []*types.PoolVariant
+	var matched []*types.PoolVariant
+	var noImageName []*types.PoolVariant
 	for _, variant := range candidates {
-		if variant.ImageName != "" {
-			variantFullyQualifiedImage, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
-			if variantFullyQualifiedImage == fullyQualifiedImageName {
-				imageMatchedCandidates = append(imageMatchedCandidates, variant)
-			}
+		if variant.ImageName == "" {
+			noImageName = append(noImageName, variant)
+			continue
+		}
+		variantFQ, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
+		if variantFQ == fullyQualifiedImageName {
+			matched = append(matched, variant)
 		}
 	}
 
-	finalCandidates := imageMatchedCandidates
-	if len(finalCandidates) == 0 {
-		logr.WithField("resource_class", provisionParams.ResourceClass).
-			WithField("image_name", fullyQualifiedImageName).
-			Debugln("provision: no variants matched image filter, falling back to resource_class and nested_virtualization matches")
-		finalCandidates = candidates
+	var imageMatchedCandidates []*types.PoolVariant
+	if len(matched) > 0 {
+		imageMatchedCandidates = matched
+	} else {
+		imageMatchedCandidates = noImageName
 	}
 
-	variantIDs := make([]string, len(finalCandidates))
-	for i := range finalCandidates {
-		variantIDs[i] = finalCandidates[i].VariantID
+	if len(imageMatchedCandidates) == 0 {
+		logr.WithField("resource_class", provisionParams.ResourceClass).
+			WithField("image_name", fullyQualifiedImageName).
+			Debugln("provision: no variants matched image filter")
+		return nil
+	}
+
+	variantIDs := make([]string, len(imageMatchedCandidates))
+	for i := range imageMatchedCandidates {
+		variantIDs[i] = imageMatchedCandidates[i].VariantID
 	}
 	logr.WithField("variant_ids", variantIDs).
 		Debugln("provision: matched variants in priority order")
 
-	return finalCandidates
+	return imageMatchedCandidates
 }
 
 // applyVariantToSetupParams applies the selected variant's configuration to setupParams
@@ -874,18 +889,19 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	// Execute cleanup and call setupInstanceAsync for each cleaned instance
 	instances, err := d.executeInstanceCleanup(ctx, pool, conditions, "free")
 
-	// Call setupInstanceAsync for each cleaned free instance
-	for _, instance := range instances {
-		d.setupInstanceAsync(ctx, pool.Name, instance.RunnerName, &types.SetupInstanceParams{
-			ImageName:            instance.Image,
-			NestedVirtualization: instance.EnableNestedVirtualization,
-			MachineType:          instance.Size,
-			VariantID:            instance.VariantID,
-			Zones:                []string{instance.Zone},
-			Hibernate:            instance.IsHibernated,
-		})
+	// Log the instances that are being cleaned up
+	// Don't replenish the stale free instances, predictor will handle that
+	if instances != nil {
+		instanceIDs := make([]string, len(instances))
+		for i, instance := range instances {
+			instanceIDs[i] = instance.ID
+		}
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithField("count", len(instances)).
+			WithField("instance_ids", instanceIDs).
+			Infof("distributed dlite: purger: cleaning up %d stale free instances", len(instances))
 	}
-
 	return err
 }
 
