@@ -69,7 +69,17 @@ func (m *Manager) setupInstanceWithHibernate(
 			logrus.WithError(updateErr).WithField("instanceID", inst.ID).Errorln("failed to update instance state to created")
 			return
 		}
-		logrus.WithField("instanceID", inst.ID).Infoln("instance connectivity verified, state updated to created")
+		logrus.WithFields(logrus.Fields{
+			"instanceID": inst.ID,
+			"name":       inst.Name,
+			"ip":         inst.Address,
+			"pool":       pool.Name,
+			"zone":       inst.Zone,
+			"region":     inst.Region,
+			"stage":      inst.Stage,
+			"owner":      inst.OwnerID,
+			"provider":   inst.Provider,
+		}).Debugln("instance connectivity verified, state updated to created")
 
 		// Step 3: Attempt to hibernate the instance
 		herr := m.hibernateOrStopWithRetries(ctx, pool.Name, inst, false)
@@ -101,7 +111,16 @@ func (m *Manager) hibernateOrStopWithRetries(
 	for {
 		err := m.hibernate(ctx, instance.ID, poolName, pool)
 		if err == nil {
-			logrus.WithField("instanceID", instance.ID).Infoln("hibernate complete")
+			logrus.WithFields(logrus.Fields{
+				"instanceID": instance.ID,
+				"name":       instance.Name,
+				"ip":         instance.Address,
+				"pool":       poolName,
+				"zone":       instance.Zone,
+				"region":     instance.Region,
+				"stage":      instance.Stage,
+				"provider":   instance.Provider,
+			}).Infoln("hibernate complete")
 			return nil
 		}
 

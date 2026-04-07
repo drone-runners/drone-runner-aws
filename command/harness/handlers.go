@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -68,10 +69,12 @@ func (h *HTTPHandlers) HandlePoolOwner(w http.ResponseWriter, r *http.Request) {
 	if stageID != "" {
 		entity, err := h.service.FindStageOwner(r.Context(), stageID)
 		if err != nil {
-			logrus.WithError(err).
-				WithField("pool", poolName).
-				WithField("stageId", stageID).
-				Error("failed to find the stage in store")
+			if !strings.Contains(err.Error(), "no rows") {
+				logrus.WithError(err).
+					WithField("pool", poolName).
+					WithField("stageId", stageID).
+					Error("failed to find the stage in store")
+			}
 			httprender.OK(w, poolOwnerResponse{Owner: false})
 			return
 		}

@@ -24,12 +24,14 @@ func Middleware(next http.Handler) http.Handler {
 			WithField("status", status).
 			WithField("dur[ms]", dur)
 		logLine := "HTTP: " + r.Method + " " + r.URL.RequestURI()
-		// Avoid logging health checks to avoid spamming the logs
-		if strings.Contains(r.URL.RequestURI(), "healthz") {
+		// Avoid logging health checks and metrics scrapes to avoid spamming the logs
+		if strings.Contains(r.URL.RequestURI(), "healthz") || strings.Contains(r.URL.RequestURI(), "/metrics") {
 			return
 		}
 		if status >= http.StatusInternalServerError {
 			logr.Errorln(logLine)
+		} else if strings.Contains(r.URL.RequestURI(), "pool_owner") {
+			logr.Debugln(logLine)
 		} else {
 			logr.Infoln(logLine)
 		}
