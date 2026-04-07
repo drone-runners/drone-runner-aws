@@ -346,7 +346,6 @@ type InstanceCount struct {
 	Pool      string `db:"pool"`
 	VariantID string `db:"variant_id"`
 	ImageName string `db:"image_name"`
-	GPU       bool   `db:"gpu"`
 	Count     int    `db:"count"`
 }
 

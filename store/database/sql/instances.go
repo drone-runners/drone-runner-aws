@@ -373,10 +373,9 @@ func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.I
 		"COALESCE(instance_pool, '') as pool",
 		"COALESCE(variant_id, '') as variant_id",
 		"COALESCE(instance_image, '') as image_name",
-		"COALESCE(instance_gpu, false) as gpu",
 		"COUNT(*) as count",
 	).From("instances").
-		GroupBy("instance_pool", "variant_id", "instance_image", "instance_gpu")
+		GroupBy("instance_pool", "variant_id", "instance_image")
 
 	if status != "" {
 		stmt = stmt.Where(squirrel.Eq{"instance_state": status})
