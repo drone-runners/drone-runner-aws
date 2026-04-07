@@ -162,6 +162,8 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"enable_nested_virtualization": true})
 	}
 
+	subQuery = subQuery.Where(squirrel.Eq{"instance_gpu": params.GPU})
+
 	if params.VariantID != "" {
 		subQuery = subQuery.Where(squirrel.Eq{"variant_id": params.VariantID})
 	}
@@ -269,6 +271,7 @@ const instanceColumns = `
 ,enable_nested_virtualization
 ,runner_name
 ,variant_id
+,instance_gpu
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -309,6 +312,7 @@ INSERT INTO instances (
 ,instance_labels
 ,enable_nested_virtualization
 ,variant_id
+,instance_gpu
 ) values (
  :instance_id
 ,:instance_node_id
@@ -341,6 +345,7 @@ INSERT INTO instances (
 ,:instance_labels
 ,:enable_nested_virtualization
 ,:variant_id
+,:instance_gpu
 ) RETURNING instance_id
 `
 

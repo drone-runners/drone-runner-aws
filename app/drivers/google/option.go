@@ -236,6 +236,23 @@ func WithEnableC4D(enableC4D bool) Option {
 	}
 }
 
+// WithGPU returns an option to mark the pool as GPU-enabled.
+// GPU instances require OnHostMaintenance=TERMINATE (live migration is not supported).
+func WithGPU(gpu bool) Option {
+	return func(p *config) {
+		p.gpu = gpu
+	}
+}
+
+// onHostMaintenance returns the GCP scheduling onHostMaintenance value.
+// GPU instances must use TERMINATE; all others use MIGRATE.
+func onHostMaintenance(gpu bool) string {
+	if gpu {
+		return "TERMINATE"
+	}
+	return "MIGRATE"
+}
+
 // NetworkConfigInput holds the input parameters for a network configuration entry.
 type NetworkConfigInput struct {
 	Network    string

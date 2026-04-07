@@ -1,0 +1,1 @@
+ALTER TABLE instances ADD COLUMN instance_gpu BOOLEAN NOT NULL DEFAULT false;

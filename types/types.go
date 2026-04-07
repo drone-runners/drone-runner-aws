@@ -96,6 +96,7 @@ type Instance struct {
 	Labels                     []byte      `db:"instance_labels" json:"instance_labels"`
 	EnableNestedVirtualization bool        `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
 	VariantID                  string      `db:"variant_id" json:"variant_id"`
+	GPU                        bool        `db:"instance_gpu" json:"gpu"`
 }
 
 // Passwords holds sensitive data.
@@ -179,6 +180,7 @@ type InstanceCreateOpts struct {
 	SkipCloudInitPackages        bool
 	CapacityReservation          *CapacityReservation
 	NestedVirtualization         bool
+	GPU                          bool
 	EnvmanBinaryURI              string
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
@@ -205,6 +207,7 @@ type QueryParams struct {
 	ImageName            string
 	MachineType          string
 	NestedVirtualization bool
+	GPU                  bool
 	VariantID            string
 }
 
@@ -325,7 +328,7 @@ type SetupInstanceParams struct {
 	DiskSize             int64    `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
 	DiskType             string   `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
 	ResourceClass        string   `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
-	// Add more fields as needed in the future
+	GPU                  bool     `json:"gpu,omitempty" yaml:"gpu,omitempty"`
 }
 
 // ScaleJobParams represents the parameters for a scaling job.
@@ -351,7 +354,7 @@ type ScalerConfig struct {
 	ActiveImageLookbackDays int
 }
 
-// InstanceCount holds an instance count grouped by pool, variant, and image.
+// InstanceCount holds an instance count grouped by pool, variant, image, and GPU flag.
 type InstanceCount struct {
 	Pool      string `db:"pool"`
 	VariantID string `db:"variant_id"`

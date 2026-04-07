@@ -239,6 +239,7 @@ type (
 		Hibernate                  bool              `json:"hibernate,omitempty"`
 		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
 		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
+		GPU                        bool              `json:"gpu,omitempty" yaml:"gpu,omitempty"`
 	}
 
 	GoogleAccount struct {

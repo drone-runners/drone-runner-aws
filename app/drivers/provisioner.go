@@ -213,6 +213,7 @@ func (m *Manager) setupInstance(
 		createOptions.Zones = setupParams.Zones
 		createOptions.MachineType = setupParams.MachineType
 		createOptions.NestedVirtualization = setupParams.NestedVirtualization
+		createOptions.GPU = setupParams.GPU
 	}
 	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
 		createOptions.VMImageConfig = types.VMImageConfig{

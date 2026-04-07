@@ -368,6 +368,7 @@ func (d *DistributedManager) provisionFromPool(
 			NestedVirtualization: setupParams.NestedVirtualization,
 			VariantID:            candidateVariantID,
 			ImageName:            fullyQualifiedImageName,
+			GPU:                  setupParams.GPU,
 		}
 
 		// Try to find and claim a free instance atomically
@@ -392,6 +393,7 @@ func (d *DistributedManager) provisionFromPool(
 			d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
 				ImageName:            inst.Image,
 				NestedVirtualization: inst.EnableNestedVirtualization,
+				GPU:                  inst.GPU,
 				MachineType:          inst.Size,
 				Hibernate:            inst.IsHibernated,
 				Zones:                []string{inst.Zone},
@@ -536,6 +538,9 @@ func applyVariantToSetupParams(setupParams *types.SetupInstanceParams, variant *
 	}
 	if variant.DiskType != "" {
 		setupParams.DiskType = variant.DiskType
+	}
+	if variant.GPU {
+		setupParams.GPU = true
 	}
 	// Set VariantID for tracking
 	setupParams.VariantID = variant.VariantID
