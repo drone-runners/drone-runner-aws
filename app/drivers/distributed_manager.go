@@ -368,6 +368,7 @@ func (d *DistributedManager) provisionFromPool(
 			NestedVirtualization: setupParams.NestedVirtualization,
 			VariantID:            candidateVariantID,
 			ImageName:            fullyQualifiedImageName,
+			GPU:                  setupParams.GPU,
 		}
 
 		// Try to find and claim a free instance atomically
@@ -893,17 +894,18 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	// Execute cleanup and call setupInstanceAsync for each cleaned instance
 	instances, err := d.executeInstanceCleanup(ctx, pool, conditions, "free")
 
-	// Call setupInstanceAsync for each cleaned free instance
-	for _, instance := range instances {
-		d.setupInstanceAsync(ctx, pool.Name, instance.RunnerName, &types.SetupInstanceParams{
-			ImageName:            instance.Image,
-			NestedVirtualization: instance.EnableNestedVirtualization,
-			GPU:                  instance.GPU,
-			MachineType:          instance.Size,
-			VariantID:            instance.VariantID,
-			Zones:                []string{instance.Zone},
-			Hibernate:            instance.IsHibernated,
-		})
+	// Log the instances that are being cleaned up
+	// Don't replenish the stale free instances, predictor will handle that
+	if instances != nil {
+		instanceIDs := make([]string, len(instances))
+		for i, instance := range instances {
+			instanceIDs[i] = instance.ID
+		}
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithField("count", len(instances)).
+			WithField("instance_ids", instanceIDs).
+			Infof("distributed dlite: purger: cleaning up %d stale free instances", len(instances))
 	}
 	return err
 }

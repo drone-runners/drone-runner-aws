@@ -162,9 +162,7 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"enable_nested_virtualization": true})
 	}
 
-	if params.GPU {
-		subQuery = subQuery.Where(squirrel.Eq{"instance_gpu": true})
-	}
+	subQuery = subQuery.Where(squirrel.Eq{"instance_gpu": params.GPU})
 
 	if params.VariantID != "" {
 		subQuery = subQuery.Where(squirrel.Eq{"variant_id": params.VariantID})

@@ -554,10 +554,6 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	}
 
 	gpu := opts.GPU
-	if !gpu {
-		gpu = p.gpu
-	}
-
 	opts.EnableC4D = p.enableC4D
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
