@@ -169,16 +169,14 @@ func (s *Scaler) scaleVariantForActiveImages(
 	activeImages, err := s.historyStore.GetActiveImages(ctx, pool.Name, variantID, since)
 	if err != nil {
 		logr.WithError(err).Errorln("scaler: failed to get active images")
-		// Fall back to scaling without image dimension (use empty string)
-		activeImages = []string{""}
-	}
-
-	if len(activeImages) == 0 {
-		// No active images found — scale with empty image (pool default)
-		activeImages = []string{""}
+		return
 	}
 
 	for _, imageName := range activeImages {
+		if imageName == "" {
+			logr.Debugln("scaler: no image name, skipping")
+			continue
+		}
 		if err := s.scaleVariant(ctx, pool, variantID, imageName, minSize, params, windowStart, windowEnd, freeCounts); err != nil {
 			logr.WithError(err).WithField("image_name", imageName).
 				Errorln("scaler: failed to scale variant for image")
@@ -236,7 +234,7 @@ func (s *Scaler) scaleVariant(
 
 	// Record metrics
 	if s.metrics != nil {
-		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID).Set(float64(prediction.RecommendedInstances))
+		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID, imageName).Set(float64(prediction.RecommendedInstances))
 	}
 
 	// If dry run mode is enabled, only record metrics and skip actual scaling
