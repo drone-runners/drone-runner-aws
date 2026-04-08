@@ -417,14 +417,14 @@ func CapacityReservationCount() *prometheus.CounterVec {
 	)
 }
 
-// ScalerPredictedInstances provides the predicted number of instances for a pool/variant
+// ScalerPredictedInstances provides the predicted number of instances for a pool/variant/image
 func ScalerPredictedInstances() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "harness_ci_scaler_predicted_instances",
 			Help: "Predicted number of instances needed for the upcoming window",
 		},
-		[]string{"pool_id", "variant_id"},
+		[]string{"pool_id", "variant_id", "image_name"},
 	)
 }
 
