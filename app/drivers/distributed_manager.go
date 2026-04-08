@@ -977,26 +977,6 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 		capacitiesToDelete = append(capacitiesToDelete, freeCapacities...)
 	}
 
-	// Also claim stale "inuse" capacity reservations that were never cleaned up
-	// (e.g., destroy handler failed to find the capacity due to scan errors)
-	staleInUseCapacities, err := d.capacityReservationStore.FindAndClaim(
-		ctx,
-		&types.CapacityReservationQueryParams{
-			PoolName:        pool.Name,
-			CreatedAtBefore: createdAtBefore,
-		},
-		types.CapacityReservationStateTerminating,
-		[]types.CapacityReservationState{types.CapacityReservationStateInUse},
-	)
-	if err != nil {
-		logger.FromContext(ctx).
-			WithField("pool", pool.Name).
-			WithError(err).
-			Error("distributed dlite: purger: failed to find and claim stale inuse capacity reservations")
-	} else {
-		capacitiesToDelete = append(capacitiesToDelete, staleInUseCapacities...)
-	}
-
 	if len(capacitiesToDelete) == 0 {
 		return
 	}
