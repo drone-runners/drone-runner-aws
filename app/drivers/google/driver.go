@@ -391,7 +391,7 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 			InstanceID:    "", // Will be set when instance is created
 			ReservationID: reservationName,
 			CreatedAt:     time.Now().Unix(),
-			Zone:          zone,
+			Zone:          types.StringPtr(zone),
 		}, nil
 	}
 
@@ -434,7 +434,7 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	logr.Debugln("google: deleting capacity reservation")
 
 	// Use stored zone, fall back to API lookup
-	zone := capacity.Zone
+	zone := capacity.GetZone()
 	if zone == "" {
 		var findErr error
 		zone, findErr = p.findReservationZone(ctx, capacity.ReservationID)
@@ -487,9 +487,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	// Step 1: Resolve capacity reservation zone (if any)
 	var zone string
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
-		if opts.CapacityReservation.Zone != "" {
+		if opts.CapacityReservation.GetZone() != "" {
 			// Use stored zone directly
-			zone = opts.CapacityReservation.Zone
+			zone = opts.CapacityReservation.GetZone()
 		} else {
 			// Fallback: look up zone via API (for reservations created before zone was stored)
 			reservationZone, reservationErr := p.findReservationZone(ctx, opts.CapacityReservation.ReservationID)
