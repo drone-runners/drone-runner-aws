@@ -223,6 +223,7 @@ RETURNING %s
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
 		&dst.EnableNestedVirtualization, &dst.RunnerName, &dst.VariantID,
+		&dst.GPU,
 	)
 	if err != nil {
 		return nil, err
