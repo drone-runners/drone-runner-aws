@@ -546,9 +546,16 @@ func TestScaler_ScaleUp(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
-	// Set prediction to 5 instances
-	mockPredictor.SetPrediction("pool-1", "default", 5)
+	// Set prediction to 5 instances for the image
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 5)
+
+	// Add utilization history so GetActiveImages returns this image
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
 
 	pools := []ScalablePool{
 		{Name: "pool-1", MinSize: 1},
@@ -560,7 +567,7 @@ func TestScaler_ScaleUp(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	// Current free: 0, Predicted: 5 -> Should scale up by 5
 	now := time.Now()
@@ -591,9 +598,16 @@ func TestScaler_RespectMinSize(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
 	// Set prediction to 0 instances
-	mockPredictor.SetPrediction("pool-1", "default", 0)
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Add utilization history so GetActiveImages returns this image
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
 
 	pools := []ScalablePool{
 		{Name: "pool-1", MinSize: 3}, // Min size is 3
@@ -605,7 +619,7 @@ func TestScaler_RespectMinSize(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	// Current free: 0, Predicted: 0, MinSize: 3 -> Should scale up to 3
 	now := time.Now()
@@ -625,21 +639,30 @@ func TestScaler_NoScalingNeeded(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
 	// Set prediction to 2 instances
-	mockPredictor.SetPrediction("pool-1", "default", 2)
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 2)
+
+	// Add utilization history so GetActiveImages returns this image
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
 
 	// Add 2 free instances (matches prediction)
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-1",
 		Pool:      "pool-1",
 		VariantID: "default",
+		Image:     "ubuntu-2204",
 		State:     types.StateCreated,
 	})
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-2",
 		Pool:      "pool-1",
 		VariantID: "default",
+		Image:     "ubuntu-2204",
 		State:     types.StateCreated,
 	})
 
@@ -653,7 +676,7 @@ func TestScaler_NoScalingNeeded(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	// Current free: 2, Predicted: 2 -> No scaling needed
 	now := time.Now()
@@ -672,10 +695,23 @@ func TestScaler_WithVariants(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
 	// Set predictions for different variants
-	mockPredictor.SetPrediction("pool-1", "default", 2)
-	mockPredictor.SetPrediction("pool-1", "large", 3)
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 2)
+	mockPredictor.SetPredictionForImage("pool-1", "large", "ubuntu-2204", 3)
+
+	// Add utilization history for both variants
+	historyStore.records = append(historyStore.records,
+		types.UtilizationRecord{
+			Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+			RecordedAt: time.Now().Unix(), InUseInstances: 1,
+		},
+		types.UtilizationRecord{
+			Pool: "pool-1", VariantID: "large", ImageName: "ubuntu-2204",
+			RecordedAt: time.Now().Unix(), InUseInstances: 1,
+		},
+	)
 
 	pools := []ScalablePool{
 		{
@@ -699,7 +735,7 @@ func TestScaler_WithVariants(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	now := time.Now()
 	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
