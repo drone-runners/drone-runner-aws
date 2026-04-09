@@ -698,7 +698,7 @@ func TestGetDynamicConfig_ZonePriority(t *testing.T) {
 		PoolName: "test-pool",
 		Zones:    []string{"us-east-1c"},
 		CapacityReservation: &drtypes.CapacityReservation{
-			Zone: "us-east-1b",
+			Zone: drtypes.StringPtr("us-east-1b"),
 		},
 	})
 	assert.NoError(t, err)
@@ -709,7 +709,7 @@ func TestGetDynamicConfig_ZonePriority(t *testing.T) {
 	cfg, err = p.getDynamicConfig(&drtypes.InstanceCreateOpts{
 		PoolName: "test-pool",
 		CapacityReservation: &drtypes.CapacityReservation{
-			Zone: "us-east-1b",
+			Zone: drtypes.StringPtr("us-east-1b"),
 		},
 	})
 	assert.NoError(t, err)

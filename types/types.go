@@ -223,7 +223,20 @@ type CapacityReservation struct {
 	ReservationID    string                   `db:"reservation_id" json:"reservation_id"`
 	CreatedAt        int64                    `db:"created_at" json:"created_at"`
 	ReservationState CapacityReservationState `db:"reservation_state" json:"reservation_state"`
-	Zone             string                   `db:"zone" json:"zone,omitempty"`
+	Zone             *string                  `db:"zone" json:"zone,omitempty"`
+}
+
+// GetZone returns the zone string, or empty string if Zone is nil.
+func (c *CapacityReservation) GetZone() string {
+	if c.Zone != nil {
+		return *c.Zone
+	}
+	return ""
+}
+
+// StringPtr returns a pointer to the given string.
+func StringPtr(s string) *string {
+	return &s
 }
 
 type GitspaceOpts struct {
