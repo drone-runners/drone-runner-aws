@@ -1286,7 +1286,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceName str
 	cidrs := make([]string, 0, len(resolvedIPs))
 	for _, ip := range resolvedIPs {
 		if !strings.Contains(ip, "/") {
-			ip = ip + "/32"
+			ip += "/32"
 		}
 		cidrs = append(cidrs, ip)
 	}
@@ -1320,9 +1320,9 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceName str
 		logr.WithError(err).Errorln("egress: failed to create allow firewall rule")
 		return nil, fmt.Errorf("egress: failed to create allow rule: %w", err)
 	}
-	if err := p.waitGlobalOperation(ctx, op.Name); err != nil {
-		logr.WithError(err).Errorln("egress: failed waiting for allow firewall rule")
-		return nil, fmt.Errorf("egress: failed waiting for allow rule: %w", err)
+	if waitErr := p.waitGlobalOperation(ctx, op.Name); waitErr != nil {
+		logr.WithError(waitErr).Errorln("egress: failed waiting for allow firewall rule")
+		return nil, fmt.Errorf("egress: failed waiting for allow rule: %w", waitErr)
 	}
 
 	// Create deny-all rule
@@ -1348,9 +1348,9 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceName str
 		p.deleteFirewallRulesByID(ctx, []string{allowRuleName})
 		return nil, fmt.Errorf("egress: failed to create deny rule: %w", err)
 	}
-	if err := p.waitGlobalOperation(ctx, op.Name); err != nil {
-		logr.WithError(err).Errorln("egress: failed waiting for deny firewall rule")
-		return nil, fmt.Errorf("egress: failed waiting for deny rule: %w", err)
+	if waitErr := p.waitGlobalOperation(ctx, op.Name); waitErr != nil {
+		logr.WithError(waitErr).Errorln("egress: failed waiting for deny firewall rule")
+		return nil, fmt.Errorf("egress: failed waiting for deny rule: %w", waitErr)
 	}
 
 	logr.Infoln("egress: successfully created egress firewall rules")
