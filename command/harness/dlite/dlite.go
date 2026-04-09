@@ -105,6 +105,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) error {
 	c.runner.PoolManager = result.PoolManager
 	c.runner.StageOwnerStore = result.StageOwnerStore
 	c.runner.CapacityReservationStore = result.CapacityReservationStore
+	c.runner.FirewallStore = result.FirewallStore
 	c.runner.Scheduler = result.Scheduler
 	c.runner.PoolConfig = result.PoolConfig
 

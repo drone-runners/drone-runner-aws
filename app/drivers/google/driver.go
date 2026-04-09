@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/drone/runner-go/logger"
+	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
@@ -645,7 +646,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		},
 		DeletionProtection: false,
 		Tags: &compute.Tags{
-			Items: resolvedTags,
+			Items: append(resolvedTags, name),
 		},
 		Labels: p.labels,
 	}
@@ -1245,6 +1246,131 @@ func (p *config) setupFirewall(ctx context.Context) error {
 	}
 
 	return err
+}
+
+// ApplyEgressPolicy creates per-VM egress firewall rules using pre-resolved IPs from lite-engine.
+// Returns the list of created rule names for DB storage.
+func (p *config) ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error) {
+	return p.createEgressFirewallRules(ctx, instance.Name, resolvedIPs)
+}
+
+// CleanupEgressPolicy removes per-VM egress firewall rules using stored rule IDs.
+func (p *config) CleanupEgressPolicy(ctx context.Context, instance *types.Instance, ruleIDs []string) error {
+	p.deleteFirewallRulesByID(ctx, ruleIDs)
+	return nil
+}
+
+// egressRuleName builds a GCP-compliant firewall rule name: "{prefix}{instanceName}", truncated to 63 chars.
+// The instance name already contains randomness (uniuri8 + rand5) so the result is unique per VM.
+func egressRuleName(prefix, instanceName string) string {
+	const maxLen = 63
+	name := prefix + instanceName
+	if len(name) > maxLen {
+		name = name[:maxLen]
+	}
+	name = strings.TrimRight(name, "-")
+	return name
+}
+
+// createEgressFirewallRules creates two GCP firewall rules for egress restriction.
+// Returns the created rule names for DB storage.
+func (p *config) createEgressFirewallRules(ctx context.Context, instanceName string, resolvedIPs []string) ([]string, error) {
+	logr := logger.FromContext(ctx).WithField("instance", instanceName)
+
+	if len(resolvedIPs) == 0 {
+		logr.Warnln("egress: no resolved IPs provided, skipping firewall rule creation")
+		return nil, nil
+	}
+
+	// Ensure all IPs are in CIDR format
+	cidrs := make([]string, 0, len(resolvedIPs))
+	for _, ip := range resolvedIPs {
+		if !strings.Contains(ip, "/") {
+			ip = ip + "/32"
+		}
+		cidrs = append(cidrs, ip)
+	}
+
+	network := p.network
+	if !strings.HasPrefix(network, "projects/") {
+		network = fmt.Sprintf("projects/%s/global/networks/%s", p.projectID, network)
+	}
+
+	// Create allow rule for whitelisted IPs
+	allowRuleName := egressRuleName("egress-allow-", instanceName)
+	allowRule := &compute.Firewall{
+		Name:      allowRuleName,
+		Network:   network,
+		Direction: "EGRESS",
+		Priority:  900,
+		Allowed: []*compute.FirewallAllowed{
+			{IPProtocol: "tcp"},
+			{IPProtocol: "udp"},
+			{IPProtocol: "icmp"},
+		},
+		DestinationRanges: cidrs,
+		TargetTags:        []string{instanceName},
+	}
+
+	logr.WithField("rule", allowRuleName).WithField("destinations", len(cidrs)).
+		Infoln("egress: creating allow firewall rule")
+
+	op, err := p.service.Firewalls.Insert(p.projectID, allowRule).Context(ctx).Do()
+	if err != nil {
+		logr.WithError(err).Errorln("egress: failed to create allow firewall rule")
+		return nil, fmt.Errorf("egress: failed to create allow rule: %w", err)
+	}
+	if err := p.waitGlobalOperation(ctx, op.Name); err != nil {
+		logr.WithError(err).Errorln("egress: failed waiting for allow firewall rule")
+		return nil, fmt.Errorf("egress: failed waiting for allow rule: %w", err)
+	}
+
+	// Create deny-all rule
+	denyRuleName := egressRuleName("egress-deny-", instanceName)
+	denyRule := &compute.Firewall{
+		Name:      denyRuleName,
+		Network:   network,
+		Direction: "EGRESS",
+		Priority:  1000,
+		Denied: []*compute.FirewallDenied{
+			{IPProtocol: "all"},
+		},
+		DestinationRanges: []string{"0.0.0.0/0"},
+		TargetTags:        []string{instanceName},
+	}
+
+	logr.WithField("rule", denyRuleName).Infoln("egress: creating deny-all firewall rule")
+
+	op, err = p.service.Firewalls.Insert(p.projectID, denyRule).Context(ctx).Do()
+	if err != nil {
+		logr.WithError(err).Errorln("egress: failed to create deny firewall rule")
+		// Best effort: try to clean up the allow rule we already created
+		p.deleteFirewallRulesByID(ctx, []string{allowRuleName})
+		return nil, fmt.Errorf("egress: failed to create deny rule: %w", err)
+	}
+	if err := p.waitGlobalOperation(ctx, op.Name); err != nil {
+		logr.WithError(err).Errorln("egress: failed waiting for deny firewall rule")
+		return nil, fmt.Errorf("egress: failed waiting for deny rule: %w", err)
+	}
+
+	logr.Infoln("egress: successfully created egress firewall rules")
+	return []string{allowRuleName, denyRuleName}, nil
+}
+
+// deleteFirewallRulesByID removes firewall rules by their stored IDs/names.
+func (p *config) deleteFirewallRulesByID(ctx context.Context, ruleIDs []string) {
+	for _, ruleID := range ruleIDs {
+		_, err := p.service.Firewalls.Delete(p.projectID, ruleID).Context(ctx).Do()
+		if err != nil {
+			if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+				logrus.WithField("rule", ruleID).Debugln("egress: firewall rule not found, already deleted")
+			} else {
+				logrus.WithField("rule", ruleID).WithError(err).Warnln("egress: failed to delete firewall rule")
+			}
+		} else {
+			logrus.WithField("rule", ruleID).Infoln("egress: deleted firewall rule")
+		}
+	}
 }
 
 func (p *config) waitGlobalOperation(ctx context.Context, name string) error {

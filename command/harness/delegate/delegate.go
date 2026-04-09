@@ -86,7 +86,7 @@ func (c *delegateCommand) setupPools(runner *harness.Runner) error {
 func (c *delegateCommand) setupStandardMode(runner *harness.Runner) error {
 	logrus.Infoln("delegate: starting in standard mode")
 
-	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := database.ProvideStore(
+	instanceStore, stageOwnerStore, _, capacityReservationStore, _, firewallStore, err := database.ProvideStore( //nolint:dogsled
 		context.Background(),
 		runner.Config.Database.Driver,
 		runner.Config.Database.Datasource,

@@ -145,6 +145,27 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 		logr.WithError(derr).Warnln("destroy: failed to delete instance from store after successful destroy")
 	}
 	logr.Infoln("destroy: instance destroyed successfully")
+
+	// Best-effort async cleanup of egress firewall rules after instance is destroyed.
+	go func() {
+		if m.firewallStore == nil || instance.Stage == "" {
+			return
+		}
+		rules, listErr := m.firewallStore.ListByStageID(context.Background(), instance.Stage)
+		if listErr != nil || len(rules) == 0 {
+			return
+		}
+		ruleIDs := make([]string, len(rules))
+		for i, r := range rules {
+			ruleIDs[i] = r.ResourceID
+		}
+		if cleanupErr := pool.Driver.CleanupEgressPolicy(context.Background(), instance, ruleIDs); cleanupErr != nil {
+			logr.WithError(cleanupErr).Warnln("egress: failed to cleanup egress policy during destroy")
+		}
+		if delErr := m.firewallStore.DeleteByStageID(context.Background(), instance.Stage); delErr != nil {
+			logr.WithError(delErr).Warnln("egress: failed to delete firewall rule records from DB")
+		}
+	}()
 	return nil
 }
 
@@ -298,6 +319,24 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 		return fmt.Errorf("provision: failed to label an instance of %q pool: %w", poolName, err)
 	}
 	return nil
+}
+
+// ApplyEgressPolicy creates cloud-level egress firewall rules for the instance.
+func (m *Manager) ApplyEgressPolicy(ctx context.Context, poolName string, instance *types.Instance, resolvedIPs []string) ([]string, error) {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return nil, fmt.Errorf("egress: pool name %q not found", poolName)
+	}
+	return pool.Driver.ApplyEgressPolicy(ctx, instance, resolvedIPs)
+}
+
+// CleanupEgressPolicy removes cloud-level egress firewall rules for the instance.
+func (m *Manager) CleanupEgressPolicy(ctx context.Context, poolName string, instance *types.Instance, ruleIDs []string) error {
+	pool := m.poolMap[poolName]
+	if pool == nil {
+		return fmt.Errorf("egress: pool name %q not found", poolName)
+	}
+	return pool.Driver.CleanupEgressPolicy(ctx, instance, ruleIDs)
 }
 
 // InstanceLogs returns logs for an instance.

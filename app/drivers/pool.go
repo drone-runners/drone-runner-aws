@@ -40,6 +40,11 @@ type Driver interface {
 	// Logs returns the console logs for the instance.
 	Logs(ctx context.Context, instanceID string) (string, error)
 
+	// ApplyEgressPolicy creates cloud-level egress firewall rules for the instance using pre-resolved IPs.
+	ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error)
+	// CleanupEgressPolicy removes cloud-level egress firewall rules for the instance.
+	CleanupEgressPolicy(ctx context.Context, instance *types.Instance, ruleIDs []string) error
+
 	RootDir() string
 	DriverName() string
 	CanHibernate() bool

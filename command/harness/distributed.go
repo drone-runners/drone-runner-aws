@@ -23,6 +23,7 @@ type DistributedSetupResult struct {
 	InstanceStore            store.InstanceStore
 	StageOwnerStore          store.StageOwnerStore
 	CapacityReservationStore store.CapacityReservationStore
+	FirewallStore            store.FirewallStore
 	Scheduler                *scheduler.Scheduler
 	PoolConfig               *config.PoolFile
 }
@@ -40,7 +41,7 @@ type DistributedSetupConfig struct {
 func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, error) {
 	logrus.Infoln("Starting postgres database for distributed mode")
 
-	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, err := database.ProvideStore(
+	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, firewallStore, err := database.ProvideStore(
 		cfg.Ctx,
 		cfg.Env.DistributedMode.Driver,
 		cfg.Env.DistributedMode.Datasource,

@@ -108,6 +108,14 @@ func (c *config) CanHibernate() bool {
 	return false
 }
 
+func (c *config) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []string) ([]string, error) {
+	return nil, nil
+}
+
+func (c *config) CleanupEgressPolicy(_ context.Context, _ *types.Instance, _ []string) error {
+	return nil
+}
+
 func (c *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
 	return c.offer, nil
 }

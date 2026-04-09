@@ -117,6 +117,14 @@ func (p *config) CanHibernate() bool {
 	return p.hibernate
 }
 
+func (p *config) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []string) ([]string, error) {
+	return nil, nil
+}
+
+func (p *config) CleanupEgressPolicy(_ context.Context, _ *types.Instance, _ []string) error {
+	return nil
+}
+
 func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
 	// For Noop driver, just return the image name as is
 	// This is a no-op implementation used for testing

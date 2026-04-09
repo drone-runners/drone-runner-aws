@@ -70,6 +70,14 @@ func (p *config) CanHibernate() bool {
 	return false
 }
 
+func (p *config) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []string) ([]string, error) {
+	return nil, nil
+}
+
+func (p *config) CleanupEgressPolicy(_ context.Context, _ *types.Instance, _ []string) error {
+	return nil
+}
+
 // ReserveCapacity reserves capacity for a VM
 func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (*types.CapacityReservation, error) {
 	return nil, &ierrors.ErrCapacityReservationNotSupported{Driver: p.DriverName()}

@@ -19,6 +19,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
+	"github.com/drone-runners/drone-runner-aws/command/harness/egress"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -68,6 +69,8 @@ func HandleSetup(
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 	envFallbackPoolIDs []string,
+	egressDefaultIPs string,
+	firewallStore store.FirewallStore,
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
 	stageRuntimeID := r.ID
@@ -213,7 +216,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, egressDefaultIPs, firewallStore)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -417,6 +420,8 @@ func handleSetup(
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
+	egressDefaultIPs string,
+	firewallStore store.FirewallStore,
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -596,11 +601,45 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
+	// If enabled, merge default Harness IPs with customer IPs.
+	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
+		defaultPolicy := egress.DefaultEgressPolicy(egressDefaultIPs)
+		r.SetupRequest.EgressPolicy.AllowedIPs = append(defaultPolicy.AllowedIPs, r.SetupRequest.EgressPolicy.AllowedIPs...)
+	}
+
 	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
 	if err != nil {
 		printError(buildLog, "Machine setup failed")
 		go cleanUpInstanceFn(true)
 		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", err)
+	}
+
+	// Apply cloud-level egress firewall rules async and save to firewall store
+	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
+		go func() {
+			ruleIDs, egressErr := poolManager.ApplyEgressPolicy(context.Background(), pool, instance, r.SetupRequest.EgressPolicy.AllowedIPs)
+			if egressErr != nil {
+				ilog.WithError(egressErr).Warnln("failed to apply cloud egress firewall rules")
+				return
+			}
+			if firewallStore == nil || len(ruleIDs) == 0 {
+				return
+			}
+			now := time.Now().Unix()
+			rules := make([]*types.FirewallRule, len(ruleIDs))
+			for i, rid := range ruleIDs {
+				rules[i] = &types.FirewallRule{
+					StageID:       stageRuntimeID,
+					InstanceID:    instance.ID,
+					ResourceID:    rid,
+					CloudProvider: string(instance.Provider),
+					CreatedAt:     now,
+				}
+			}
+			if saveErr := firewallStore.CreateBatch(context.Background(), rules); saveErr != nil {
+				ilog.WithError(saveErr).Warnln("egress: failed to save firewall rules to DB")
+			}
+		}()
 	}
 
 	return instance, warmed, hibernated, variantID, nil
