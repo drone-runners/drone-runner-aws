@@ -375,7 +375,7 @@ func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.Instan
 		InstanceID:    "",
 		ReservationID: reservationID,
 		CreatedAt:     time.Now().Unix(),
-		Zone:          reqCfg.availabilityZone,
+		Zone:          drtypes.StringPtr(reqCfg.availabilityZone),
 	}, nil
 }
 
@@ -943,8 +943,8 @@ func (p *amazonConfig) getDynamicConfig(opts *drtypes.InstanceCreateOpts) (*requ
 	var targetZone string
 	if len(opts.Zones) > 0 {
 		targetZone = opts.Zones[0]
-	} else if opts.CapacityReservation != nil && opts.CapacityReservation.Zone != "" {
-		targetZone = opts.CapacityReservation.Zone
+	} else if opts.CapacityReservation != nil && opts.CapacityReservation.GetZone() != "" {
+		targetZone = opts.CapacityReservation.GetZone()
 	}
 
 	if targetZone != "" {
