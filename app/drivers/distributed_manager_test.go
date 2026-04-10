@@ -895,3 +895,46 @@ func TestApplyVariantToSetupParams(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldReplenishInstance(t *testing.T) {
+	tests := []struct {
+		name   string
+		source types.InstanceSource
+		want   bool
+	}{
+		{
+			name:   "pool source should replenish",
+			source: types.InstanceSourcePool,
+			want:   true,
+		},
+		{
+			name:   "predictor source should not replenish",
+			source: types.InstanceSourcePredictor,
+			want:   false,
+		},
+		{
+			name:   "ondemand source should not replenish",
+			source: types.InstanceSourceOnDemand,
+			want:   false,
+		},
+		{
+			name:   "empty source should not replenish",
+			source: "",
+			want:   false,
+		},
+		{
+			name:   "unknown source should not replenish",
+			source: types.InstanceSourceUnknown,
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inst := &types.Instance{Source: tt.source}
+			got := shouldReplenishInstance(inst)
+			if got != tt.want {
+				t.Errorf("shouldReplenishInstance() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
