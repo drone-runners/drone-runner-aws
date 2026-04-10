@@ -178,7 +178,7 @@ func (s InstanceStore) FindAndClaim(
 
 	if params.PreferSource != "" {
 		subQuery = subQuery.OrderByClause(
-			fmt.Sprintf("CASE WHEN instance_source = '%s' THEN 0 ELSE 1 END ASC", string(params.PreferSource)),
+			"CASE WHEN instance_source = ? THEN 0 ELSE 1 END ASC", string(params.PreferSource),
 		)
 	}
 
