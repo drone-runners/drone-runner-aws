@@ -91,19 +91,19 @@ type Instance struct {
 	Size                       string        `db:"instance_size" json:"size"`
 	OwnerID                    string        `db:"instance_owner_id" json:"owner_id"`
 	Platform                   `json:"platform"`
-	CAKey                      []byte      `db:"instance_ca_key" json:"ca_key"`
-	CACert                     []byte      `db:"instance_ca_cert" json:"ca_cert"`
-	TLSKey                     []byte      `db:"instance_tls_key" json:"tls_key"`
-	TLSCert                    []byte      `db:"instance_tls_cert" json:"tls_cert"`
-	Stage                      string      `db:"instance_stage" json:"stage"`
-	Updated                    int64       `db:"instance_updated" json:"updated"`
-	Started                    int64       `db:"instance_started" json:"started"`
-	IsHibernated               bool        `db:"is_hibernated" json:"is_hibernated"`
-	Port                       int64       `db:"instance_port" json:"port"`
-	RunnerName                 string      `db:"runner_name" json:"runner_name"`
-	GitspacePortMappings       map[int]int `json:"gitspaces_port_mappings"`
-	StorageIdentifier          string      `db:"instance_storage_identifier" json:"storage_identifier"`
-	Labels                     []byte      `db:"instance_labels" json:"instance_labels"`
+	CAKey                      []byte         `db:"instance_ca_key" json:"ca_key"`
+	CACert                     []byte         `db:"instance_ca_cert" json:"ca_cert"`
+	TLSKey                     []byte         `db:"instance_tls_key" json:"tls_key"`
+	TLSCert                    []byte         `db:"instance_tls_cert" json:"tls_cert"`
+	Stage                      string         `db:"instance_stage" json:"stage"`
+	Updated                    int64          `db:"instance_updated" json:"updated"`
+	Started                    int64          `db:"instance_started" json:"started"`
+	IsHibernated               bool           `db:"is_hibernated" json:"is_hibernated"`
+	Port                       int64          `db:"instance_port" json:"port"`
+	RunnerName                 string         `db:"runner_name" json:"runner_name"`
+	GitspacePortMappings       map[int]int    `json:"gitspaces_port_mappings"`
+	StorageIdentifier          string         `db:"instance_storage_identifier" json:"storage_identifier"`
+	Labels                     []byte         `db:"instance_labels" json:"instance_labels"`
 	EnableNestedVirtualization bool           `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
 	VariantID                  string         `db:"variant_id" json:"variant_id"`
 	GPU                        bool           `db:"instance_gpu" json:"gpu"`
@@ -331,12 +331,12 @@ type OutboxJob struct {
 
 // SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
 type SetupInstanceParams struct {
-	ImageName            string   `json:"image_name,omitempty" yaml:"image_name,omitempty"`
-	NestedVirtualization bool     `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-	MachineType          string   `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-	Hibernate            bool     `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
-	Zones                []string `json:"zones,omitempty" yaml:"zones,omitempty"`
-	VariantID            string   `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	ImageName            string         `json:"image_name,omitempty" yaml:"image_name,omitempty"`
+	NestedVirtualization bool           `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+	MachineType          string         `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+	Hibernate            bool           `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
+	Zones                []string       `json:"zones,omitempty" yaml:"zones,omitempty"`
+	VariantID            string         `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
 	DiskSize             int64          `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
 	DiskType             string         `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
 	ResourceClass        string         `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
