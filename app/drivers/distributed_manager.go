@@ -280,6 +280,7 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 		_ = d.DestroyCapacity(ctx, reservedCapacity)
 		reservedCapacity = nil
 	}
+	setupParams.Source = types.InstanceSourceOnDemand
 	inst, _, err := d.setupInstance(ctx,
 		pool,
 		tlsServerName,
