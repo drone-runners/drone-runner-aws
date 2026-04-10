@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -125,17 +126,18 @@ func (m *MockInstanceStore) FindAndClaim(
 			(params.ImageName == "" || inst.Image == params.ImageName)
 	}
 
-	// First pass: find instances matching preferred source
-	if params.PreferSource != "" {
+	// If FilterSource is set, only match instances with that source
+	if params.FilterSource != "" {
 		for i, inst := range m.instances {
-			if matches(inst) && inst.Source == params.PreferSource {
+			if matches(inst) && inst.Source == params.FilterSource {
 				m.instances[i].State = newState
 				return m.instances[i], nil
 			}
 		}
+		return nil, errors.New("no matching instance with source " + string(params.FilterSource))
 	}
 
-	// Second pass: any matching instance
+	// No source filter: any matching instance
 	for i, inst := range m.instances {
 		if matches(inst) {
 			m.instances[i].State = newState
@@ -969,7 +971,7 @@ func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
 	}
 }
 
-func TestScaler_ScaleDown_PrefersPredictor(t *testing.T) {
+func TestScaler_ScaleDown_FiltersPredictor(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 
 	// Add 3 free instances: 1 pool, 2 predictor
@@ -986,12 +988,12 @@ func TestScaler_ScaleDown_PrefersPredictor(t *testing.T) {
 		Image: "ubuntu-2204", State: types.StateCreated, Source: types.InstanceSourcePredictor,
 	})
 
-	// Test that FindAndClaim with PreferSource picks predictor first
+	// Test that FindAndClaim with FilterSource only returns predictor instances
 	queryParams := &types.QueryParams{
 		PoolName:     "pool-1",
 		VariantID:    "default",
 		ImageName:    "ubuntu-2204",
-		PreferSource: types.InstanceSourcePredictor,
+		FilterSource: types.InstanceSourcePredictor,
 	}
 
 	// First claim: should get a predictor instance
@@ -1024,30 +1026,12 @@ func TestScaler_ScaleDown_PrefersPredictor(t *testing.T) {
 		t.Errorf("expected predictor instance second, got source=%q id=%s", inst2.Source, inst2.ID)
 	}
 
-	// Third claim: should get pool instance (only one left in StateCreated)
-	inst3, err := instanceStore.FindAndClaim(
+	// Third claim: should fail — no more predictor instances (pool instances are NOT returned)
+	_, err = instanceStore.FindAndClaim(
 		context.Background(), queryParams, types.StateTerminating,
 		[]types.InstanceState{types.StateCreated}, false,
 	)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if inst3 == nil {
-		t.Fatal("expected third instance, got nil")
-	}
-	if inst3.Source != types.InstanceSourcePool {
-		t.Errorf("expected pool instance third, got source=%q id=%s", inst3.Source, inst3.ID)
-	}
-
-	// Fourth claim: no more StateCreated instances
-	inst4, err := instanceStore.FindAndClaim(
-		context.Background(), queryParams, types.StateTerminating,
-		[]types.InstanceState{types.StateCreated}, false,
-	)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if inst4 != nil {
-		t.Errorf("expected nil (no more free instances), got id=%s", inst4.ID)
+	if err == nil {
+		t.Error("expected error when no more predictor instances, got nil")
 	}
 }

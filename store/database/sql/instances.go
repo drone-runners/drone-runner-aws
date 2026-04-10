@@ -176,10 +176,8 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_state": stateVals})
 	}
 
-	if params.PreferSource != "" {
-		subQuery = subQuery.OrderByClause(
-			"CASE WHEN instance_source = ? THEN 0 ELSE 1 END ASC", string(params.PreferSource),
-		)
+	if params.FilterSource != "" {
+		subQuery = subQuery.Where(squirrel.Eq{"instance_source": string(params.FilterSource)})
 	}
 
 	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")

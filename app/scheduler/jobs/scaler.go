@@ -337,7 +337,7 @@ func (s *Scaler) scaleDown(
 		PoolName:     poolName,
 		VariantID:    variantID,
 		ImageName:    imageName,
-		PreferSource: types.InstanceSourcePredictor,
+		FilterSource: types.InstanceSourcePredictor,
 	}
 
 	allowedStates := []types.InstanceState{types.StateCreated, types.StateHibernating}

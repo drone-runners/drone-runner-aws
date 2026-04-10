@@ -220,7 +220,7 @@ type QueryParams struct {
 	NestedVirtualization bool
 	GPU                  bool
 	VariantID            string
-	PreferSource         InstanceSource
+	FilterSource         InstanceSource
 }
 
 type StageOwner struct {
