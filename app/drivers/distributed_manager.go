@@ -280,6 +280,7 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 		_ = d.DestroyCapacity(ctx, reservedCapacity)
 		reservedCapacity = nil
 	}
+	setupParams.Source = types.InstanceSourceOnDemand
 	inst, _, err := d.setupInstance(ctx,
 		pool,
 		tlsServerName,
@@ -388,20 +389,32 @@ func (d *DistributedManager) provisionFromPool(
 				WithField("instance_id", inst.ID).
 				WithField("hotpool", true).
 				WithField("variant_id", candidateVariantID).
+				WithField("source", string(inst.Source)).
 				Traceln("provision: claimed hotpool instance")
 
-			d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
-				ImageName:            inst.Image,
-				NestedVirtualization: inst.EnableNestedVirtualization,
-				GPU:                  inst.GPU,
-				MachineType:          inst.Size,
-				Hibernate:            inst.IsHibernated,
-				Zones:                []string{inst.Zone},
-				VariantID:            inst.VariantID,
-				DiskSize:             setupParams.DiskSize,
-				DiskType:             setupParams.DiskType,
-				ResourceClass:        setupParams.ResourceClass,
-			})
+			// Only replenish pool-sourced instances. Predictor-created instances
+			// are managed by the scaler and should not be backfilled.
+			if shouldReplenishInstance(inst) {
+				d.setupInstanceAsync(ctx, inst.Pool, inst.RunnerName, &types.SetupInstanceParams{
+					ImageName:            inst.Image,
+					NestedVirtualization: inst.EnableNestedVirtualization,
+					GPU:                  inst.GPU,
+					MachineType:          inst.Size,
+					Hibernate:            inst.IsHibernated,
+					Zones:                []string{inst.Zone},
+					VariantID:            inst.VariantID,
+					DiskSize:             setupParams.DiskSize,
+					DiskType:             setupParams.DiskType,
+					ResourceClass:        setupParams.ResourceClass,
+					Source:               types.InstanceSourcePool,
+				})
+			} else {
+				logger.FromContext(ctx).
+					WithField("pool", poolName).
+					WithField("instance_id", inst.ID).
+					WithField("source", string(inst.Source)).
+					Infoln("provision: skipping replenishment for non-pool instance")
+			}
 			capacity = &types.CapacityReservation{
 				InstanceID: inst.ID,
 				PoolName:   poolName,
@@ -413,6 +426,7 @@ func (d *DistributedManager) provisionFromPool(
 	// set the variant ID to the first variant in the list
 	variantID = variantsToTry[0]
 	setupParams.VariantID = variantID
+	setupParams.Source = types.InstanceSourceOnDemand
 
 	// Case 3: No available hotpool instance across any variant → create new (using first variant's config)
 	logger.FromContext(ctx).
@@ -443,6 +457,13 @@ func (d *DistributedManager) provisionFromPool(
 		return nil, nil, false, variantID, fmt.Errorf("provision: failed to create instance: %w", err)
 	}
 	return inst, capacity, false, variantID, nil
+}
+
+// shouldReplenishInstance returns true if the claimed instance should be replenished.
+// Only pool-sourced instances are replenished. Predictor-sourced instances are managed
+// by the scaler, and on-demand instances are one-off.
+func shouldReplenishInstance(inst *types.Instance) bool {
+	return inst.Source == types.InstanceSourcePool
 }
 
 // filterVariants returns all matching variants in priority order based on provisionParams criteria.

@@ -326,6 +326,8 @@ func (m *Manager) setupInstance(
 		inst.VariantID = defaultVariantID
 	}
 
+	inst.Source = resolveInstanceSource(setupParams)
+
 	if inst.Labels == nil {
 		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
 		if marshalErr != nil {
@@ -464,4 +466,12 @@ func vmImageConfigFromSetupParams(params *types.SetupInstanceParams) *spec.VMIma
 	return &spec.VMImageConfig{
 		ImageName: params.ImageName,
 	}
+}
+
+// resolveInstanceSource returns the instance source from setupParams, defaulting to pool.
+func resolveInstanceSource(params *types.SetupInstanceParams) types.InstanceSource {
+	if params != nil && params.Source != "" {
+		return params.Source
+	}
+	return types.InstanceSourcePool
 }
