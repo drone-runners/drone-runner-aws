@@ -41,8 +41,11 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	logrus.Infoln("Starting postgres database for distributed mode")
 
 	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, err := database.ProvideStore(
+		cfg.Ctx,
 		cfg.Env.DistributedMode.Driver,
 		cfg.Env.DistributedMode.Datasource,
+		cfg.Env.DistributedMode.IAMAuth,
+		cfg.Env.DistributedMode.Region,
 	)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")

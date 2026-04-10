@@ -506,6 +506,8 @@ type EnvConfig struct {
 	DistributedMode struct {
 		Driver     string `default:"postgres"`
 		Datasource string `envconfig:"DRONE_DISTRIBUTED_DATASOURCE" default:"port=5431 user=admin password=password dbname=dlite sslmode=disable"`
+		IAMAuth    bool   `envconfig:"DRONE_DISTRIBUTED_DB_IAM_AUTH" default:"false"`
+		Region     string `envconfig:"DRONE_DISTRIBUTED_DB_REGION" default:"us-east-1"`
 	}
 
 	Tmate struct {

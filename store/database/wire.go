@@ -5,6 +5,8 @@
 package database
 
 import (
+	"context"
+
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -101,7 +103,7 @@ func ProvideSQLUtilizationHistoryStore(db *sqlx.DB) store.UtilizationHistoryStor
 }
 
 //nolint:gocritic
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) {
+func ProvideStore(ctx context.Context, driver, datasource string, iamAuth bool, iamRegion string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) { //nolint:lll
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
@@ -110,7 +112,15 @@ func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOw
 		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil, nil
 	}
 
-	db, err := ProvideSQLDatabase(driver, datasource)
+	var (
+		db  *sqlx.DB
+		err error
+	)
+	if iamAuth {
+		db, err = ConnectSQLWithIAM(ctx, datasource, iamRegion)
+	} else {
+		db, err = ProvideSQLDatabase(driver, datasource)
+	}
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}

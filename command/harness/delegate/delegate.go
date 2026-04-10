@@ -1,6 +1,8 @@
 package delegate
 
 import (
+	"context"
+
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -85,8 +87,11 @@ func (c *delegateCommand) setupStandardMode(runner *harness.Runner) error {
 	logrus.Infoln("delegate: starting in standard mode")
 
 	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := database.ProvideStore(
+		context.Background(),
 		runner.Config.Database.Driver,
 		runner.Config.Database.Datasource,
+		false,
+		"",
 	)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
