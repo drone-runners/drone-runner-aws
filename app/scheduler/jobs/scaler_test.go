@@ -110,6 +110,38 @@ func (m *MockInstanceStore) FindAndClaim(
 	ctx context.Context, params *types.QueryParams, newState types.InstanceState,
 	allowedStates []types.InstanceState, updateStartTime bool,
 ) (*types.Instance, error) {
+	isAllowed := func(state types.InstanceState) bool {
+		for _, s := range allowedStates {
+			if s == state {
+				return true
+			}
+		}
+		return false
+	}
+
+	matches := func(inst *types.Instance) bool {
+		return inst.Pool == params.PoolName && isAllowed(inst.State) &&
+			(params.VariantID == "" || inst.VariantID == params.VariantID) &&
+			(params.ImageName == "" || inst.Image == params.ImageName)
+	}
+
+	// First pass: find instances matching preferred source
+	if params.PreferSource != "" {
+		for i, inst := range m.instances {
+			if matches(inst) && inst.Source == params.PreferSource {
+				m.instances[i].State = newState
+				return m.instances[i], nil
+			}
+		}
+	}
+
+	// Second pass: any matching instance
+	for i, inst := range m.instances {
+		if matches(inst) {
+			m.instances[i].State = newState
+			return m.instances[i], nil
+		}
+	}
 	return nil, nil
 }
 
@@ -591,6 +623,16 @@ func TestScaler_ScaleUp(t *testing.T) {
 		if job.RunnerName != "" {
 			t.Errorf("expected runner name to be empty (so any runner can process), got %q", job.RunnerName)
 		}
+		// Verify source is set to predictor
+		if job.JobParams != nil {
+			var params types.SetupInstanceParams
+			if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+				t.Fatalf("failed to unmarshal job params: %v", err)
+			}
+			if params.Source != types.InstanceSourcePredictor {
+				t.Errorf("expected Source=predictor in scaleUp job, got %q", params.Source)
+			}
+		}
 	}
 }
 
@@ -749,13 +791,16 @@ func TestScaler_WithVariants(t *testing.T) {
 		t.Errorf("expected 5 setup instance jobs, got %d", len(setupJobs))
 	}
 
-	// Count jobs by variant
+	// Count jobs by variant and verify source
 	variantCounts := make(map[string]int)
 	for _, job := range setupJobs {
 		if job.JobParams != nil {
 			var params types.SetupInstanceParams
 			if err := json.Unmarshal(*job.JobParams, &params); err == nil {
 				variantCounts[params.VariantID]++
+				if params.Source != types.InstanceSourcePredictor {
+					t.Errorf("expected Source=predictor for variant %q, got %q", params.VariantID, params.Source)
+				}
 			}
 		}
 	}
@@ -921,5 +966,88 @@ func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
 
 	if notFoundDifferentPool != nil {
 		t.Error("expected nil for different pool, got job")
+	}
+}
+
+func TestScaler_ScaleDown_PrefersPredictor(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+
+	// Add 3 free instances: 1 pool, 2 predictor
+	instanceStore.AddInstance(&types.Instance{
+		ID: "inst-pool-1", Pool: "pool-1", VariantID: "default",
+		Image: "ubuntu-2204", State: types.StateCreated, Source: types.InstanceSourcePool,
+	})
+	instanceStore.AddInstance(&types.Instance{
+		ID: "inst-pred-1", Pool: "pool-1", VariantID: "default",
+		Image: "ubuntu-2204", State: types.StateCreated, Source: types.InstanceSourcePredictor,
+	})
+	instanceStore.AddInstance(&types.Instance{
+		ID: "inst-pred-2", Pool: "pool-1", VariantID: "default",
+		Image: "ubuntu-2204", State: types.StateCreated, Source: types.InstanceSourcePredictor,
+	})
+
+	// Test that FindAndClaim with PreferSource picks predictor first
+	queryParams := &types.QueryParams{
+		PoolName:     "pool-1",
+		VariantID:    "default",
+		ImageName:    "ubuntu-2204",
+		PreferSource: types.InstanceSourcePredictor,
+	}
+
+	// First claim: should get a predictor instance
+	inst, err := instanceStore.FindAndClaim(
+		context.Background(), queryParams, types.StateTerminating,
+		[]types.InstanceState{types.StateCreated}, false,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst == nil {
+		t.Fatal("expected instance, got nil")
+	}
+	if inst.Source != types.InstanceSourcePredictor {
+		t.Errorf("expected predictor instance first, got source=%q id=%s", inst.Source, inst.ID)
+	}
+
+	// Second claim: should get second predictor instance
+	inst2, err := instanceStore.FindAndClaim(
+		context.Background(), queryParams, types.StateTerminating,
+		[]types.InstanceState{types.StateCreated}, false,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst2 == nil {
+		t.Fatal("expected second instance, got nil")
+	}
+	if inst2.Source != types.InstanceSourcePredictor {
+		t.Errorf("expected predictor instance second, got source=%q id=%s", inst2.Source, inst2.ID)
+	}
+
+	// Third claim: should get pool instance (only one left in StateCreated)
+	inst3, err := instanceStore.FindAndClaim(
+		context.Background(), queryParams, types.StateTerminating,
+		[]types.InstanceState{types.StateCreated}, false,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst3 == nil {
+		t.Fatal("expected third instance, got nil")
+	}
+	if inst3.Source != types.InstanceSourcePool {
+		t.Errorf("expected pool instance third, got source=%q id=%s", inst3.Source, inst3.ID)
+	}
+
+	// Fourth claim: no more StateCreated instances
+	inst4, err := instanceStore.FindAndClaim(
+		context.Background(), queryParams, types.StateTerminating,
+		[]types.InstanceState{types.StateCreated}, false,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst4 != nil {
+		t.Errorf("expected nil (no more free instances), got id=%s", inst4.ID)
 	}
 }

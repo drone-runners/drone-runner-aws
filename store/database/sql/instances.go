@@ -176,6 +176,12 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_state": stateVals})
 	}
 
+	if params.PreferSource != "" {
+		subQuery = subQuery.OrderByClause(
+			fmt.Sprintf("CASE WHEN instance_source = '%s' THEN 0 ELSE 1 END ASC", string(params.PreferSource)),
+		)
+	}
+
 	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
 	// --- Convert subquery to SQL + args ---
@@ -223,7 +229,7 @@ RETURNING %s
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
 		&dst.EnableNestedVirtualization, &dst.RunnerName, &dst.VariantID,
-		&dst.GPU,
+		&dst.GPU, &dst.Source,
 	)
 	if err != nil {
 		return nil, err
@@ -273,6 +279,7 @@ const instanceColumns = `
 ,runner_name
 ,variant_id
 ,instance_gpu
+,instance_source
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -314,6 +321,7 @@ INSERT INTO instances (
 ,enable_nested_virtualization
 ,variant_id
 ,instance_gpu
+,instance_source
 ) values (
  :instance_id
 ,:instance_node_id
@@ -347,6 +355,7 @@ INSERT INTO instances (
 ,:enable_nested_virtualization
 ,:variant_id
 ,:instance_gpu
+,:instance_source
 ) RETURNING instance_id
 `
 

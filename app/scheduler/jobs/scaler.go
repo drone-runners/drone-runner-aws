@@ -277,10 +277,12 @@ func (s *Scaler) scaleUp(
 		setupParams := &types.SetupInstanceParams{
 			VariantID: variantID,
 			ImageName: imageName,
+			Source:    types.InstanceSourcePredictor,
 		}
 		if params != nil {
 			paramsCopy := *params
 			paramsCopy.VariantID = variantID
+			paramsCopy.Source = types.InstanceSourcePredictor
 			if imageName != "" {
 				paramsCopy.ImageName = imageName
 			}
@@ -332,9 +334,10 @@ func (s *Scaler) scaleDown(
 	// Use FindAndClaim to atomically claim instances for termination
 	// This avoids race conditions with other processes
 	queryParams := &types.QueryParams{
-		PoolName:  poolName,
-		VariantID: variantID,
-		ImageName: imageName,
+		PoolName:     poolName,
+		VariantID:    variantID,
+		ImageName:    imageName,
+		PreferSource: types.InstanceSourcePredictor,
 	}
 
 	allowedStates := []types.InstanceState{types.StateCreated, types.StateHibernating}
