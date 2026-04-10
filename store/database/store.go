@@ -14,12 +14,26 @@ import (
 
 var _ = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
+// DBConnConfig holds connection pool settings for the database.
+type DBConnConfig struct {
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+}
+
 // ConnectSQL to a database and verify with a ping.
-func ConnectSQL(driver, datasource string) (*sqlx.DB, error) {
+func ConnectSQL(driver, datasource string, poolCfg *DBConnConfig) (*sqlx.DB, error) {
 	db, err := sql.Open(driver, datasource)
 	if err != nil {
 		return nil, err
 	}
+
+	if poolCfg != nil {
+		db.SetMaxIdleConns(poolCfg.MaxIdleConns)
+		db.SetConnMaxLifetime(poolCfg.ConnMaxLifetime)
+		db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
+	}
+
 	dbx := sqlx.NewDb(db, driver)
 	if err := pingDatabase(dbx); err != nil {
 		return nil, err

@@ -504,8 +504,11 @@ type EnvConfig struct {
 	}
 
 	DistributedMode struct {
-		Driver     string `default:"postgres"`
-		Datasource string `envconfig:"DRONE_DISTRIBUTED_DATASOURCE" default:"port=5431 user=admin password=password dbname=dlite sslmode=disable"`
+		Driver              string `default:"postgres"`
+		Datasource          string `envconfig:"DRONE_DISTRIBUTED_DATASOURCE" default:"port=5431 user=admin password=password dbname=dlite sslmode=disable"`
+		MaxIdleConns        int    `envconfig:"DRONE_DB_MAX_IDLE_CONNS" default:"10"`
+		ConnMaxLifetimeSecs int    `envconfig:"DRONE_DB_CONN_MAX_LIFETIME_SECS" default:"300"`
+		ConnMaxIdleTimeSecs int    `envconfig:"DRONE_DB_CONN_MAX_IDLE_TIME_SECS" default:"60"`
 	}
 
 	Tmate struct {
