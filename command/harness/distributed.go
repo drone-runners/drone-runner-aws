@@ -57,6 +57,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	managerCfg := drivers.NewManagerConfigFromEnv(cfg.Ctx, instanceStore, cfg.Env)
 	managerCfg.StageOwnerStore = stageOwnerStore
 	managerCfg.CapacityReservationStore = capacityReservationStore
+	managerCfg.FirewallStore = firewallStore
 	poolManager := drivers.NewDistributedManager(
 		drivers.NewManagerFromConfig(&managerCfg),
 		outboxStore,
@@ -176,6 +177,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 		InstanceStore:            instanceStore,
 		StageOwnerStore:          stageOwnerStore,
 		CapacityReservationStore: capacityReservationStore,
+		FirewallStore:            firewallStore,
 		Scheduler:                sched,
 		PoolConfig:               poolConfig,
 	}, nil

@@ -113,9 +113,7 @@ func ProvideSQLFirewallStore(db *sqlx.DB) store.FirewallStore {
 }
 
 //nolint:gocritic
-func ProvideStore( //nolint:lll
-	ctx context.Context, driver, datasource string, iamAuth bool, iamRegion string
-) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, store.FirewallStore, error) {
+func ProvideStore(ctx context.Context, driver, datasource string, iamAuth bool, iamRegion string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, store.FirewallStore, error) { //nolint:lll
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
