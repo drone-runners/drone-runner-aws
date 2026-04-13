@@ -38,7 +38,7 @@ type ExecuteVMRequest struct {
 
 var (
 	StepTimeout      = 10 * time.Hour
-	StartStepTimeout = 10 * time.Minute
+	StartStepTimeout = 30 * time.Second
 )
 
 func HandleStep(ctx context.Context,

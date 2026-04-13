@@ -209,8 +209,11 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		return nil, err
 	}
 
-	const timeoutStep      = 4 * time.Hour  // TODO: Move to configuration
-	const timeoutStartStep = 10 * time.Minute
+	const timeoutStep = 4 * time.Hour // TODO: Move to configuration
+	timeoutStartStep := e.config.LiteEngine.StartStepTimeout
+	if timeoutStartStep == 0 {
+		timeoutStartStep = 30 * time.Second
+	}
 
 	secretEnvs := make(map[string]string, len(step.Secrets))
 	for _, secret := range step.Secrets {
