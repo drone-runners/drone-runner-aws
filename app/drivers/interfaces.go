@@ -122,6 +122,8 @@ type ConfigProvider interface {
 
 	// GetSetupTimeout returns the setup timeout.
 	GetSetupTimeout() time.Duration
+	// GetStartStepTimeout returns the start step timeout.
+	GetStartStepTimeout() time.Duration
 }
 
 // PurgerStarter starts the instance purger.

@@ -37,8 +37,7 @@ type ExecuteVMRequest struct {
 }
 
 var (
-	StepTimeout      = 10 * time.Hour
-	StartStepTimeout = 30 * time.Second
+	StepTimeout = 10 * time.Hour
 )
 
 func HandleStep(ctx context.Context,
@@ -145,7 +144,7 @@ func HandleStep(ctx context.Context,
 			}
 		}
 	}
-	startStepResponse, err := client.RetryStartStep(ctx, &r.StartStepRequest, StartStepTimeout)
+	startStepResponse, err := client.RetryStartStep(ctx, &r.StartStepRequest, poolManager.GetStartStepTimeout())
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LE.RetryStartStep: %w", err)
 	}
