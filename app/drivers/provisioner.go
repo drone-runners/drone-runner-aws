@@ -280,6 +280,7 @@ func (m *Manager) setupInstance(
 	createOptions.DriverName = pool.Driver.DriverName()
 	createOptions.Timeout = timeout
 	createOptions.CapacityReservation = reservedCapacity
+	createOptions.CapacityReservationTTL = m.capacityReservationTTL
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")

@@ -367,6 +367,10 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 			Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
 		}
 
+		if opts.CapacityReservationTTL > 0 {
+			reservation.DeleteAfterDuration = &compute.Duration{Seconds: opts.CapacityReservationTTL}
+		}
+
 		// Insert the reservation
 		op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(ctx).Do()
 		if err != nil {
