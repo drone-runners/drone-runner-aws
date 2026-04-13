@@ -69,8 +69,8 @@ func NewVMService(cfg *VMServiceConfig) *VMService {
 
 // NewVMServiceFromRunner creates a VMService from a Runner instance.
 func NewVMServiceFromRunner(r *Runner) *VMService {
-	if r.Config.LiteEngine.StartStepTimeout > 0 {
-		StartStepTimeout = r.Config.LiteEngine.StartStepTimeout
+	if r.Config.RunnerConfig.StartStepTimeout > 0 {
+		StartStepTimeout = r.Config.RunnerConfig.StartStepTimeout
 	}
 	return &VMService{
 		poolManager:              r.PoolManager,

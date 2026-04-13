@@ -210,7 +210,7 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 	}
 
 	const timeoutStep = 4 * time.Hour // TODO: Move to configuration
-	timeoutStartStep := e.config.LiteEngine.StartStepTimeout
+	timeoutStartStep := e.config.RunnerConfig.StartStepTimeout
 	if timeoutStartStep == 0 {
 		timeoutStartStep = 30 * time.Second
 	}
