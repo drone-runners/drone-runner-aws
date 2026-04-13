@@ -128,6 +128,7 @@ type RunnerConfig struct {
 	HealthCheckWindowsTimeout       time.Duration
 	HealthCheckConnectivityDuration time.Duration
 	SetupTimeout                    time.Duration
+	StartStepTimeout                time.Duration
 	HA                              bool
 }
 

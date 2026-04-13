@@ -372,6 +372,7 @@ type EnvConfig struct {
 		HealthCheckWindowsTimeout       time.Duration `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5m"`
 		HealthCheckConnectivityDuration time.Duration `envconfig:"HEALTH_CHECK_CONNECTIVITY_DURATION" default:"3s"`
 		SetupTimeout                    time.Duration `envconfig:"SETUP_TIMEOUT" default:"30s"`
+		StartStepTimeout                time.Duration `envconfig:"START_STEP_TIMEOUT" default:"30s"`
 		HA                              bool          `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
