@@ -147,25 +147,8 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 	logr.Infoln("destroy: instance destroyed successfully")
 
 	// Best-effort async cleanup of egress firewall rules after instance is destroyed.
-	go func() {
-		if m.firewallStore == nil || instance.Stage == "" {
-			return
-		}
-		rules, listErr := m.firewallStore.ListByStageID(context.Background(), instance.Stage)
-		if listErr != nil || len(rules) == 0 {
-			return
-		}
-		ruleIDs := make([]string, len(rules))
-		for i, r := range rules {
-			ruleIDs[i] = r.ResourceID
-		}
-		if cleanupErr := pool.Driver.CleanupEgressPolicy(context.Background(), instance, ruleIDs); cleanupErr != nil {
-			logr.WithError(cleanupErr).Warnln("egress: failed to cleanup egress policy during destroy")
-		}
-		if delErr := m.firewallStore.DeleteByStageID(context.Background(), instance.Stage); delErr != nil {
-			logr.WithError(delErr).Warnln("egress: failed to delete firewall rule records from DB")
-		}
-	}()
+	go m.cleanupEgressFirewallRules(instance, pool, logr)
+
 	return nil
 }
 
@@ -322,21 +305,42 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 }
 
 // ApplyEgressPolicy creates cloud-level egress firewall rules for the instance.
-func (m *Manager) ApplyEgressPolicy(ctx context.Context, poolName string, instance *types.Instance, resolvedIPs []string) ([]string, error) {
-	pool := m.poolMap[poolName]
+func (m *Manager) ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error) {
+	pool := m.poolMap[instance.Pool]
 	if pool == nil {
-		return nil, fmt.Errorf("egress: pool name %q not found", poolName)
+		return nil, fmt.Errorf("egress: pool %q not found for instance %q", instance.Pool, instance.ID)
 	}
 	return pool.Driver.ApplyEgressPolicy(ctx, instance, resolvedIPs)
 }
 
 // CleanupEgressPolicy removes cloud-level egress firewall rules for the instance.
-func (m *Manager) CleanupEgressPolicy(ctx context.Context, poolName string, instance *types.Instance, ruleIDs []string) error {
-	pool := m.poolMap[poolName]
+func (m *Manager) CleanupEgressPolicy(ctx context.Context, instance *types.Instance, ruleIDs []string) error {
+	pool := m.poolMap[instance.Pool]
 	if pool == nil {
-		return fmt.Errorf("egress: pool name %q not found", poolName)
+		return fmt.Errorf("egress: pool %q not found for instance %q", instance.Pool, instance.ID)
 	}
 	return pool.Driver.CleanupEgressPolicy(ctx, instance, ruleIDs)
+}
+
+// cleanupEgressFirewallRules performs best-effort cleanup of egress firewall rules for a destroyed instance.
+func (m *Manager) cleanupEgressFirewallRules(instance *types.Instance, pool *poolEntry, logr *logrus.Entry) {
+	if m.firewallStore == nil || instance.Stage == "" {
+		return
+	}
+	rules, listErr := m.firewallStore.ListByStageID(context.Background(), instance.Stage)
+	if listErr != nil || len(rules) == 0 {
+		return
+	}
+	ruleIDs := make([]string, len(rules))
+	for i, r := range rules {
+		ruleIDs[i] = r.ResourceID
+	}
+	if cleanupErr := pool.Driver.CleanupEgressPolicy(context.Background(), instance, ruleIDs); cleanupErr != nil {
+		logr.WithError(cleanupErr).Warnln("egress: failed to cleanup egress policy during destroy")
+	}
+	if delErr := m.firewallStore.DeleteByStageID(context.Background(), instance.Stage); delErr != nil {
+		logr.WithError(delErr).Warnln("egress: failed to delete firewall rule records from DB")
+	}
 }
 
 // InstanceLogs returns logs for an instance.

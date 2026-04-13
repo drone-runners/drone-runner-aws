@@ -577,10 +577,12 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
-	// If enabled, merge default Harness IPs with customer IPs.
+	// If enabled, merge default Harness IPs with customer IPs into a new slice (don't mutate the request).
+	var mergedAllowedIPs []string
 	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
 		defaultPolicy := egress.DefaultEgressPolicy(egressDefaultIPs)
-		r.SetupRequest.EgressPolicy.AllowedIPs = append(defaultPolicy.AllowedIPs, r.SetupRequest.EgressPolicy.AllowedIPs...)
+		mergedAllowedIPs = append(defaultPolicy.AllowedIPs, r.SetupRequest.EgressPolicy.AllowedIPs...)
+		r.SetupRequest.EgressPolicy.AllowedIPs = mergedAllowedIPs
 	}
 
 	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
@@ -592,8 +594,8 @@ func handleSetup(
 
 	// Apply cloud-level egress firewall rules async and save to firewall store
 	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
-		go applyAndSaveEgressRules(poolManager, firewallStore, pool, instance,
-			r.SetupRequest.EgressPolicy.AllowedIPs, stageRuntimeID, ilog)
+		go applyAndSaveEgressRules(poolManager, firewallStore, instance,
+			mergedAllowedIPs, stageRuntimeID, ilog)
 	}
 
 	return instance, warmed, hibernated, variantID, nil
@@ -603,13 +605,12 @@ func handleSetup(
 func applyAndSaveEgressRules(
 	poolManager drivers.IManager,
 	firewallStore store.FirewallStore,
-	pool string,
 	instance *types.Instance,
 	allowedIPs []string,
 	stageRuntimeID string,
 	ilog *logrus.Entry,
 ) {
-	ruleIDs, egressErr := poolManager.ApplyEgressPolicy(context.Background(), pool, instance, allowedIPs)
+	ruleIDs, egressErr := poolManager.ApplyEgressPolicy(context.Background(), instance, allowedIPs)
 	if egressErr != nil {
 		ilog.WithError(egressErr).Warnln("failed to apply cloud egress firewall rules")
 		return

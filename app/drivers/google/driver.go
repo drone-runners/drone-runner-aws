@@ -1251,7 +1251,7 @@ func (p *config) setupFirewall(ctx context.Context) error {
 // ApplyEgressPolicy creates per-VM egress firewall rules using pre-resolved IPs from lite-engine.
 // Returns the list of created rule names for DB storage.
 func (p *config) ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error) {
-	return p.createEgressFirewallRules(ctx, instance.Name, resolvedIPs)
+	return p.createEgressFirewallRules(ctx, instance.ID, instance.Name, resolvedIPs)
 }
 
 // CleanupEgressPolicy removes per-VM egress firewall rules using stored rule IDs.
@@ -1260,11 +1260,11 @@ func (p *config) CleanupEgressPolicy(ctx context.Context, instance *types.Instan
 	return nil
 }
 
-// egressRuleName builds a GCP-compliant firewall rule name: "{prefix}{instanceName}", truncated to 63 chars.
-// The instance name already contains randomness (uniuri8 + rand5) so the result is unique per VM.
-func egressRuleName(prefix, instanceName string) string {
+// egressRuleName builds a GCP-compliant firewall rule name: "{prefix}{instanceID}", truncated to 63 chars.
+// The instance ID already contains randomness so the result is unique per VM.
+func egressRuleName(prefix, instanceID string) string {
 	const maxLen = 63
-	name := prefix + instanceName
+	name := prefix + instanceID
 	if len(name) > maxLen {
 		name = name[:maxLen]
 	}
@@ -1274,7 +1274,7 @@ func egressRuleName(prefix, instanceName string) string {
 
 // createEgressFirewallRules creates two GCP firewall rules for egress restriction.
 // Returns the created rule names for DB storage.
-func (p *config) createEgressFirewallRules(ctx context.Context, instanceName string, resolvedIPs []string) ([]string, error) {
+func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, instanceName string, resolvedIPs []string) ([]string, error) {
 	logr := logger.FromContext(ctx).WithField("instance", instanceName)
 
 	if len(resolvedIPs) == 0 {
@@ -1297,7 +1297,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceName str
 	}
 
 	// Create allow rule for whitelisted IPs
-	allowRuleName := egressRuleName("egress-allow-", instanceName)
+	allowRuleName := egressRuleName("egress-allow-", instanceID)
 	allowRule := &compute.Firewall{
 		Name:      allowRuleName,
 		Network:   network,
@@ -1326,7 +1326,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceName str
 	}
 
 	// Create deny-all rule
-	denyRuleName := egressRuleName("egress-deny-", instanceName)
+	denyRuleName := egressRuleName("egress-deny-", instanceID)
 	denyRule := &compute.Firewall{
 		Name:      denyRuleName,
 		Network:   network,
