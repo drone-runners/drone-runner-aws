@@ -209,7 +209,8 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		return nil, err
 	}
 
-	const timeoutStep = 4 * time.Hour // TODO: Move to configuration
+	const timeoutStep      = 4 * time.Hour  // TODO: Move to configuration
+	const timeoutStartStep = 10 * time.Minute
 
 	secretEnvs := make(map[string]string, len(step.Secrets))
 	for _, secret := range step.Secrets {
@@ -291,7 +292,9 @@ func (e *Engine) Run(ctx context.Context, specv runtime.Spec, stepv runtime.Step
 		b := false
 		req.MountDockerSocket = &b
 	}
-	startStepResponse, err := client.StartStep(ctx, req)
+	startStepCtx, startStepCancel := context.WithTimeout(ctx, timeoutStartStep)
+	defer startStepCancel()
+	startStepResponse, err := client.StartStep(startStepCtx, req)
 	if err != nil {
 		logr.WithError(err).Errorln("failed to start step")
 		return nil, err
