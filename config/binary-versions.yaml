@@ -20,7 +20,7 @@ registry: "gar"
 
 binaries:
   lite-engine:
-    version: "1.2.0"
+    version: "1.4.0"
     image: "harness-vm-runner-lite-engine"
     description: "Harness CI execution engine"
 
