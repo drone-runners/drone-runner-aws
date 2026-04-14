@@ -35,7 +35,7 @@ binaries:
     description: "Auto-injection for build instrumentation"
 
   hcli:
-    version: "1.3.0"
+    version: "1.6.0"
     image: "harness/harness-vm-runner-hcli"
     description: "Harness CLI for annotations and step integration"
 
