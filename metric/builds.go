@@ -226,7 +226,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 		}
 
 		// Get all instances for this pool using instanceStore.List()
-		busy, free, hibernating, provisioning, err := metricStore.Manager.List(ctx, poolName, metricStore.Query)
+		busy, free, hibernating, provisioning, _, err := metricStore.Manager.List(ctx, poolName, metricStore.Query)
 		if err != nil {
 			// Log error but continue with other pools
 			continue

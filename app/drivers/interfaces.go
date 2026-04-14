@@ -40,7 +40,7 @@ type InstanceQuerier interface {
 	Find(ctx context.Context, instanceID string) (*types.Instance, error)
 
 	// List lists instances in a pool by state.
-	List(ctx context.Context, pool string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning []*types.Instance, err error)
+	List(ctx context.Context, pool string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning, terminating []*types.Instance, err error)
 
 	// GetInstanceByStageID gets an instance by stage ID.
 	GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error)

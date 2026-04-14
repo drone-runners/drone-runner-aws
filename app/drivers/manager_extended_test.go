@@ -14,6 +14,7 @@ import (
 	// Note: Removed unused "github.com/drone-runners/drone-runner-aws/store" import
 	// We define mock implementations of store interfaces directly in this file
 	// instead of importing the store package
+	"github.com/harness/lite-engine/engine/spec"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -715,16 +716,17 @@ func TestManager_GetInstanceByStageID(t *testing.T) {
 
 func TestManager_List(t *testing.T) {
 	tests := []struct {
-		name        string
-		poolName    string
-		query       *types.QueryParams
-		mockList    []*types.Instance
-		mockErr     error
-		wantBusy    int
-		wantFree    int
-		wantHibern  int
-		wantErr     bool
-		errContains string
+		name           string
+		poolName       string
+		query          *types.QueryParams
+		mockList       []*types.Instance
+		mockErr        error
+		wantBusy       int
+		wantFree       int
+		wantHibern     int
+		wantTerminate  int
+		wantErr        bool
+		errContains    string
 	}{
 		{
 			name:        "pool not found",
@@ -769,6 +771,21 @@ func TestManager_List(t *testing.T) {
 			wantErr:    false,
 		},
 		{
+			name:     "terminating instances categorized separately",
+			poolName: "test-pool",
+			mockList: []*types.Instance{
+				{ID: "1", State: types.StateInUse},
+				{ID: "2", State: types.StateTerminating},
+				{ID: "3", State: types.StateCreated},
+				{ID: "4", State: types.StateTerminating},
+			},
+			wantBusy:      1,
+			wantFree:      1,
+			wantHibern:    0,
+			wantTerminate: 2,
+			wantErr:       false,
+		},
+		{
 			name:     "store error",
 			poolName: "test-pool",
 			mockErr:  errors.New("database error"),
@@ -789,7 +806,7 @@ func TestManager_List(t *testing.T) {
 				_ = m.Add(Pool{Name: tt.poolName})
 			}
 
-			busy, free, hibernating, _, err := m.List(context.Background(), tt.poolName, tt.query)
+			busy, free, hibernating, _, terminating, err := m.List(context.Background(), tt.poolName, tt.query)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -801,6 +818,7 @@ func TestManager_List(t *testing.T) {
 				assert.Equal(t, tt.wantBusy, len(busy))
 				assert.Equal(t, tt.wantFree, len(free))
 				assert.Equal(t, tt.wantHibern, len(hibernating))
+				assert.Equal(t, tt.wantTerminate, len(terminating))
 			}
 		})
 	}
@@ -1279,6 +1297,166 @@ func TestManager_SetInstanceTags(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test buildPool - verifies terminating instances are not counted as free
+// This is the core of CI-21780: terminating instances were previously categorized
+// as free, causing buildPool to think the pool had enough capacity and skip creating
+// needed instances — or worse, schedule unnecessary replacements.
+func TestManager_buildPool_terminatingNotCountedAsFree(t *testing.T) {
+	tests := []struct {
+		name            string
+		minSize         int
+		maxSize         int
+		instances       []*types.Instance
+		wantCreateCount int
+	}{
+		{
+			name:    "terminating instances not counted as free - triggers instance creation",
+			minSize: 2,
+			maxSize: 5,
+			instances: []*types.Instance{
+				{ID: "term-1", State: types.StateTerminating},
+				{ID: "term-2", State: types.StateTerminating},
+			},
+			wantCreateCount: 2, // minSize=2, free=0 (terminating excluded), so 2 should be created
+		},
+		{
+			name:    "mix of free and terminating - only free counts toward pool",
+			minSize: 3,
+			maxSize: 5,
+			instances: []*types.Instance{
+				{ID: "free-1", State: types.StateCreated},
+				{ID: "term-1", State: types.StateTerminating},
+				{ID: "term-2", State: types.StateTerminating},
+			},
+			wantCreateCount: 2, // minSize=3, free=1 (terminating excluded), so 2 should be created
+		},
+		{
+			name:    "enough free instances - no creation needed",
+			minSize: 2,
+			maxSize: 5,
+			instances: []*types.Instance{
+				{ID: "free-1", State: types.StateCreated},
+				{ID: "free-2", State: types.StateCreated},
+				{ID: "term-1", State: types.StateTerminating},
+			},
+			wantCreateCount: 0, // minSize=2, free=2, no creation needed
+		},
+		{
+			name:    "pool: 0 with terminating instances - no creation",
+			minSize: 0,
+			maxSize: 5,
+			instances: []*types.Instance{
+				{ID: "term-1", State: types.StateTerminating},
+				{ID: "term-2", State: types.StateTerminating},
+			},
+			wantCreateCount: 0, // minSize=0, nothing should be created
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			createCount := 0
+
+			instanceStore := &mockInstanceStore{
+				ListFunc: func(ctx context.Context, poolName string, query *types.QueryParams) ([]*types.Instance, error) {
+					return tt.instances, nil
+				},
+			}
+
+			pool := &poolEntry{
+				Pool: Pool{
+					Name:    "test-pool",
+					MinSize: tt.minSize,
+					MaxSize: tt.maxSize,
+					Driver:  &flexibleMockDriver{driverName: "mock"},
+				},
+			}
+
+			m := &Manager{
+				instanceStore: instanceStore,
+				runnerName:    "test-runner",
+			}
+
+			mockSetup := func(
+				ctx context.Context,
+				pool *poolEntry,
+				tlsServerName string,
+				variantID string,
+				params *types.SetupInstanceParams,
+				vmImage *spec.VMImageConfig,
+				gitspaceConfig *types.GitspaceAgentConfig,
+				storageConfig *types.StorageConfig,
+				storageSize int64,
+				platform *types.Platform,
+			) (*types.Instance, error) {
+				createCount++
+				return &types.Instance{ID: "new-inst"}, nil
+			}
+
+			err := m.buildPool(context.Background(), pool, "", nil, mockSetup, nil)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantCreateCount, createCount,
+				"expected %d instances to be created, got %d", tt.wantCreateCount, createCount)
+		})
+	}
+}
+
+// Test CleanPools with terminating instances - verifies terminating instances
+// are destroyed when destroyBusy is true (they behave like busy instances)
+func TestManager_CleanPools_terminatingDestroyedWithBusy(t *testing.T) {
+	destroyedIDs := []string{}
+
+	listFunc := func(ctx context.Context, poolName string, query *types.QueryParams) ([]*types.Instance, error) {
+		return []*types.Instance{
+			{ID: "busy-1", State: types.StateInUse},
+			{ID: "term-1", State: types.StateTerminating},
+			{ID: "term-2", State: types.StateTerminating},
+			{ID: "free-1", State: types.StateCreated},
+		}, nil
+	}
+
+	destroyFunc := func(ctx context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+		for _, inst := range instances {
+			destroyedIDs = append(destroyedIDs, inst.ID)
+		}
+		return nil, nil
+	}
+
+	deleteFunc := func(ctx context.Context, id string) error {
+		return nil
+	}
+
+	driver := &flexibleMockDriver{
+		DestroyFunc: destroyFunc,
+		driverName:  "mock",
+	}
+
+	m := &Manager{
+		poolMap: map[string]*poolEntry{
+			"pool1": {
+				Pool: Pool{
+					Name:   "pool1",
+					Driver: driver,
+				},
+			},
+		},
+		instanceStore: &mockInstanceStore{
+			ListFunc:   listFunc,
+			DeleteFunc: deleteFunc,
+		},
+		runnerName: "test-runner",
+	}
+
+	// destroyBusy=true, destroyFree=false: should destroy busy + terminating, not free
+	err := m.CleanPools(context.Background(), true, false)
+	assert.NoError(t, err)
+	assert.Contains(t, destroyedIDs, "busy-1")
+	assert.Contains(t, destroyedIDs, "term-1")
+	assert.Contains(t, destroyedIDs, "term-2")
+	assert.NotContains(t, destroyedIDs, "free-1")
+	assert.Len(t, destroyedIDs, 3)
 }
 
 // Test CleanPools method - covers batch instance cleanup
