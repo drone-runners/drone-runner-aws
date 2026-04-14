@@ -17,6 +17,7 @@ import (
 	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/egress"
@@ -602,6 +603,7 @@ func handleSetup(
 }
 
 // applyAndSaveEgressRules creates cloud-level egress firewall rules and saves references to the firewall store.
+// It pre-saves rules with provisioning state before cloud creation, then updates to active on success.
 func applyAndSaveEgressRules(
 	poolManager drivers.IManager,
 	firewallStore store.FirewallStore,
@@ -610,27 +612,47 @@ func applyAndSaveEgressRules(
 	stageRuntimeID string,
 	ilog *logrus.Entry,
 ) {
-	ruleIDs, egressErr := poolManager.ApplyEgressPolicy(context.Background(), instance, allowedIPs)
-	if egressErr != nil {
-		ilog.WithError(egressErr).Warnln("failed to apply cloud egress firewall rules")
-		return
-	}
-	if firewallStore == nil || len(ruleIDs) == 0 {
-		return
-	}
-	now := time.Now().Unix()
-	rules := make([]*types.FirewallRule, len(ruleIDs))
-	for i, rid := range ruleIDs {
-		rules[i] = &types.FirewallRule{
-			StageID:       stageRuntimeID,
-			InstanceID:    instance.ID,
-			ResourceID:    rid,
-			CloudProvider: string(instance.Provider),
-			CreatedAt:     now,
+	ctx := context.Background()
+
+	// Pre-compute rule names (deterministic based on instance ID).
+	allowRuleName := google.EgressRuleName(google.EgressAllowPrefix, instance.ID)
+	denyRuleName := google.EgressRuleName(google.EgressDenyPrefix, instance.ID)
+
+	// Pre-save rules with provisioning state and actual rule names so destroy/purger can always find and clean them.
+	if firewallStore != nil {
+		now := time.Now().Unix()
+		rules := []*types.FirewallRule{
+			{
+				StageID: stageRuntimeID, InstanceID: instance.ID,
+				ResourceID: allowRuleName, CloudProvider: string(instance.Provider),
+				State: types.FirewallStateProvisioning, CreatedAt: now,
+			},
+			{
+				StageID: stageRuntimeID, InstanceID: instance.ID,
+				ResourceID: denyRuleName, CloudProvider: string(instance.Provider),
+				State: types.FirewallStateProvisioning, CreatedAt: now,
+			},
+		}
+		if saveErr := firewallStore.CreateBatch(ctx, rules); saveErr != nil {
+			ilog.WithError(saveErr).Warnln("egress: failed to pre-save firewall rules to DB")
 		}
 	}
-	if saveErr := firewallStore.CreateBatch(context.Background(), rules); saveErr != nil {
-		ilog.WithError(saveErr).Warnln("egress: failed to save firewall rules to DB")
+
+	_, egressErr := poolManager.ApplyEgressPolicy(ctx, instance, allowedIPs)
+	if egressErr != nil {
+		ilog.WithError(egressErr).Warnln("failed to apply cloud egress firewall rules")
+		// Clean up the provisioning records
+		if firewallStore != nil {
+			_ = firewallStore.DeleteByStageID(ctx, stageRuntimeID)
+		}
+		return
+	}
+
+	// Update rules to active state after successful cloud creation.
+	if firewallStore != nil {
+		if updateErr := firewallStore.UpdateState(ctx, stageRuntimeID, types.FirewallStateActive); updateErr != nil {
+			ilog.WithError(updateErr).Warnln("egress: failed to update firewall rules state to active")
+		}
 	}
 }
 

@@ -112,7 +112,7 @@ func (c *config) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []str
 	return nil, nil
 }
 
-func (c *config) CleanupEgressPolicy(_ context.Context, _ *types.Instance, _ []string) error {
+func (c *config) CleanupEgressPolicy(_ context.Context, _ []string) error {
 	return nil
 }
 

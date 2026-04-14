@@ -27,10 +27,10 @@ func (s FirewallStore) CreateBatch(_ context.Context, rules []*types.FirewallRul
 	}
 
 	q := builder.Insert("firewall_rules").
-		Columns("stage_id", "instance_id", "resource_id", "cloud_provider", "created_at")
+		Columns("stage_id", "instance_id", "resource_id", "cloud_provider", "state", "created_at")
 
 	for _, r := range rules {
-		q = q.Values(r.StageID, r.InstanceID, r.ResourceID, r.CloudProvider, r.CreatedAt)
+		q = q.Values(r.StageID, r.InstanceID, r.ResourceID, r.CloudProvider, r.State, r.CreatedAt)
 	}
 
 	query, args, err := q.ToSql()
@@ -77,4 +77,31 @@ func (s FirewallStore) DeleteByStageID(ctx context.Context, stageID string) erro
 	return tx.Commit()
 }
 
-const firewallRuleColumns = `id, stage_id, instance_id, resource_id, cloud_provider, created_at`
+func (s FirewallStore) ListAll(_ context.Context) ([]*types.FirewallRule, error) {
+	var dst []*types.FirewallRule
+
+	query, args, err := builder.Select(firewallRuleColumns).
+		From("firewall_rules").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("firewall_rules: failed to build select-all query: %w", err)
+	}
+
+	err = s.db.Select(&dst, query, args...)
+	return dst, err
+}
+
+func (s FirewallStore) UpdateState(_ context.Context, stageID, state string) error {
+	query, args, err := builder.Update("firewall_rules").
+		Set("state", state).
+		Where(squirrel.Eq{"stage_id": stageID}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("firewall_rules: failed to build update-state query: %w", err)
+	}
+
+	_, err = s.db.Exec(query, args...)
+	return err
+}
+
+const firewallRuleColumns = `id, stage_id, instance_id, resource_id, cloud_provider, state, created_at`

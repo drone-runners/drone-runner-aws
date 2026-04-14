@@ -65,6 +65,8 @@ func SetupPool(
 		}
 		logrus.Infoln("pools cleaned")
 	}
+	// Purge stale firewall rules left by aborted builds or purger cleanup
+	poolManager.PurgeOrphanedFirewallRules(ctx, busyMaxAgeDuration)
 	// seed pools
 	buildPoolErr := poolManager.BuildPools(ctx)
 	if buildPoolErr != nil {

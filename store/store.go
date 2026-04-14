@@ -55,6 +55,8 @@ type CapacityReservationStore interface {
 type FirewallStore interface {
 	CreateBatch(ctx context.Context, rules []*types.FirewallRule) error
 	ListByStageID(ctx context.Context, stageID string) ([]*types.FirewallRule, error)
+	ListAll(ctx context.Context) ([]*types.FirewallRule, error)
+	UpdateState(ctx context.Context, stageID, state string) error
 	DeleteByStageID(ctx context.Context, stageID string) error
 }
 

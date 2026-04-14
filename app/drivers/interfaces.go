@@ -63,6 +63,9 @@ type PoolManager interface {
 	// CleanPools cleans up pools.
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error
 
+	// PurgeOrphanedFirewallRules finds and cleans up stale firewall rules based on age.
+	PurgeOrphanedFirewallRules(ctx context.Context, maxAge time.Duration)
+
 	// Inspect returns platform, root directory, and driver name for a pool.
 	Inspect(name string) (platform types.Platform, rootDir, driver string)
 
@@ -87,8 +90,8 @@ type InstanceLifecycle interface {
 	// ApplyEgressPolicy creates cloud-level egress firewall rules for the instance.
 	ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error)
 
-	// CleanupEgressPolicy removes cloud-level egress firewall rules for the instance.
-	CleanupEgressPolicy(ctx context.Context, instance *types.Instance, ruleIDs []string) error
+	// CleanupEgressPolicy removes cloud-level egress firewall rules by rule IDs.
+	CleanupEgressPolicy(ctx context.Context, poolName string, ruleIDs []string) error
 }
 
 // HealthChecker provides health check operations.

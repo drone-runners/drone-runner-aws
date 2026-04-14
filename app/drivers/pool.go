@@ -42,8 +42,8 @@ type Driver interface {
 
 	// ApplyEgressPolicy creates cloud-level egress firewall rules for the instance using pre-resolved IPs.
 	ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error)
-	// CleanupEgressPolicy removes cloud-level egress firewall rules for the instance.
-	CleanupEgressPolicy(ctx context.Context, instance *types.Instance, ruleIDs []string) error
+	// CleanupEgressPolicy removes cloud-level egress firewall rules by rule IDs.
+	CleanupEgressPolicy(ctx context.Context, ruleIDs []string) error
 
 	RootDir() string
 	DriverName() string
