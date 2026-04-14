@@ -48,7 +48,7 @@ func (m *Manager) GetInstanceByStageID(ctx context.Context, poolName, stage stri
 }
 
 // List lists instances in a pool by state.
-func (m *Manager) List(ctx context.Context, poolName string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning, terminating []*types.Instance, err error) {
+func (m *Manager) List(ctx context.Context, poolName string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning, terminating []*types.Instance, err error) { //nolint:gocritic
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("manager: pool %s not found", poolName)
@@ -57,7 +57,7 @@ func (m *Manager) List(ctx context.Context, poolName string, queryParams *types.
 }
 
 // list is an internal helper to list instances in a pool.
-func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating, provisioning, terminating []*types.Instance, err error) {
+func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.QueryParams) (busy, free, hibernating, provisioning, terminating []*types.Instance, err error) { //nolint:gocritic
 	list, err := m.instanceStore.List(ctx, pool.Name, queryParams)
 	if err != nil {
 		logger.FromContext(ctx).WithError(err).

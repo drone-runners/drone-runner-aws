@@ -716,17 +716,17 @@ func TestManager_GetInstanceByStageID(t *testing.T) {
 
 func TestManager_List(t *testing.T) {
 	tests := []struct {
-		name           string
-		poolName       string
-		query          *types.QueryParams
-		mockList       []*types.Instance
-		mockErr        error
-		wantBusy       int
-		wantFree       int
-		wantHibern     int
-		wantTerminate  int
-		wantErr        bool
-		errContains    string
+		name          string
+		poolName      string
+		query         *types.QueryParams
+		mockList      []*types.Instance
+		mockErr       error
+		wantBusy      int
+		wantFree      int
+		wantHibern    int
+		wantTerminate int
+		wantErr       bool
+		errContains   string
 	}{
 		{
 			name:        "pool not found",
@@ -887,7 +887,7 @@ func TestManager_GetPoolSpec(t *testing.T) {
 				_ = m.Add(Pool{Name: tt.poolName, Spec: tt.poolSpec})
 			}
 
-			spec, err := m.GetPoolSpec(tt.poolName)
+			poolSpec, err := m.GetPoolSpec(tt.poolName)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -896,7 +896,7 @@ func TestManager_GetPoolSpec(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.poolSpec, spec)
+				assert.Equal(t, tt.poolSpec, poolSpec)
 			}
 		})
 	}
