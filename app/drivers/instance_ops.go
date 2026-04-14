@@ -76,7 +76,7 @@ func (m *Manager) list(ctx context.Context, pool *poolEntry, queryParams *types.
 			provisioning = append(provisioning, loopInstance)
 		} else if instance.State == types.StateTerminating {
 			terminating = append(terminating, loopInstance)
-		} else {
+		} else if instance.State == types.StateCreated {
 			free = append(free, loopInstance)
 		}
 	}
