@@ -77,14 +77,15 @@ func (s FirewallStore) DeleteByStageID(ctx context.Context, stageID string) erro
 	return tx.Commit()
 }
 
-func (s FirewallStore) ListAll(_ context.Context) ([]*types.FirewallRule, error) {
+func (s FirewallStore) ListOlderThan(_ context.Context, createdBefore int64) ([]*types.FirewallRule, error) {
 	var dst []*types.FirewallRule
 
 	query, args, err := builder.Select(firewallRuleColumns).
 		From("firewall_rules").
+		Where(squirrel.Lt{"created_at": createdBefore}).
 		ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("firewall_rules: failed to build select-all query: %w", err)
+		return nil, fmt.Errorf("firewall_rules: failed to build select query: %w", err)
 	}
 
 	err = s.db.Select(&dst, query, args...)

@@ -462,7 +462,7 @@ type EnvConfig struct {
 	}
 
 	Egress struct {
-		DefaultIPs string `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
+		DefaultIPs []string `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
 	}
 
 	LiteEngine struct {

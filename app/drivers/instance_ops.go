@@ -307,18 +307,12 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 // ApplyEgressPolicy creates cloud-level egress firewall rules for the instance.
 func (m *Manager) ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error) {
 	pool := m.poolMap[instance.Pool]
-	if pool == nil {
-		return nil, fmt.Errorf("egress: pool %q not found for instance %q", instance.Pool, instance.ID)
-	}
 	return pool.Driver.ApplyEgressPolicy(ctx, instance, resolvedIPs)
 }
 
 // CleanupEgressPolicy removes cloud-level egress firewall rules by rule IDs.
 func (m *Manager) CleanupEgressPolicy(ctx context.Context, poolName string, ruleIDs []string) error {
 	pool := m.poolMap[poolName]
-	if pool == nil {
-		return fmt.Errorf("egress: pool %q not found", poolName)
-	}
 	return pool.Driver.CleanupEgressPolicy(ctx, ruleIDs)
 }
 
@@ -350,23 +344,19 @@ func (m *Manager) PurgeOrphanedFirewallRules(ctx context.Context, maxAge time.Du
 		return
 	}
 
-	allRules, err := m.firewallStore.ListAll(ctx)
-	if err != nil || len(allRules) == 0 {
+	createdBefore := time.Now().Add(-maxAge).Unix()
+	staleRules, err := m.firewallStore.ListOlderThan(ctx, createdBefore)
+	if err != nil || len(staleRules) == 0 {
 		return
 	}
 
 	// Group rules by stage_id
 	rulesByStage := map[string][]*types.FirewallRule{}
-	for _, r := range allRules {
+	for _, r := range staleRules {
 		rulesByStage[r.StageID] = append(rulesByStage[r.StageID], r)
 	}
 
 	for stageID, rules := range rulesByStage {
-		startedAt := time.Unix(rules[0].CreatedAt, 0)
-		if time.Since(startedAt) <= maxAge {
-			continue
-		}
-
 		// Clean up cloud rules (best-effort, ignore 404 for non-existent rules)
 		ruleIDs := make([]string, 0, len(rules))
 		for _, r := range rules {

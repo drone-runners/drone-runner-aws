@@ -36,7 +36,7 @@ type VMService struct {
 	enableMock       bool
 	mockTimeoutSecs  int
 	fallbackPoolIDs  []string
-	egressDefaultIPs string
+	egressDefaultIPs []string
 }
 
 // VMServiceConfig holds configuration for creating a VMService.
@@ -52,7 +52,7 @@ type VMServiceConfig struct {
 	EnableMock               bool
 	MockTimeoutSecs          int
 	FallbackPoolIDs          []string
-	EgressDefaultIPs         string
+	EgressDefaultIPs         []string
 }
 
 // NewVMService creates a new VMService with the provided configuration.

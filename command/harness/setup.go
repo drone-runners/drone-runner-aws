@@ -70,7 +70,7 @@ func HandleSetup(
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 	envFallbackPoolIDs []string,
-	egressDefaultIPs string,
+	egressDefaultIPs []string,
 	firewallStore store.FirewallStore,
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
@@ -421,7 +421,7 @@ func handleSetup(
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
-	egressDefaultIPs string,
+	egressDefaultIPs []string,
 	firewallStore store.FirewallStore,
 ) (
 	instance *types.Instance,

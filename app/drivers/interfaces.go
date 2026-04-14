@@ -63,9 +63,6 @@ type PoolManager interface {
 	// CleanPools cleans up pools.
 	CleanPools(ctx context.Context, destroyBusy, destroyFree bool) error
 
-	// PurgeOrphanedFirewallRules finds and cleans up stale firewall rules based on age.
-	PurgeOrphanedFirewallRules(ctx context.Context, maxAge time.Duration)
-
 	// Inspect returns platform, root directory, and driver name for a pool.
 	Inspect(name string) (platform types.Platform, rootDir, driver string)
 
