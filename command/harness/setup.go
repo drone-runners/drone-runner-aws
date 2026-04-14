@@ -582,7 +582,9 @@ func handleSetup(
 	var mergedAllowedIPs []string
 	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
 		defaultPolicy := egress.DefaultEgressPolicy(egressDefaultIPs)
-		mergedAllowedIPs = append(defaultPolicy.AllowedIPs, r.SetupRequest.EgressPolicy.AllowedIPs...)
+		mergedAllowedIPs = make([]string, 0, len(defaultPolicy.AllowedIPs)+len(r.SetupRequest.EgressPolicy.AllowedIPs))
+		mergedAllowedIPs = append(mergedAllowedIPs, defaultPolicy.AllowedIPs...)
+		mergedAllowedIPs = append(mergedAllowedIPs, r.SetupRequest.EgressPolicy.AllowedIPs...)
 		r.SetupRequest.EgressPolicy.AllowedIPs = mergedAllowedIPs
 	}
 
