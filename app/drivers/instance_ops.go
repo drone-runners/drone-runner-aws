@@ -310,12 +310,6 @@ func (m *Manager) ApplyEgressPolicy(ctx context.Context, instance *types.Instanc
 	return pool.Driver.ApplyEgressPolicy(ctx, instance, resolvedIPs)
 }
 
-// CleanupEgressPolicy removes cloud-level egress firewall rules by rule IDs.
-func (m *Manager) CleanupEgressPolicy(ctx context.Context, poolName string, ruleIDs []string) error {
-	pool := m.poolMap[poolName]
-	return pool.Driver.CleanupEgressPolicy(ctx, ruleIDs)
-}
-
 // cleanupEgressFirewallRules performs best-effort cleanup of egress firewall rules for a destroyed instance.
 func (m *Manager) cleanupEgressFirewallRules(instance *types.Instance, pool *poolEntry, logr *logrus.Entry) {
 	if m.firewallStore == nil || instance.Stage == "" {
