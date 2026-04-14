@@ -88,6 +88,14 @@ func (p *config) CanHibernate() bool {
 	return false
 }
 
+func (p *config) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []string) ([]string, error) {
+	return nil, nil
+}
+
+func (p *config) CleanupEgressPolicy(_ context.Context, _ []string) error {
+	return nil
+}
+
 func (p *config) GetFullyQualifiedImage(_ context.Context, config *types.VMImageConfig) (string, error) {
 	// If no image name is provided, return the default ISO path
 	if config.ImageName == "" {

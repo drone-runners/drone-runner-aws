@@ -145,6 +145,10 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 		logr.WithError(derr).Warnln("destroy: failed to delete instance from store after successful destroy")
 	}
 	logr.Infoln("destroy: instance destroyed successfully")
+
+	// Best-effort async cleanup of egress firewall rules after instance is destroyed.
+	go m.cleanupEgressFirewallRules(instance, pool, logr)
+
 	return nil
 }
 
@@ -298,6 +302,73 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 		return fmt.Errorf("provision: failed to label an instance of %q pool: %w", poolName, err)
 	}
 	return nil
+}
+
+// ApplyEgressPolicy creates cloud-level egress firewall rules for the instance.
+func (m *Manager) ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error) {
+	pool := m.poolMap[instance.Pool]
+	return pool.Driver.ApplyEgressPolicy(ctx, instance, resolvedIPs)
+}
+
+// cleanupEgressFirewallRules performs best-effort cleanup of egress firewall rules for a destroyed instance.
+func (m *Manager) cleanupEgressFirewallRules(instance *types.Instance, pool *poolEntry, logr *logrus.Entry) {
+	if m.firewallStore == nil || instance.Stage == "" {
+		return
+	}
+	rules, listErr := m.firewallStore.ListByStageID(context.Background(), instance.Stage)
+	if listErr != nil || len(rules) == 0 {
+		return
+	}
+	ruleIDs := make([]string, len(rules))
+	for i, r := range rules {
+		ruleIDs[i] = r.ResourceID
+	}
+	if cleanupErr := pool.Driver.CleanupEgressPolicy(context.Background(), ruleIDs); cleanupErr != nil {
+		logr.WithError(cleanupErr).Warnln("egress: failed to cleanup egress policy during destroy")
+	}
+	if delErr := m.firewallStore.DeleteByStageID(context.Background(), instance.Stage); delErr != nil {
+		logr.WithError(delErr).Warnln("egress: failed to delete firewall rule records from DB")
+	}
+}
+
+// PurgeOrphanedFirewallRules finds and cleans up stale firewall rules.
+// Rules older than maxAge are purged — same threshold and logic as busy instances.
+func (m *Manager) PurgeOrphanedFirewallRules(ctx context.Context, maxAge time.Duration) {
+	if m.firewallStore == nil {
+		return
+	}
+
+	createdBefore := time.Now().Add(-maxAge).Unix()
+	staleRules, err := m.firewallStore.ListOlderThan(ctx, createdBefore)
+	if err != nil || len(staleRules) == 0 {
+		return
+	}
+
+	// Group rules by stage_id
+	rulesByStage := map[string][]*types.FirewallRule{}
+	for _, r := range staleRules {
+		rulesByStage[r.StageID] = append(rulesByStage[r.StageID], r)
+	}
+
+	for stageID, rules := range rulesByStage {
+		// Clean up cloud rules (best-effort, ignore 404 for non-existent rules)
+		ruleIDs := make([]string, 0, len(rules))
+		for _, r := range rules {
+			if r.ResourceID != "" {
+				ruleIDs = append(ruleIDs, r.ResourceID)
+			}
+		}
+		if len(ruleIDs) > 0 {
+			for _, pool := range m.poolMap {
+				_ = pool.Driver.CleanupEgressPolicy(ctx, ruleIDs)
+				break
+			}
+		}
+
+		_ = m.firewallStore.DeleteByStageID(ctx, stageID)
+		logrus.WithField("stage_id", stageID).WithField("rule_count", len(rules)).
+			Infoln("purger: cleaned stale firewall rules")
+	}
 }
 
 // InstanceLogs returns logs for an instance.

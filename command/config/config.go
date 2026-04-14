@@ -461,6 +461,10 @@ type EnvConfig struct {
 		SkipCloudInitPackages        bool     `envconfig:"DRONE_SKIP_CLOUD_INIT_PACKAGES" default:"false"`
 	}
 
+	Egress struct {
+		DefaultIPs []string `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
+	}
+
 	LiteEngine struct {
 		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.170/"`
 		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.170/"`

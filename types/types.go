@@ -286,6 +286,29 @@ type StorageConfig struct {
 	BootDiskType       string `json:"boot_disk_type"`
 }
 
+// Firewall rule states.
+const (
+	FirewallStateProvisioning = "provisioning"
+	FirewallStateActive       = "active"
+)
+
+// FirewallRule represents a cloud firewall rule stored in the DB for cleanup tracking.
+type FirewallRule struct {
+	ID            int64  `db:"id" json:"id"`
+	StageID       string `db:"stage_id" json:"stage_id"`
+	InstanceID    string `db:"instance_id" json:"instance_id"`
+	ResourceID    string `db:"resource_id" json:"resource_id"`
+	CloudProvider string `db:"cloud_provider" json:"cloud_provider"`
+	State         string `db:"state" json:"state"`
+	CreatedAt     int64  `db:"created_at" json:"created_at"`
+}
+
+// EgressPolicy defines the egress/outbound traffic restriction policy for a VM.
+type EgressPolicy struct {
+	Enabled    bool     `json:"enabled"`
+	AllowedIPs []string `json:"allowed_ips,omitempty"`
+}
+
 type VMImageConfig struct {
 	ImageVersion string
 	ImageName    string

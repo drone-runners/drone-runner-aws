@@ -199,6 +199,14 @@ func (p *amazonConfig) CanHibernate() bool {
 	return p.hibernate
 }
 
+func (p *amazonConfig) ApplyEgressPolicy(_ context.Context, _ *drtypes.Instance, _ []string) ([]string, error) {
+	return nil, nil
+}
+
+func (p *amazonConfig) CleanupEgressPolicy(_ context.Context, _ []string) error {
+	return nil
+}
+
 // Ping checks that we can log into EC2, and the regions respond
 func (p *amazonConfig) Ping(ctx context.Context) error {
 	client := p.service

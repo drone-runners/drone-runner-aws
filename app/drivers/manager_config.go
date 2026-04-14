@@ -17,6 +17,7 @@ type ManagerConfig struct {
 	InstanceStore            store.InstanceStore
 	StageOwnerStore          store.StageOwnerStore
 	CapacityReservationStore store.CapacityReservationStore
+	FirewallStore            store.FirewallStore
 
 	// Runner configuration
 	RunnerName   string
@@ -49,6 +50,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		instanceStore:                cfg.InstanceStore,
 		stageOwnerStore:              cfg.StageOwnerStore,
 		capacityReservationStore:     cfg.CapacityReservationStore,
+		firewallStore:                cfg.FirewallStore,
 		runnerName:                   cfg.RunnerName,
 		runnerConfig:                 cfg.RunnerConfig,
 		tmate:                        cfg.Tmate,
@@ -123,6 +125,13 @@ func WithStageOwnerStore(s store.StageOwnerStore) ManagerOption {
 func WithCapacityReservationStore(s store.CapacityReservationStore) ManagerOption {
 	return func(m *Manager) {
 		m.capacityReservationStore = s
+	}
+}
+
+// WithFirewallStore sets the firewall store.
+func WithFirewallStore(s store.FirewallStore) ManagerOption {
+	return func(m *Manager) {
+		m.firewallStore = s
 	}
 }
 
