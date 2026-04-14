@@ -148,13 +148,13 @@ func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 	go func() {
 		for {
 			time.Sleep(dbInterval)
+			m.RunningPerAccountCount.Reset()
+			m.RunningCount.Reset()
 			wg := &sync.WaitGroup{}
 			for _, ms := range m.stores {
 				go m.updateRunningCount(ctx, ms, wg)
 			}
 			wg.Wait()
-			m.RunningPerAccountCount.Reset()
-			m.RunningCount.Reset()
 		}
 	}()
 }
