@@ -227,6 +227,17 @@ func (m *MockUtilizationHistoryStore) GetActiveImages(ctx context.Context, pool,
 	return images, nil
 }
 
+func (m *MockUtilizationHistoryStore) HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error) {
+	for _, rec := range m.records {
+		if rec.Pool == pool && rec.VariantID == variantID &&
+			rec.ImageName == imageName &&
+			rec.RecordedAt >= since && rec.InUseInstances > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (m *MockUtilizationHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
 	var remaining []types.UtilizationRecord
 	var deleted int64
@@ -968,6 +979,268 @@ func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
 
 	if notFoundDifferentPool != nil {
 		t.Error("expected nil for different pool, got job")
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_ScalesUpWhenPredictionZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// But there was recent usage (within 7 days)
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-2 * 24 * time.Hour).Unix(), InUseInstances: 5,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 3,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Prediction=0, minSize=0, but RecentUsageMinInstances=3 with recent usage -> scale up 3
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 3 {
+		t.Errorf("expected 3 setup instance jobs from recent usage minimum, got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_AccountsForMinSize(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 2}, // minSize already provides 2
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 3, // Want 3 total, minSize gives 2, so only 1 additional
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// minSize=2 brings target to 2, then RecentUsageMinInstances=3 raises it to 3
+	// Total scale up = 3 (since current free = 0)
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 3 {
+		t.Errorf("expected 3 setup instance jobs (minSize=2 + 1 from recent usage min), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_NoEffectWhenMinSizeHigher(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 5}, // minSize is already higher
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 3, // Lower than minSize, so no additional effect
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// minSize=5 already exceeds RecentUsageMinInstances=3, so target stays 5
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 5 {
+		t.Errorf("expected 5 setup instance jobs (minSize dominates), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_NoEffectWhenNoRecentUsage(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Usage record exists but outside both lookback windows (30 days ago)
+	// ActiveImageLookbackDays=30 so GetActiveImages finds the image
+	// But RecentUsageLookbackDays=7 so hasRecentUsage won't find it
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-10 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 30, // Wide enough to discover the image
+		RecentUsageLookbackDays: 7,  // But recent usage check is narrower
+		RecentUsageMinInstances: 3,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// No recent usage within 7 days, so RecentUsageMinInstances doesn't apply
+	// Prediction=0, minSize=0 -> no scaling
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 0 {
+		t.Errorf("expected 0 setup instance jobs (no recent usage), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_DisabledWhenZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 0, // Disabled
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// RecentUsageMinInstances=0 means disabled, so no scaling
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 0 {
+		t.Errorf("expected 0 setup instance jobs (feature disabled), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_NoEffectWhenPredictionNonZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is non-zero
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 2)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 5, // Higher than prediction, but only applies when prediction=0
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Prediction=2, so RecentUsageMinInstances doesn't kick in (only for prediction=0)
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 2 {
+		t.Errorf("expected 2 setup instance jobs (from prediction), got %d", len(setupJobs))
 	}
 }
 

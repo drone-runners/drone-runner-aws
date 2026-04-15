@@ -389,6 +389,15 @@ type ScalerConfig struct {
 	DisabledPools []string
 	// ActiveImageLookbackDays is how many days to look back when discovering active images (default: 2)
 	ActiveImageLookbackDays int
+	// RecentUsageLookbackDays is how many days to look back when checking for recent usage
+	// to determine if a variant/image with zero prediction should still have a minimum pool.
+	// Default: 7
+	RecentUsageLookbackDays int
+	// RecentUsageMinInstances is the minimum number of instances to maintain for a variant/image
+	// combination that has zero prediction but had usage within the lookback window.
+	// This is applied on top of minSize: if RecentUsageMinInstances=3 and minSize=2,
+	// only 1 additional instance is added. Default: 0 (disabled)
+	RecentUsageMinInstances int
 }
 
 // InstanceCount holds an instance count grouped by pool, variant, image, and GPU flag.

@@ -67,6 +67,17 @@ func (m *MockHistoryStore) GetActiveImages(ctx context.Context, pool, variantID 
 	return images, nil
 }
 
+func (m *MockHistoryStore) HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error) {
+	for _, rec := range m.records {
+		if rec.Pool == pool && rec.VariantID == variantID &&
+			rec.ImageName == imageName &&
+			rec.RecordedAt >= since && rec.InUseInstances > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func TestEMAWeekendDecayPredictor_Name(t *testing.T) {
 	predictor := NewEMAWeekendDecayPredictorWithDefaults(&MockHistoryStore{})
 	expected := "ema-weekend-decay-predictor"
@@ -261,7 +272,7 @@ func TestEMAWeekendDecayPredictor_WeekendVsWeekday(t *testing.T) {
 	store := &MockHistoryStore{records: records} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
-	config.SafetyBuffer = 0 // Disable buffer for easier testing
+	config.ScalePercent = 100 // Disable buffer for easier testing
 
 	predictor := NewEMAWeekendDecayPredictor(store, config)
 
@@ -320,7 +331,7 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 
 	store := &MockHistoryStore{records: records} //nolint:gocritic
 	config := DefaultPredictorConfig()
-	config.SafetyBuffer = 0
+	config.ScalePercent = 100
 	config.EMAWeight = 0 // Use only historical
 
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -361,8 +372,8 @@ func TestDefaultPredictorConfig(t *testing.T) {
 	if config.WeekDecayFactors[2] != 0.05 {
 		t.Errorf("expected week 3 decay 0.05, got %f", config.WeekDecayFactors[2])
 	}
-	if config.SafetyBuffer != 0.15 {
-		t.Errorf("expected SafetyBuffer 0.15, got %f", config.SafetyBuffer)
+	if config.ScalePercent != 100 {
+		t.Errorf("expected ScalePercent 100, got %f", config.ScalePercent)
 	}
 	if config.MinInstances != 0 {
 		t.Errorf("expected MinInstances 0, got %d", config.MinInstances)
@@ -492,6 +503,124 @@ func TestIsWeekend(t *testing.T) {
 				t.Errorf("expected isWeekend=%v, got %v", tt.isWeekend, result)
 			}
 		})
+	}
+}
+
+func TestEMAWeekendDecayPredictor_ScalePercent(t *testing.T) {
+	// Wednesday, January 10, 2024 at 10:00 AM UTC
+	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
+
+	// Only add data for 1 week ago so historical value is deterministic
+	records := []types.UtilizationRecord{
+		{
+			Pool:           "test-pool",
+			VariantID:      "variant-1",
+			InUseInstances: 50,
+			RecordedAt:     now.Add(-7 * 24 * time.Hour).Unix(),
+		},
+	}
+
+	tests := []struct {
+		name         string
+		scalePercent float64
+		expected     int
+	}{
+		{
+			name:         "100% returns exact prediction",
+			scalePercent: 100,
+			expected:     50, // 50 * 1.0 = 50
+		},
+		{
+			name:         "150% scales up prediction",
+			scalePercent: 150,
+			expected:     75, // 50 * 1.5 = 75
+		},
+		{
+			name:         "50% scales down prediction",
+			scalePercent: 50,
+			expected:     25, // 50 * 0.5 = 25
+		},
+		{
+			name:         "200% doubles prediction",
+			scalePercent: 200,
+			expected:     100, // doubles prediction
+		},
+		{
+			name:         "115% similar to old 0.15 safety buffer",
+			scalePercent: 115,
+			expected:     58, // 50 * 1.15 = 57.5, ceil = 58
+		},
+		{
+			name:         "80% reduces prediction",
+			scalePercent: 80,
+			expected:     40, // 50 * 0.8 = 40
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := &MockHistoryStore{records: records}
+			config := DefaultPredictorConfig()
+			config.ScalePercent = tt.scalePercent
+			config.EMAWeight = 0 // Use only historical for deterministic results
+
+			pred := NewEMAWeekendDecayPredictor(mockStore, config)
+
+			input := &PredictionInput{
+				PoolName:       "test-pool",
+				VariantID:      "variant-1",
+				StartTimestamp: now.Unix(),
+				EndTimestamp:   now.Add(time.Hour).Unix(),
+			}
+
+			result, err := pred.Predict(context.Background(), input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result.RecommendedInstances != tt.expected {
+				t.Errorf("expected %d instances, got %d", tt.expected, result.RecommendedInstances)
+			}
+		})
+	}
+}
+
+func TestEMAWeekendDecayPredictor_ScalePercent_WithMinInstances(t *testing.T) {
+	// Wednesday, January 10, 2024 at 10:00 AM UTC
+	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
+
+	records := []types.UtilizationRecord{
+		{
+			Pool:           "test-pool",
+			VariantID:      "variant-1",
+			InUseInstances: 10,
+			RecordedAt:     now.Add(-7 * 24 * time.Hour).Unix(),
+		},
+	}
+
+	mockStore := &MockHistoryStore{records: records}
+	config := DefaultPredictorConfig()
+	config.ScalePercent = 50 // 10 * 0.5 = 5
+	config.MinInstances = 8  // But min is 8
+	config.EMAWeight = 0
+
+	pred := NewEMAWeekendDecayPredictor(mockStore, config)
+
+	input := &PredictionInput{
+		PoolName:       "test-pool",
+		VariantID:      "variant-1",
+		StartTimestamp: now.Unix(),
+		EndTimestamp:   now.Add(time.Hour).Unix(),
+	}
+
+	result, err := pred.Predict(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// ScalePercent would give 5, but MinInstances enforces 8
+	if result.RecommendedInstances != 8 {
+		t.Errorf("expected MinInstances=8 to take precedence, got %d", result.RecommendedInstances)
 	}
 }
 
