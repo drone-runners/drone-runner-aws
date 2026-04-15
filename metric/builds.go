@@ -36,8 +36,8 @@ type Metrics struct {
 	// Scaler metrics
 	ScalerPredictedInstances *prometheus.GaugeVec
 
-	// Predictor idle age metric
-	PredictorIdleAge *prometheus.HistogramVec
+	// Instance idle age metric
+	InstanceIdleAge *prometheus.HistogramVec
 
 	stores []*Store
 }
@@ -154,7 +154,7 @@ func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 			time.Sleep(dbInterval)
 			m.RunningPerAccountCount.Reset()
 			m.RunningCount.Reset()
-			m.PredictorIdleAge.Reset()
+			m.InstanceIdleAge.Reset()
 			wg := &sync.WaitGroup{}
 			for _, ms := range m.stores {
 				go m.updateRunningCount(ctx, ms, wg)
@@ -210,9 +210,9 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 		}
 		d[l]++
 
-		if i.Source == types.InstanceSourcePredictor && i.Started > 0 {
+		if i.Started > 0 {
 			age := float64(now - i.Started)
-			m.PredictorIdleAge.WithLabelValues(i.Pool, i.OS, i.Arch, string(i.State), i.VariantID, strconv.FormatBool(i.IsHibernated)).Observe(age)
+			m.InstanceIdleAge.WithLabelValues(i.Pool, i.OS, i.Arch, string(i.State), i.VariantID, string(i.Source), strconv.FormatBool(i.IsHibernated)).Observe(age)
 		}
 	}
 	for k, v := range d {
@@ -436,15 +436,15 @@ func CapacityReservationCount() *prometheus.CounterVec {
 	)
 }
 
-// PredictorIdleAge provides a histogram of how long predictor-created instances have been idle (in created state)
-func PredictorIdleAge() *prometheus.HistogramVec {
+// InstanceIdleAge provides a histogram of how long instances have been idle (in created state)
+func InstanceIdleAge() *prometheus.HistogramVec {
 	return prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "harness_ci_predictor_idle_age_seconds",
 			Help:    "Age in seconds of predictor-created instances currently in a given state",
 			Buckets: []float64{10, 20, 40, 60, 80, 100, 120, 150, 200, 250, 300, 400, 600, 1800, 3600},
 		},
-		[]string{"pool_id", "os", "arch", "state", "variant_id", "hibernate"},
+		[]string{"pool_id", "os", "arch", "state", "variant_id", "source", "hibernate"},
 	)
 }
 
@@ -480,8 +480,8 @@ func RegisterMetrics() *Metrics {
 	// Scaler metrics
 	scalerPredictedInstances := ScalerPredictedInstances()
 
-	// Predictor idle age metric
-	predictorIdleAge := PredictorIdleAge()
+	// Instance idle age metric
+	instanceIdleAge := InstanceIdleAge()
 
 	prometheus.MustRegister(
 		buildCount, failedBuildCount, runningCount, runningPerAccountCount,
@@ -491,7 +491,7 @@ func RegisterMetrics() *Metrics {
 		capacityReservationPerPoolDurationCount, capacityReservationFallbackCount,
 		capacityReservationFailedCount,
 		scalerPredictedInstances,
-		predictorIdleAge,
+		instanceIdleAge,
 	)
 
 	return &Metrics{
@@ -512,6 +512,6 @@ func RegisterMetrics() *Metrics {
 		CapacityReservationFallbackCount:        capacityReservationFallbackCount,
 		CapacityReservationFailedCount:          capacityReservationFailedCount,
 		ScalerPredictedInstances:                scalerPredictedInstances,
-		PredictorIdleAge:                        predictorIdleAge,
+		InstanceIdleAge:                         instanceIdleAge,
 	}
 }
