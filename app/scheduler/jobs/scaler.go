@@ -223,12 +223,14 @@ func (s *Scaler) scaleVariant(
 	}
 
 	// If prediction is 0 but there was recent usage, apply a minimum floor
+	scaledByRecentUsage := false
 	if prediction.RecommendedInstances == 0 && s.config.RecentUsageMinInstances > 0 {
 		hasRecentUsage, checkErr := s.hasRecentUsage(ctx, pool.Name, variantID, imageName)
 		if checkErr != nil {
 			logr.WithError(checkErr).Warnln("scaler: failed to check recent usage, skipping recent usage minimum")
 		} else if hasRecentUsage && targetCount < s.config.RecentUsageMinInstances {
 			targetCount = s.config.RecentUsageMinInstances
+			scaledByRecentUsage = true
 		}
 	}
 
@@ -255,7 +257,7 @@ func (s *Scaler) scaleVariant(
 
 	if delta > 0 {
 		// Scale up: create instances
-		s.scaleUp(ctx, pool, variantID, imageName, params, delta)
+		s.scaleUp(ctx, pool, variantID, imageName, params, delta, scaledByRecentUsage)
 	} else if delta < 0 {
 		// Scale down: destroy excess instances
 		s.scaleDown(ctx, pool.Name, variantID, imageName, -delta)
@@ -271,6 +273,7 @@ func (s *Scaler) scaleUp(
 	variantID, imageName string,
 	params *types.SetupInstanceParams,
 	count int,
+	hibernate bool,
 ) {
 	logr := logrus.WithFields(logrus.Fields{
 		"pool":       pool.Name,
@@ -288,6 +291,7 @@ func (s *Scaler) scaleUp(
 			VariantID: variantID,
 			ImageName: imageName,
 			Source:    types.InstanceSourcePredictor,
+			Hibernate: hibernate,
 		}
 		if params != nil {
 			paramsCopy := *params
@@ -295,6 +299,9 @@ func (s *Scaler) scaleUp(
 			paramsCopy.Source = types.InstanceSourcePredictor
 			if imageName != "" {
 				paramsCopy.ImageName = imageName
+			}
+			if hibernate {
+				paramsCopy.Hibernate = true
 			}
 			setupParams = &paramsCopy
 		}
