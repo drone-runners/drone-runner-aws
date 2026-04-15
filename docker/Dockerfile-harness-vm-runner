@@ -7,7 +7,7 @@ RUN apk --update add ca-certificates
 # ---------------------------------------------------------#
 #                   Build Harness VM Runner                #
 # ---------------------------------------------------------#
-FROM golang:1.24 as builder
+FROM golang:1.25 as builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git && \
@@ -34,7 +34,7 @@ ARG GIT_TAG
 ARG LITE_ENGINE_VERSION=1.4.0
 ARG PLUGIN_VERSION=1.5.0
 ARG AUTO_INJECTION_VERSION=1.1.0
-ARG HCLI_VERSION=1.3.0
+ARG HCLI_VERSION=1.6.0
 ARG TMATE_VERSION=1.1.0
 ARG ENVMAN_VERSION=1.5.0
 
