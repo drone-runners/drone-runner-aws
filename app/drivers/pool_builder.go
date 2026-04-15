@@ -44,7 +44,7 @@ func (m *Manager) buildPool(
 	) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
 ) error {
-	instBusy, instFree, instHibernating, _, err := m.list(ctx, pool, query)
+	instBusy, instFree, instHibernating, _, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
 	}

@@ -124,7 +124,7 @@ func (m *Manager) provisionFromPool(
 ) (instance *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, err error) {
 	pool.Lock()
 
-	busy, free, _, _, err := m.list(ctx, pool, query)
+	busy, free, _, _, _, err := m.list(ctx, pool, query) //nolint:dogsled
 	if err != nil {
 		pool.Unlock()
 		return nil, nil, false, "", fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
