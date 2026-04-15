@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/Masterminds/squirrel"
@@ -143,6 +144,29 @@ func (s *UtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, var
 	}
 
 	return images, rows.Err()
+}
+
+func (s *UtilizationHistoryStore) HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error) {
+	query := squirrel.Select("1").
+		From("instance_utilization_history").
+		Where(squirrel.Eq{"pool_name": pool}).
+		Where(squirrel.Eq{"variant_id": variantID}).
+		Where(squirrel.Eq{"image_name": imageName}).
+		Where(squirrel.GtOrEq{"recorded_at": since}).
+		Where(squirrel.Gt{"in_use_instances": 0}).
+		Limit(1).
+		RunWith(s.db).
+		PlaceholderFormat(squirrel.Dollar)
+
+	var exists int
+	err := query.QueryRowContext(ctx).Scan(&exists)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking recent usage: %w", err)
+	}
+	return true, nil
 }
 
 func joinWithUnionAll(parts []string) string {

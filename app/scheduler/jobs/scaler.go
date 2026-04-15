@@ -222,6 +222,16 @@ func (s *Scaler) scaleVariant(
 		targetCount = minSize
 	}
 
+	// If prediction is 0 but there was recent usage, apply a minimum floor
+	if prediction.RecommendedInstances == 0 && s.config.RecentUsageMinInstances > 0 {
+		hasRecentUsage, checkErr := s.hasRecentUsage(ctx, pool.Name, variantID, imageName)
+		if checkErr != nil {
+			logr.WithError(checkErr).Warnln("scaler: failed to check recent usage, skipping recent usage minimum")
+		} else if hasRecentUsage && targetCount < s.config.RecentUsageMinInstances {
+			targetCount = s.config.RecentUsageMinInstances
+		}
+	}
+
 	delta := targetCount - currentFree
 
 	logr.WithFields(logrus.Fields{
@@ -392,6 +402,13 @@ func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool Scalable
 }
 
 // isPoolDisabled checks if the given pool name is in the disabled pools list.
+// hasRecentUsage checks if a variant/image combination had any non-zero utilization
+// within the configured lookback window.
+func (s *Scaler) hasRecentUsage(ctx context.Context, poolName, variantID, imageName string) (bool, error) {
+	since := time.Now().AddDate(0, 0, -s.config.RecentUsageLookbackDays).Unix()
+	return s.historyStore.HasRecentUsage(ctx, poolName, variantID, imageName, since)
+}
+
 func (s *Scaler) isPoolDisabled(poolName string) bool {
 	for _, disabledPool := range s.config.DisabledPools {
 		if disabledPool == poolName {

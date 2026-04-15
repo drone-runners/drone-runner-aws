@@ -34,9 +34,10 @@ type PredictorConfig struct { //nolint:revive
 	// Default: [0.85, 0.10, 0.05]
 	WeekDecayFactors [3]float64
 
-	// SafetyBuffer is a percentage buffer added to predictions (e.g., 0.15 = 15%).
-	// Default: 0.15
-	SafetyBuffer float64
+	// ScalePercent is the percentage of predicted VMs to target (e.g., 115 = 115% of predicted, 80 = 80%).
+	// Values above 100 over-provision, values below 100 under-provision.
+	// Default: 100 (no adjustment)
+	ScalePercent float64
 
 	// MinInstances is the minimum number of instances to recommend.
 	// Default: 0
@@ -57,7 +58,7 @@ func DefaultPredictorConfig() PredictorConfig {
 		EMAPeriod:        3,
 		EMAWeight:        0.85,
 		WeekDecayFactors: [3]float64{0.85, 0.10, 0.05},
-		SafetyBuffer:     0.15,
+		ScalePercent:     100,
 		MinInstances:     0,
 		MaxLookbackDays:  4,
 		TargetWeekdays:   2,
@@ -109,8 +110,8 @@ func (p *EMAWeekendDecayPredictor) Predict(ctx context.Context, input *Predictio
 		baseValue = p.combineValues(emaValue, historicalValue)
 	}
 
-	// Step 2: Apply safety buffer
-	finalValue := baseValue * (1.0 + p.config.SafetyBuffer)
+	// Step 2: Apply scale percent adjustment
+	finalValue := baseValue * (p.config.ScalePercent / 100.0)
 
 	// Step 3: Round up and ensure minimum
 	recommendedInstances := int(math.Ceil(finalValue))

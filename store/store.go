@@ -73,5 +73,7 @@ type UtilizationHistoryStore interface {
 	GetUtilizationHistoryBatch(ctx context.Context, pool, variantID, imageName string, ranges []TimeRange) ([][]types.UtilizationRecord, error)
 	// GetActiveImages returns distinct image names that had non-zero utilization since the given timestamp.
 	GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error)
+	// HasRecentUsage returns true if there is any non-zero utilization for the given pool/variant/image since the given timestamp.
+	HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error)
 	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 }

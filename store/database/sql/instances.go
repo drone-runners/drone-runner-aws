@@ -180,7 +180,13 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_source": string(params.FilterSource)})
 	}
 
-	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
+	// When claiming for InUse, prioritize non-hibernated instances first
+	if newState == types.StateInUse {
+		subQuery = subQuery.OrderBy("is_hibernated ASC", "instance_started ASC")
+	} else {
+		subQuery = subQuery.OrderBy("instance_started ASC")
+	}
+	subQuery = subQuery.Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
 	// --- Convert subquery to SQL + args ---
 	subSQL, subArgs, err := subQuery.ToSql()
