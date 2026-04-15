@@ -200,7 +200,11 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 	}
 	now := time.Now().Unix()
 	for _, i := range instances {
-		l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider), ownerID: i.OwnerID, variantID: i.VariantID, source: string(i.Source), hibernated: i.IsHibernated}
+		l := label{
+			os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool,
+			driver: string(i.Provider), ownerID: i.OwnerID, variantID: i.VariantID,
+			source: string(i.Source), hibernated: i.IsHibernated,
+		}
 		if i.OwnerID != "" {
 			m.RunningPerAccountCount.WithLabelValues(i.OwnerID, i.OS, strconv.FormatBool(metricStore.Distributed)).Inc()
 		}
@@ -212,7 +216,10 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 		}
 	}
 	for k, v := range d {
-		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed), k.ownerID, k.variantID, k.source, strconv.FormatBool(k.hibernated)).Set(float64(v))
+		m.RunningCount.WithLabelValues(
+			k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed),
+			k.ownerID, k.variantID, k.source, strconv.FormatBool(k.hibernated),
+		).Set(float64(v))
 	}
 }
 

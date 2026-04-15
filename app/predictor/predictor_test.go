@@ -543,7 +543,7 @@ func TestEMAWeekendDecayPredictor_ScalePercent(t *testing.T) {
 		{
 			name:         "200% doubles prediction",
 			scalePercent: 200,
-			expected:     100, // 50 * 2.0 = 100
+			expected:     100, // doubles prediction
 		},
 		{
 			name:         "115% similar to old 0.15 safety buffer",
