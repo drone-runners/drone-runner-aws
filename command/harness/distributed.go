@@ -34,6 +34,7 @@ type DistributedSetupConfig struct {
 	Env      *config.EnvConfig
 	PoolFile string
 	Metrics  *metric.Metrics
+	Hosted   bool
 }
 
 // SetupDistributedMode initializes the distributed pool manager, scheduler, and all related components.
@@ -58,6 +59,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	managerCfg.StageOwnerStore = stageOwnerStore
 	managerCfg.CapacityReservationStore = capacityReservationStore
 	managerCfg.FirewallStore = firewallStore
+	managerCfg.Hosted = cfg.Hosted
 	poolManager := drivers.NewDistributedManager(
 		drivers.NewManagerFromConfig(&managerCfg),
 		outboxStore,
