@@ -80,3 +80,8 @@ func (m *Manager) GetStartStepTimeout() time.Duration {
 func (m *Manager) IsDistributed() bool {
 	return false
 }
+
+// IsHosted returns whether the runner is operating in hosted mode.
+func (m *Manager) IsHosted() bool {
+	return m.hosted
+}

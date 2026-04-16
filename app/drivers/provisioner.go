@@ -197,7 +197,7 @@ func (m *Manager) setupInstance(
 
 	// generate certs
 	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
-	createOptions.IsHosted = IsHosted(ctx)
+	createOptions.IsHosted = m.hosted
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
 	createOptions.PoolName = pool.Name

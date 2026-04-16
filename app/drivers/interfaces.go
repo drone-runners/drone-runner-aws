@@ -120,6 +120,9 @@ type ConfigProvider interface {
 	// IsDistributed returns whether the manager is in distributed mode.
 	IsDistributed() bool
 
+	// IsHosted returns whether the runner is operating in hosted mode.
+	IsHosted() bool
+
 	// GetRunnerConfig returns the runner configuration.
 	GetRunnerConfig() types.RunnerConfig
 

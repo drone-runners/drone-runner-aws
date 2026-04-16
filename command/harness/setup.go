@@ -554,7 +554,7 @@ func handleSetup(
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
 	ilog.Traceln("running healthcheck and waiting for an ok response")
-	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS, warmed)
+	performDNSLookup := drivers.ShouldPerformDNSLookup(poolManager.IsHosted(), instance.Platform.OS, warmed)
 
 	// Get the health check timeout based on the instance OS, provider, warmed status, and hibernated status
 	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider, warmed, hibernated)

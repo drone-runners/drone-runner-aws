@@ -221,7 +221,7 @@ func (m *Manager) waitForInstanceConnectivity(ctx context.Context, tlsServerName
 	}
 
 	_, err = client.RetryHealth(ctx, &api.HealthRequest{
-		PerformDNSLookup:                ShouldPerformDNSLookup(ctx, instance.Platform.OS, false),
+		PerformDNSLookup:                ShouldPerformDNSLookup(m.hosted, instance.Platform.OS, false),
 		Timeout:                         defaultConnectivityTimeout,
 		HealthCheckConnectivityDuration: m.GetHealthCheckConnectivityDuration(),
 	})
