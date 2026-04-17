@@ -14,29 +14,30 @@ import (
 
 // MockPredictor is a mock implementation of predictor.Predictor for testing.
 type MockPredictor struct {
-	predictions map[string]int // key: "poolName:variantID:imageName" -> predicted instances
+	predictions map[string]predictor.PredictionResult // key: "poolName:variantID:imageName"
 }
 
 func NewMockPredictor() *MockPredictor {
 	return &MockPredictor{
-		predictions: make(map[string]int),
+		predictions: make(map[string]predictor.PredictionResult),
 	}
 }
 
 func (m *MockPredictor) SetPrediction(poolName, variantID string, instances int) {
-	m.predictions[poolName+":"+variantID+":"] = instances
+	m.predictions[poolName+":"+variantID+":"] = predictor.PredictionResult{PredictedInstances: instances}
 }
 
 func (m *MockPredictor) SetPredictionForImage(poolName, variantID, imageName string, instances int) {
-	m.predictions[poolName+":"+variantID+":"+imageName] = instances
+	m.predictions[poolName+":"+variantID+":"+imageName] = predictor.PredictionResult{PredictedInstances: instances}
 }
 
 func (m *MockPredictor) Predict(ctx context.Context, input *predictor.PredictionInput) (*predictor.PredictionResult, error) {
 	key := input.PoolName + ":" + input.VariantID + ":" + input.ImageName
-	if instances, ok := m.predictions[key]; ok {
-		return &predictor.PredictionResult{RecommendedInstances: instances}, nil
+	if result, ok := m.predictions[key]; ok {
+		r := result
+		return &r, nil
 	}
-	return &predictor.PredictionResult{RecommendedInstances: 1}, nil
+	return &predictor.PredictionResult{PredictedInstances: 1}, nil
 }
 
 func (m *MockPredictor) Name() string {
@@ -1306,5 +1307,210 @@ func TestScaler_ScaleDown_FiltersPredictor(t *testing.T) {
 	)
 	if err == nil {
 		t.Error("expected error when no more predictor instances, got nil")
+	}
+}
+
+// TestScaler_ScalePercent_CreatesHibernatedBuffer verifies that when ScalePercent > 100
+// and there's a positive delta, the scaler creates additional hibernated VMs equal to
+// ceil(delta * (ScalePercent-100)/100).
+func TestScaler_ScalePercent_CreatesHibernatedBuffer(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Predict 10 instances, current free = 0, delta = 10.
+	// ScalePercent = 120 -> buffer = ceil(10 * 20 / 100) = 2 hibernated VMs.
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 10)
+
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   120,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 12 {
+		t.Fatalf("expected 12 setup jobs (10 live + 2 hibernated buffer), got %d", len(setupJobs))
+	}
+
+	liveCount, hibernatedCount := 0, 0
+	for _, job := range setupJobs {
+		var params types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+			t.Fatalf("failed to unmarshal job params: %v", err)
+		}
+		if params.Hibernate {
+			hibernatedCount++
+		} else {
+			liveCount++
+		}
+	}
+
+	if liveCount != 10 {
+		t.Errorf("expected 10 live jobs, got %d", liveCount)
+	}
+	if hibernatedCount != 2 {
+		t.Errorf("expected 2 hibernated buffer jobs, got %d", hibernatedCount)
+	}
+}
+
+// TestScaler_ScalePercent_NotAppliedWhenDeltaIsZero verifies that when the delta
+// is zero (current free already meets prediction), no hibernated buffer is created.
+func TestScaler_ScalePercent_NotAppliedWhenDeltaIsZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 5)
+
+	// 5 free instances already exist — delta = 0
+	for i := 0; i < 5; i++ {
+		instanceStore.AddInstance(&types.Instance{
+			ID:        "inst-" + time.Now().Format("150405") + string(rune(i)),
+			Pool:      "pool-1",
+			VariantID: "default",
+			Image:     "ubuntu-2204",
+			State:     types.StateCreated,
+		})
+	}
+
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   150,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 0 {
+		t.Errorf("expected 0 jobs when delta is 0, got %d", len(setupJobs))
+	}
+}
+
+// TestScaler_ScalePercent_Disabled_At100 verifies that ScalePercent <= 100 creates
+// no hibernated buffer, regardless of delta.
+func TestScaler_ScalePercent_Disabled_At100(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 7)
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   100,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 7 {
+		t.Fatalf("expected 7 live jobs, got %d", len(setupJobs))
+	}
+
+	for _, job := range setupJobs {
+		var params types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+			t.Fatalf("failed to unmarshal job params: %v", err)
+		}
+		if params.Hibernate {
+			t.Errorf("expected no hibernated jobs when ScalePercent=100, got one: %+v", params)
+		}
+	}
+}
+
+// TestScaler_ScalePercent_CeilingRounding verifies the ceiling rounding behavior
+// for fractional buffer deltas.
+func TestScaler_ScalePercent_CeilingRounding(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// delta = 3, ScalePercent = 115 -> buffer = ceil(3 * 0.15) = ceil(0.45) = 1
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 3)
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   115,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 4 {
+		t.Fatalf("expected 4 jobs (3 live + 1 ceil buffer), got %d", len(setupJobs))
+	}
+
+	hibernatedCount := 0
+	for _, job := range setupJobs {
+		var params types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if params.Hibernate {
+			hibernatedCount++
+		}
+	}
+	if hibernatedCount != 1 {
+		t.Errorf("expected 1 hibernated buffer job, got %d", hibernatedCount)
 	}
 }

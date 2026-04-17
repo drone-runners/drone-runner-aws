@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -114,7 +115,7 @@ func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, wi
 		return nil
 	}
 
-	// Get current free instance counts for this pool, grouped by (variant, image)
+	// Get current free instance counts for this pool, grouped by (variant, image).
 	freeCounts, err := s.getFreeInstanceCountsForPool(ctx, *targetPool)
 	if err != nil {
 		return fmt.Errorf("scaler: failed to get free instance counts: %w", err)
@@ -212,19 +213,20 @@ func (s *Scaler) scaleVariant(
 		return fmt.Errorf("failed to get prediction: %w", err)
 	}
 
-	// Get current free count for this instance key combination
 	key := InstanceKey{VariantID: variantID, ImageName: imageName}
 	currentFree := freeCounts[key]
 
-	// Ensure we never go below min size
-	targetCount := prediction.RecommendedInstances
+	// Target = predicted demand, floored by MinSize.
+	targetCount := prediction.PredictedInstances
 	if targetCount < minSize {
 		targetCount = minSize
 	}
 
-	// If prediction is 0 but there was recent usage, apply a minimum floor
+	// If prediction is 0 but there was recent usage, apply a minimum floor.
+	// These extra instances are kept hibernated (warm-standby) since there's no
+	// predicted demand — only past usage justifying a small floor.
 	scaledByRecentUsage := false
-	if prediction.RecommendedInstances == 0 && s.config.RecentUsageMinInstances > 0 {
+	if prediction.PredictedInstances == 0 && s.config.RecentUsageMinInstances > 0 {
 		hasRecentUsage, checkErr := s.hasRecentUsage(ctx, pool.Name, variantID, imageName)
 		if checkErr != nil {
 			logr.WithError(checkErr).Warnln("scaler: failed to check recent usage, skipping recent usage minimum")
@@ -236,17 +238,25 @@ func (s *Scaler) scaleVariant(
 
 	delta := targetCount - currentFree
 
-	logr.WithFields(logrus.Fields{
-		"current_free": currentFree,
-		"predicted":    prediction.RecommendedInstances,
-		"target":       targetCount,
-		"min_size":     minSize,
-		"delta":        delta,
-	}).Infoln("scaler: calculated scaling delta")
+	// Compute hibernated buffer only for positive deltas, applied as a percentage of the delta.
+	bufferDelta := 0
+	if delta > 0 && s.config.ScalePercent > 100 {
+		bufferDelta = int(math.Ceil(float64(delta) * (s.config.ScalePercent - 100.0) / 100.0)) //nolint:mnd
+	}
 
-	// Record metrics
+	logr.WithFields(logrus.Fields{
+		"current_free":           currentFree,
+		"predicted":              prediction.PredictedInstances,
+		"target":                 targetCount,
+		"min_size":               minSize,
+		"delta":                  delta,
+		"buffer_delta":           bufferDelta,
+		"scale_percent":          s.config.ScalePercent,
+		"scaled_by_recent_usage": scaledByRecentUsage,
+	}).Infoln("scaler: calculated scaling deltas")
+
 	if s.metrics != nil {
-		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID, imageName).Set(float64(prediction.RecommendedInstances))
+		s.metrics.ScalerPredictedInstances.WithLabelValues(pool.Name, variantID, imageName).Set(float64(targetCount + bufferDelta))
 	}
 
 	// If dry run mode is enabled, only record metrics and skip actual scaling
@@ -256,10 +266,12 @@ func (s *Scaler) scaleVariant(
 	}
 
 	if delta > 0 {
-		// Scale up: create instances
+		// Recent-usage-floored instances are hibernated; normal predicted demand is live.
 		s.scaleUp(ctx, pool, variantID, imageName, params, delta, scaledByRecentUsage)
+		if bufferDelta > 0 {
+			s.scaleUp(ctx, pool, variantID, imageName, params, bufferDelta, true)
+		}
 	} else if delta < 0 {
-		// Scale down: destroy excess instances
 		s.scaleDown(ctx, pool.Name, variantID, imageName, -delta)
 	}
 
@@ -333,7 +345,7 @@ func (s *Scaler) scaleUp(
 	}
 }
 
-// scaleDown destroys excess free instances.
+// scaleDown destroys excess free instances (either live or hibernated).
 func (s *Scaler) scaleDown(
 	ctx context.Context,
 	poolName, variantID, imageName string,
@@ -358,7 +370,6 @@ func (s *Scaler) scaleDown(
 	}
 
 	allowedStates := []types.InstanceState{types.StateCreated, types.StateHibernating}
-
 	destroyedCount := 0
 	for i := 0; i < count; i++ {
 		// Atomically find and claim a free instance, setting it to terminating state
@@ -391,7 +402,10 @@ func (s *Scaler) scaleDown(
 }
 
 // getFreeInstanceCountsForPool returns free instance counts keyed by InstanceKey for a specific pool.
-func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool ScalablePool) (map[InstanceKey]int, error) {
+// Free instances are those in StateCreated, StateHibernating, or StateProvisioning.
+func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool ScalablePool) (
+	map[InstanceKey]int, error,
+) {
 	instances, err := s.instanceStore.List(ctx, pool.Name, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list instances for pool %s: %w", pool.Name, err)

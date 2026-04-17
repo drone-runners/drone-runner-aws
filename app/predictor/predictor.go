@@ -16,8 +16,11 @@ type PredictionInput struct {
 
 // PredictionResult contains the output of a prediction.
 type PredictionResult struct {
-	// RecommendedInstances is the recommended number of instances to have available.
-	RecommendedInstances int
+	// PredictedInstances is the recommended base instance count derived from
+	// historical/EMA analysis. MinInstances floors this value. Callers (the scaler)
+	// are responsible for any additional over-provisioning buffer — the predictor
+	// no longer applies ScalePercent.
+	PredictedInstances int
 }
 
 // Predictor defines the interface for predicting the number of machines required.
