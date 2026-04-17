@@ -124,6 +124,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			ActiveImageLookbackDays: cfg.Env.Scheduler.Scaler.ActiveImageLookbackDays,
 			RecentUsageLookbackDays: cfg.Env.Scheduler.Scaler.RecentUsageLookbackDays,
 			RecentUsageMinInstances: cfg.Env.Scheduler.Scaler.RecentUsageMinInstances,
+			ScalePercent:            cfg.Env.Scheduler.Scaler.ScalePercent,
 		}
 
 		// Build scalable pools from pool config
@@ -134,7 +135,6 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			EMAPeriod:        cfg.Env.Scheduler.Predictor.EMAPeriod,
 			EMAWeight:        cfg.Env.Scheduler.Predictor.EMAWeight,
 			WeekDecayFactors: cfg.Env.PredictorConfig(),
-			ScalePercent:     cfg.Env.Scheduler.Predictor.ScalePercent,
 			MinInstances:     cfg.Env.Scheduler.Predictor.MinInstances,
 			MaxLookbackDays:  cfg.Env.Scheduler.Predictor.MaxLookbackDays,
 			TargetWeekdays:   cfg.Env.Scheduler.Predictor.TargetWeekdays,

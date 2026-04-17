@@ -103,8 +103,8 @@ func TestEMAWeekendDecayPredictor_Predict_EmptyHistory(t *testing.T) {
 	}
 
 	// With no historical data, should return minimum instances (0 by default)
-	if result.RecommendedInstances != 0 {
-		t.Errorf("expected minimum instances 0, got %d", result.RecommendedInstances)
+	if result.PredictedInstances != 0 {
+		t.Errorf("expected minimum instances 0, got %d", result.PredictedInstances)
 	}
 }
 
@@ -163,8 +163,8 @@ func TestEMAWeekendDecayPredictor_Predict_WithRecentData(t *testing.T) {
 
 	// Should recommend more than minimum based on historical data
 	// EMA ~12, Historical weighted avg ~11.7, Combined ~11.8, with 10% buffer ~13
-	if result.RecommendedInstances < 10 {
-		t.Errorf("expected recommended instances >= 10, got %d", result.RecommendedInstances)
+	if result.PredictedInstances < 10 {
+		t.Errorf("expected recommended instances >= 10, got %d", result.PredictedInstances)
 	}
 }
 
@@ -231,8 +231,8 @@ func TestEMAWeekendDecayPredictor_Predict_WithHistoricalWeekData(t *testing.T) {
 	// Historical: (20*0.85 + 15*0.10 + 12*0.05) / 1.0 = 19.1
 	// Combined: 0.85*10 + 0.15*19.1 = 11.365
 	// With 15% safety buffer: ~13.07, ceil = 14
-	if result.RecommendedInstances < 10 || result.RecommendedInstances > 25 {
-		t.Errorf("expected recommended instances between 10-25, got %d", result.RecommendedInstances)
+	if result.PredictedInstances < 10 || result.PredictedInstances > 25 {
+		t.Errorf("expected recommended instances between 10-25, got %d", result.PredictedInstances)
 	}
 }
 
@@ -272,7 +272,6 @@ func TestEMAWeekendDecayPredictor_WeekendVsWeekday(t *testing.T) {
 	store := &MockHistoryStore{records: records} //nolint:gocritic
 
 	config := DefaultPredictorConfig()
-	config.ScalePercent = 100 // Disable buffer for easier testing
 
 	predictor := NewEMAWeekendDecayPredictor(store, config)
 
@@ -303,14 +302,14 @@ func TestEMAWeekendDecayPredictor_WeekendVsWeekday(t *testing.T) {
 	}
 
 	// Both should produce valid predictions
-	t.Logf("Saturday (historical only): %d instances", saturdayResult.RecommendedInstances)
-	t.Logf("Tuesday (EMA + historical): %d instances", tuesdayResult.RecommendedInstances)
+	t.Logf("Saturday (historical only): %d instances", saturdayResult.PredictedInstances)
+	t.Logf("Tuesday (EMA + historical): %d instances", tuesdayResult.PredictedInstances)
 
 	// With same historical data, results depend on algorithm differences
 	// Weekend uses only historical, weekday combines EMA with historical
-	if saturdayResult.RecommendedInstances < 1 || tuesdayResult.RecommendedInstances < 1 {
+	if saturdayResult.PredictedInstances < 1 || tuesdayResult.PredictedInstances < 1 {
 		t.Errorf("expected valid predictions, got weekend=%d, weekday=%d",
-			saturdayResult.RecommendedInstances, tuesdayResult.RecommendedInstances)
+			saturdayResult.PredictedInstances, tuesdayResult.PredictedInstances)
 	}
 }
 
@@ -331,7 +330,6 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 
 	store := &MockHistoryStore{records: records} //nolint:gocritic
 	config := DefaultPredictorConfig()
-	config.ScalePercent = 100
 	config.EMAWeight = 0 // Use only historical
 
 	predictor := NewEMAWeekendDecayPredictor(store, config)
@@ -349,8 +347,8 @@ func TestEMAWeekendDecayPredictor_DecayWeights(t *testing.T) {
 	}
 
 	// With only week 1 data at 50 instances, should recommend ~50
-	if result.RecommendedInstances != 50 {
-		t.Errorf("expected 50 instances, got %d", result.RecommendedInstances)
+	if result.PredictedInstances != 50 {
+		t.Errorf("expected 50 instances, got %d", result.PredictedInstances)
 	}
 }
 
@@ -371,9 +369,6 @@ func TestDefaultPredictorConfig(t *testing.T) {
 	}
 	if config.WeekDecayFactors[2] != 0.05 {
 		t.Errorf("expected week 3 decay 0.05, got %f", config.WeekDecayFactors[2])
-	}
-	if config.ScalePercent != 100 {
-		t.Errorf("expected ScalePercent 100, got %f", config.ScalePercent)
 	}
 	if config.MinInstances != 0 {
 		t.Errorf("expected MinInstances 0, got %d", config.MinInstances)
@@ -506,86 +501,7 @@ func TestIsWeekend(t *testing.T) {
 	}
 }
 
-func TestEMAWeekendDecayPredictor_ScalePercent(t *testing.T) {
-	// Wednesday, January 10, 2024 at 10:00 AM UTC
-	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
-
-	// Only add data for 1 week ago so historical value is deterministic
-	records := []types.UtilizationRecord{
-		{
-			Pool:           "test-pool",
-			VariantID:      "variant-1",
-			InUseInstances: 50,
-			RecordedAt:     now.Add(-7 * 24 * time.Hour).Unix(),
-		},
-	}
-
-	tests := []struct {
-		name         string
-		scalePercent float64
-		expected     int
-	}{
-		{
-			name:         "100% returns exact prediction",
-			scalePercent: 100,
-			expected:     50, // 50 * 1.0 = 50
-		},
-		{
-			name:         "150% scales up prediction",
-			scalePercent: 150,
-			expected:     75, // 50 * 1.5 = 75
-		},
-		{
-			name:         "50% scales down prediction",
-			scalePercent: 50,
-			expected:     25, // 50 * 0.5 = 25
-		},
-		{
-			name:         "200% doubles prediction",
-			scalePercent: 200,
-			expected:     100, // doubles prediction
-		},
-		{
-			name:         "115% similar to old 0.15 safety buffer",
-			scalePercent: 115,
-			expected:     58, // 50 * 1.15 = 57.5, ceil = 58
-		},
-		{
-			name:         "80% reduces prediction",
-			scalePercent: 80,
-			expected:     40, // 50 * 0.8 = 40
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockStore := &MockHistoryStore{records: records}
-			config := DefaultPredictorConfig()
-			config.ScalePercent = tt.scalePercent
-			config.EMAWeight = 0 // Use only historical for deterministic results
-
-			pred := NewEMAWeekendDecayPredictor(mockStore, config)
-
-			input := &PredictionInput{
-				PoolName:       "test-pool",
-				VariantID:      "variant-1",
-				StartTimestamp: now.Unix(),
-				EndTimestamp:   now.Add(time.Hour).Unix(),
-			}
-
-			result, err := pred.Predict(context.Background(), input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result.RecommendedInstances != tt.expected {
-				t.Errorf("expected %d instances, got %d", tt.expected, result.RecommendedInstances)
-			}
-		})
-	}
-}
-
-func TestEMAWeekendDecayPredictor_ScalePercent_WithMinInstances(t *testing.T) {
+func TestEMAWeekendDecayPredictor_MinInstances(t *testing.T) {
 	// Wednesday, January 10, 2024 at 10:00 AM UTC
 	now := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
 
@@ -593,15 +509,14 @@ func TestEMAWeekendDecayPredictor_ScalePercent_WithMinInstances(t *testing.T) {
 		{
 			Pool:           "test-pool",
 			VariantID:      "variant-1",
-			InUseInstances: 10,
+			InUseInstances: 3,
 			RecordedAt:     now.Add(-7 * 24 * time.Hour).Unix(),
 		},
 	}
 
 	mockStore := &MockHistoryStore{records: records}
 	config := DefaultPredictorConfig()
-	config.ScalePercent = 50 // 10 * 0.5 = 5
-	config.MinInstances = 8  // But min is 8
+	config.MinInstances = 8 // Floor raises prediction from 3 to 8
 	config.EMAWeight = 0
 
 	pred := NewEMAWeekendDecayPredictor(mockStore, config)
@@ -618,9 +533,8 @@ func TestEMAWeekendDecayPredictor_ScalePercent_WithMinInstances(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// ScalePercent would give 5, but MinInstances enforces 8
-	if result.RecommendedInstances != 8 {
-		t.Errorf("expected MinInstances=8 to take precedence, got %d", result.RecommendedInstances)
+	if result.PredictedInstances != 8 {
+		t.Errorf("expected MinInstances=8 to take precedence, got %d", result.PredictedInstances)
 	}
 }
 
@@ -669,12 +583,12 @@ func TestEMAWeekendDecayPredictor_15MinWindowPrediction(t *testing.T) {
 			t.Fatalf("window %d: unexpected error: %v", i, err)
 		}
 
-		predictions = append(predictions, result.RecommendedInstances)
+		predictions = append(predictions, result.PredictedInstances)
 		t.Logf("Window %d [%s - %s]: Recommended %d instances",
 			i+1,
 			windowStart.Format("15:04"),
 			windowEnd.Format("15:04"),
-			result.RecommendedInstances)
+			result.PredictedInstances)
 	}
 
 	// Validate predictions are reasonable
@@ -741,14 +655,14 @@ func TestEMAWeekendDecayPredictor_15MinWindowWeekdayVsWeekend(t *testing.T) {
 		t.Fatalf("weekend prediction failed: %v", err)
 	}
 
-	t.Logf("Weekday (Wednesday 10:00-10:15): %d instances", weekdayResult.RecommendedInstances)
-	t.Logf("Weekend (Saturday 10:00-10:15): %d instances", weekendResult.RecommendedInstances)
+	t.Logf("Weekday (Wednesday 10:00-10:15): %d instances", weekdayResult.PredictedInstances)
+	t.Logf("Weekend (Saturday 10:00-10:15): %d instances", weekendResult.PredictedInstances)
 
 	// Weekend uses only historical data, weekday uses EMA + historical
 	// Results may vary based on historical patterns
-	if weekendResult.RecommendedInstances >= weekdayResult.RecommendedInstances {
+	if weekendResult.PredictedInstances >= weekdayResult.PredictedInstances {
 		t.Logf("Note: Weekend prediction (%d) >= Weekday prediction (%d)",
-			weekendResult.RecommendedInstances, weekdayResult.RecommendedInstances)
+			weekendResult.PredictedInstances, weekdayResult.PredictedInstances)
 		// This can happen based on historical data patterns
 	}
 }
@@ -796,10 +710,10 @@ func TestEMAWeekendDecayPredictor_15MinWindowWithSpikes(t *testing.T) {
 			i+1,
 			windowStart.Format("15:04"),
 			windowEnd.Format("15:04"),
-			result.RecommendedInstances)
+			result.PredictedInstances)
 
 		// Predictions should account for historical spikes
-		if result.RecommendedInstances < config.MinInstances {
+		if result.PredictedInstances < config.MinInstances {
 			t.Errorf("window %d: prediction below minimum", i)
 		}
 	}
@@ -836,11 +750,11 @@ func TestEMAWeekendDecayPredictor_15MinWindowTrendDetection(t *testing.T) {
 		t.Fatalf("prediction failed: %v", err)
 	}
 
-	t.Logf("Prediction with gradual increase trend: %d instances", result.RecommendedInstances)
+	t.Logf("Prediction with gradual increase trend: %d instances", result.PredictedInstances)
 
 	// With gradual increase, the EMA should capture the upward trend
 	// and recommend higher instances compared to stable data
-	if result.RecommendedInstances < config.MinInstances {
+	if result.PredictedInstances < config.MinInstances {
 		t.Errorf("prediction below minimum")
 	}
 }

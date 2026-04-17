@@ -428,11 +428,11 @@ type EnvConfig struct {
 			ActiveImageLookbackDays int      `envconfig:"DLITE_SCHEDULER_SCALER_ACTIVE_IMAGE_LOOKBACK_DAYS" default:"2"`
 			RecentUsageLookbackDays int      `envconfig:"DLITE_SCHEDULER_SCALER_RECENT_USAGE_LOOKBACK_DAYS" default:"7"`
 			RecentUsageMinInstances int      `envconfig:"DLITE_SCHEDULER_SCALER_RECENT_USAGE_MIN_INSTANCES" default:"0"`
+			ScalePercent            float64  `envconfig:"DLITE_SCHEDULER_SCALER_SCALE_PERCENT" default:"100"`
 		}
 		Predictor struct {
 			EMAPeriod       int     `envconfig:"DLITE_PREDICTOR_EMA_PERIOD" default:"3"`
 			EMAWeight       float64 `envconfig:"DLITE_PREDICTOR_EMA_WEIGHT" default:"0.85"`
-			ScalePercent    float64 `envconfig:"DLITE_PREDICTOR_SCALE_PERCENT" default:"100"`
 			MinInstances    int     `envconfig:"DLITE_PREDICTOR_MIN_INSTANCES" default:"0"`
 			MaxLookbackDays int     `envconfig:"DLITE_PREDICTOR_MAX_LOOKBACK_DAYS" default:"4"`
 			TargetWeekdays  int     `envconfig:"DLITE_PREDICTOR_TARGET_WEEKDAYS" default:"2"`

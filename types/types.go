@@ -398,6 +398,11 @@ type ScalerConfig struct {
 	// This is applied on top of minSize: if RecentUsageMinInstances=3 and minSize=2,
 	// only 1 additional instance is added. Default: 0 (disabled)
 	RecentUsageMinInstances int
+	// ScalePercent is the percentage of additional instances to pre-provision as a hibernated
+	// buffer above the predicted live demand. It is only applied to positive scale-up deltas.
+	// A value of 100 (or below) disables buffering; 115 adds a 15% hibernated buffer on top
+	// of the live scale-up. Default: 100 (disabled).
+	ScalePercent float64
 }
 
 // InstanceCount holds an instance count grouped by pool, variant, image, and GPU flag.
