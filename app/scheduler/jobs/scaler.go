@@ -63,7 +63,7 @@ func NewScaler(
 	instanceStore store.InstanceStore,
 	historyStore store.UtilizationHistoryStore,
 	outboxStore store.OutboxStore,
-	config types.ScalerConfig,
+	config types.ScalerConfig, //nolint:gocritic // acceptable for one-time setup
 	pools []ScalablePool,
 	metrics *metric.Metrics,
 ) *Scaler {
