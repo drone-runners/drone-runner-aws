@@ -1133,7 +1133,7 @@ func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
 	var lastErr error
 	allNotFound := true
 
-	for _, zone := range p.zones {
+	for _, zone := range p.allZones() {
 		_, err := p.getInstance(ctx, p.projectID, zone, instanceID)
 		if err == nil {
 			return zone, nil
