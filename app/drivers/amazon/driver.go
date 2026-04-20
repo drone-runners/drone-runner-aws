@@ -808,11 +808,18 @@ func (p *amazonConfig) DestroyInstanceAndStorage(
 
 		_, err := client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: []string{instance.ID}})
 		if err != nil {
-			err = fmt.Errorf("failed to terminate instance %s: %v", instance.ID, err)
-			logr.Error(err)
-			failedInstances = append(failedInstances, instance)
-			lastErr = err
-			continue
+			// Instance already gone in AWS — treat as successfully destroyed so the
+			// DB row gets cleaned up instead of resurfacing on every startup cleanup.
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidInstanceID.NotFound" {
+				logr.WithError(err).Warnln("amazon: instance not found in AWS, treating as already terminated")
+			} else {
+				err = fmt.Errorf("failed to terminate instance %s: %v", instance.ID, err)
+				logr.Error(err)
+				failedInstances = append(failedInstances, instance)
+				lastErr = err
+				continue
+			}
 		}
 
 		logr.Traceln("amazon: VM terminated")
