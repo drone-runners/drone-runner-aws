@@ -171,7 +171,9 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 		"destroy_caller":   caller,
 	})
 
-	logr.Infoln("destroy_capacity: initiating capacity reservation destroy")
+	logr.Infoln("destroy_capacity: skipping capacity reservation destroy")
+
+	return nil
 
 	pool, err := m.validatePool(reservedCapacity.PoolName)
 	if err != nil {
