@@ -370,6 +370,8 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 
 		if opts.CapacityReservationTTL > 0 {
 			reservation.DeleteAfterDuration = &compute.Duration{Seconds: opts.CapacityReservationTTL}
+			zoneLogr.WithField("delete_after_seconds", opts.CapacityReservationTTL).
+				Infoln("google: setting delete after duration on capacity reservation")
 		}
 
 		// Insert the reservation

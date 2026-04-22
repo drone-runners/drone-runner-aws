@@ -179,6 +179,10 @@ func (m *Manager) DestroyCapacity(ctx context.Context, reservedCapacity *types.C
 		return fmt.Errorf("provision: pool name %q not found", reservedCapacity.PoolName)
 	}
 
+	// Atomically mark the reservation as Terminating so concurrent destroys don't race
+	// and so the purger can retry if the driver call fails below.
+	m.claimCapacityForTermination(ctx, reservedCapacity, logr)
+
 	// Destroy associated instance if exists
 	if reservedCapacity.InstanceID != "" {
 		logr.Infoln("destroy_capacity: destroying associated instance")
@@ -214,6 +218,35 @@ func (m *Manager) deleteCapacityReservationRecord(ctx context.Context, stageID s
 	if err := m.capacityReservationStore.Delete(ctx, stageID); err != nil {
 		logr.Warnln("failed to delete capacity reservation entity")
 	}
+}
+
+// claimCapacityForTermination atomically transitions a capacity reservation from
+// Created/InUse to Terminating. If the reservation is already Terminating (claimed
+// by another caller or the purger) or missing, this is a no-op. The state update
+// ensures the purger can retry cleanup if the driver-side destroy fails.
+func (m *Manager) claimCapacityForTermination(ctx context.Context, reservedCapacity *types.CapacityReservation, logr *logrus.Entry) {
+	if m.capacityReservationStore == nil || reservedCapacity.StageID == "" {
+		return
+	}
+	claimed, err := m.capacityReservationStore.FindAndClaim(
+		ctx,
+		&types.CapacityReservationQueryParams{StageID: reservedCapacity.StageID, Limit: 1},
+		types.CapacityReservationStateTerminating,
+		[]types.CapacityReservationState{
+			types.CapacityReservationStateCreated,
+			types.CapacityReservationStateInUse,
+		},
+	)
+	if err != nil {
+		logr.WithError(err).Warnln("destroy_capacity: failed to mark capacity reservation as terminating")
+		return
+	}
+	if len(claimed) == 0 {
+		logr.Infoln("destroy_capacity: capacity reservation already terminating or missing, proceeding with destroy")
+		return
+	}
+	reservedCapacity.ReservationState = types.CapacityReservationStateTerminating
+	logr.Infoln("destroy_capacity: marked capacity reservation as terminating")
 }
 
 // StartInstance starts a hibernated instance.
