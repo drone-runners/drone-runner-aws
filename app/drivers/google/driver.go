@@ -244,7 +244,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 	var err error
 	if p.service == nil {
 		if p.JSONPath != "" {
-			p.service, err = compute.NewService(ctx, option.WithCredentialsFile(p.JSONPath))
+			p.service, err = compute.NewService(ctx, option.WithCredentialsFile(p.JSONPath)) //nolint:staticcheck // SA1019: pre-existing usage, not changed by this PR
 		} else {
 			p.service, err = compute.NewService(ctx)
 		}
