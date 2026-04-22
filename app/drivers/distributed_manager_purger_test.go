@@ -123,7 +123,8 @@ func (s *purgerFakeStore) DeleteAndReturn(_ context.Context, query string, args 
 
 // newPurgerTestManager wires a DistributedManager around the in-memory store
 // and a driver the test can configure per-scenario.
-func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver, poolName string) (*DistributedManager, *poolEntry) {
+func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver) (*DistributedManager, *poolEntry) {
+	const poolName = "pool1"
 	pool := &poolEntry{
 		Pool: Pool{
 			Name:   poolName,
@@ -161,7 +162,7 @@ func TestDistributedPurger_ExecuteInstanceCleanup_HappyPath(t *testing.T) {
 		},
 	}
 
-	d, pool := newPurgerTestManager(store, driver, "pool1")
+	d, pool := newPurgerTestManager(store, driver)
 	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
 
 	successful, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
@@ -197,7 +198,7 @@ func TestDistributedPurger_ExecuteInstanceCleanup_DestroyFailureKeepsRow(t *test
 		},
 	}
 
-	d, pool := newPurgerTestManager(store, driver, "pool1")
+	d, pool := newPurgerTestManager(store, driver)
 	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
 
 	successful, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
@@ -238,7 +239,7 @@ func TestDistributedPurger_ForceDeleteLeakCandidateAt2xMaxAge(t *testing.T) {
 		},
 	}
 
-	d, pool := newPurgerTestManager(store, driver, "pool1")
+	d, pool := newPurgerTestManager(store, driver)
 	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
 
 	_, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
@@ -263,7 +264,7 @@ func TestDistributedPurger_ForceDelete_NoopWhenMaxAgeZero(t *testing.T) {
 		&types.Instance{ID: "old", Name: "vm-old", Pool: "pool1", State: types.StateInUse, Started: now.Add(-24 * time.Hour).Unix()},
 	)
 	driver := &flexibleMockDriver{driverName: "mock"}
-	d, pool := newPurgerTestManager(store, driver, "pool1")
+	d, pool := newPurgerTestManager(store, driver)
 
 	d.forceDeleteLeakedInstances(context.Background(), pool, "busy", 0)
 
@@ -295,7 +296,7 @@ func TestDistributedPurger_StuckTerminatingRowIsRePicked(t *testing.T) {
 		},
 	}
 
-	d, pool := newPurgerTestManager(store, driver, "pool1")
+	d, pool := newPurgerTestManager(store, driver)
 	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
 
 	// Tick 1: Destroy fails -> row stays in terminating.
