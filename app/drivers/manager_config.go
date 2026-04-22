@@ -17,6 +17,7 @@ type ManagerConfig struct {
 	InstanceStore            store.InstanceStore
 	StageOwnerStore          store.StageOwnerStore
 	CapacityReservationStore store.CapacityReservationStore
+	FirewallStore            store.FirewallStore
 
 	// Runner configuration
 	RunnerName   string
@@ -40,6 +41,7 @@ type ManagerConfig struct {
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
 	SkipCloudInitPackages        bool
+	Hosted                       bool
 	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
 }
 
@@ -50,6 +52,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		instanceStore:                cfg.InstanceStore,
 		stageOwnerStore:              cfg.StageOwnerStore,
 		capacityReservationStore:     cfg.CapacityReservationStore,
+		firewallStore:                cfg.FirewallStore,
 		runnerName:                   cfg.RunnerName,
 		runnerConfig:                 cfg.RunnerConfig,
 		tmate:                        cfg.Tmate,
@@ -67,6 +70,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		tmateBinaryURI:               cfg.TmateBinaryURI,
 		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
 		skipCloudInitPackages:        cfg.SkipCloudInitPackages,
+		hosted:                       cfg.Hosted,
 		capacityReservationTTL:       cfg.CapacityReservationTTL,
 	}
 }
@@ -126,6 +130,13 @@ func WithStageOwnerStore(s store.StageOwnerStore) ManagerOption {
 func WithCapacityReservationStore(s store.CapacityReservationStore) ManagerOption {
 	return func(m *Manager) {
 		m.capacityReservationStore = s
+	}
+}
+
+// WithFirewallStore sets the firewall store.
+func WithFirewallStore(s store.FirewallStore) ManagerOption {
+	return func(m *Manager) {
+		m.firewallStore = s
 	}
 }
 

@@ -29,7 +29,7 @@ type ScalerTriggerJob struct {
 // NewScalerTriggerJob creates a new ScalerTriggerJob.
 func NewScalerTriggerJob(
 	outboxStore store.OutboxStore,
-	config types.ScalerConfig,
+	config types.ScalerConfig, //nolint:gocritic // acceptable for one-time setup
 	runnerName string,
 	pools []ScalablePool,
 ) *ScalerTriggerJob {

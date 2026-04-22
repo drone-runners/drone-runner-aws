@@ -5,6 +5,8 @@
 package database
 
 import (
+	"context"
+
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -100,19 +102,39 @@ func ProvideSQLUtilizationHistoryStore(db *sqlx.DB) store.UtilizationHistoryStor
 	}
 }
 
+// ProvideSQLFirewallStore provides a firewall rule store.
+func ProvideSQLFirewallStore(db *sqlx.DB) store.FirewallStore {
+	switch db.DriverName() {
+	case Postgres:
+		return sql.NewFirewallStore(db)
+	default:
+		return nil
+	}
+}
+
 //nolint:gocritic
-func ProvideStore(driver, datasource string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) {
+func ProvideStore(ctx context.Context, driver, datasource string, iamAuth bool, iamRegion string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, store.FirewallStore, error) { //nolint:lll
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
-			return nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
-		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil, nil
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil, nil, nil
 	}
 
-	db, err := ProvideSQLDatabase(driver, datasource)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
+	var (
+		db  *sqlx.DB
+		err error
+	)
+	if iamAuth {
+		db, err = ConnectSQLWithIAM(ctx, datasource, iamRegion)
+	} else {
+		db, err = ProvideSQLDatabase(driver, datasource)
 	}
-	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db), ProvideSQLCapacityReservationStore(db), ProvideSQLUtilizationHistoryStore(db), nil
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+
+	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db),
+		ProvideSQLCapacityReservationStore(db), ProvideSQLUtilizationHistoryStore(db), ProvideSQLFirewallStore(db), nil
 }

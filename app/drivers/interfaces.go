@@ -40,7 +40,7 @@ type InstanceQuerier interface {
 	Find(ctx context.Context, instanceID string) (*types.Instance, error)
 
 	// List lists instances in a pool by state.
-	List(ctx context.Context, pool string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning []*types.Instance, err error)
+	List(ctx context.Context, pool string, queryParams *types.QueryParams) (busy, free, hibernating, provisioning, terminating []*types.Instance, err error)
 
 	// GetInstanceByStageID gets an instance by stage ID.
 	GetInstanceByStageID(ctx context.Context, poolName, stage string) (*types.Instance, error)
@@ -83,6 +83,9 @@ type InstanceLifecycle interface {
 
 	// InstanceLogs returns logs for an instance.
 	InstanceLogs(ctx context.Context, poolName, instanceID string) (string, error)
+
+	// ApplyEgressPolicy creates cloud-level egress firewall rules for the instance.
+	ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error)
 }
 
 // HealthChecker provides health check operations.
@@ -117,11 +120,16 @@ type ConfigProvider interface {
 	// IsDistributed returns whether the manager is in distributed mode.
 	IsDistributed() bool
 
+	// IsHosted returns whether the runner is operating in hosted mode.
+	IsHosted() bool
+
 	// GetRunnerConfig returns the runner configuration.
 	GetRunnerConfig() types.RunnerConfig
 
 	// GetSetupTimeout returns the setup timeout.
 	GetSetupTimeout() time.Duration
+	// GetStartStepTimeout returns the start step timeout.
+	GetStartStepTimeout() time.Duration
 }
 
 // PurgerStarter starts the instance purger.

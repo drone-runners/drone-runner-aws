@@ -176,7 +176,17 @@ func (s InstanceStore) FindAndClaim(
 		subQuery = subQuery.Where(squirrel.Eq{"instance_state": stateVals})
 	}
 
-	subQuery = subQuery.OrderBy("instance_started ASC").Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
+	if params.FilterSource != "" {
+		subQuery = subQuery.Where(squirrel.Eq{"instance_source": string(params.FilterSource)})
+	}
+
+	// When claiming for InUse, prioritize non-hibernated instances first
+	if newState == types.StateInUse {
+		subQuery = subQuery.OrderBy("is_hibernated ASC", "instance_started ASC")
+	} else {
+		subQuery = subQuery.OrderBy("instance_started ASC")
+	}
+	subQuery = subQuery.Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
 	// --- Convert subquery to SQL + args ---
 	subSQL, subArgs, err := subQuery.ToSql()
@@ -223,6 +233,7 @@ RETURNING %s
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
 		&dst.EnableNestedVirtualization, &dst.RunnerName, &dst.VariantID,
+		&dst.GPU, &dst.Source,
 	)
 	if err != nil {
 		return nil, err
@@ -272,6 +283,7 @@ const instanceColumns = `
 ,runner_name
 ,variant_id
 ,instance_gpu
+,instance_source
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -313,6 +325,7 @@ INSERT INTO instances (
 ,enable_nested_virtualization
 ,variant_id
 ,instance_gpu
+,instance_source
 ) values (
  :instance_id
 ,:instance_node_id
@@ -346,6 +359,7 @@ INSERT INTO instances (
 ,:enable_nested_virtualization
 ,:variant_id
 ,:instance_gpu
+,:instance_source
 ) RETURNING instance_id
 `
 

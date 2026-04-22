@@ -12,7 +12,6 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness"
-	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // dliteCommand represents the dlite command configuration.
@@ -57,8 +56,7 @@ func (c *dliteCommand) run(*kingpin.ParseContext) error {
 		return err
 	}
 
-	// Set hosted context value.
-	ctx := context.WithValue(c.runner.Context(), types.Hosted, true)
+	ctx := c.runner.Context()
 
 	// Setup distributed pools (dlite always uses distributed mode).
 	if err := c.setupDistributedPool(ctx); err != nil {
@@ -96,6 +94,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) error {
 			Env:      c.runner.Config,
 			PoolFile: c.poolFile,
 			Metrics:  c.runner.Metrics,
+			Hosted:   true,
 		},
 	)
 	if err != nil {
@@ -105,6 +104,7 @@ func (c *dliteCommand) setupDistributedPool(ctx context.Context) error {
 	c.runner.PoolManager = result.PoolManager
 	c.runner.StageOwnerStore = result.StageOwnerStore
 	c.runner.CapacityReservationStore = result.CapacityReservationStore
+	c.runner.FirewallStore = result.FirewallStore
 	c.runner.Scheduler = result.Scheduler
 	c.runner.PoolConfig = result.PoolConfig
 

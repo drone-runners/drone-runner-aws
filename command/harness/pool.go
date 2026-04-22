@@ -57,13 +57,15 @@ func SetupPool(
 			Errorln("failed to start instance purger")
 		return configPool, err
 	}
-	// lets remove any old instances.
+	// lets remove any old instances. Bootstrap cleanup is best-effort: log and
+	// continue so transient AWS/GCP errors don't crash-loop the runner on startup.
 	if !reusePool {
 		cleanErr := poolManager.CleanPools(ctx, true, true)
 		if cleanErr != nil {
-			return configPool, cleanErr
+			logrus.WithError(cleanErr).Warnln("bootstrap pool cleanup failed; continuing startup")
+		} else {
+			logrus.Infoln("pools cleaned")
 		}
-		logrus.Infoln("pools cleaned")
 	}
 	// seed pools
 	buildPoolErr := poolManager.BuildPools(ctx)

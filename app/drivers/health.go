@@ -71,7 +71,17 @@ func (m *Manager) GetSetupTimeout() time.Duration {
 	return m.runnerConfig.SetupTimeout
 }
 
+// GetStartStepTimeout returns the start step timeout.
+func (m *Manager) GetStartStepTimeout() time.Duration {
+	return m.runnerConfig.StartStepTimeout
+}
+
 // IsDistributed returns whether the manager is in distributed mode.
 func (m *Manager) IsDistributed() bool {
 	return false
+}
+
+// IsHosted returns whether the runner is operating in hosted mode.
+func (m *Manager) IsHosted() bool {
+	return m.hosted
 }

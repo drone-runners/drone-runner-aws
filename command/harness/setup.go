@@ -17,8 +17,10 @@ import (
 	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/app/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
+	"github.com/drone-runners/drone-runner-aws/command/harness/egress"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -68,6 +70,8 @@ func HandleSetup(
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 	envFallbackPoolIDs []string,
+	egressDefaultIPs []string,
+	firewallStore store.FirewallStore,
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
 	stageRuntimeID := r.ID
@@ -213,7 +217,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, egressDefaultIPs, firewallStore)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -417,6 +421,8 @@ func handleSetup(
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
+	egressDefaultIPs []string,
+	firewallStore store.FirewallStore,
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -498,44 +504,20 @@ func handleSetup(
 	instanceName := instance.Name
 	instanceIP := instance.Address
 
-	// cleanUpInstanceFn is a function to terminate the instance if an error occurs later in the handleSetup function
 	cleanUpInstanceFn := func(consoleLogs bool) {
 		if consoleLogs {
-			out, logErr := poolManager.InstanceLogs(context.Background(), pool, instanceID)
-			if logErr != nil {
-				ilog.WithError(logErr).Errorln("failed to fetch console output logs")
-			} else {
-				// Serial console output is limited to 60000 characters since stackdriver only supports 64KB per log entry
-				const maxLogLength = 60000
-				totalLength := len(out)
-				for start := 0; start < totalLength; start += maxLogLength {
-					end := start + maxLogLength
-					if end > totalLength {
-						end = totalLength
-					}
-					logIndex := start / maxLogLength
-					logrus.WithField("id", instanceID).
-						WithField("instance_name", instanceName).
-						WithField("ip", instanceIP).
-						WithField("pool_id", pool).
-						WithField("stage_runtime_id", stageRuntimeID).
-						WithField("log_index", logIndex).
-						Infof("serial console output: %s", out[start:end])
-				}
-			}
+			logSerialConsoleOutput(poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
 		}
 		ilog.WithFields(logrus.Fields{
 			"instance_id":    instanceID,
 			"pool":           pool,
 			"destroy_caller": "setup:le_health_check_failed",
 		}).Infoln("destroy: cleaning up instance and capacity after LE health check failure")
-		err = poolManager.Destroy(context.Background(), pool, instanceID, instance, nil)
-		if err != nil {
-			ilog.WithError(err).Errorln("failed to cleanup instance on setup failure")
+		if dErr := poolManager.Destroy(context.Background(), pool, instanceID, instance, nil); dErr != nil {
+			ilog.WithError(dErr).Errorln("failed to cleanup instance on setup failure")
 		}
-		err = poolManager.DestroyCapacity(context.Background(), reservedCapacity)
-		if err != nil {
-			ilog.WithError(err).Errorln("failed to cleanup capacity reservation on setup failure")
+		if dErr := poolManager.DestroyCapacity(context.Background(), reservedCapacity); dErr != nil {
+			ilog.WithError(dErr).Errorln("failed to cleanup capacity reservation on setup failure")
 		}
 	}
 
@@ -572,7 +554,7 @@ func handleSetup(
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
 	ilog.Traceln("running healthcheck and waiting for an ok response")
-	performDNSLookup := drivers.ShouldPerformDNSLookup(ctx, instance.Platform.OS, warmed)
+	performDNSLookup := drivers.ShouldPerformDNSLookup(poolManager.IsHosted(), instance.Platform.OS, warmed)
 
 	// Get the health check timeout based on the instance OS, provider, warmed status, and hibernated status
 	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider, warmed, hibernated)
@@ -596,6 +578,16 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
+	// If enabled, merge default Harness IPs with customer IPs into a new slice (don't mutate the request).
+	var mergedAllowedIPs []string
+	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
+		defaultPolicy := egress.DefaultEgressPolicy(egressDefaultIPs)
+		mergedAllowedIPs = make([]string, 0, len(defaultPolicy.AllowedIPs)+len(r.SetupRequest.EgressPolicy.AllowedIPs))
+		mergedAllowedIPs = append(mergedAllowedIPs, defaultPolicy.AllowedIPs...)
+		mergedAllowedIPs = append(mergedAllowedIPs, r.SetupRequest.EgressPolicy.AllowedIPs...)
+		r.SetupRequest.EgressPolicy.AllowedIPs = mergedAllowedIPs
+	}
+
 	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
 	if err != nil {
 		printError(buildLog, "Machine setup failed")
@@ -603,5 +595,92 @@ func handleSetup(
 		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", err)
 	}
 
+	// Apply cloud-level egress firewall rules async and save to firewall store
+	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
+		go applyAndSaveEgressRules(poolManager, firewallStore, instance,
+			mergedAllowedIPs, stageRuntimeID, ilog)
+	}
+
 	return instance, warmed, hibernated, variantID, nil
+}
+
+// applyAndSaveEgressRules creates cloud-level egress firewall rules and saves references to the firewall store.
+// It pre-saves rules with provisioning state before cloud creation, then updates to active on success.
+func applyAndSaveEgressRules(
+	poolManager drivers.IManager,
+	firewallStore store.FirewallStore,
+	instance *types.Instance,
+	allowedIPs []string,
+	stageRuntimeID string,
+	ilog *logrus.Entry,
+) {
+	ctx := context.Background()
+
+	// Pre-compute rule names (deterministic based on instance ID).
+	allowRuleName := google.EgressRuleName(google.EgressAllowPrefix, instance.ID)
+	denyRuleName := google.EgressRuleName(google.EgressDenyPrefix, instance.ID)
+
+	// Pre-save rules with provisioning state and actual rule names so destroy/purger can always find and clean them.
+	if firewallStore != nil {
+		now := time.Now().Unix()
+		rules := []*types.FirewallRule{
+			{
+				StageID: stageRuntimeID, InstanceID: instance.ID,
+				ResourceID: allowRuleName, CloudProvider: string(instance.Provider),
+				State: types.FirewallStateProvisioning, CreatedAt: now,
+			},
+			{
+				StageID: stageRuntimeID, InstanceID: instance.ID,
+				ResourceID: denyRuleName, CloudProvider: string(instance.Provider),
+				State: types.FirewallStateProvisioning, CreatedAt: now,
+			},
+		}
+		if saveErr := firewallStore.CreateBatch(ctx, rules); saveErr != nil {
+			ilog.WithError(saveErr).Warnln("egress: failed to pre-save firewall rules to DB")
+		}
+	}
+
+	_, egressErr := poolManager.ApplyEgressPolicy(ctx, instance, allowedIPs)
+	if egressErr != nil {
+		ilog.WithError(egressErr).Warnln("failed to apply cloud egress firewall rules")
+		// Clean up the provisioning records
+		if firewallStore != nil {
+			_ = firewallStore.DeleteByStageID(ctx, stageRuntimeID)
+		}
+		return
+	}
+
+	// Update rules to active state after successful cloud creation.
+	if firewallStore != nil {
+		if updateErr := firewallStore.UpdateState(ctx, stageRuntimeID, types.FirewallStateActive); updateErr != nil {
+			ilog.WithError(updateErr).Warnln("egress: failed to update firewall rules state to active")
+		}
+	}
+}
+
+// logSerialConsoleOutput fetches and logs the serial console output for an instance.
+func logSerialConsoleOutput(
+	poolManager drivers.IManager,
+	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
+) {
+	out, logErr := poolManager.InstanceLogs(context.Background(), pool, instanceID)
+	if logErr != nil {
+		logrus.WithField("id", instanceID).WithError(logErr).Errorln("failed to fetch console output logs")
+		return
+	}
+	const maxLogLength = 60000
+	totalLength := len(out)
+	for start := 0; start < totalLength; start += maxLogLength {
+		end := start + maxLogLength
+		if end > totalLength {
+			end = totalLength
+		}
+		logrus.WithField("id", instanceID).
+			WithField("instance_name", instanceName).
+			WithField("ip", instanceIP).
+			WithField("pool_id", pool).
+			WithField("stage_runtime_id", stageRuntimeID).
+			WithField("log_index", start/maxLogLength).
+			Infof("serial console output: %s", out[start:end])
+	}
 }

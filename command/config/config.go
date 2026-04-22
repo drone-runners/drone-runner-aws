@@ -372,6 +372,7 @@ type EnvConfig struct {
 		HealthCheckWindowsTimeout       time.Duration `envconfig:"HEALTH_CHECK_WINDOWS_TIMEOUT" default:"5m"`
 		HealthCheckConnectivityDuration time.Duration `envconfig:"HEALTH_CHECK_CONNECTIVITY_DURATION" default:"3s"`
 		SetupTimeout                    time.Duration `envconfig:"SETUP_TIMEOUT" default:"30s"`
+		StartStepTimeout                time.Duration `envconfig:"START_STEP_TIMEOUT" default:"30s"`
 		HA                              bool          `envconfig:"DRONE_RUNNER_HA" default:"false"`
 	}
 
@@ -425,11 +426,13 @@ type EnvConfig struct {
 			DryRun                  bool     `envconfig:"DLITE_SCHEDULER_SCALER_DRY_RUN" default:"false"`
 			DisabledPools           []string `envconfig:"DLITE_SCHEDULER_SCALER_DISABLED_POOLS"`
 			ActiveImageLookbackDays int      `envconfig:"DLITE_SCHEDULER_SCALER_ACTIVE_IMAGE_LOOKBACK_DAYS" default:"2"`
+			RecentUsageLookbackDays int      `envconfig:"DLITE_SCHEDULER_SCALER_RECENT_USAGE_LOOKBACK_DAYS" default:"7"`
+			RecentUsageMinInstances int      `envconfig:"DLITE_SCHEDULER_SCALER_RECENT_USAGE_MIN_INSTANCES" default:"0"`
+			ScalePercent            float64  `envconfig:"DLITE_SCHEDULER_SCALER_SCALE_PERCENT" default:"100"`
 		}
 		Predictor struct {
 			EMAPeriod       int     `envconfig:"DLITE_PREDICTOR_EMA_PERIOD" default:"3"`
 			EMAWeight       float64 `envconfig:"DLITE_PREDICTOR_EMA_WEIGHT" default:"0.85"`
-			SafetyBuffer    float64 `envconfig:"DLITE_PREDICTOR_SAFETY_BUFFER" default:"0.15"`
 			MinInstances    int     `envconfig:"DLITE_PREDICTOR_MIN_INSTANCES" default:"0"`
 			MaxLookbackDays int     `envconfig:"DLITE_PREDICTOR_MAX_LOOKBACK_DAYS" default:"4"`
 			TargetWeekdays  int     `envconfig:"DLITE_PREDICTOR_TARGET_WEEKDAYS" default:"2"`
@@ -449,7 +452,7 @@ type EnvConfig struct {
 		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.5-beta"`
 		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.5-beta"`
 		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"15"`
-		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.16"`
+		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.18"`
 		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/latest/"`
 		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/latest/"`
 		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/v2.5.5/"`
@@ -460,9 +463,13 @@ type EnvConfig struct {
 		SkipCloudInitPackages        bool     `envconfig:"DRONE_SKIP_CLOUD_INIT_PACKAGES" default:"false"`
 	}
 
+	Egress struct {
+		DefaultIPs []string `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
+	}
+
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.167/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.167/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.170/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.170/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
@@ -506,6 +513,8 @@ type EnvConfig struct {
 	DistributedMode struct {
 		Driver     string `default:"postgres"`
 		Datasource string `envconfig:"DRONE_DISTRIBUTED_DATASOURCE" default:"port=5431 user=admin password=password dbname=dlite sslmode=disable"`
+		IAMAuth    bool   `envconfig:"DRONE_DISTRIBUTED_DB_IAM_AUTH" default:"false"`
+		Region     string `envconfig:"DRONE_DISTRIBUTED_DB_REGION" default:"us-east-1"`
 	}
 
 	Tmate struct {

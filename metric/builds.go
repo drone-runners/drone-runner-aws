@@ -36,17 +36,22 @@ type Metrics struct {
 	// Scaler metrics
 	ScalerPredictedInstances *prometheus.GaugeVec
 
+	// Instance idle age metric
+	InstanceIdleAge *prometheus.HistogramVec
+
 	stores []*Store
 }
 
 type label struct {
-	os        string
-	arch      string
-	state     string
-	poolID    string
-	driver    string
-	ownerID   string
-	variantID string
+	os         string
+	arch       string
+	state      string
+	poolID     string
+	driver     string
+	ownerID    string
+	variantID  string
+	source     string
+	hibernated bool
 }
 
 type Store struct {
@@ -115,7 +120,7 @@ func RunningCount() *prometheus.GaugeVec {
 			Name: "harness_ci_pipeline_running_executions",
 			Help: "Total number of running executions",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "state", "distributed", "owner_id", "variant_id"}, // state can be running, in_use, or hibernating
+		[]string{"pool_id", "os", "arch", "driver", "state", "distributed", "owner_id", "variant_id", "source", "hibernate"}, // state can be running, in_use, or hibernating
 	)
 }
 
@@ -147,13 +152,14 @@ func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 	go func() {
 		for {
 			time.Sleep(dbInterval)
+			m.RunningPerAccountCount.Reset()
+			m.RunningCount.Reset()
+			m.InstanceIdleAge.Reset()
 			wg := &sync.WaitGroup{}
 			for _, ms := range m.stores {
 				go m.updateRunningCount(ctx, ms, wg)
 			}
 			wg.Wait()
-			m.RunningPerAccountCount.Reset()
-			m.RunningCount.Reset()
 		}
 	}()
 }
@@ -192,15 +198,28 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 		// TODO: log error
 		return
 	}
+	now := time.Now().Unix()
 	for _, i := range instances {
-		l := label{os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool, driver: string(i.Provider), ownerID: i.OwnerID, variantID: i.VariantID}
+		l := label{
+			os: i.OS, arch: i.Arch, state: string(i.State), poolID: i.Pool,
+			driver: string(i.Provider), ownerID: i.OwnerID, variantID: i.VariantID,
+			source: string(i.Source), hibernated: i.IsHibernated,
+		}
 		if i.OwnerID != "" {
 			m.RunningPerAccountCount.WithLabelValues(i.OwnerID, i.OS, strconv.FormatBool(metricStore.Distributed)).Inc()
 		}
 		d[l]++
+
+		if i.Started > 0 {
+			age := float64(now - i.Started)
+			m.InstanceIdleAge.WithLabelValues(i.Pool, i.OS, i.Arch, string(i.State), i.VariantID, string(i.Source), strconv.FormatBool(i.IsHibernated)).Observe(age)
+		}
 	}
 	for k, v := range d {
-		m.RunningCount.WithLabelValues(k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed), k.ownerID, k.variantID).Set(float64(v))
+		m.RunningCount.WithLabelValues(
+			k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed),
+			k.ownerID, k.variantID, k.source, strconv.FormatBool(k.hibernated),
+		).Set(float64(v))
 	}
 }
 
@@ -226,7 +245,7 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 		}
 
 		// Get all instances for this pool using instanceStore.List()
-		busy, free, hibernating, provisioning, err := metricStore.Manager.List(ctx, poolName, metricStore.Query)
+		busy, free, hibernating, provisioning, _, err := metricStore.Manager.List(ctx, poolName, metricStore.Query)
 		if err != nil {
 			// Log error but continue with other pools
 			continue
@@ -417,14 +436,26 @@ func CapacityReservationCount() *prometheus.CounterVec {
 	)
 }
 
-// ScalerPredictedInstances provides the predicted number of instances for a pool/variant
+// InstanceIdleAge provides a histogram of how long instances have been idle (in created state)
+func InstanceIdleAge() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "harness_ci_predictor_idle_age_seconds",
+			Help:    "Age in seconds of predictor-created instances currently in a given state",
+			Buckets: []float64{10, 20, 40, 60, 80, 100, 120, 150, 200, 250, 300, 400, 600, 1800, 3600},
+		},
+		[]string{"pool_id", "os", "arch", "state", "variant_id", "source", "hibernate"},
+	)
+}
+
+// ScalerPredictedInstances provides the predicted number of instances for a pool/variant/image
 func ScalerPredictedInstances() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "harness_ci_scaler_predicted_instances",
 			Help: "Predicted number of instances needed for the upcoming window",
 		},
-		[]string{"pool_id", "variant_id"},
+		[]string{"pool_id", "variant_id", "image_name"},
 	)
 }
 
@@ -449,6 +480,9 @@ func RegisterMetrics() *Metrics {
 	// Scaler metrics
 	scalerPredictedInstances := ScalerPredictedInstances()
 
+	// Instance idle age metric
+	instanceIdleAge := InstanceIdleAge()
+
 	prometheus.MustRegister(
 		buildCount, failedBuildCount, runningCount, runningPerAccountCount,
 		poolFallbackCount, waitDurationCount, totalVMInitDurationCount,
@@ -457,6 +491,7 @@ func RegisterMetrics() *Metrics {
 		capacityReservationPerPoolDurationCount, capacityReservationFallbackCount,
 		capacityReservationFailedCount,
 		scalerPredictedInstances,
+		instanceIdleAge,
 	)
 
 	return &Metrics{
@@ -477,5 +512,6 @@ func RegisterMetrics() *Metrics {
 		CapacityReservationFallbackCount:        capacityReservationFallbackCount,
 		CapacityReservationFailedCount:          capacityReservationFailedCount,
 		ScalerPredictedInstances:                scalerPredictedInstances,
+		InstanceIdleAge:                         instanceIdleAge,
 	}
 }

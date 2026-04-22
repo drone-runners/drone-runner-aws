@@ -124,7 +124,7 @@ func (m *Manager) provisionFromPool(
 ) (instance *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, err error) {
 	pool.Lock()
 
-	busy, free, _, _, err := m.list(ctx, pool, query)
+	busy, free, _, _, _, err := m.list(ctx, pool, query) //nolint:dogsled
 	if err != nil {
 		pool.Unlock()
 		return nil, nil, false, "", fmt.Errorf("provision: failed to list instances of %q pool: %w", poolName, err)
@@ -197,7 +197,7 @@ func (m *Manager) setupInstance(
 
 	// generate certs
 	createOptions, err := certs.Generate(m.runnerName, tlsServerName)
-	createOptions.IsHosted = IsHosted(ctx)
+	createOptions.IsHosted = m.hosted
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
 	createOptions.PoolName = pool.Name
@@ -326,6 +326,8 @@ func (m *Manager) setupInstance(
 	} else {
 		inst.VariantID = defaultVariantID
 	}
+
+	inst.Source = resolveInstanceSource(setupParams)
 
 	if inst.Labels == nil {
 		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
@@ -465,4 +467,12 @@ func vmImageConfigFromSetupParams(params *types.SetupInstanceParams) *spec.VMIma
 	return &spec.VMImageConfig{
 		ImageName: params.ImageName,
 	}
+}
+
+// resolveInstanceSource returns the instance source from setupParams, defaulting to pool.
+func resolveInstanceSource(params *types.SetupInstanceParams) types.InstanceSource {
+	if params != nil && params.Source != "" {
+		return params.Source
+	}
+	return types.InstanceSourcePool
 }

@@ -52,6 +52,16 @@ const (
 	StateProvisioning = InstanceState("provisioning") // VM created but not yet ready for use
 )
 
+// InstanceSource represents who created an instance.
+type InstanceSource string
+
+const (
+	InstanceSourceUnknown   InstanceSource = "unknown"
+	InstanceSourcePool      InstanceSource = "pool"
+	InstanceSourcePredictor InstanceSource = "predictor"
+	InstanceSourceOnDemand  InstanceSource = "ondemand"
+)
+
 // CapacityReservationState type enumeration.
 const (
 	CapacityReservationStateCreated     = CapacityReservationState("created")
@@ -81,22 +91,23 @@ type Instance struct {
 	Size                       string        `db:"instance_size" json:"size"`
 	OwnerID                    string        `db:"instance_owner_id" json:"owner_id"`
 	Platform                   `json:"platform"`
-	CAKey                      []byte      `db:"instance_ca_key" json:"ca_key"`
-	CACert                     []byte      `db:"instance_ca_cert" json:"ca_cert"`
-	TLSKey                     []byte      `db:"instance_tls_key" json:"tls_key"`
-	TLSCert                    []byte      `db:"instance_tls_cert" json:"tls_cert"`
-	Stage                      string      `db:"instance_stage" json:"stage"`
-	Updated                    int64       `db:"instance_updated" json:"updated"`
-	Started                    int64       `db:"instance_started" json:"started"`
-	IsHibernated               bool        `db:"is_hibernated" json:"is_hibernated"`
-	Port                       int64       `db:"instance_port" json:"port"`
-	RunnerName                 string      `db:"runner_name" json:"runner_name"`
-	GitspacePortMappings       map[int]int `json:"gitspaces_port_mappings"`
-	StorageIdentifier          string      `db:"instance_storage_identifier" json:"storage_identifier"`
-	Labels                     []byte      `db:"instance_labels" json:"instance_labels"`
-	EnableNestedVirtualization bool        `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
-	VariantID                  string      `db:"variant_id" json:"variant_id"`
-	GPU                        bool        `db:"instance_gpu" json:"gpu"`
+	CAKey                      []byte         `db:"instance_ca_key" json:"ca_key"`
+	CACert                     []byte         `db:"instance_ca_cert" json:"ca_cert"`
+	TLSKey                     []byte         `db:"instance_tls_key" json:"tls_key"`
+	TLSCert                    []byte         `db:"instance_tls_cert" json:"tls_cert"`
+	Stage                      string         `db:"instance_stage" json:"stage"`
+	Updated                    int64          `db:"instance_updated" json:"updated"`
+	Started                    int64          `db:"instance_started" json:"started"`
+	IsHibernated               bool           `db:"is_hibernated" json:"is_hibernated"`
+	Port                       int64          `db:"instance_port" json:"port"`
+	RunnerName                 string         `db:"runner_name" json:"runner_name"`
+	GitspacePortMappings       map[int]int    `json:"gitspaces_port_mappings"`
+	StorageIdentifier          string         `db:"instance_storage_identifier" json:"storage_identifier"`
+	Labels                     []byte         `db:"instance_labels" json:"instance_labels"`
+	EnableNestedVirtualization bool           `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
+	VariantID                  string         `db:"variant_id" json:"variant_id"`
+	GPU                        bool           `db:"instance_gpu" json:"gpu"`
+	Source                     InstanceSource `db:"instance_source" json:"source"`
 }
 
 // Passwords holds sensitive data.
@@ -117,6 +128,7 @@ type RunnerConfig struct {
 	HealthCheckWindowsTimeout       time.Duration
 	HealthCheckConnectivityDuration time.Duration
 	SetupTimeout                    time.Duration
+	StartStepTimeout                time.Duration
 	HA                              bool
 }
 
@@ -210,6 +222,7 @@ type QueryParams struct {
 	NestedVirtualization bool
 	GPU                  bool
 	VariantID            string
+	FilterSource         InstanceSource
 }
 
 type StageOwner struct {
@@ -224,7 +237,20 @@ type CapacityReservation struct {
 	ReservationID    string                   `db:"reservation_id" json:"reservation_id"`
 	CreatedAt        int64                    `db:"created_at" json:"created_at"`
 	ReservationState CapacityReservationState `db:"reservation_state" json:"reservation_state"`
-	Zone             string                   `db:"zone" json:"zone,omitempty"`
+	Zone             *string                  `db:"zone" json:"zone,omitempty"`
+}
+
+// GetZone returns the zone string, or empty string if Zone is nil.
+func (c *CapacityReservation) GetZone() string {
+	if c.Zone != nil {
+		return *c.Zone
+	}
+	return ""
+}
+
+// StringPtr returns a pointer to the given string.
+func StringPtr(s string) *string {
+	return &s
 }
 
 type GitspaceOpts struct {
@@ -259,6 +285,29 @@ type StorageConfig struct {
 	Type               string `json:"type" default:"pd-balanced"`
 	BootDiskSize       string `json:"boot_disk_size"`
 	BootDiskType       string `json:"boot_disk_type"`
+}
+
+// Firewall rule states.
+const (
+	FirewallStateProvisioning = "provisioning"
+	FirewallStateActive       = "active"
+)
+
+// FirewallRule represents a cloud firewall rule stored in the DB for cleanup tracking.
+type FirewallRule struct {
+	ID            int64  `db:"id" json:"id"`
+	StageID       string `db:"stage_id" json:"stage_id"`
+	InstanceID    string `db:"instance_id" json:"instance_id"`
+	ResourceID    string `db:"resource_id" json:"resource_id"`
+	CloudProvider string `db:"cloud_provider" json:"cloud_provider"`
+	State         string `db:"state" json:"state"`
+	CreatedAt     int64  `db:"created_at" json:"created_at"`
+}
+
+// EgressPolicy defines the egress/outbound traffic restriction policy for a VM.
+type EgressPolicy struct {
+	Enabled    bool     `json:"enabled"`
+	AllowedIPs []string `json:"allowed_ips,omitempty"`
 }
 
 type VMImageConfig struct {
@@ -307,16 +356,17 @@ type OutboxJob struct {
 
 // SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
 type SetupInstanceParams struct {
-	ImageName            string   `json:"image_name,omitempty" yaml:"image_name,omitempty"`
-	NestedVirtualization bool     `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-	MachineType          string   `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-	Hibernate            bool     `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
-	Zones                []string `json:"zones,omitempty" yaml:"zones,omitempty"`
-	VariantID            string   `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
-	DiskSize             int64    `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
-	DiskType             string   `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
-	ResourceClass        string   `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
-	GPU                  bool     `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	ImageName            string         `json:"image_name,omitempty" yaml:"image_name,omitempty"`
+	NestedVirtualization bool           `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+	MachineType          string         `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+	Hibernate            bool           `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
+	Zones                []string       `json:"zones,omitempty" yaml:"zones,omitempty"`
+	VariantID            string         `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	DiskSize             int64          `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
+	DiskType             string         `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
+	ResourceClass        string         `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
+	GPU                  bool           `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	Source               InstanceSource `json:"source,omitempty" yaml:"source,omitempty"`
 }
 
 // ScaleJobParams represents the parameters for a scaling job.
@@ -340,6 +390,20 @@ type ScalerConfig struct {
 	DisabledPools []string
 	// ActiveImageLookbackDays is how many days to look back when discovering active images (default: 2)
 	ActiveImageLookbackDays int
+	// RecentUsageLookbackDays is how many days to look back when checking for recent usage
+	// to determine if a variant/image with zero prediction should still have a minimum pool.
+	// Default: 7
+	RecentUsageLookbackDays int
+	// RecentUsageMinInstances is the minimum number of instances to maintain for a variant/image
+	// combination that has zero prediction but had usage within the lookback window.
+	// This is applied on top of minSize: if RecentUsageMinInstances=3 and minSize=2,
+	// only 1 additional instance is added. Default: 0 (disabled)
+	RecentUsageMinInstances int
+	// ScalePercent is the percentage of additional instances to pre-provision as a hibernated
+	// buffer above the predicted live demand. It is only applied to positive scale-up deltas.
+	// A value of 100 (or below) disables buffering; 115 adds a 15% hibernated buffer on top
+	// of the live scale-up. Default: 100 (disabled).
+	ScalePercent float64
 }
 
 // InstanceCount holds an instance count grouped by pool, variant, image, and GPU flag.

@@ -115,9 +115,11 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 				logr.WithField("destroy_caller", "destroy_handler:deferred_capacity_cleanup").
 					WithField("reservation_id", capacity.ReservationID).
 					Infoln("destroy_capacity: deferred capacity reservation cleanup")
-				if err := poolManager.DestroyCapacity(ctx, capacity); err != nil {
-					logr.WithError(err).Errorln("failed to destroy capacity reservation")
+				if destroyCapErr := poolManager.DestroyCapacity(ctx, capacity); destroyCapErr != nil {
+					logr.WithError(destroyCapErr).Errorln("failed to destroy capacity reservation")
 				}
+			} else {
+				logr.WithError(err).Warnln("destroy_capacity: failed to find capacity reservation for cleanup")
 			}
 		}
 	}()

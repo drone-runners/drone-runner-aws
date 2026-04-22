@@ -27,6 +27,7 @@ type (
 		instanceStore                store.InstanceStore
 		stageOwnerStore              store.StageOwnerStore
 		capacityReservationStore     store.CapacityReservationStore
+		firewallStore                store.FirewallStore
 		harnessTestBinaryURI         string
 		pluginBinaryURI              string
 		tmate                        types.Tmate
@@ -43,6 +44,7 @@ type (
 		env                          string
 		skipCloudInitPackages        bool
 		capacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
+		hosted                       bool
 	}
 
 	poolEntry struct {

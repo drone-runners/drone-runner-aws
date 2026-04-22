@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,29 +14,30 @@ import (
 
 // MockPredictor is a mock implementation of predictor.Predictor for testing.
 type MockPredictor struct {
-	predictions map[string]int // key: "poolName:variantID:imageName" -> predicted instances
+	predictions map[string]predictor.PredictionResult // key: "poolName:variantID:imageName"
 }
 
 func NewMockPredictor() *MockPredictor {
 	return &MockPredictor{
-		predictions: make(map[string]int),
+		predictions: make(map[string]predictor.PredictionResult),
 	}
 }
 
 func (m *MockPredictor) SetPrediction(poolName, variantID string, instances int) {
-	m.predictions[poolName+":"+variantID+":"] = instances
+	m.predictions[poolName+":"+variantID+":"] = predictor.PredictionResult{PredictedInstances: instances}
 }
 
 func (m *MockPredictor) SetPredictionForImage(poolName, variantID, imageName string, instances int) {
-	m.predictions[poolName+":"+variantID+":"+imageName] = instances
+	m.predictions[poolName+":"+variantID+":"+imageName] = predictor.PredictionResult{PredictedInstances: instances}
 }
 
 func (m *MockPredictor) Predict(ctx context.Context, input *predictor.PredictionInput) (*predictor.PredictionResult, error) {
 	key := input.PoolName + ":" + input.VariantID + ":" + input.ImageName
-	if instances, ok := m.predictions[key]; ok {
-		return &predictor.PredictionResult{RecommendedInstances: instances}, nil
+	if result, ok := m.predictions[key]; ok {
+		r := result
+		return &r, nil
 	}
-	return &predictor.PredictionResult{RecommendedInstances: 1}, nil
+	return &predictor.PredictionResult{PredictedInstances: 1}, nil
 }
 
 func (m *MockPredictor) Name() string {
@@ -110,6 +112,39 @@ func (m *MockInstanceStore) FindAndClaim(
 	ctx context.Context, params *types.QueryParams, newState types.InstanceState,
 	allowedStates []types.InstanceState, updateStartTime bool,
 ) (*types.Instance, error) {
+	isAllowed := func(state types.InstanceState) bool {
+		for _, s := range allowedStates {
+			if s == state {
+				return true
+			}
+		}
+		return false
+	}
+
+	matches := func(inst *types.Instance) bool {
+		return inst.Pool == params.PoolName && isAllowed(inst.State) &&
+			(params.VariantID == "" || inst.VariantID == params.VariantID) &&
+			(params.ImageName == "" || inst.Image == params.ImageName)
+	}
+
+	// If FilterSource is set, only match instances with that source
+	if params.FilterSource != "" {
+		for i, inst := range m.instances {
+			if matches(inst) && inst.Source == params.FilterSource {
+				m.instances[i].State = newState
+				return m.instances[i], nil
+			}
+		}
+		return nil, errors.New("no matching instance with source " + string(params.FilterSource))
+	}
+
+	// No source filter: any matching instance
+	for i, inst := range m.instances {
+		if matches(inst) {
+			m.instances[i].State = newState
+			return m.instances[i], nil
+		}
+	}
 	return nil, nil
 }
 
@@ -191,6 +226,17 @@ func (m *MockUtilizationHistoryStore) GetActiveImages(ctx context.Context, pool,
 		images = append(images, img)
 	}
 	return images, nil
+}
+
+func (m *MockUtilizationHistoryStore) HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error) {
+	for _, rec := range m.records {
+		if rec.Pool == pool && rec.VariantID == variantID &&
+			rec.ImageName == imageName &&
+			rec.RecordedAt >= since && rec.InUseInstances > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (m *MockUtilizationHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
@@ -546,9 +592,16 @@ func TestScaler_ScaleUp(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
-	// Set prediction to 5 instances
-	mockPredictor.SetPrediction("pool-1", "default", 5)
+	// Set prediction to 5 instances for the image
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 5)
+
+	// Add utilization history so GetActiveImages returns this image
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
 
 	pools := []ScalablePool{
 		{Name: "pool-1", MinSize: 1},
@@ -560,7 +613,7 @@ func TestScaler_ScaleUp(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	// Current free: 0, Predicted: 5 -> Should scale up by 5
 	now := time.Now()
@@ -584,6 +637,16 @@ func TestScaler_ScaleUp(t *testing.T) {
 		if job.RunnerName != "" {
 			t.Errorf("expected runner name to be empty (so any runner can process), got %q", job.RunnerName)
 		}
+		// Verify source is set to predictor
+		if job.JobParams != nil {
+			var params types.SetupInstanceParams
+			if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+				t.Fatalf("failed to unmarshal job params: %v", err)
+			}
+			if params.Source != types.InstanceSourcePredictor {
+				t.Errorf("expected Source=predictor in scaleUp job, got %q", params.Source)
+			}
+		}
 	}
 }
 
@@ -591,9 +654,16 @@ func TestScaler_RespectMinSize(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
 	// Set prediction to 0 instances
-	mockPredictor.SetPrediction("pool-1", "default", 0)
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Add utilization history so GetActiveImages returns this image
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
 
 	pools := []ScalablePool{
 		{Name: "pool-1", MinSize: 3}, // Min size is 3
@@ -605,7 +675,7 @@ func TestScaler_RespectMinSize(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	// Current free: 0, Predicted: 0, MinSize: 3 -> Should scale up to 3
 	now := time.Now()
@@ -625,21 +695,30 @@ func TestScaler_NoScalingNeeded(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
 	// Set prediction to 2 instances
-	mockPredictor.SetPrediction("pool-1", "default", 2)
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 2)
+
+	// Add utilization history so GetActiveImages returns this image
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
 
 	// Add 2 free instances (matches prediction)
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-1",
 		Pool:      "pool-1",
 		VariantID: "default",
+		Image:     "ubuntu-2204",
 		State:     types.StateCreated,
 	})
 	instanceStore.AddInstance(&types.Instance{
 		ID:        "inst-2",
 		Pool:      "pool-1",
 		VariantID: "default",
+		Image:     "ubuntu-2204",
 		State:     types.StateCreated,
 	})
 
@@ -653,7 +732,7 @@ func TestScaler_NoScalingNeeded(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	// Current free: 2, Predicted: 2 -> No scaling needed
 	now := time.Now()
@@ -672,10 +751,23 @@ func TestScaler_WithVariants(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
 
 	// Set predictions for different variants
-	mockPredictor.SetPrediction("pool-1", "default", 2)
-	mockPredictor.SetPrediction("pool-1", "large", 3)
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 2)
+	mockPredictor.SetPredictionForImage("pool-1", "large", "ubuntu-2204", 3)
+
+	// Add utilization history for both variants
+	historyStore.records = append(historyStore.records,
+		types.UtilizationRecord{
+			Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+			RecordedAt: time.Now().Unix(), InUseInstances: 1,
+		},
+		types.UtilizationRecord{
+			Pool: "pool-1", VariantID: "large", ImageName: "ubuntu-2204",
+			RecordedAt: time.Now().Unix(), InUseInstances: 1,
+		},
+	)
 
 	pools := []ScalablePool{
 		{
@@ -699,7 +791,7 @@ func TestScaler_WithVariants(t *testing.T) {
 		Enabled:        true,
 	}
 
-	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
 
 	now := time.Now()
 	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
@@ -713,13 +805,16 @@ func TestScaler_WithVariants(t *testing.T) {
 		t.Errorf("expected 5 setup instance jobs, got %d", len(setupJobs))
 	}
 
-	// Count jobs by variant
+	// Count jobs by variant and verify source
 	variantCounts := make(map[string]int)
 	for _, job := range setupJobs {
 		if job.JobParams != nil {
 			var params types.SetupInstanceParams
 			if err := json.Unmarshal(*job.JobParams, &params); err == nil {
 				variantCounts[params.VariantID]++
+				if params.Source != types.InstanceSourcePredictor {
+					t.Errorf("expected Source=predictor for variant %q, got %q", params.VariantID, params.Source)
+				}
 			}
 		}
 	}
@@ -885,5 +980,537 @@ func TestMockOutboxStore_FindScaleJobForWindow(t *testing.T) {
 
 	if notFoundDifferentPool != nil {
 		t.Error("expected nil for different pool, got job")
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_ScalesUpWhenPredictionZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// But there was recent usage (within 7 days)
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-2 * 24 * time.Hour).Unix(), InUseInstances: 5,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 3,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Prediction=0, minSize=0, but RecentUsageMinInstances=3 with recent usage -> scale up 3
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 3 {
+		t.Errorf("expected 3 setup instance jobs from recent usage minimum, got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_AccountsForMinSize(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 2}, // minSize already provides 2
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 3, // Want 3 total, minSize gives 2, so only 1 additional
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// minSize=2 brings target to 2, then RecentUsageMinInstances=3 raises it to 3
+	// Total scale up = 3 (since current free = 0)
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 3 {
+		t.Errorf("expected 3 setup instance jobs (minSize=2 + 1 from recent usage min), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_NoEffectWhenMinSizeHigher(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 5}, // minSize is already higher
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 3, // Lower than minSize, so no additional effect
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// minSize=5 already exceeds RecentUsageMinInstances=3, so target stays 5
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 5 {
+		t.Errorf("expected 5 setup instance jobs (minSize dominates), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_NoEffectWhenNoRecentUsage(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Usage record exists but outside both lookback windows (30 days ago)
+	// ActiveImageLookbackDays=30 so GetActiveImages finds the image
+	// But RecentUsageLookbackDays=7 so hasRecentUsage won't find it
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-10 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 30, // Wide enough to discover the image
+		RecentUsageLookbackDays: 7,  // But recent usage check is narrower
+		RecentUsageMinInstances: 3,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// No recent usage within 7 days, so RecentUsageMinInstances doesn't apply
+	// Prediction=0, minSize=0 -> no scaling
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 0 {
+		t.Errorf("expected 0 setup instance jobs (no recent usage), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_DisabledWhenZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is 0
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 0, // Disabled
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// RecentUsageMinInstances=0 means disabled, so no scaling
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 0 {
+		t.Errorf("expected 0 setup instance jobs (feature disabled), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_RecentUsageMinInstances_NoEffectWhenPredictionNonZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Prediction is non-zero
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 2)
+
+	// Recent usage exists
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Add(-1 * 24 * time.Hour).Unix(), InUseInstances: 10,
+	})
+
+	pools := []ScalablePool{
+		{Name: "pool-1", MinSize: 0},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+		RecentUsageLookbackDays: 7,
+		RecentUsageMinInstances: 5, // Higher than prediction, but only applies when prediction=0
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Prediction=2, so RecentUsageMinInstances doesn't kick in (only for prediction=0)
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 2 {
+		t.Errorf("expected 2 setup instance jobs (from prediction), got %d", len(setupJobs))
+	}
+}
+
+func TestScaler_ScaleDown_FiltersPredictor(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+
+	// Add 3 free instances: 1 pool, 2 predictor
+	instanceStore.AddInstance(&types.Instance{
+		ID: "inst-pool-1", Pool: "pool-1", VariantID: "default",
+		Image: "ubuntu-2204", State: types.StateCreated, Source: types.InstanceSourcePool,
+	})
+	instanceStore.AddInstance(&types.Instance{
+		ID: "inst-pred-1", Pool: "pool-1", VariantID: "default",
+		Image: "ubuntu-2204", State: types.StateCreated, Source: types.InstanceSourcePredictor,
+	})
+	instanceStore.AddInstance(&types.Instance{
+		ID: "inst-pred-2", Pool: "pool-1", VariantID: "default",
+		Image: "ubuntu-2204", State: types.StateCreated, Source: types.InstanceSourcePredictor,
+	})
+
+	// Test that FindAndClaim with FilterSource only returns predictor instances
+	queryParams := &types.QueryParams{
+		PoolName:     "pool-1",
+		VariantID:    "default",
+		ImageName:    "ubuntu-2204",
+		FilterSource: types.InstanceSourcePredictor,
+	}
+
+	// First claim: should get a predictor instance
+	inst, err := instanceStore.FindAndClaim(
+		context.Background(), queryParams, types.StateTerminating,
+		[]types.InstanceState{types.StateCreated}, false,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst == nil {
+		t.Fatal("expected instance, got nil")
+	}
+	if inst.Source != types.InstanceSourcePredictor {
+		t.Errorf("expected predictor instance first, got source=%q id=%s", inst.Source, inst.ID)
+	}
+
+	// Second claim: should get second predictor instance
+	inst2, err := instanceStore.FindAndClaim(
+		context.Background(), queryParams, types.StateTerminating,
+		[]types.InstanceState{types.StateCreated}, false,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst2 == nil {
+		t.Fatal("expected second instance, got nil")
+	}
+	if inst2.Source != types.InstanceSourcePredictor {
+		t.Errorf("expected predictor instance second, got source=%q id=%s", inst2.Source, inst2.ID)
+	}
+
+	// Third claim: should fail — no more predictor instances (pool instances are NOT returned)
+	_, err = instanceStore.FindAndClaim(
+		context.Background(), queryParams, types.StateTerminating,
+		[]types.InstanceState{types.StateCreated}, false,
+	)
+	if err == nil {
+		t.Error("expected error when no more predictor instances, got nil")
+	}
+}
+
+// TestScaler_ScalePercent_CreatesHibernatedBuffer verifies that when ScalePercent > 100
+// and there's a positive delta, the scaler creates additional hibernated VMs equal to
+// ceil(delta * (ScalePercent-100)/100).
+func TestScaler_ScalePercent_CreatesHibernatedBuffer(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Predict 10 instances, current free = 0, delta = 10.
+	// ScalePercent = 120 -> buffer = ceil(10 * 20 / 100) = 2 hibernated VMs.
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 10)
+
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   120,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 12 {
+		t.Fatalf("expected 12 setup jobs (10 live + 2 hibernated buffer), got %d", len(setupJobs))
+	}
+
+	liveCount, hibernatedCount := 0, 0
+	for _, job := range setupJobs {
+		var params types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+			t.Fatalf("failed to unmarshal job params: %v", err)
+		}
+		if params.Hibernate {
+			hibernatedCount++
+		} else {
+			liveCount++
+		}
+	}
+
+	if liveCount != 10 {
+		t.Errorf("expected 10 live jobs, got %d", liveCount)
+	}
+	if hibernatedCount != 2 {
+		t.Errorf("expected 2 hibernated buffer jobs, got %d", hibernatedCount)
+	}
+}
+
+// TestScaler_ScalePercent_NotAppliedWhenDeltaIsZero verifies that when the delta
+// is zero (current free already meets prediction), no hibernated buffer is created.
+func TestScaler_ScalePercent_NotAppliedWhenDeltaIsZero(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 5)
+
+	// 5 free instances already exist — delta = 0
+	for i := 0; i < 5; i++ {
+		instanceStore.AddInstance(&types.Instance{
+			ID:        "inst-" + time.Now().Format("150405") + string(rune(i)),
+			Pool:      "pool-1",
+			VariantID: "default",
+			Image:     "ubuntu-2204",
+			State:     types.StateCreated,
+		})
+	}
+
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   150,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 0 {
+		t.Errorf("expected 0 jobs when delta is 0, got %d", len(setupJobs))
+	}
+}
+
+// TestScaler_ScalePercent_Disabled_At100 verifies that ScalePercent <= 100 creates
+// no hibernated buffer, regardless of delta.
+func TestScaler_ScalePercent_Disabled_At100(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 7)
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   100,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 7 {
+		t.Fatalf("expected 7 live jobs, got %d", len(setupJobs))
+	}
+
+	for _, job := range setupJobs {
+		var params types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+			t.Fatalf("failed to unmarshal job params: %v", err)
+		}
+		if params.Hibernate {
+			t.Errorf("expected no hibernated jobs when ScalePercent=100, got one: %+v", params)
+		}
+	}
+}
+
+// TestScaler_ScalePercent_CeilingRounding verifies the ceiling rounding behavior
+// for fractional buffer deltas.
+func TestScaler_ScalePercent_CeilingRounding(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// delta = 3, ScalePercent = 115 -> buffer = ceil(3 * 0.15) = ceil(0.45) = 1
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 3)
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+		ScalePercent:   115,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 4 {
+		t.Fatalf("expected 4 jobs (3 live + 1 ceil buffer), got %d", len(setupJobs))
+	}
+
+	hibernatedCount := 0
+	for _, job := range setupJobs {
+		var params types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if params.Hibernate {
+			hibernatedCount++
+		}
+	}
+	if hibernatedCount != 1 {
+		t.Errorf("expected 1 hibernated buffer job, got %d", hibernatedCount)
 	}
 }

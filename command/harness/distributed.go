@@ -23,6 +23,7 @@ type DistributedSetupResult struct {
 	InstanceStore            store.InstanceStore
 	StageOwnerStore          store.StageOwnerStore
 	CapacityReservationStore store.CapacityReservationStore
+	FirewallStore            store.FirewallStore
 	Scheduler                *scheduler.Scheduler
 	PoolConfig               *config.PoolFile
 }
@@ -33,6 +34,7 @@ type DistributedSetupConfig struct {
 	Env      *config.EnvConfig
 	PoolFile string
 	Metrics  *metric.Metrics
+	Hosted   bool
 }
 
 // SetupDistributedMode initializes the distributed pool manager, scheduler, and all related components.
@@ -40,9 +42,12 @@ type DistributedSetupConfig struct {
 func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, error) {
 	logrus.Infoln("Starting postgres database for distributed mode")
 
-	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, err := database.ProvideStore(
+	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, firewallStore, err := database.ProvideStore(
+		cfg.Ctx,
 		cfg.Env.DistributedMode.Driver,
 		cfg.Env.DistributedMode.Datasource,
+		cfg.Env.DistributedMode.IAMAuth,
+		cfg.Env.DistributedMode.Region,
 	)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
@@ -53,6 +58,8 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	managerCfg := drivers.NewManagerConfigFromEnv(cfg.Ctx, instanceStore, cfg.Env)
 	managerCfg.StageOwnerStore = stageOwnerStore
 	managerCfg.CapacityReservationStore = capacityReservationStore
+	managerCfg.FirewallStore = firewallStore
+	managerCfg.Hosted = cfg.Hosted
 	poolManager := drivers.NewDistributedManager(
 		drivers.NewManagerFromConfig(&managerCfg),
 		outboxStore,
@@ -115,6 +122,9 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			DryRun:                  cfg.Env.Scheduler.Scaler.DryRun,
 			DisabledPools:           cfg.Env.Scheduler.Scaler.DisabledPools,
 			ActiveImageLookbackDays: cfg.Env.Scheduler.Scaler.ActiveImageLookbackDays,
+			RecentUsageLookbackDays: cfg.Env.Scheduler.Scaler.RecentUsageLookbackDays,
+			RecentUsageMinInstances: cfg.Env.Scheduler.Scaler.RecentUsageMinInstances,
+			ScalePercent:            cfg.Env.Scheduler.Scaler.ScalePercent,
 		}
 
 		// Build scalable pools from pool config
@@ -125,7 +135,6 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			EMAPeriod:        cfg.Env.Scheduler.Predictor.EMAPeriod,
 			EMAWeight:        cfg.Env.Scheduler.Predictor.EMAWeight,
 			WeekDecayFactors: cfg.Env.PredictorConfig(),
-			SafetyBuffer:     cfg.Env.Scheduler.Predictor.SafetyBuffer,
 			MinInstances:     cfg.Env.Scheduler.Predictor.MinInstances,
 			MaxLookbackDays:  cfg.Env.Scheduler.Predictor.MaxLookbackDays,
 			TargetWeekdays:   cfg.Env.Scheduler.Predictor.TargetWeekdays,
@@ -172,6 +181,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 		InstanceStore:            instanceStore,
 		StageOwnerStore:          stageOwnerStore,
 		CapacityReservationStore: capacityReservationStore,
+		FirewallStore:            firewallStore,
 		Scheduler:                sched,
 		PoolConfig:               poolConfig,
 	}, nil

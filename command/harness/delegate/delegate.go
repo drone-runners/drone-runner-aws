@@ -1,6 +1,8 @@
 package delegate
 
 import (
+	"context"
+
 	loghistory "github.com/drone/runner-go/logger/history"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -84,9 +86,12 @@ func (c *delegateCommand) setupPools(runner *harness.Runner) error {
 func (c *delegateCommand) setupStandardMode(runner *harness.Runner) error {
 	logrus.Infoln("delegate: starting in standard mode")
 
-	instanceStore, stageOwnerStore, _, capacityReservationStore, _, err := database.ProvideStore(
+	instanceStore, stageOwnerStore, _, capacityReservationStore, _, firewallStore, err := database.ProvideStore( //nolint:dogsled
+		context.Background(),
 		runner.Config.Database.Driver,
 		runner.Config.Database.Datasource,
+		false,
+		"",
 	)
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
@@ -95,6 +100,7 @@ func (c *delegateCommand) setupStandardMode(runner *harness.Runner) error {
 
 	runner.StageOwnerStore = stageOwnerStore
 	runner.CapacityReservationStore = capacityReservationStore
+	runner.FirewallStore = firewallStore
 	runner.PoolManager = drivers.New(runner.Context(), instanceStore, runner.Config)
 
 	poolConfig, err := harness.SetupPoolWithEnv(runner.Context(), runner.Config, runner.PoolManager, c.poolFile)
@@ -132,6 +138,7 @@ func (c *delegateCommand) setupDistributedMode(runner *harness.Runner) error {
 	runner.PoolManager = result.PoolManager
 	runner.StageOwnerStore = result.StageOwnerStore
 	runner.CapacityReservationStore = result.CapacityReservationStore
+	runner.FirewallStore = result.FirewallStore
 	runner.Scheduler = result.Scheduler
 	runner.PoolConfig = result.PoolConfig
 

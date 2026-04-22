@@ -67,7 +67,15 @@ func (m *mockDriver) CanHibernate() bool {
 	return false
 }
 
-func TestFilterVariants(t *testing.T) {
+func (m *mockDriver) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []string) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockDriver) CleanupEgressPolicy(_ context.Context, _ []string) error {
+	return nil
+}
+
+func TestFilterVariant(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	log.Logger.SetLevel(logrus.FatalLevel) // Suppress logs during tests
 	ctx := logger.WithContext(context.Background(), logger.Logrus(log))
@@ -465,6 +473,12 @@ func (g *googleMockDriver) DestroyCapacity(context.Context, *types.CapacityReser
 	return nil
 }
 func (g *googleMockDriver) SetTags(context.Context, *types.Instance, map[string]string) error {
+	return nil
+}
+func (g *googleMockDriver) ApplyEgressPolicy(context.Context, *types.Instance, []string) ([]string, error) {
+	return nil, nil
+}
+func (g *googleMockDriver) CleanupEgressPolicy(context.Context, []string) error {
 	return nil
 }
 func (g *googleMockDriver) RootDir() string    { return "/tmp" }
@@ -891,6 +905,49 @@ func TestApplyVariantToSetupParams(t *testing.T) {
 						t.Errorf("Zones[%d]: expected %s, got %s", i, tt.expectedParams.Zones[i], tt.initialParams.Zones[i])
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestShouldReplenishInstance(t *testing.T) {
+	tests := []struct {
+		name   string
+		source types.InstanceSource
+		want   bool
+	}{
+		{
+			name:   "pool source should replenish",
+			source: types.InstanceSourcePool,
+			want:   true,
+		},
+		{
+			name:   "predictor source should not replenish",
+			source: types.InstanceSourcePredictor,
+			want:   false,
+		},
+		{
+			name:   "ondemand source should not replenish",
+			source: types.InstanceSourceOnDemand,
+			want:   false,
+		},
+		{
+			name:   "empty source should not replenish",
+			source: "",
+			want:   false,
+		},
+		{
+			name:   "unknown source should not replenish",
+			source: types.InstanceSourceUnknown,
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inst := &types.Instance{Source: tt.source}
+			got := shouldReplenishInstance(inst)
+			if got != tt.want {
+				t.Errorf("shouldReplenishInstance() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -199,6 +199,14 @@ func (p *amazonConfig) CanHibernate() bool {
 	return p.hibernate
 }
 
+func (p *amazonConfig) ApplyEgressPolicy(_ context.Context, _ *drtypes.Instance, _ []string) ([]string, error) {
+	return nil, nil
+}
+
+func (p *amazonConfig) CleanupEgressPolicy(_ context.Context, _ []string) error {
+	return nil
+}
+
 // Ping checks that we can log into EC2, and the regions respond
 func (p *amazonConfig) Ping(ctx context.Context) error {
 	client := p.service
@@ -380,7 +388,7 @@ func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.Instan
 		InstanceID:    "",
 		ReservationID: reservationID,
 		CreatedAt:     time.Now().Unix(),
-		Zone:          reqCfg.availabilityZone,
+		Zone:          drtypes.StringPtr(reqCfg.availabilityZone),
 	}, nil
 }
 
@@ -800,11 +808,18 @@ func (p *amazonConfig) DestroyInstanceAndStorage(
 
 		_, err := client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: []string{instance.ID}})
 		if err != nil {
-			err = fmt.Errorf("failed to terminate instance %s: %v", instance.ID, err)
-			logr.Error(err)
-			failedInstances = append(failedInstances, instance)
-			lastErr = err
-			continue
+			// Instance already gone in AWS — treat as successfully destroyed so the
+			// DB row gets cleaned up instead of resurfacing on every startup cleanup.
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidInstanceID.NotFound" {
+				logr.WithError(err).Warnln("amazon: instance not found in AWS, treating as already terminated")
+			} else {
+				err = fmt.Errorf("failed to terminate instance %s: %v", instance.ID, err)
+				logr.Error(err)
+				failedInstances = append(failedInstances, instance)
+				lastErr = err
+				continue
+			}
 		}
 
 		logr.Traceln("amazon: VM terminated")
@@ -976,8 +991,8 @@ func (p *amazonConfig) getDynamicConfig(opts *drtypes.InstanceCreateOpts) (*requ
 	if len(opts.Zones) > 0 {
 		targetZone = opts.Zones[0]
 		zoneSource = "request"
-	} else if opts.CapacityReservation != nil && opts.CapacityReservation.Zone != "" {
-		targetZone = opts.CapacityReservation.Zone
+	} else if opts.CapacityReservation != nil && opts.CapacityReservation.GetZone() != "" {
+		targetZone = opts.CapacityReservation.GetZone()
 		zoneSource = "capacity_reservation"
 	}
 

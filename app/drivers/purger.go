@@ -62,11 +62,12 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 							defer pool.Unlock()
 
 							queryParams := &types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
-							busy, free, hibernating, provisioning, err := m.list(ctx, pool, queryParams)
+							busy, free, hibernating, provisioning, terminating, err := m.list(ctx, pool, queryParams)
 							if err != nil {
 								return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
 							}
 							free = append(free, hibernating...)
+							busy = append(busy, terminating...)
 
 							var instances []*types.Instance
 							for _, inst := range busy {
@@ -133,6 +134,9 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 						logger.FromContext(ctx).WithError(err).
 							Errorln("purger: Failed to purge stale instances")
 					}
+
+					// Purge stale firewall rules after instance cleanup
+					m.PurgeOrphanedFirewallRules(ctx, maxAgeBusy)
 				}
 			}()
 		}
@@ -145,7 +149,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.QueryParams, destroyBusy, destroyFree bool) error {
 	pool.Lock()
 	defer pool.Unlock()
-	busy, free, hibernating, provisioning, err := m.list(ctx, pool, query)
+	busy, free, hibernating, provisioning, terminating, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
 	}
@@ -154,6 +158,7 @@ func (m *Manager) cleanPool(ctx context.Context, pool *poolEntry, query *types.Q
 
 	if destroyBusy {
 		instances = append(instances, busy...)
+		instances = append(instances, terminating...)
 	}
 
 	if destroyFree {
