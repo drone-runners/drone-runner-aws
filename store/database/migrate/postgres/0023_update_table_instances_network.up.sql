@@ -1,0 +1,1 @@
+ALTER TABLE instances ADD COLUMN IF NOT EXISTS instance_network TEXT NOT NULL DEFAULT '';
