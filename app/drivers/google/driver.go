@@ -1301,7 +1301,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 	}
 
 	network := instanceNetwork
-	if !strings.Contains(network, "/") {
+	if !strings.HasPrefix(network, "projects/") {
 		network = fmt.Sprintf("projects/%s/global/networks/%s", p.projectID, network)
 	}
 
