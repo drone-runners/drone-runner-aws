@@ -902,7 +902,7 @@ func (d *DistributedManager) cleanupBusyInstances(ctx context.Context, pool *poo
 		squirrel.Lt{"instance_updated": currentTime.Add(-stuckTerminatingMaxAge).Unix()},
 	}
 	conditions = append(conditions, busyCondition, extendedBusyCondition, stuckTerminatingCondition)
-	_, err := d.executeInstanceCleanup(ctx, pool, conditions, "busy")
+	_, err := d.executeInstanceCleanup(ctx, pool, conditions, "busy", maxAgeBusy)
 	return err
 }
 
@@ -934,7 +934,7 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	conditions := squirrel.Or{freeCondition, stuckProvisioningCondition}
 
 	// Execute cleanup and call setupInstanceAsync for each cleaned instance
-	instances, err := d.executeInstanceCleanup(ctx, pool, conditions, "free")
+	instances, err := d.executeInstanceCleanup(ctx, pool, conditions, "free", maxAgeFree)
 
 	// Log the instances that are being cleaned up
 	// Don't replenish the stale free instances, predictor will handle that
@@ -1025,19 +1025,48 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 	d.destroyCapacityFromReservation(ctx, capacitiesToDelete)
 }
 
-// executeInstanceCleanup performs cleanup and returns the instances for further processing
-func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *poolEntry, conditions squirrel.Or, cleanupType string) ([]*types.Instance, error) {
+// executeInstanceCleanup claims candidate rows into StateTerminating, asks the
+// driver to destroy them, and only deletes the DB rows that were destroyed
+// successfully. Rows whose destroy fails stay in StateTerminating and will be
+// re-picked on the next tick via the stuckTerminatingCondition, which gives
+// the driver multiple natural retries. As a safety net to keep the table
+// bounded, rows older than 2 * maxAge by instance_started are force-deleted
+// with an instance_leak_candidate warn log.
+func (d *DistributedManager) executeInstanceCleanup(
+	ctx context.Context,
+	pool *poolEntry,
+	conditions squirrel.Or,
+	cleanupType string,
+	maxAge time.Duration,
+) ([]*types.Instance, error) {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name).
 		WithField("cleanup_type", cleanupType)
+
+	// Force-delete rows that have exceeded 2 * maxAge. They have been retried
+	// for at least the full maxAge window and the driver still hasn't been
+	// able to destroy them; keeping them forever would grow the table
+	// unboundedly. We cap losses by logging loudly.
+	d.forceDeleteLeakedInstances(ctx, pool, cleanupType, maxAge)
+
 	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-	deleteSQL, args, err := builder.Delete("instances").Where(conditions).Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").ToSql()
+	// Claim the rows by transitioning them to StateTerminating. The row stays
+	// in the DB until the driver confirms destroy; this is the inverse of the
+	// previous DELETE-then-destroy path which leaked GCP VMs when Destroy
+	// failed with anything other than NotFound.
+	claimSQL, args, err := builder.
+		Update("instances").
+		Set("instance_state", types.StateTerminating).
+		Set("instance_updated", squirrel.Expr("extract(epoch FROM now())")).
+		Where(conditions).
+		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").
+		ToSql()
 	if err != nil {
 		return nil, err
 	}
 
-	instances, err := d.instanceStore.DeleteAndReturn(ctx, deleteSQL, args...)
+	instances, err := d.instanceStore.DeleteAndReturn(ctx, claimSQL, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1066,16 +1095,99 @@ func (d *DistributedManager) executeInstanceCleanup(ctx context.Context, pool *p
 		failedIDs[inst.ID] = true
 	}
 
-	// Only destroy capacity for successfully deleted instances
 	var successfulInstances []*types.Instance
+	var successfulIDs []string
 	for _, inst := range instances {
-		if !failedIDs[inst.ID] {
-			successfulInstances = append(successfulInstances, inst)
+		if failedIDs[inst.ID] {
+			continue
+		}
+		successfulInstances = append(successfulInstances, inst)
+		successfulIDs = append(successfulIDs, inst.ID)
+	}
+
+	if len(failedIDs) > 0 {
+		failedList := make([]string, 0, len(failedIDs))
+		for id := range failedIDs {
+			failedList = append(failedList, id)
+		}
+		logr.WithField("failed_instance_ids", failedList).
+			WithField("destroy_caller", "distributed_purger:"+cleanupType).
+			Warnf("distributed dlite: purger: %d instance(s) destroy failed; left in terminating for retry", len(failedIDs))
+	}
+
+	if len(successfulIDs) > 0 {
+		deleteSQL, deleteArgs, buildErr := builder.
+			Delete("instances").
+			Where(squirrel.Eq{"instance_id": successfulIDs}).
+			Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").
+			ToSql()
+		if buildErr != nil {
+			return successfulInstances, fmt.Errorf("failed to build delete query for destroyed instances: %w", buildErr)
+		}
+		if _, deleteErr := d.instanceStore.DeleteAndReturn(ctx, deleteSQL, deleteArgs...); deleteErr != nil {
+			return successfulInstances, fmt.Errorf("failed to delete destroyed %s instances: %w", cleanupType, deleteErr)
 		}
 	}
 
 	d.destroyCapacity(ctx, successfulInstances)
 	return successfulInstances, nil
+}
+
+// forceDeleteLeakedInstances removes rows that have been stuck past 2 * maxAge.
+// These are instances the driver has been unable to destroy across many retry
+// ticks; keeping them forever would bloat the table and skew pool metrics.
+// We log loudly so operators can reconcile the cloud side.
+func (d *DistributedManager) forceDeleteLeakedInstances(
+	ctx context.Context,
+	pool *poolEntry,
+	cleanupType string,
+	maxAge time.Duration,
+) {
+	if maxAge <= 0 {
+		return
+	}
+	logr := logger.FromContext(ctx).
+		WithField("driver", pool.Driver.DriverName()).
+		WithField("pool", pool.Name).
+		WithField("cleanup_type", cleanupType)
+
+	leakCutoff := time.Now().Add(-2 * maxAge).Unix()
+	builder := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+	deleteSQL, args, err := builder.
+		Delete("instances").
+		Where(squirrel.And{
+			squirrel.Eq{"instance_pool": pool.Name},
+			squirrel.Lt{"instance_started": leakCutoff},
+		}).
+		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").
+		ToSql()
+	if err != nil {
+		logr.WithError(err).Error("distributed dlite: purger: failed to build leak-candidate delete query")
+		return
+	}
+
+	leaked, err := d.instanceStore.DeleteAndReturn(ctx, deleteSQL, args...)
+	if err != nil {
+		logr.WithError(err).Error("distributed dlite: purger: failed to force-delete leak-candidate instances")
+		return
+	}
+	if len(leaked) == 0 {
+		return
+	}
+
+	leakedIDs := make([]string, len(leaked))
+	leakedNames := make([]string, len(leaked))
+	for i, inst := range leaked {
+		leakedIDs[i] = inst.ID
+		leakedNames[i] = inst.Name
+	}
+	logr.WithField("instance_ids", leakedIDs).
+		WithField("instance_names", leakedNames).
+		WithField("max_age_seconds", int64(maxAge.Seconds())).
+		WithField("destroy_caller", "distributed_purger:leak_candidate").
+		Warnf("distributed dlite: purger: force-deleting %d instance_leak_candidate row(s) older than 2x maxAge; verify cloud-side cleanup", len(leaked))
+
+	d.destroyCapacity(ctx, leaked)
 }
 
 func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*types.Instance) {

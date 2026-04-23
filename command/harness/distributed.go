@@ -228,6 +228,7 @@ func buildScalablePools(poolConfig *config.PoolFile) []jobs.ScalablePool {
 					Zones:                variant.Zones,
 					DiskSize:             variant.DiskSize,
 					DiskType:             variant.DiskType,
+					GPU:                  variant.GPU,
 				},
 			})
 		}
