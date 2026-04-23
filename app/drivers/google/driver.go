@@ -1200,7 +1200,7 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 }
 
 func (p *config) setup(ctx context.Context) error {
-	if reflect.DeepEqual(p.tags, defaultTags) {
+	if reflect.DeepEqual(p.tags, defaultTags) && len(p.networkConfigs) == 0 {
 		return p.setupFirewall(ctx)
 	}
 	return nil
