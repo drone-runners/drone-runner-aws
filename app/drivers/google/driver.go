@@ -1082,7 +1082,10 @@ func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, disk
 	})
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization, gpu bool, image, machineType, resolvedNetwork string) (types.Instance, error) {
+func (p *config) mapToInstance(
+	vm *compute.Instance, zone string, opts *types.InstanceCreateOpts,
+	enableNestedVitualization, gpu bool, image, machineType, resolvedNetwork string,
+) (types.Instance, error) {
 	network := vm.NetworkInterfaces[0]
 	instanceIP := ""
 	if p.privateIP {
