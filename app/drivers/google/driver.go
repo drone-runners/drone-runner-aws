@@ -732,7 +732,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		return nil, err
 	}
 
-	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, gpu, image, machineType)
+	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, gpu, image, machineType, resolvedNetwork)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to map VM to instance")
 		return nil, err
@@ -1088,7 +1088,10 @@ func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, disk
 	})
 }
 
-func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.InstanceCreateOpts, enableNestedVitualization, gpu bool, image, machineType string) (types.Instance, error) {
+func (p *config) mapToInstance(
+	vm *compute.Instance, zone string, opts *types.InstanceCreateOpts,
+	enableNestedVitualization, gpu bool, image, machineType, resolvedNetwork string,
+) (types.Instance, error) {
 	network := vm.NetworkInterfaces[0]
 	instanceIP := ""
 	if p.privateIP {
@@ -1131,6 +1134,7 @@ func (p *config) mapToInstance(vm *compute.Instance, zone string, opts *types.In
 		StorageIdentifier:          opts.StorageOpts.Identifier,
 		Labels:                     labelsBytes,
 		GitspacePortMappings:       gitspacePortMappings,
+		Network:                    resolvedNetwork,
 	}, nil
 }
 
@@ -1206,7 +1210,7 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 }
 
 func (p *config) setup(ctx context.Context) error {
-	if reflect.DeepEqual(p.tags, defaultTags) {
+	if reflect.DeepEqual(p.tags, defaultTags) && len(p.networkConfigs) == 0 {
 		return p.setupFirewall(ctx)
 	}
 	return nil
@@ -1257,7 +1261,7 @@ func (p *config) setupFirewall(ctx context.Context) error {
 // ApplyEgressPolicy creates per-VM egress firewall rules using pre-resolved IPs from lite-engine.
 // Returns the list of created rule names for DB storage.
 func (p *config) ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error) {
-	return p.createEgressFirewallRules(ctx, instance.ID, instance.Name, resolvedIPs)
+	return p.createEgressFirewallRules(ctx, instance.ID, instance.Name, instance.Network, resolvedIPs)
 }
 
 // CleanupEgressPolicy removes per-VM egress firewall rules using stored rule IDs.
@@ -1285,7 +1289,7 @@ const (
 
 // createEgressFirewallRules creates two GCP firewall rules for egress restriction.
 // Returns the created rule names for DB storage.
-func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, instanceName string, resolvedIPs []string) ([]string, error) {
+func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, instanceName, instanceNetwork string, resolvedIPs []string) ([]string, error) {
 	logr := logger.FromContext(ctx).WithField("instance", instanceName)
 
 	if len(resolvedIPs) == 0 {
@@ -1302,7 +1306,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 		cidrs = append(cidrs, ip)
 	}
 
-	network := p.network
+	network := instanceNetwork
 	if !strings.HasPrefix(network, "projects/") {
 		network = fmt.Sprintf("projects/%s/global/networks/%s", p.projectID, network)
 	}
