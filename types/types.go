@@ -108,6 +108,7 @@ type Instance struct {
 	VariantID                  string         `db:"variant_id" json:"variant_id"`
 	GPU                        bool           `db:"instance_gpu" json:"gpu"`
 	Source                     InstanceSource `db:"instance_source" json:"source"`
+	Network                    string         `db:"instance_network" json:"network"`
 }
 
 // Passwords holds sensitive data.

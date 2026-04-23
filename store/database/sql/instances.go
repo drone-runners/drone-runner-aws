@@ -233,7 +233,7 @@ RETURNING %s
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
 		&dst.EnableNestedVirtualization, &dst.RunnerName, &dst.VariantID,
-		&dst.GPU, &dst.Source,
+		&dst.GPU, &dst.Source, &dst.Network,
 	)
 	if err != nil {
 		return nil, err
@@ -284,6 +284,7 @@ const instanceColumns = `
 ,variant_id
 ,instance_gpu
 ,instance_source
+,instance_network
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -326,6 +327,7 @@ INSERT INTO instances (
 ,variant_id
 ,instance_gpu
 ,instance_source
+,instance_network
 ) values (
  :instance_id
 ,:instance_node_id
@@ -360,6 +362,7 @@ INSERT INTO instances (
 ,:variant_id
 ,:instance_gpu
 ,:instance_source
+,:instance_network
 ) RETURNING instance_id
 `
 
