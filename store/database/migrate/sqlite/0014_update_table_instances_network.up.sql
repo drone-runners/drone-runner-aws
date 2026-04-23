@@ -1,1 +1,1 @@
-ALTER TABLE instances ADD COLUMN instance_network TEXT NOT NULL DEFAULT '';
+ALTER TABLE instances ADD COLUMN instance_network VARCHAR(250) NOT NULL DEFAULT '';
