@@ -80,6 +80,27 @@ try {
 }
 {{ end }}
 
+{{ if .BrokerHelperBinaryURI }}
+# credential-broker binary (Harness credentialBroker repo) — Windows equivalent of the Linux
+# credential_process helper. Installed once per VM and mounted into Windows step containers
+# by lite-engine's docker/convert.go. URL layout follows the canonical CDN schema:
+# <BrokerHelperBinaryURI>/<os>/<arch>/credential-broker.exe.
+$brokerHelperUrl = "{{ .BrokerHelperBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/credential-broker.exe"
+$brokerHelperPath = "C:\Program Files\lite-engine\credential-broker.exe"
+echo "[DRONE][broker] BrokerHelperBinaryURI={{ .BrokerHelperBinaryURI }} os={{ .Platform.OS }} arch={{ .Platform.Arch }} url=$brokerHelperUrl target=$brokerHelperPath"
+
+try {
+    Invoke-WebRequest -Uri $brokerHelperUrl -OutFile $brokerHelperPath -ErrorAction Stop
+    $size = (Get-Item $brokerHelperPath).Length
+    New-Item -ItemType Directory -Force -Path "C:\ProgramData\harness\aws"
+    Set-Content -Path "C:\ProgramData\harness\aws\config" -Value "[profile default]`ncredential_process = `"$brokerHelperPath`"`n"
+    echo "[DRONE][broker] Successfully downloaded credential-broker.exe size=$size bytes; credential_process config created at C:\ProgramData\harness\aws\config"
+    Get-ChildItem $brokerHelperPath, "C:\ProgramData\harness\aws\config" | Format-List FullName, Length
+} catch {
+    echo "[DRONE][broker] WARNING: Failed to download credential-broker binary: $($_.Exception.Message) — AWS credential broker steps on this VM will fail"
+}
+{{ end }}
+
 $primaryLiteEngineUrl = "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $secondaryLiteEngineUrl = "{{ .LiteEngineFallbackPath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
 $outputFile = "C:\Program Files\lite-engine\lite-engine.exe"

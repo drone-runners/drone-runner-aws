@@ -45,6 +45,7 @@ type Params struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	BrokerHelperBinaryURI        string
 }
 
 var funcs = map[string]interface{}{

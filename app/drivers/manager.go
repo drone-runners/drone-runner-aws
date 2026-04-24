@@ -40,6 +40,7 @@ type (
 		envmanBinaryFallbackURI      string
 		tmateBinaryURI               string
 		tmateBinaryFallbackURI       string
+		brokerHelperBinaryURI        string
 		env                          string
 		skipCloudInitPackages        bool
 	}

@@ -266,6 +266,7 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		EnvmanBinaryFallbackURI:      opts.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               opts.TmateBinaryURI,
 		TmateBinaryFallbackURI:       opts.TmateBinaryFallbackURI,
+		BrokerHelperBinaryURI:        opts.BrokerHelperBinaryURI,
 	}
 	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
 		(opts.GitspaceOpts.VMInitScript != "") {

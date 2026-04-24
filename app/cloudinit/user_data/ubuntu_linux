@@ -256,6 +256,28 @@ runcmd:
   - chmod 755 /usr/bin/hcli
   {{ end }}
   
+  # Download and install the credential-broker binary if configured. Source of truth is the
+  # Harness credentialBroker repo (https://app.harness.io/public/shared/tools/credential-broker/
+  # release/<version>/bin/<os>/<arch>/credential-broker). It is installed in a stable location
+  # so any step container that bind-mounts /usr/local/bin/credential-broker and the AWS config
+  # dir can reuse the same credential_process helper. URL layout follows the canonical CDN
+  # schema: <BrokerHelperBinaryURI>/<os>/<arch>/credential-broker.
+  {{ if .BrokerHelperBinaryURI }}
+  - echo "[DRONE][broker] BrokerHelperBinaryURI={{ .BrokerHelperBinaryURI }} os={{ .Platform.OS }} arch={{ .Platform.Arch }}"
+  - |
+    echo "[DRONE][broker] Downloading credential-broker binary from {{ .BrokerHelperBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/credential-broker" && \
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .BrokerHelperBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/credential-broker" -O /usr/local/bin/credential-broker && \
+    echo "[DRONE][broker] Successfully downloaded credential-broker binary size=$(stat -c %s /usr/local/bin/credential-broker 2>/dev/null || echo unknown) bytes" || \
+    echo "[DRONE][broker] WARNING: Failed to download credential-broker binary — AWS credential broker steps on this VM will fail"
+  - chmod 755 /usr/local/bin/credential-broker
+  - mkdir -p /etc/harness/aws
+  - |
+    printf '[profile default]\ncredential_process = /usr/local/bin/credential-broker\n' > /etc/harness/aws/config
+  - chmod 644 /etc/harness/aws/config
+  - echo "[DRONE][broker] AWS broker credential_process config created at /etc/harness/aws/config"
+  - ls -l /usr/local/bin/credential-broker /etc/harness/aws/config || true
+  {{ end }}
+  
   # Setup environment and start lite-engine
   - touch /root/.env
   - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'

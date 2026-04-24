@@ -258,6 +258,7 @@ func (m *Manager) setupInstance(
 	createOptions.EnvmanBinaryFallbackURI = m.envmanBinaryFallbackURI
 	createOptions.TmateBinaryURI = m.tmateBinaryURI
 	createOptions.TmateBinaryFallbackURI = m.tmateBinaryFallbackURI
+	createOptions.BrokerHelperBinaryURI = m.brokerHelperBinaryURI
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:                   agentConfig.Secret,

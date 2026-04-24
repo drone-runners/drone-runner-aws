@@ -197,6 +197,7 @@ type InstanceCreateOpts struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	BrokerHelperBinaryURI        string
 }
 
 // Platform defines the target platform.

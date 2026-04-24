@@ -39,6 +39,7 @@ type ManagerConfig struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	BrokerHelperBinaryURI        string
 	SkipCloudInitPackages        bool
 }
 
@@ -65,6 +66,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		envmanBinaryFallbackURI:      cfg.EnvmanBinaryFallbackURI,
 		tmateBinaryURI:               cfg.TmateBinaryURI,
 		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
+		brokerHelperBinaryURI:        cfg.BrokerHelperBinaryURI,
 		skipCloudInitPackages:        cfg.SkipCloudInitPackages,
 	}
 }
@@ -91,6 +93,7 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		EnvmanBinaryFallbackURI:      envConfig.Settings.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
 		TmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
+		BrokerHelperBinaryURI:        envConfig.Settings.BrokerHelperBinaryURI,
 		SkipCloudInitPackages:        envConfig.Settings.SkipCloudInitPackages,
 	}
 }
