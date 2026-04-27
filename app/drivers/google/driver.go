@@ -1411,7 +1411,7 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 // (e.g. "projects/<project>/global/networks/<name>"). Falls back to defaultProject.
 func projectFromNetwork(network, defaultProject string) string {
 	if strings.HasPrefix(network, "projects/") {
-		parts := strings.SplitN(network, "/", 3)
+		parts := strings.SplitN(network, "/", 3) //nolint:mnd
 		if len(parts) >= 2 && parts[1] != "" {
 			return parts[1]
 		}
