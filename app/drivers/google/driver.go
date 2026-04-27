@@ -1259,8 +1259,12 @@ func (p *config) ApplyEgressPolicy(ctx context.Context, instance *types.Instance
 }
 
 // CleanupEgressPolicy removes per-VM egress firewall rules using stored rule IDs.
-func (p *config) CleanupEgressPolicy(ctx context.Context, ruleIDs []string) error {
-	return p.deleteFirewallRulesByID(ctx, ruleIDs)
+func (p *config) CleanupEgressPolicy(ctx context.Context, instance *types.Instance, ruleIDs []string) error {
+	firewallProject := p.projectID
+	if instance != nil && instance.Network != "" {
+		firewallProject = projectFromNetwork(instance.Network, p.projectID)
+	}
+	return p.deleteFirewallRulesByID(ctx, firewallProject, ruleIDs)
 }
 
 // EgressRuleName builds a GCP-compliant firewall rule name: "{prefix}{instanceID}", truncated to 63 chars.
@@ -1305,6 +1309,13 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 		network = fmt.Sprintf("projects/%s/global/networks/%s", p.projectID, network)
 	}
 
+	// For Shared VPC, firewall rules must be created in the host project (VPC owner).
+	// Extract the project from the fully qualified network path.
+	firewallProject := projectFromNetwork(network, p.projectID)
+
+	logr.WithField("firewall_project", firewallProject).WithField("vm_project", p.projectID).
+		Debugln("egress: resolved firewall project from network path")
+
 	// Create allow rule for whitelisted IPs
 	allowRuleName := EgressRuleName(EgressAllowPrefix, instanceID)
 	allowRule := &compute.Firewall{
@@ -1324,14 +1335,10 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 	logr.WithField("rule", allowRuleName).WithField("destinations", len(cidrs)).
 		Infoln("egress: creating allow firewall rule")
 
-	op, err := p.service.Firewalls.Insert(p.projectID, allowRule).Context(ctx).Do()
+	_, err := p.service.Firewalls.Insert(firewallProject, allowRule).Context(ctx).Do()
 	if err != nil {
 		logr.WithError(err).Errorln("egress: failed to create allow firewall rule")
 		return nil, fmt.Errorf("egress: failed to create allow rule: %w", err)
-	}
-	if waitErr := p.waitGlobalOperation(ctx, op.Name); waitErr != nil {
-		logr.WithError(waitErr).Errorln("egress: failed waiting for allow firewall rule")
-		return nil, fmt.Errorf("egress: failed waiting for allow rule: %w", waitErr)
 	}
 
 	// Create deny-all rule
@@ -1350,15 +1357,11 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 
 	logr.WithField("rule", denyRuleName).Infoln("egress: creating deny-all firewall rule")
 
-	op, err = p.service.Firewalls.Insert(p.projectID, denyRule).Context(ctx).Do()
+	_, err = p.service.Firewalls.Insert(firewallProject, denyRule).Context(ctx).Do()
 	if err != nil {
 		logr.WithError(err).Errorln("egress: failed to create deny firewall rule")
-		_ = p.deleteFirewallRulesByID(ctx, []string{allowRuleName})
+		_ = p.deleteFirewallRulesByID(ctx, firewallProject, []string{allowRuleName})
 		return nil, fmt.Errorf("egress: failed to create deny rule: %w", err)
-	}
-	if waitErr := p.waitGlobalOperation(ctx, op.Name); waitErr != nil {
-		logr.WithError(waitErr).Errorln("egress: failed waiting for deny firewall rule")
-		return nil, fmt.Errorf("egress: failed waiting for deny rule: %w", waitErr)
 	}
 
 	logr.Infoln("egress: successfully created egress firewall rules")
@@ -1366,10 +1369,10 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 }
 
 // deleteFirewallRulesByID removes firewall rules by their stored IDs/names.
-func (p *config) deleteFirewallRulesByID(ctx context.Context, ruleIDs []string) error {
+func (p *config) deleteFirewallRulesByID(ctx context.Context, firewallProject string, ruleIDs []string) error {
 	var errs []error
 	for _, ruleID := range ruleIDs {
-		_, err := p.service.Firewalls.Delete(p.projectID, ruleID).Context(ctx).Do()
+		_, err := p.service.Firewalls.Delete(firewallProject, ruleID).Context(ctx).Do()
 		if err != nil {
 			if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
 				logrus.WithField("rule", ruleID).Debugln("egress: firewall rule not found, already deleted")
@@ -1402,6 +1405,18 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+// projectFromNetwork extracts the GCP project from a fully qualified network path
+// (e.g. "projects/<project>/global/networks/<name>"). Falls back to defaultProject.
+func projectFromNetwork(network, defaultProject string) string {
+	if strings.HasPrefix(network, "projects/") {
+		parts := strings.SplitN(network, "/", 3)
+		if len(parts) >= 2 && parts[1] != "" {
+			return parts[1]
+		}
+	}
+	return defaultProject
 }
 
 func (p *config) getZone(ctx context.Context, instance *types.Instance) (string, error) {

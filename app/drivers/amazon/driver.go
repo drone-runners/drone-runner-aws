@@ -203,7 +203,7 @@ func (p *amazonConfig) ApplyEgressPolicy(_ context.Context, _ *drtypes.Instance,
 	return nil, nil
 }
 
-func (p *amazonConfig) CleanupEgressPolicy(_ context.Context, _ []string) error {
+func (p *amazonConfig) CleanupEgressPolicy(_ context.Context, _ *drtypes.Instance, _ []string) error {
 	return nil
 }
 
