@@ -275,7 +275,7 @@ func (m *flexibleMockDriver) ApplyEgressPolicy(_ context.Context, _ *types.Insta
 	return nil, nil
 }
 
-func (m *flexibleMockDriver) CleanupEgressPolicy(_ context.Context, _ []string) error {
+func (m *flexibleMockDriver) CleanupEgressPolicy(_ context.Context, _ *types.Instance, _ []string) error {
 	return nil
 }
 

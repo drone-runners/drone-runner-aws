@@ -71,7 +71,7 @@ func (m *mockDriver) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ [
 	return nil, nil
 }
 
-func (m *mockDriver) CleanupEgressPolicy(_ context.Context, _ []string) error {
+func (m *mockDriver) CleanupEgressPolicy(_ context.Context, _ *types.Instance, _ []string) error {
 	return nil
 }
 
@@ -478,7 +478,7 @@ func (g *googleMockDriver) SetTags(context.Context, *types.Instance, map[string]
 func (g *googleMockDriver) ApplyEgressPolicy(context.Context, *types.Instance, []string) ([]string, error) {
 	return nil, nil
 }
-func (g *googleMockDriver) CleanupEgressPolicy(context.Context, []string) error {
+func (g *googleMockDriver) CleanupEgressPolicy(context.Context, *types.Instance, []string) error {
 	return nil
 }
 func (g *googleMockDriver) RootDir() string    { return "/tmp" }
