@@ -325,7 +325,8 @@ func (m *Manager) cleanupEgressFirewallRules(instance *types.Instance, pool *poo
 	for i, r := range rules {
 		ruleIDs[i] = r.ResourceID
 	}
-	if cleanupErr := pool.Driver.CleanupEgressPolicy(context.Background(), instance, ruleIDs); cleanupErr != nil {
+	project := types.ProjectFromNetwork(instance.Network, "")
+	if cleanupErr := pool.Driver.CleanupEgressPolicy(context.Background(), ruleIDs, project); cleanupErr != nil {
 		logr.WithError(cleanupErr).Warnln("egress: failed to cleanup egress policy during destroy")
 	}
 	if delErr := m.firewallStore.DeleteByStageID(context.Background(), instance.Stage); delErr != nil {
@@ -362,7 +363,7 @@ func (m *Manager) PurgeOrphanedFirewallRules(ctx context.Context, maxAge time.Du
 		}
 		if len(ruleIDs) > 0 {
 			for _, pool := range m.poolMap {
-				_ = pool.Driver.CleanupEgressPolicy(ctx, nil, ruleIDs)
+				_ = pool.Driver.CleanupEgressPolicy(ctx, ruleIDs, rules[0].ProjectID)
 				break
 			}
 		}

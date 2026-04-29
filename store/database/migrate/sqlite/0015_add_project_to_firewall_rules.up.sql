@@ -1,0 +1,1 @@
+ALTER TABLE firewall_rules ADD COLUMN project_id VARCHAR(250) NOT NULL DEFAULT '';
