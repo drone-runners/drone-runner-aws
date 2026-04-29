@@ -42,6 +42,7 @@ type ManagerConfig struct {
 	TmateBinaryFallbackURI       string
 	SkipCloudInitPackages        bool
 	Hosted                       bool
+	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
 }
 
 // NewManagerFromConfig creates a new Manager from a ManagerConfig.
@@ -70,6 +71,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
 		skipCloudInitPackages:        cfg.SkipCloudInitPackages,
 		hosted:                       cfg.Hosted,
+		capacityReservationTTL:       cfg.CapacityReservationTTL,
 	}
 }
 
@@ -96,6 +98,7 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
 		TmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
 		SkipCloudInitPackages:        envConfig.Settings.SkipCloudInitPackages,
+		CapacityReservationTTL:       envConfig.Settings.FreeCapacityMaxAgeMinutes * 60,
 	}
 }
 

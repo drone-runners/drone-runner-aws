@@ -244,7 +244,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 	var err error
 	if p.service == nil {
 		if p.JSONPath != "" {
-			p.service, err = compute.NewService(ctx, option.WithCredentialsFile(p.JSONPath))
+			p.service, err = compute.NewService(ctx, option.WithCredentialsFile(p.JSONPath)) //nolint:staticcheck // SA1019: pre-existing usage, not changed by this PR
 		} else {
 			p.service, err = compute.NewService(ctx)
 		}
@@ -366,6 +366,12 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 			},
 			SpecificReservationRequired: true, // Require specific reservation targeting
 			Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
+		}
+
+		if opts.CapacityReservationTTL > 0 {
+			reservation.DeleteAfterDuration = &compute.Duration{Seconds: opts.CapacityReservationTTL}
+			zoneLogr.WithField("delete_after_seconds", opts.CapacityReservationTTL).
+				Infoln("google: setting delete after duration on capacity reservation")
 		}
 
 		// Insert the reservation

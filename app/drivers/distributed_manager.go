@@ -998,6 +998,13 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 		capacitiesToDelete = append(capacitiesToDelete, freeCapacities...)
 	}
 
+	// Reclaim orphaned InUse capacities: capacity records whose associated instance
+	// no longer exists in the DB. This covers destroy paths that failed to clean up
+	// the reservation record. Only consider InUse rows older than the cutoff to avoid
+	// racing with in-flight setups that haven't yet written the instance row.
+	orphanedCapacities := d.findOrphanedInUseCapacities(ctx, pool, createdAtBefore)
+	capacitiesToDelete = append(capacitiesToDelete, orphanedCapacities...)
+
 	if len(capacitiesToDelete) == 0 {
 		return
 	}
@@ -1023,6 +1030,64 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 		Infof("distributed dlite: purger: cleaning up %d stale capacity reservations", len(capacitiesToDelete))
 
 	d.destroyCapacityFromReservation(ctx, capacitiesToDelete)
+}
+
+// findOrphanedInUseCapacities lists InUse capacity reservations older than createdAtBefore
+// whose associated instance no longer exists, then atomically claims each into the
+// Terminating state so the caller can destroy them. Returns only successfully claimed rows.
+func (d *DistributedManager) findOrphanedInUseCapacities(ctx context.Context, pool *poolEntry, createdAtBefore int64) []*types.CapacityReservation {
+	inUseCapacities, err := d.capacityReservationStore.List(
+		ctx,
+		&types.CapacityReservationQueryParams{
+			PoolName:        pool.Name,
+			CreatedAtBefore: createdAtBefore,
+		},
+		[]types.CapacityReservationState{types.CapacityReservationStateInUse},
+	)
+	if err != nil {
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithError(err).
+			Error("distributed dlite: purger: failed to list in-use capacity reservations")
+		return nil
+	}
+
+	var orphans []*types.CapacityReservation
+	for _, capacity := range inUseCapacities {
+		if capacity.StageID == "" {
+			continue
+		}
+		inst, _ := d.GetInstanceByStageID(ctx, pool.Name, capacity.StageID)
+		if inst != nil {
+			continue
+		}
+		claimed, claimErr := d.capacityReservationStore.FindAndClaim(
+			ctx,
+			&types.CapacityReservationQueryParams{StageID: capacity.StageID, Limit: 1},
+			types.CapacityReservationStateTerminating,
+			[]types.CapacityReservationState{types.CapacityReservationStateInUse},
+		)
+		if claimErr != nil {
+			logger.FromContext(ctx).
+				WithField("pool", pool.Name).
+				WithField("stage_runtime_id", capacity.StageID).
+				WithError(claimErr).
+				Warn("distributed dlite: purger: failed to claim orphaned in-use capacity reservation")
+			continue
+		}
+		if len(claimed) == 0 {
+			continue
+		}
+		orphans = append(orphans, claimed...)
+	}
+
+	if len(orphans) > 0 {
+		logger.FromContext(ctx).
+			WithField("pool", pool.Name).
+			WithField("count", len(orphans)).
+			Info("distributed dlite: purger: found orphaned in-use capacity reservations (no matching instance)")
+	}
+	return orphans
 }
 
 // executeInstanceCleanup claims candidate rows into StateTerminating, asks the

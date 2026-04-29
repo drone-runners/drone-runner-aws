@@ -43,6 +43,7 @@ type (
 		tmateBinaryFallbackURI       string
 		env                          string
 		skipCloudInitPackages        bool
+		capacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
 		hosted                       bool
 	}
 
