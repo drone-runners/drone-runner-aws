@@ -620,6 +620,10 @@ func applyAndSaveEgressRules(
 	allowRuleName := google.EgressRuleName(google.EgressAllowPrefix, instance.ID)
 	denyRuleName := google.EgressRuleName(google.EgressDenyPrefix, instance.ID)
 
+	// Resolve the firewall project from the instance's network so the purger can delete rules
+	// from the correct project later (Shared VPC firewalls live in the host project, not the VM project).
+	firewallProject := google.ProjectFromNetwork(instance.Network, "")
+
 	// Pre-save rules with provisioning state and actual rule names so destroy/purger can always find and clean them.
 	if firewallStore != nil {
 		now := time.Now().Unix()
@@ -627,12 +631,12 @@ func applyAndSaveEgressRules(
 			{
 				StageID: stageRuntimeID, InstanceID: instance.ID,
 				ResourceID: allowRuleName, CloudProvider: string(instance.Provider),
-				State: types.FirewallStateProvisioning, CreatedAt: now,
+				ProjectID: firewallProject, State: types.FirewallStateProvisioning, CreatedAt: now,
 			},
 			{
 				StageID: stageRuntimeID, InstanceID: instance.ID,
 				ResourceID: denyRuleName, CloudProvider: string(instance.Provider),
-				State: types.FirewallStateProvisioning, CreatedAt: now,
+				ProjectID: firewallProject, State: types.FirewallStateProvisioning, CreatedAt: now,
 			},
 		}
 		if saveErr := firewallStore.CreateBatch(ctx, rules); saveErr != nil {

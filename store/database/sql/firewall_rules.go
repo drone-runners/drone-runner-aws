@@ -27,10 +27,10 @@ func (s FirewallStore) CreateBatch(_ context.Context, rules []*types.FirewallRul
 	}
 
 	q := builder.Insert("firewall_rules").
-		Columns("stage_id", "instance_id", "resource_id", "cloud_provider", "state", "created_at")
+		Columns("stage_id", "instance_id", "resource_id", "cloud_provider", "project_id", "state", "created_at")
 
 	for _, r := range rules {
-		q = q.Values(r.StageID, r.InstanceID, r.ResourceID, r.CloudProvider, r.State, r.CreatedAt)
+		q = q.Values(r.StageID, r.InstanceID, r.ResourceID, r.CloudProvider, r.ProjectID, r.State, r.CreatedAt)
 	}
 
 	query, args, err := q.ToSql()
@@ -105,4 +105,4 @@ func (s FirewallStore) UpdateState(_ context.Context, stageID, state string) err
 	return err
 }
 
-const firewallRuleColumns = `id, stage_id, instance_id, resource_id, cloud_provider, state, created_at`
+const firewallRuleColumns = `id, stage_id, instance_id, resource_id, cloud_provider, project_id, state, created_at`

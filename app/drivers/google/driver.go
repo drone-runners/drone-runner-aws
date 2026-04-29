@@ -1259,10 +1259,10 @@ func (p *config) ApplyEgressPolicy(ctx context.Context, instance *types.Instance
 }
 
 // CleanupEgressPolicy removes per-VM egress firewall rules using stored rule IDs.
-func (p *config) CleanupEgressPolicy(ctx context.Context, instance *types.Instance, ruleIDs []string) error {
+func (p *config) CleanupEgressPolicy(ctx context.Context, ruleIDs []string, projectID string) error {
 	firewallProject := p.projectID
-	if instance != nil && instance.Network != "" {
-		firewallProject = projectFromNetwork(instance.Network, p.projectID)
+	if projectID != "" {
+		firewallProject = projectID
 	}
 	return p.deleteFirewallRulesByID(ctx, firewallProject, ruleIDs)
 }
@@ -1311,7 +1311,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 
 	// For Shared VPC, firewall rules must be created in the host project (VPC owner).
 	// Extract the project from the fully qualified network path.
-	firewallProject := projectFromNetwork(network, p.projectID)
+	firewallProject := ProjectFromNetwork(network, p.projectID)
 
 	logr.WithField("firewall_project", firewallProject).WithField("vm_project", p.projectID).
 		Debugln("egress: resolved firewall project from network path")
@@ -1407,16 +1407,10 @@ func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 	}
 }
 
-// projectFromNetwork extracts the GCP project from a fully qualified network path
-// (e.g. "projects/<project>/global/networks/<name>"). Falls back to defaultProject.
-func projectFromNetwork(network, defaultProject string) string {
-	if strings.HasPrefix(network, "projects/") {
-		parts := strings.SplitN(network, "/", 3) //nolint:mnd
-		if len(parts) >= 2 && parts[1] != "" {
-			return parts[1]
-		}
-	}
-	return defaultProject
+// ProjectFromNetwork extracts the GCP project from a fully qualified network path.
+// Delegates to types.ProjectFromNetwork.
+func ProjectFromNetwork(network, defaultProject string) string {
+	return types.ProjectFromNetwork(network, defaultProject)
 }
 
 func (p *config) getZone(ctx context.Context, instance *types.Instance) (string, error) {

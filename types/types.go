@@ -3,6 +3,7 @@ package types
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/harness/lite-engine/engine/spec"
@@ -300,8 +301,21 @@ type FirewallRule struct {
 	InstanceID    string `db:"instance_id" json:"instance_id"`
 	ResourceID    string `db:"resource_id" json:"resource_id"`
 	CloudProvider string `db:"cloud_provider" json:"cloud_provider"`
+	ProjectID     string `db:"project_id" json:"project_id"`
 	State         string `db:"state" json:"state"`
 	CreatedAt     int64  `db:"created_at" json:"created_at"`
+}
+
+// ProjectFromNetwork extracts the GCP project from a fully qualified network path
+// (e.g. "projects/<project>/global/networks/<name>"). Falls back to defaultProject.
+func ProjectFromNetwork(network, defaultProject string) string {
+	if strings.HasPrefix(network, "projects/") {
+		parts := strings.SplitN(network, "/", 3) //nolint:mnd
+		if len(parts) >= 2 && parts[1] != "" {
+			return parts[1]
+		}
+	}
+	return defaultProject
 }
 
 // EgressPolicy defines the egress/outbound traffic restriction policy for a VM.
