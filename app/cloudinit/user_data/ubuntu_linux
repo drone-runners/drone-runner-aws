@@ -1,7 +1,7 @@
 #cloud-config
-{{ if not .SkipCloudInitPackages }}
+{{ if not .IsHosted }}
 # Package installation
-{{ if and (.IsHosted) (eq .Platform.Arch "amd64") }}
+{{ if (eq .Platform.Arch "amd64") }}
 packages:
   - wget
 {{ else }}

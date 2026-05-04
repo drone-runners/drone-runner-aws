@@ -250,7 +250,6 @@ func (m *Manager) setupInstance(
 			createOptions.StorageOpts.BootDiskType = setupParams.DiskType
 		}
 	}
-	createOptions.SkipCloudInitPackages = m.skipCloudInitPackages
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	createOptions.AnnotationsBinaryURI = m.annotationsBinaryURI
 	createOptions.AnnotationsBinaryFallbackURI = m.annotationsBinaryFallbackURI
