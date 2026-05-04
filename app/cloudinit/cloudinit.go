@@ -38,7 +38,6 @@ type Params struct {
 	DriverName                   string
 	CertsDirectory               string
 	EnableC4D                    bool
-	SkipCloudInitPackages        bool
 	AnnotationsBinaryURI         string
 	AnnotationsBinaryFallbackURI string
 	EnvmanBinaryURI              string

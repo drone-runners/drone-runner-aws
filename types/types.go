@@ -191,7 +191,6 @@ type InstanceCreateOpts struct {
 	DriverName                   string
 	Timeout                      int64
 	EnableC4D                    bool
-	SkipCloudInitPackages        bool
 	CapacityReservation          *CapacityReservation
 	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservation after this duration
 	NestedVirtualization         bool
