@@ -321,14 +321,15 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	vmImageConfig := p.getVMImageConfig(opts)
 
 	// get the machine details where the resource job was allocated
-	ip, id, liteEngineHostPort, gitspacesPorts, nodeMeta, err := p.fetchMachine(logr, resourceJobID)
+	machine, err := p.fetchMachine(logr, resourceJobID)
 	if err != nil {
 		defer func() {
 			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		}()
 		return nil, err
 	}
-	opts.NodeMeta = nodeMeta
+	ip, id, liteEngineHostPort, gitspacesPorts := machine.IP, machine.NodeID, machine.LiteEngineHostPort, machine.Ports
+	opts.NodeMeta = machine.NodeMeta
 
 	var gitspacesPortMappingsString string
 	gitspacesPortMappings := make(map[int]int)
@@ -533,69 +534,79 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 	return job, id
 }
 
+type machineInfo struct {
+	IP                 string
+	NodeID             string
+	LiteEngineHostPort int
+	Ports              []int
+	NodeMeta           map[string]string
+}
+
 // fetchMachine returns details of the machine where the job has been allocated
-func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string, liteEngineHostPort int, ports []int, nodeMeta map[string]string, err error) {
+func (p *config) fetchMachine(logr logger.Logger, id string) (machineInfo, error) {
+	var info machineInfo
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
 	l, _, err := p.client.Jobs().Allocations(id, false, nil)
 	if err != nil {
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, err
+		return info, err
 	}
 	if len(l) == 0 {
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, errors.New("scheduler: no allocation found for the job")
+		return info, errors.New("scheduler: no allocation found for the job")
 	}
 
-	nodeID = l[0].NodeID
+	info.NodeID = l[0].NodeID
 	allocID := l[0].ID
-	if nodeID == "" || allocID == "" {
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, errors.New("scheduler: could not find an allocation identifier for the job")
+	if info.NodeID == "" || allocID == "" {
+		return info, errors.New("scheduler: could not find an allocation identifier for the job")
 	}
 
 	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
 	if err != nil {
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, err
+		return info, err
 	}
 
 	// Not expected - if nomad is unable to find a port, it should not run the job at all.
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
 		err = fmt.Errorf("scheduler: could not allocate network and ports for job")
 		logr.Errorln(err)
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, err
+		return info, err
 	}
 
-	liteEngineHostPort = alloc.Resources.Networks[0].DynamicPorts[0].Value
+	info.LiteEngineHostPort = alloc.Resources.Networks[0].DynamicPorts[0].Value
 	for i := 1; i < len(alloc.Resources.Networks[0].DynamicPorts); i++ {
-		ports = append(ports, alloc.Resources.Networks[0].DynamicPorts[i].Value)
+		info.Ports = append(info.Ports, alloc.Resources.Networks[0].DynamicPorts[i].Value)
 	}
 
 	// sanity check
-	if liteEngineHostPort <= 0 || liteEngineHostPort > 65535 {
-		err = fmt.Errorf("scheduler: lite engine host port %d generated is not a valid port", liteEngineHostPort)
+	if info.LiteEngineHostPort <= 0 || info.LiteEngineHostPort > 65535 {
+		err = fmt.Errorf("scheduler: lite engine host port %d generated is not a valid port", info.LiteEngineHostPort)
 		logr.Errorln(err)
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, err
+		return info, err
 	}
-	for _, port := range ports {
+	for _, port := range info.Ports {
 		if port <= 0 || port > 65535 {
 			err = fmt.Errorf("scheduler: gitspace host port %d generated is not a valid port", port)
 			logr.Errorln(err)
-			return ip, nodeID, liteEngineHostPort, ports, nodeMeta, err
+			return info, err
 		}
 	}
 
-	n, _, err := p.client.Nodes().Info(nodeID, &api.QueryOptions{})
+	n, _, err := p.client.Nodes().Info(info.NodeID, &api.QueryOptions{})
 	if err != nil {
 		logr.WithError(err).Errorln("scheduler: could not get information about the node which picked up the resource job")
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, err
+		return info, err
 	}
 
-	ip = strings.Split(n.HTTPAddr, ":")[0]
-	if net.ParseIP(ip) == nil {
-		err = fmt.Errorf("scheduler: could not parse client machine IP: %s", ip)
+	info.IP = strings.Split(n.HTTPAddr, ":")[0]
+	if net.ParseIP(info.IP) == nil {
+		err = fmt.Errorf("scheduler: could not parse client machine IP: %s", info.IP)
 		logr.Errorln(err)
-		return ip, nodeID, liteEngineHostPort, ports, nodeMeta, err
+		return info, err
 	}
 
-	return ip, nodeID, liteEngineHostPort, ports, n.Meta, nil
+	info.NodeMeta = n.Meta
+	return info, nil
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
