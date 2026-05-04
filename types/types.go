@@ -199,6 +199,7 @@ type InstanceCreateOpts struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	NodeMeta                     map[string]string
 }
 
 // Platform defines the target platform.

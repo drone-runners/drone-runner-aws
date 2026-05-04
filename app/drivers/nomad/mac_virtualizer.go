@@ -3,7 +3,9 @@ package nomad
 import (
 	"encoding/base64"
 	"fmt"
+	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/nomad/api"
@@ -53,7 +55,8 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 		return nil, "", "", err
 	}
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
-	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, vmImageConfig, resource, port)))
+	dnsServers := getDNSServersFromMeta(opts.NodeMeta)
+	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, vmImageConfig, resource, port, dnsServers)))
 	vmStartupScriptPath := fmt.Sprintf("/tmp/%s.sh", vm)
 	cloudInitScriptPath := fmt.Sprintf("/tmp/cloud_init_%s.sh", vm)
 	id = "tart_job_" + vm
@@ -131,10 +134,10 @@ func (mv *MacVirtualizer) generateUserData(userData string, opts *types.Instance
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string { //nolint:gocritic
+func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int, dnsServers string) string { //nolint:gocritic
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
-	return fmt.Sprintf(`
+	script := fmt.Sprintf(`
 #!/usr/bin/env bash
 set -eo pipefail
 
@@ -343,6 +346,12 @@ while true
 echo "Tart VM Started"
 `, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
 		vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password, machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, lockFunction, vmID, port, UnlockFunction)
+
+	if dnsServers != "" {
+		script += generateDNSSetupBlock(dnsServers)
+	}
+
+	return script
 }
 
 func (mv *MacVirtualizer) GetMachineFrequency() int {
@@ -475,4 +484,65 @@ func (mv *MacVirtualizer) GetInitJobTimeout(vmImageConfig types.VMImageConfig) t
 		return mv.nomadConfig.ByoiInitTimeout // remote image from registry
 	}
 	return mv.nomadConfig.InitTimeout // local or shorthand image
+}
+
+func getDNSServersFromMeta(meta map[string]string) string {
+	if meta == nil {
+		return ""
+	}
+	if !strings.EqualFold(meta["custom_dns"], "true") {
+		return ""
+	}
+	raw := strings.TrimSpace(meta["dns_servers"])
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	for _, p := range parts {
+		ip := strings.TrimSpace(p)
+		if ip == "" || net.ParseIP(ip) == nil {
+			return ""
+		}
+	}
+	return raw
+}
+
+func generateDNSSetupBlock(dnsServers string) string {
+	servers := strings.ReplaceAll(dnsServers, ",", " ")
+	return fmt.Sprintf(`
+echo "[DNS] Custom DNS configuration detected: %s"
+echo "[DNS] Applying DNS servers to VM network interface..."
+
+expect <<- DONE
+    set timeout 30
+    spawn ssh -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "networksetup -setdnsservers Ethernet %s"
+    expect {
+        "*yes/no*" { send "yes\r"; exp_continue }
+        "*Password:" { send "$VM_PASSWORD\r"; exp_continue }
+    }
+DONE
+
+if [ $? -eq 0 ]; then
+    echo "[DNS] DNS servers applied successfully"
+else
+    echo "[DNS] WARNING: Failed to apply DNS servers"
+fi
+
+echo "[DNS] Verifying DNS resolution inside VM..."
+
+expect <<- DONE
+    set timeout 15
+    spawn ssh -o "ConnectTimeout=5" -o "StrictHostKeyChecking=no" "$VM_USER@$VM_IP" "nslookup app.harness.io && nslookup github.com"
+    expect {
+        "*yes/no*" { send "yes\r"; exp_continue }
+        "*Password:" { send "$VM_PASSWORD\r"; exp_continue }
+    }
+DONE
+
+if [ $? -eq 0 ]; then
+    echo "[DNS] DNS resolution verified successfully"
+else
+    echo "[DNS] WARNING: DNS resolution check failed - proceeding anyway"
+fi
+`, dnsServers, servers)
 }
