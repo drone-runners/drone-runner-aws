@@ -268,9 +268,11 @@ func (m *Manager) setupInstance(
 		retain = "true"
 	}
 	createOptions.InternalLabels = map[string]string{"retain": retain}
+	source := resolveInstanceSource(setupParams)
 	if createOptions.IsHosted {
 		createOptions.VMLabels = map[string]string{
 			"pool_id": pool.Name,
+			"source":  string(source),
 		}
 		if m.env != "" {
 			createOptions.VMLabels["harness_env"] = m.env
@@ -326,7 +328,7 @@ func (m *Manager) setupInstance(
 		inst.VariantID = defaultVariantID
 	}
 
-	inst.Source = resolveInstanceSource(setupParams)
+	inst.Source = source
 
 	if inst.Labels == nil {
 		labelsBytes, marshalErr := json.Marshal(map[string]string{"retain": "false"})
