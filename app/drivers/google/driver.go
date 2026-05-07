@@ -109,14 +109,14 @@ type config struct {
 // reservationZone is the zone from a capacity reservation (may be empty).
 // requestZones is opts.Zones from the request (may be empty).
 //
-// Zone priority: reservationZone > requestZones[0] > network config zone > pool RandomZone.
+// Zone priority: reservationZone > random zone from requestZones > network config zone > pool RandomZone.
 // Network priority: networkConfigs (zone-matched or round-robin) > single network/subnetwork/tags.
 func (p *config) resolveNetworkAndZone(reservationZone string, requestZones []string) (zone, network, subnetwork string, tags []string) {
 	zone = reservationZone
 
-	// Fallback to the first zone from the request
+	// Fallback to a random zone from the request so load is spread across zones
 	if zone == "" && len(requestZones) > 0 {
-		zone = requestZones[0]
+		zone = requestZones[rand.Intn(len(requestZones))] //nolint:gosec
 	}
 
 	// Select network (zone-matched if zone is known, round-robin otherwise)
@@ -321,22 +321,15 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	// Generate a unique reservation name
 	reservationName := getInstanceName(opts.RunnerName, opts.PoolName)
 
-	// Determine zones to try
-	var zonesToTry []string
+	// Pick a single zone at random. The capacity reservation timeout is short,
+	// so trying multiple zones here would eat into the budget that fallback
+	// pools need to take over.
+	var candidateZones []string
 	if len(p.networkConfigs) > 0 {
-		// Round-robin: pick the next network config and use its zones
 		nc := p.nextNetworkConfig()
-		zonesToTry = make([]string, len(nc.zones))
-		copy(zonesToTry, nc.zones)
-		rand.Shuffle(len(zonesToTry), func(i, j int) { //nolint:gosec
-			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
-		})
+		candidateZones = nc.zones
 	} else {
-		zonesToTry = make([]string, len(p.zones))
-		copy(zonesToTry, p.zones)
-		rand.Shuffle(len(zonesToTry), func(i, j int) { //nolint:gosec
-			zonesToTry[i], zonesToTry[j] = zonesToTry[j], zonesToTry[i]
-		})
+		candidateZones = p.zones
 	}
 
 	logr := logger.FromContext(ctx).
@@ -345,66 +338,54 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 		WithField("machine_type", machineType).
 		WithField("pool", opts.PoolName)
 
-	logr.Debugln("google: creating capacity reservation")
-
-	var lastErr error
-
-	// Try each zone until we successfully create a reservation
-	for _, zone := range zonesToTry {
-		zoneLogr := logr.WithField("zone", zone)
-		zoneLogr.Debugln("google: attempting capacity reservation in zone")
-
-		// Create the reservation
-		reservation := &compute.Reservation{
-			Name: reservationName,
-			Zone: fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
-			SpecificReservation: &compute.AllocationSpecificSKUReservation{
-				Count: 1, // Reserve capacity for 1 VM
-				InstanceProperties: &compute.AllocationSpecificSKUAllocationReservedInstanceProperties{
-					MachineType: machineType,
-				},
-			},
-			SpecificReservationRequired: true, // Require specific reservation targeting
-			Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
-		}
-
-		if opts.CapacityReservationTTL > 0 {
-			reservation.DeleteAfterDuration = &compute.Duration{Seconds: opts.CapacityReservationTTL}
-			zoneLogr.WithField("delete_after_seconds", opts.CapacityReservationTTL).
-				Infoln("google: setting delete after duration on capacity reservation")
-		}
-
-		// Insert the reservation
-		op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(ctx).Do()
-		if err != nil {
-			lastErr = err
-			zoneLogr.WithError(err).Warnln("google: failed to create capacity reservation in zone, trying next zone")
-			continue
-		}
-
-		// Wait for the reservation to be created
-		err = p.waitZoneOperation(ctx, op.Name, zone)
-		if err != nil {
-			lastErr = err
-			zoneLogr.WithError(err).Warnln("google: capacity reservation creation operation failed in zone, trying next zone")
-			continue
-		}
-
-		// Success!
-		zoneLogr.Infoln("google: capacity reservation created successfully")
-		return &types.CapacityReservation{
-			StageID:       "", // Will be set by the caller
-			PoolName:      opts.PoolName,
-			InstanceID:    "", // Will be set when instance is created
-			ReservationID: reservationName,
-			CreatedAt:     time.Now().Unix(),
-			Zone:          types.StringPtr(zone),
-		}, nil
+	if len(candidateZones) == 0 {
+		logr.Errorln("google: no zones configured for capacity reservation")
+		return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
 	}
 
-	// All zones failed - treat as capacity unavailable
-	logr.WithError(lastErr).Errorln("google: capacity unavailable in all zones")
-	return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
+	zone := candidateZones[rand.Intn(len(candidateZones))] //nolint:gosec
+	zoneLogr := logr.WithField("zone", zone)
+	zoneLogr.Debugln("google: attempting capacity reservation in zone")
+
+	reservation := &compute.Reservation{
+		Name: reservationName,
+		Zone: fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
+		SpecificReservation: &compute.AllocationSpecificSKUReservation{
+			Count: 1, // Reserve capacity for 1 VM
+			InstanceProperties: &compute.AllocationSpecificSKUAllocationReservedInstanceProperties{
+				MachineType: machineType,
+			},
+		},
+		SpecificReservationRequired: true, // Require specific reservation targeting
+		Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
+	}
+
+	if opts.CapacityReservationTTL > 0 {
+		reservation.DeleteAfterDuration = &compute.Duration{Seconds: opts.CapacityReservationTTL}
+		zoneLogr.WithField("delete_after_seconds", opts.CapacityReservationTTL).
+			Infoln("google: setting delete after duration on capacity reservation")
+	}
+
+	op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(ctx).Do()
+	if err != nil {
+		zoneLogr.WithError(err).Warnln("google: failed to create capacity reservation")
+		return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
+	}
+
+	if err := p.waitZoneOperation(ctx, op.Name, zone); err != nil {
+		zoneLogr.WithError(err).Warnln("google: capacity reservation creation operation failed")
+		return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
+	}
+
+	zoneLogr.Infoln("google: capacity reservation created successfully")
+	return &types.CapacityReservation{
+		StageID:       "", // Will be set by the caller
+		PoolName:      opts.PoolName,
+		InstanceID:    "", // Will be set when instance is created
+		ReservationID: reservationName,
+		CreatedAt:     time.Now().Unix(),
+		Zone:          types.StringPtr(zone),
+	}, nil
 }
 
 // findReservationZone finds the zone where a capacity reservation exists
