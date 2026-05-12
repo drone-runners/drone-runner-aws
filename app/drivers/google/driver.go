@@ -1309,7 +1309,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 		Name:      allowRuleName,
 		Network:   network,
 		Direction: "EGRESS",
-		Priority:  900,
+		Priority:  1100,
 		Allowed: []*compute.FirewallAllowed{
 			{IPProtocol: "tcp"},
 			{IPProtocol: "udp"},
@@ -1334,7 +1334,7 @@ func (p *config) createEgressFirewallRules(ctx context.Context, instanceID, inst
 		Name:      denyRuleName,
 		Network:   network,
 		Direction: "EGRESS",
-		Priority:  1000,
+		Priority:  1200,
 		Denied: []*compute.FirewallDenied{
 			{IPProtocol: "all"},
 		},
