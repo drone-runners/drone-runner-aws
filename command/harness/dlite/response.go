@@ -21,6 +21,20 @@ type VMTaskExecutionResponse struct {
 	GitspacesPortMappings  map[int]int               `json:"gitspaces_port_mappings"`
 	InstanceInfo           common.InstanceInfo       `json:"instance_info"`
 	CapacityReservation    types.CapacityReservation `json:"capacity_reservation"`
+	OSStats                *OSStats                  `json:"os_stats,omitempty"`
+}
+
+// OSStats contains OS-level resource usage statistics collected during stage execution.
+type OSStats struct {
+	TotalMemMB     float64 `json:"total_mem_mb"`
+	CPUCores       int     `json:"cpu_cores"`
+	AvgMemUsagePct float64 `json:"avg_mem_usage_pct"`
+	AvgCPUUsagePct float64 `json:"avg_cpu_usage_pct"`
+	MaxMemUsagePct float64 `json:"max_mem_usage_pct"`
+	MaxCPUUsagePct float64 `json:"max_cpu_usage_pct"`
+	P95MemUsagePct float64 `json:"p95_mem_usage_pct"`
+	P95CpuUsagePct float64 `json:"p95_cpu_usage_pct"`
+	PeakMemMB      float64 `json:"peak_mem_mb"`
 }
 
 type DelegateMetaInfo struct {

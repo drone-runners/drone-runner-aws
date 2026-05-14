@@ -37,7 +37,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Execute cleanup.
 	vmService := t.c.getVMService()
-	err := vmService.Destroy(ctx, req)
+	osStats, err := vmService.Destroy(ctx, req)
 	if err != nil {
 		t.c.runner.Metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not destroy VM")
@@ -52,6 +52,20 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			HostName: t.c.delegateInfo.Host,
 			ID:       t.c.delegateInfo.ID,
 		},
+	}
+
+	if osStats != nil {
+		resp.OSStats = &OSStats{
+			TotalMemMB:     osStats.TotalMemMB,
+			CPUCores:       osStats.CPUCores,
+			AvgMemUsagePct: osStats.AvgMemUsagePct,
+			AvgCPUUsagePct: osStats.AvgCPUUsagePct,
+			MaxMemUsagePct: osStats.MaxMemUsagePct,
+			MaxCPUUsagePct: osStats.MaxCPUUsagePct,
+			P95MemUsagePct: osStats.P95MemUsagePct,
+			P95CpuUsagePct: osStats.P95CpuUsagePct,
+			PeakMemMB:      osStats.PeakMemMB,
+		}
 	}
 
 	writeSuccessResponse(w, &resp)
