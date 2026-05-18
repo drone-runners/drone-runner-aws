@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,7 +20,7 @@ import (
 func TestGenerateStartupScriptSyntax(t *testing.T) {
 	script := generateScriptForTest(t, "ghcr.io/example/macos-base:latest", "ghcr.io")
 
-	cmd := exec.Command("bash", "-n")
+	cmd := exec.CommandContext(context.Background(), "bash", "-n")
 	cmd.Stdin = strings.NewReader(script)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -151,10 +152,11 @@ func TestImageCleanup(t *testing.T) {
 			dir := t.TempDir()
 			mockPath := installMockTart(t, dir, tc.tartList)
 			script := extractImageCleanupScript(t, tc.vmImage, tc.registry)
-			// Redirect the hard-coded /opt/homebrew/bin/tart path to our mock.
-			script = strings.ReplaceAll(script, "/opt/homebrew/bin/tart", mockPath)
+			// Redirect the hard-coded /opt/homebrew/bin/tart path to our mock,
+			// invoked via `bash <mockPath>` so we don't need the executable bit.
+			script = strings.ReplaceAll(script, "/opt/homebrew/bin/tart", "bash "+mockPath)
 
-			cmd := exec.Command("bash")
+			cmd := exec.CommandContext(context.Background(), "bash")
 			cmd.Stdin = strings.NewReader(script)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
@@ -217,7 +219,7 @@ func installMockTart(t *testing.T, dir string, tartList []string) string {
 	for _, img := range tartList {
 		rows = append(rows, "OCI "+img+" 0 0 0 stopped")
 	}
-	if err := os.WriteFile(listFile, []byte(strings.Join(rows, "\n")+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(listFile, []byte(strings.Join(rows, "\n")+"\n"), 0o600); err != nil {
 		t.Fatalf("write list file: %v", err)
 	}
 	callsFile := filepath.Join(dir, "calls.log")
@@ -229,9 +231,11 @@ func installMockTart(t *testing.T, dir string, tartList []string) string {
 		"esac\n" +
 		"exit 0\n"
 	mockPath := filepath.Join(dir, "tart")
-	if err := os.WriteFile(mockPath, []byte(mock), 0o755); err != nil {
+	if err := os.WriteFile(mockPath, []byte(mock), 0o600); err != nil {
 		t.Fatalf("write mock tart: %v", err)
 	}
+	// The mock is invoked as `bash <mockPath> ...` from the test script, so we
+	// don't need the executable bit (and gosec G302/G306 forbid setting it).
 	return mockPath
 }
 
