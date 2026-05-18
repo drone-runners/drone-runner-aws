@@ -1,0 +1,113 @@
+app/drivers/nomad/mac_virtualizer_script_test.go
+  c517112c-2151-4ca1-a1fd-2925715ccf05 1-270
+command/harness/setup.go
+  c517112c-2151-4ca1-a1fd-2925715ccf05 175
+app/drivers/nomad/mac_virtualizer.go
+  c517112c-2151-4ca1-a1fd-2925715ccf05 158,160,162,164,167-169,171-174,177-185,187-194,197,199-207,209,211-215,221
+  human 186
+command/harness/logutil.go
+  c517112c-2151-4ca1-a1fd-2925715ccf05 74-79,84,89-100
+  human 101
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 270,
+          "added_lines": 270,
+          "deleted_lines": 48,
+          "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
+          "lines": "1-270",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/nomad/mac_virtualizer_script_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
+          "lines": "175",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/setup.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 45,
+          "added_lines": 55,
+          "deleted_lines": 9,
+          "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
+          "lines": "158,160,162,164,167-169,171-174,177-185,187-194,197,199-207,209,211-215,221",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "186",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/nomad/mac_virtualizer.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 19,
+          "added_lines": 19,
+          "deleted_lines": 5,
+          "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
+          "lines": "74-79,84,89-100",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "101",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/logutil.go"
+    }
+  ],
+  "base_commit_sha": "7edb12efaf12dda68c6c017b529297297b800de8",
+  "branch": "CI-22735",
+  "commit_sha": "06dbfa6ed300a9ad527b19e51a7a00ae85e99161",
+  "commit_time": "2026-05-18T20:54:11+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "c517112c-2151-4ca1-a1fd-2925715ccf05": {
+      "accepted_lines": 335,
+      "agent_id": {
+        "id": "c517112c-2151-4ca1-a1fd-2925715ccf05",
+        "model": "claude-opus-4-7-thinking-xhigh",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 345,
+      "total_deletions": 62
+    },
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
