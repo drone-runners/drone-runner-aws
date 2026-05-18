@@ -93,10 +93,10 @@ func TestImageCleanup(t *testing.T) {
 			},
 		},
 		{
-			name:     "empty cache just pulls the requested image",
-			vmImage:  "registry-1.docker.io/harness/macos-vm-images:vanilla_sequoia_15.6",
-			registry: "registry-1.docker.io",
-			tartList: nil,
+			name:            "empty cache just pulls the requested image",
+			vmImage:         "registry-1.docker.io/harness/macos-vm-images:vanilla_sequoia_15.6",
+			registry:        "registry-1.docker.io",
+			tartList:        nil,
 			expectedDeletes: nil,
 			expectedPulls: []string{
 				"registry-1.docker.io/harness/macos-vm-images:vanilla_sequoia_15.6",
@@ -125,10 +125,10 @@ func TestImageCleanup(t *testing.T) {
 			expectedPulls:   nil,
 		},
 		{
-			name:     "image without tag against empty cache pulls normalized :latest",
-			vmImage:  "ghcr.io/example/macos-base",
-			registry: "ghcr.io",
-			tartList: nil,
+			name:            "image without tag against empty cache pulls normalized :latest",
+			vmImage:         "ghcr.io/example/macos-base",
+			registry:        "ghcr.io",
+			tartList:        nil,
 			expectedDeletes: nil,
 			expectedPulls: []string{
 				"ghcr.io/example/macos-base:latest",
