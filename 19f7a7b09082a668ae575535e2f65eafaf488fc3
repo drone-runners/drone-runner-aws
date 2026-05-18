@@ -1,0 +1,59 @@
+app/drivers/nomad/mac_virtualizer_script_test.go
+  human 96-99,128-131
+  c517112c-2151-4ca1-a1fd-2925715ccf05 1-270
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 8,
+          "added_lines": 8,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "96-99,128-131",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 262,
+          "added_lines": 0,
+          "deleted_lines": 8,
+          "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
+          "lines": "1-270",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/nomad/mac_virtualizer_script_test.go"
+    }
+  ],
+  "base_commit_sha": "06dbfa6ed300a9ad527b19e51a7a00ae85e99161",
+  "branch": "CI-22735",
+  "commit_sha": "19f7a7b09082a668ae575535e2f65eafaf488fc3",
+  "commit_time": "2026-05-18T21:02:16+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "c517112c-2151-4ca1-a1fd-2925715ccf05": {
+      "accepted_lines": 335,
+      "agent_id": {
+        "id": "c517112c-2151-4ca1-a1fd-2925715ccf05",
+        "model": "claude-opus-4-7-thinking-xhigh",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 367,
+      "total_deletions": 62
+    },
+    "human": {
+      "accepted_lines": 8,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 8,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
