@@ -1,28 +1,36 @@
-app/drivers/nomad/mac_virtualizer_script_test.go
-  c517112c-2151-4ca1-a1fd-2925715ccf05 1-270
+command/harness/logutil.go
+  c517112c-2151-4ca1-a1fd-2925715ccf05 74-79,84,89-100
+  human 101
 command/harness/setup.go
   c517112c-2151-4ca1-a1fd-2925715ccf05 175
 app/drivers/nomad/mac_virtualizer.go
   c517112c-2151-4ca1-a1fd-2925715ccf05 158,160,162,164,167-169,171-174,177-185,187-194,197,199-207,209,211-215,221
   human 186
-command/harness/logutil.go
-  c517112c-2151-4ca1-a1fd-2925715ccf05 74-79,84,89-100
-  human 101
+app/drivers/nomad/mac_virtualizer_script_test.go
+  c517112c-2151-4ca1-a1fd-2925715ccf05 1-270
 ---
 {
   "attestations": [
     {
       "entries": [
         {
-          "accepted_lines": 270,
-          "added_lines": 270,
-          "deleted_lines": 48,
+          "accepted_lines": 19,
+          "added_lines": 19,
+          "deleted_lines": 3,
           "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
-          "lines": "1-270",
+          "lines": "74-79,84,89-100",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "101",
           "overridden_lines": 0
         }
       ],
-      "file": "app/drivers/nomad/mac_virtualizer_script_test.go"
+      "file": "command/harness/logutil.go"
     },
     {
       "entries": [
@@ -41,8 +49,8 @@ command/harness/logutil.go
       "entries": [
         {
           "accepted_lines": 45,
-          "added_lines": 55,
-          "deleted_lines": 9,
+          "added_lines": 77,
+          "deleted_lines": 13,
           "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
           "lines": "158,160,162,164,167-169,171-174,177-185,187-194,197,199-207,209,211-215,221",
           "overridden_lines": 0
@@ -61,23 +69,15 @@ command/harness/logutil.go
     {
       "entries": [
         {
-          "accepted_lines": 19,
-          "added_lines": 19,
-          "deleted_lines": 5,
+          "accepted_lines": 270,
+          "added_lines": 270,
+          "deleted_lines": 46,
           "hash": "c517112c-2151-4ca1-a1fd-2925715ccf05",
-          "lines": "74-79,84,89-100",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "human",
-          "lines": "101",
+          "lines": "1-270",
           "overridden_lines": 0
         }
       ],
-      "file": "command/harness/logutil.go"
+      "file": "app/drivers/nomad/mac_virtualizer_script_test.go"
     }
   ],
   "base_commit_sha": "7edb12efaf12dda68c6c017b529297297b800de8",
@@ -96,7 +96,7 @@ command/harness/logutil.go
       },
       "human_author": "Raghav <raghav.gupta@harness.io>",
       "overriden_lines": 0,
-      "total_additions": 345,
+      "total_additions": 367,
       "total_deletions": 62
     },
     "human": {
