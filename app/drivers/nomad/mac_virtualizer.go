@@ -154,83 +154,71 @@ tart_list=$(/opt/homebrew/bin/tart list | awk 'NR>1 {print $2}')
 # Function to check if an image name is fully qualified
 is_fully_qualified_image() {
   local image_name="$1"
-  
-  # Check if image name contains a slash
   if [[ "$image_name" != *"/"* ]]; then
-    return 1  # Not fully qualified
+    return 1
   fi
-  
-  # Extract the registry part (before the first slash)
-  local registry_part=${image_name%%/*}
-  
-  # Check if registry part contains a dot or colon
+  local registry_part="${image_name%%%%/*}"
   if [[ "$registry_part" == *"."* || "$registry_part" == *":"* ]]; then
-    return 0  # Is fully qualified
-  else
-    return 1  # Not fully qualified
+    return 0
   fi
+  return 1
 }
 
-# Function to encode the image name
-encode() {
-  echo -n "ENC:$(echo -n "$1" | base64)"
-}
-
-# Only sanitize if VM_IMAGE is fully qualified
+# Normalize a fully qualified image with no :tag and no @digest to :latest,
+# matching how tart stores it in 'tart list' output. This ensures the cache
+# presence check below works for inputs like "registry/foo" (no tag).
 if is_fully_qualified_image "$VM_IMAGE"; then
-  ENCODED_IMAGE_NAME=$(encode "$VM_IMAGE")
-else
-  ENCODED_IMAGE_NAME="$VM_IMAGE"
+  vm_image_last_segment="${VM_IMAGE##*/}"
+  if [[ "$vm_image_last_segment" != *":"* && "$VM_IMAGE" != *"@"* ]]; then
+    VM_IMAGE="${VM_IMAGE}:latest"
+  fi
 fi
 
-# Check if the image is already in the tart list
-if echo "$tart_list" | grep -q "$ENCODED_IMAGE_NAME"; then
-  echo "Image '$ENCODED_IMAGE_NAME' is already present. Nothing to do."
-else
-  echo "Image '$ENCODED_IMAGE_NAME' not found."
-  
-  # Check if the image name is fully qualified
-  if is_fully_qualified_image "$VM_IMAGE"; then
-    echo "Fully qualified image detected. Deleting all fully qualified images..."
-    
-    # Loop through each image and delete only fully qualified images
-    for image in $tart_list; do
-      if is_fully_qualified_image "$image" || [[ "$image" == ENC:* ]]; then
-        echo "Deleting fully qualified image '$image'..."
+# For fully qualified images: ensure the image is pulled and clean up other
+# fully qualified images to free disk space. Non-fully-qualified images are
+# left untouched and used as-is.
+#
+# Note on the two-refs case: a single 'tart pull foo:tag' creates both
+# 'foo:tag' and 'foo@sha256:...' in the cache. When the same image is
+# requested again, the presence check below skips the entire cleanup+pull
+# block, so both refs survive. When a different image is requested, both old
+# refs are deleted by the loop (each is != VM_IMAGE).
+if is_fully_qualified_image "$VM_IMAGE"; then
+  if echo "$tart_list" | grep -qxF "$VM_IMAGE"; then
+    echo "Image '$VM_IMAGE' is already present. Skipping pull."
+  else
+    echo "Image '$VM_IMAGE' not found. Cleaning up other fully qualified images..."
+    while IFS= read -r image; do
+      [ -z "$image" ] && continue
+      if is_fully_qualified_image "$image" && [[ "$image" != "$VM_IMAGE" ]]; then
+        echo "Deleting old image '$image'..."
         /opt/homebrew/bin/tart delete "$image" || true
-      else
-        echo "Skipping non-fully qualified image '$image'..."
       fi
-    done
-    
-    echo "Done deleting fully qualified images."
-  else
-    echo "Non-fully qualified image. Skipping deletion of other images."
-  fi
+    done <<< "$tart_list"
 
-  if [ -n "$REGISTRY" ] && [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
-	  echo "Pulling image $VM_IMAGE..."
-	  TART_REGISTRY_HOSTNAME="$REGISTRY" TART_REGISTRY_USERNAME="$REGISTRY_USERNAME" TART_REGISTRY_PASSWORD="$REGISTRY_PASSWORD" /opt/homebrew/bin/tart pull "$VM_IMAGE"
+    if [ -n "$REGISTRY" ]; then
+      echo "Pulling image $VM_IMAGE from registry $REGISTRY..."
+      export TART_REGISTRY_HOSTNAME="$REGISTRY"
+      if [ -n "$REGISTRY_USERNAME" ]; then
+        export TART_REGISTRY_USERNAME="$REGISTRY_USERNAME"
+      fi
+      if [ -n "$REGISTRY_PASSWORD" ]; then
+        export TART_REGISTRY_PASSWORD="$REGISTRY_PASSWORD"
+      fi
 
-      echo "Exporting image $VM_IMAGE to /tmp/${ENCODED_IMAGE_NAME}.tvm..."
-      /opt/homebrew/bin/tart export "$VM_IMAGE" "/tmp/${ENCODED_IMAGE_NAME}.tvm"
+      /opt/homebrew/bin/tart pull "$VM_IMAGE"
 
-	  echo "Pruning tart OCI cache..."
-	  /opt/homebrew/bin/tart prune --entries caches --older-than=0
-
-      echo "Importing image from /tmp/${ENCODED_IMAGE_NAME}.tvm as $ENCODED_IMAGE_NAME..."
-      /opt/homebrew/bin/tart import "/tmp/${ENCODED_IMAGE_NAME}.tvm" "$ENCODED_IMAGE_NAME"
-
-      echo "Removing temporary file /tmp/${ENCODED_IMAGE_NAME}.tvm..."
-      rm -f "/tmp/${ENCODED_IMAGE_NAME}.tvm" || true
-  else
-	  echo "No registry details provided, skipping logging."
+      unset TART_REGISTRY_HOSTNAME TART_REGISTRY_USERNAME TART_REGISTRY_PASSWORD
+      echo "Pulled image $VM_IMAGE."
+    else
+      echo "No registry provided, skipping pull."
+    fi
   fi
 fi
 
 echo "Cloning tart VM with id $VM_ID"
 # Install the VM
-/opt/homebrew/bin/tart clone "$ENCODED_IMAGE_NAME" "$VM_ID"
+/opt/homebrew/bin/tart clone "$VM_IMAGE" "$VM_ID"
 
 echo "Setting tart VM config with id $VM_ID"
 # Update VM configuration

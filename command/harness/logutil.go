@@ -71,15 +71,32 @@ func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
 
 // logRequestedMachine prints the standard "Requested machine" block with
 // size, OS, Arch, image, and nested virtualization flag.
-func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID string, platform *types.Platform, resourceClass, imageVersion, stageRuntimeID string, isNested bool) {
+//
+// The image shown follows this priority:
+//  1. imageVersion (from VMImageConfig.ImageVersion)
+//  2. imageName    (from VMImageConfig.ImageName)
+//  3. pool image   (derived from the pool YAML config)
+func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID string, platform *types.Platform, resourceClass, imageVersion, imageName, stageRuntimeID string, isNested bool) {
 	printTitle(logr, "Requested machine:")
 	printKV(logr, "Machine Size", resourceClass)
 	printKV(logr, "OS", capitalize(platform.OS))
 	printKV(logr, "Arch", capitalize(platform.Arch))
-	poolImageForLog := derivePoolImageForLog(poolManager, poolID)
-	printKV(logr, "Image Version", useNonEmpty(imageVersion, poolImageForLog))
+	printKV(logr, "Image Version", resolveImageForLog(poolManager, poolID, imageVersion, imageName))
 	printKV(logr, "Hardware Acceleration (Nested Virtualization)", isNested)
 	printKV(logr, "Stage Runtime ID", stageRuntimeID)
+}
+
+// resolveImageForLog picks the image identifier to log, preferring the
+// explicit imageVersion, then imageName, then the pool's configured image
+// (with its last path segment extracted for readability).
+func resolveImageForLog(poolManager drivers.IManager, poolID, imageVersion, imageName string) string {
+	if imageVersion != "" {
+		return imageVersion
+	}
+	if imageName != "" {
+		return imageName
+	}
+	return lastPathSegment(derivePoolImageForLog(poolManager, poolID))
 }
 
 // derivePoolImageForLog extracts an image identifier from the pool YAML config for logging purposes.
