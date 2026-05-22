@@ -417,6 +417,7 @@ func (d *DistributedManager) provisionFromPool(
 			capacity = &types.CapacityReservation{
 				InstanceID: inst.ID,
 				PoolName:   poolName,
+				CreatedAt:  time.Now().Unix(),
 			}
 			return inst, capacity, true, candidateVariantID, nil
 		}
