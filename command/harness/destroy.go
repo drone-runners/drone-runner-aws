@@ -28,6 +28,19 @@ var (
 	liteEngineDestroyTimeout = 30 * time.Second
 )
 
+// DestroyOSStats contains OS-level resource usage statistics from lite-engine destroy.
+type DestroyOSStats struct {
+	TotalMemMB     float64
+	CPUCores       int
+	AvgMemUsagePct float64
+	AvgCPUUsagePct float64
+	MaxMemUsagePct float64
+	MaxCPUUsagePct float64
+	P95MemUsagePct float64
+	P95CpuUsagePct float64
+	PeakMemMB      float64
+}
+
 type VMCleanupRequest struct {
 	PoolID             string              `json:"pool_id"`
 	StageRuntimeID     string              `json:"stage_runtime_id"`
@@ -47,9 +60,9 @@ func HandleDestroy(
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-) error {
+) (*DestroyOSStats, error) {
 	if r.StageRuntimeID == "" {
-		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
+		return nil, ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
 	logr := logrus.
 		WithField("stage_runtime_id", r.StageRuntimeID).
@@ -82,27 +95,27 @@ func HandleDestroy(
 				default:
 				}
 			}
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			_, osStats, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
 					lastErr = err
 				}
 				if duration == backoff.Stop {
-					return err
+					return nil, err
 				}
 				cnt++
 				continue
 			}
-			return nil
+			return osStats, nil
 		}
 	}
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
-	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, *DestroyOSStats, error) {
 	logr = logr.WithField("retry_count", retryCount)
 
 	// Declare capacity variable early and defer its destruction to ensure cleanup happens regardless of errors
@@ -126,7 +139,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
 		if err != nil || entity == nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+			return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 		}
 		poolID = entity.PoolName
 	} else {
@@ -146,10 +159,10 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.Debugf("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v", err)
 		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
 		if err != nil {
-			return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
+			return nil, nil, fmt.Errorf("cannot get the instance by tag: %w", err)
 		}
 		if inst == nil {
-			return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+			return nil, nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
 		}
 	} else {
 		logr.Infoln("Using the instance information from the VM Cleanup Request")
@@ -168,6 +181,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	}
 
 	logr.Traceln("invoking lite engine cleanup")
+	var osStats *DestroyOSStats
 	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, enableMock, mockTimeout)
 	if err != nil {
 		logr.WithError(err).Errorln("could not create lite engine client for invoking cleanup")
@@ -210,6 +224,18 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).
 				Infof("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
 					resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
+
+			osStats = &DestroyOSStats{
+				TotalMemMB:     resp.OSStats.TotalMemMB,
+				CPUCores:       resp.OSStats.CPUCores,
+				AvgMemUsagePct: resp.OSStats.AvgMemUsagePct,
+				AvgCPUUsagePct: resp.OSStats.AvgCPUUsagePct,
+				MaxMemUsagePct: resp.OSStats.MaxMemUsagePct,
+				MaxCPUUsagePct: resp.OSStats.MaxCPUUsagePct,
+				PeakMemMB:      resp.OSStats.TotalMemMB * resp.OSStats.MaxMemUsagePct / 100,
+			}
+			// P95MemUsagePct and P95CpuUsagePct will be populated after lite-engine
+			// is updated to include these fields in OSStats (>= v0.5.171)
 		}
 	}
 
@@ -217,7 +243,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		Infoln("successfully invoked lite engine cleanup, destroying instance")
 
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+		return nil, nil, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroy_handler: instance destroyed successfully")
 
@@ -227,7 +253,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 
-	return inst, nil
+	return inst, osStats, nil
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
