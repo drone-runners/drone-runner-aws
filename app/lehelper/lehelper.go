@@ -29,8 +29,6 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		return resp, err
 	}
 
-	dumpResp, _ := httputil.DumpResponse(resp, true)
-	logrus.WithField("response", string(dumpResp)).Traceln("LE HTTP response")
 	return resp, nil
 }
 
