@@ -2,15 +2,37 @@ package lehelper
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httputil"
 	"time"
 
 	"github.com/harness/lite-engine/api"
 	lehttp "github.com/harness/lite-engine/cli/client"
+	"github.com/sirupsen/logrus"
 
 	"github.com/drone-runners/drone-runner-aws/app/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
+
+type loggingTransport struct {
+	wrapped http.RoundTripper
+}
+
+func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+
+	resp, err := t.wrapped.RoundTrip(req)
+	if err != nil {
+		dump, _ := httputil.DumpRequestOut(req, true)
+		logrus.WithField("request", string(dump)).Traceln("LE HTTP request")
+		logrus.WithError(err).Errorln("LE HTTP request failed")
+		return resp, err
+	}
+
+	dumpResp, _ := httputil.DumpResponse(resp, true)
+	logrus.WithField("response", string(dumpResp)).Traceln("LE HTTP response")
+	return resp, nil
+}
 
 const (
 	LiteEnginePort = 9079
@@ -67,7 +89,12 @@ func GetClient(instance *types.Instance, serverName string, liteEnginePort int64
 	if mock {
 		return lehttp.NewNoopClient(&api.PollStepResponse{}, nil, time.Duration(mockTimeoutSecs)*time.Second, 0, 0), nil
 	}
-	return lehttp.NewHTTPClient(leURL,
+	c, err := lehttp.NewHTTPClient(leURL,
 		serverName, string(instance.CACert),
 		string(instance.TLSCert), string(instance.TLSKey))
+	if err != nil {
+		return nil, err
+	}
+	c.Client.Transport = &loggingTransport{wrapped: c.Client.Transport}
+	return c, nil
 }
