@@ -20,15 +20,12 @@ type loggingTransport struct {
 }
 
 func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-
 	resp, err := t.wrapped.RoundTrip(req)
 	if err != nil {
 		dump, _ := httputil.DumpRequestOut(req, true)
-		logrus.WithField("request", string(dump)).Traceln("LE HTTP request")
-		logrus.WithError(err).Errorln("LE HTTP request failed")
+		logrus.WithError(err).WithField("request", string(dump)).Debugln("LE HTTP request failed")
 		return resp, err
 	}
-
 	return resp, nil
 }
 
