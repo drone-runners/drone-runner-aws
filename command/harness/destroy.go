@@ -160,6 +160,30 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_id", inst.ID).
 		WithField("instance_name", inst.Name)
 
+	shouldPreserve := inst.State == types.StatePreserved
+
+	// Declare capacity variable early and defer its destruction to ensure cleanup happens regardless of errors.
+	// Skip for preserved instances: DestroyCapacity also destroys the associated cloud VM.
+	defer func() {
+		if shouldPreserve {
+			logr.Infoln("skipping capacity reservation cleanup: instance preserved for debug")
+			return
+		}
+		var capacity *types.CapacityReservation
+		var err error
+		if crs != nil {
+			capacity, err = crs.Find(ctx, r.StageRuntimeID)
+			if err == nil {
+				logr.WithField("destroy_caller", "destroy_handler:deferred_capacity_cleanup").
+					WithField("reservation_id", capacity.ReservationID).
+					Infoln("destroy_capacity: deferred capacity reservation cleanup")
+				if destroyCapErr := poolManager.DestroyCapacity(ctx, capacity); destroyCapErr != nil {
+					logr.WithError(destroyCapErr).Errorln("failed to destroy capacity reservation")
+				}
+			}
+		}
+	}()
+
 	// Update instance state to terminating and update timestamp
 	inst.State = types.StateTerminating
 	inst.Updated = time.Now().Unix()
@@ -213,13 +237,21 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		}
 	}
 
-	logr.WithField("destroy_caller", "destroy_handler:api_request").
-		Infoln("successfully invoked lite engine cleanup, destroying instance")
-
-	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+	if shouldPreserve {
+		logr.WithField("destroy_caller", "destroy_handler:preserved_db_only").
+			Infoln("successfully invoked lite engine cleanup, deleting preserved instance from store only (cloud VM left running)")
+		if err = poolManager.GetInstanceStore().Delete(ctx, inst.ID); err != nil {
+			return nil, fmt.Errorf("cannot delete preserved instance from store: %w", err)
+		}
+		logr.Infoln("destroy_handler: preserved instance removed from store")
+	} else {
+		logr.WithField("destroy_caller", "destroy_handler:api_request").
+			Infoln("successfully invoked lite engine cleanup, destroying instance")
+		if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
+			return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+		}
+		logr.Infoln("destroy_handler: instance destroyed successfully")
 	}
-	logr.Infoln("destroy_handler: instance destroyed successfully")
 
 	envState().Delete(r.StageRuntimeID)
 

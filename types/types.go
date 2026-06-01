@@ -51,6 +51,7 @@ const (
 	StateHibernating  = InstanceState("hibernating")
 	StateTerminating  = InstanceState("terminating")
 	StateProvisioning = InstanceState("provisioning") // VM created but not yet ready for use
+	StatePreserved    = InstanceState("preserved")    // held for debugging; skipped by cleanup and purger
 )
 
 // InstanceSource represents who created an instance.
