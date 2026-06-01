@@ -198,6 +198,9 @@ func getInstance(ctx context.Context, poolID, stageRuntimeID,
 }
 
 func isStartStepDeadlineExceeded(err error) bool {
+	if err == nil {
+		return false
+	}
 	return stderrors.Is(err, context.DeadlineExceeded) ||
 		strings.Contains(err.Error(), "context deadline exceeded")
 }

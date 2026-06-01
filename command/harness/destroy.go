@@ -101,6 +101,7 @@ func HandleDestroy(
 	}
 }
 
+//nolint:gocyclo // preserve-instance path adds branches; refactor later
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
@@ -170,10 +171,10 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			return
 		}
 		var capacity *types.CapacityReservation
-		var err error
 		if crs != nil {
-			capacity, err = crs.Find(ctx, r.StageRuntimeID)
-			if err == nil {
+			var capFindErr error
+			capacity, capFindErr = crs.Find(ctx, r.StageRuntimeID)
+			if capFindErr == nil {
 				logr.WithField("destroy_caller", "destroy_handler:deferred_capacity_cleanup").
 					WithField("reservation_id", capacity.ReservationID).
 					Infoln("destroy_capacity: deferred capacity reservation cleanup")
