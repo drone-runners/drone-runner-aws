@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"strings"
 	"time"
@@ -146,6 +147,11 @@ func HandleStep(ctx context.Context,
 	}
 	startStepResponse, err := client.RetryStartStep(ctx, &r.StartStepRequest, poolManager.GetStartStepTimeout())
 	if err != nil {
+		if isStartStepDeadlineExceeded(err) {
+			if preserveErr := preserveInstanceForDebug(ctx, inst, poolManager, logr); preserveErr != nil {
+				logr.WithError(preserveErr).Warnln("failed to mark instance for debug preservation")
+			}
+		}
 		return nil, fmt.Errorf("failed to call LE.RetryStartStep: %w", err)
 	}
 
@@ -184,6 +190,38 @@ func getInstance(ctx context.Context, poolID, stageRuntimeID,
 		return nil, fmt.Errorf("cannot get the instance by stageId %s: %w", stageRuntimeID, err)
 	}
 	return inst, nil
+}
+
+func isStartStepDeadlineExceeded(err error) bool {
+	return stderrors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(err.Error(), "context deadline exceeded")
+}
+
+func preserveInstanceForDebug(
+	ctx context.Context,
+	inst *types.Instance,
+	poolManager drivers.IManager,
+	logr *logrus.Entry,
+) error {
+	if inst == nil || inst.ID == "" {
+		return fmt.Errorf("instance id is required to preserve for debug")
+	}
+
+	dbInst, findErr := poolManager.Find(ctx, inst.ID)
+	if findErr == nil && dbInst != nil {
+		inst = dbInst
+	}
+
+	inst.State = types.StatePreserved
+	inst.Updated = time.Now().Unix()
+	if updateErr := poolManager.Update(ctx, inst); updateErr != nil {
+		return fmt.Errorf("failed to update instance for debug preservation: %w", updateErr)
+	}
+
+	logr.WithField("instance_id", inst.ID).
+		WithField("instance_state", types.StatePreserved).
+		Warnln("updated instance state for debug preservation after lite-engine start step timeout")
+	return nil
 }
 
 func setPrevStepExportEnvs(r *ExecuteVMRequest) {
