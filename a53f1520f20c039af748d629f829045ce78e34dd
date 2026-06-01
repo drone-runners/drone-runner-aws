@@ -1,0 +1,72 @@
+command/harness/step.go
+  54401658-b169-4950-8226-9c21fc83f61e 196-198
+command/harness/preserve_test.go
+  54401658-b169-4950-8226-9c21fc83f61e 1-394
+command/harness/destroy.go
+  54401658-b169-4950-8226-9c21fc83f61e 104,158-160
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "196-198",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 394,
+          "added_lines": 394,
+          "deleted_lines": 2,
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "1-394",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/preserve_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 1,
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "104,158-160",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/destroy.go"
+    }
+  ],
+  "base_commit_sha": "0c70859b2ea655d822e6e5c21a38250572d1636c",
+  "branch": "CI-22942-debug",
+  "commit_sha": "a53f1520f20c039af748d629f829045ce78e34dd",
+  "commit_time": "2026-06-01T22:57:27+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "54401658-b169-4950-8226-9c21fc83f61e": {
+      "accepted_lines": 401,
+      "agent_id": {
+        "id": "54401658-b169-4950-8226-9c21fc83f61e",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 401,
+      "total_deletions": 3
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
