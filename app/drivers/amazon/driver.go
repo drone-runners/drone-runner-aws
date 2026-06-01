@@ -946,7 +946,15 @@ func (p *amazonConfig) Start(ctx context.Context, instance *drtypes.Instance, po
 	state := p.getState(amazonInstance)
 	if state == string(types.InstanceStateNameRunning) {
 		return p.getIP(amazonInstance), nil
-	} else if state == string(types.InstanceStateNameStopping) {
+	}
+
+	// Instance is in a terminal state and cannot be started
+	if state == string(types.InstanceStateNameTerminated) || state == string(types.InstanceStateNameShuttingDown) {
+		logr.WithField("state", state).Errorln("aws: instance is in a terminal state, cannot start")
+		return "", fmt.Errorf("instance %s is in terminal state %q and cannot be started", instance.ID, state)
+	}
+
+	if state == string(types.InstanceStateNameStopping) {
 		logr.Traceln("aws: waiting for instance to stop")
 		waiter := ec2.NewInstanceStoppedWaiter(client)
 		waitErr := waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instance.ID}}, instanceWaitTimeout)
@@ -962,7 +970,25 @@ func (p *amazonConfig) Start(ctx context.Context, instance *drtypes.Instance, po
 			Errorln("aws: failed to start VMs")
 		return "", err
 	}
-	logr.Traceln("amazon: VM started")
+	logr.Traceln("amazon: StartInstances API call successful, waiting for instance to reach running state")
+
+	// Wait for instance to reach running state before polling for IP.
+	// This is critical for Windows instances resuming from hibernation, which can
+	// take significantly longer to boot. Without this wait, we would immediately
+	// start polling for an IP on an instance that may still be in 'pending' or
+	// stuck in 'stopped' state, wasting time on fruitless polling.
+	waiter := ec2.NewInstanceRunningWaiter(client)
+	waitErr := waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instance.ID}}, instanceWaitTimeout)
+	if waitErr != nil {
+		logr.WithError(waitErr).Errorln("aws: instance failed to reach running state after start")
+		// Check if instance is in a terminal state
+		if postStartInstance, getErr := p.getInstance(ctx, instance.ID); getErr == nil {
+			postState := p.getState(postStartInstance)
+			logr.WithField("state", postState).Errorln("aws: instance state after failed start wait")
+		}
+		return "", fmt.Errorf("instance %s failed to reach running state: %w", instance.ID, waitErr)
+	}
+	logr.Traceln("amazon: instance is now running")
 
 	awsInstance, err := p.pollInstanceIPAddr(ctx, instance.ID, logr)
 	if err != nil {
@@ -1135,6 +1161,24 @@ func (p *amazonConfig) pollInstanceIPAddr(ctx context.Context, instanceID string
 			}
 
 			instance := desc.Reservations[0].Instances[0]
+
+			// Fail fast if the instance is in a terminal or stopped state - it will never get an IP
+			if instance.State != nil {
+				stateName := instance.State.Name
+				if stateName == types.InstanceStateNameTerminated ||
+					stateName == types.InstanceStateNameShuttingDown {
+					logr.WithField("state", stateName).
+						Errorln("amazon: [provision] instance is in terminal state, will never get an IP")
+					return nil, fmt.Errorf("instance %s is in terminal state %q", instanceID, stateName)
+				}
+				if stateName == types.InstanceStateNameStopped ||
+					stateName == types.InstanceStateNameStopping {
+					logr.WithField("state", stateName).
+						Warnln("amazon: [provision] instance is stopped/stopping, cannot get an IP")
+					return nil, fmt.Errorf("instance %s is in state %q, expected running", instanceID, stateName)
+				}
+			}
+
 			instanceIP := p.getIP(&instance)
 
 			if instanceIP == "" {
