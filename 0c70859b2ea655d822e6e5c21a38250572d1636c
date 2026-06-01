@@ -1,0 +1,68 @@
+command/harness/destroy.go
+  human 146-169,223-236
+types/types.go
+  human 54
+command/harness/step.go
+  human 5,150-154,195-226
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 38,
+          "added_lines": 38,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "146-169,223-236",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/destroy.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "54",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "types/types.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 38,
+          "added_lines": 38,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "5,150-154,195-226",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step.go"
+    }
+  ],
+  "base_commit_sha": "e4b60cf6c5380d3cd8919534dea515ebfe82bb27",
+  "branch": "CI-22942-debug",
+  "commit_sha": "0c70859b2ea655d822e6e5c21a38250572d1636c",
+  "commit_time": "2026-06-01T21:20:59+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "human": {
+      "accepted_lines": 77,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 77,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
