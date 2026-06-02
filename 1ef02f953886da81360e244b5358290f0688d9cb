@@ -1,0 +1,65 @@
+command/harness/step.go
+  54401658-b169-4950-8226-9c21fc83f61e 151-152,265
+app/cloudinit/user_data/ubuntu_linux
+  human 2,125,130,140,145,150,158,162,166,173,176,182,185,191,245
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 2,
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "151-152,265",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 15,
+          "added_lines": 15,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "2,125,130,140,145,150,158,162,166,173,176,182,185,191,245",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/ubuntu_linux"
+    }
+  ],
+  "base_commit_sha": "d229f04ad21dc55b2916bb0885d195d4502e471b",
+  "branch": "HEAD",
+  "commit_sha": "1ef02f953886da81360e244b5358290f0688d9cb",
+  "commit_time": "2026-06-02T20:30:24+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "54401658-b169-4950-8226-9c21fc83f61e": {
+      "accepted_lines": 3,
+      "agent_id": {
+        "id": "54401658-b169-4950-8226-9c21fc83f61e",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 3,
+      "total_deletions": 2
+    },
+    "human": {
+      "accepted_lines": 15,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 15,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
