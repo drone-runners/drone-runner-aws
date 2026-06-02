@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/harness/lite-engine/api"
+	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
@@ -38,6 +39,11 @@ type VMCleanupRequest struct {
 	InstanceInfo       common.InstanceInfo `json:"instance_info,omitempty"`
 }
 
+// HandleDestroy tears down the VM for a stage and returns the OSStats snapshot
+// reported by lite-engine on the final destroy call. The OSStats pointer can be
+// nil when lite-engine is unreachable, returns no stats, or destroy fails before
+// the lite-engine call. Callers that need the snapshot (the unified runner path)
+// surface it on VMTaskExecutionResponse so the Java side can persist it.
 func HandleDestroy(
 	ctx context.Context,
 	r *VMCleanupRequest,
@@ -47,9 +53,9 @@ func HandleDestroy(
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-) error {
+) (*lespec.OSStats, error) {
 	if r.StageRuntimeID == "" {
-		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
+		return nil, ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
 	logr := logrus.
 		WithField("stage_runtime_id", r.StageRuntimeID).
@@ -82,28 +88,29 @@ func HandleDestroy(
 				default:
 				}
 			}
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			_, osStats, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
 					lastErr = err
 				}
 				if duration == backoff.Stop {
-					return err
+					return osStats, err
 				}
 				cnt++
 				continue
 			}
-			return nil
+			return osStats, nil
 		}
 	}
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
-	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, *lespec.OSStats, error) {
 	logr = logr.WithField("retry_count", retryCount)
+	var osStats *lespec.OSStats
 
 	// Declare capacity variable early and defer its destruction to ensure cleanup happens regardless of errors
 	defer func() {
@@ -126,7 +133,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
 		if err != nil || entity == nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+			return nil, osStats, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 		}
 		poolID = entity.PoolName
 	} else {
@@ -146,10 +153,10 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.Debugf("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v", err)
 		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
 		if err != nil {
-			return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
+			return nil, osStats, fmt.Errorf("cannot get the instance by tag: %w", err)
 		}
 		if inst == nil {
-			return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+			return nil, osStats, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
 		}
 	} else {
 		logr.Infoln("Using the instance information from the VM Cleanup Request")
@@ -183,6 +190,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			logr.WithError(destroyErr).Errorln("could not invoke lite engine cleanup")
 		}
 		if resp != nil && resp.OSStats != nil {
+			osStats = resp.OSStats
 			var cpuGe50, cpuGe70, cpuGe90, memGe50, memGe70, memGe90 bool
 			if resp.OSStats.MaxCPUUsagePct >= 50.0 { //nolint:mnd
 				cpuGe50 = true
@@ -217,7 +225,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		Infoln("successfully invoked lite engine cleanup, destroying instance")
 
 	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+		return nil, osStats, fmt.Errorf("cannot destroy the instance: %w", err)
 	}
 	logr.Infoln("destroy_handler: instance destroyed successfully")
 
@@ -227,7 +235,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.WithError(err).Errorln("failed to delete stage owner entity")
 	}
 
-	return inst, nil
+	return inst, osStats, nil
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {

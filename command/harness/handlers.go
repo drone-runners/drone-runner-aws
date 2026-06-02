@@ -179,7 +179,10 @@ func (h *HTTPHandlers) HandleDestroy(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Context.TaskID = rs.CorrelationID
 
-	err := h.service.Destroy(r.Context(), req)
+	// OSStats from lite-engine is intentionally discarded on the legacy HTTP path.
+	// The legacy /destroy endpoint returns Void; only the unified runner path
+	// surfaces the snapshot back to CI Manager (see runner/tasks/vm/cleanup.go).
+	_, err := h.service.Destroy(r.Context(), req)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).
 			WithField("task_id", rs.CorrelationID).

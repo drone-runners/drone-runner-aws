@@ -2,6 +2,7 @@ package dlite
 
 import (
 	"github.com/harness/lite-engine/api"
+	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -21,6 +22,11 @@ type VMTaskExecutionResponse struct {
 	GitspacesPortMappings  map[int]int               `json:"gitspaces_port_mappings"`
 	InstanceInfo           common.InstanceInfo       `json:"instance_info"`
 	CapacityReservation    types.CapacityReservation `json:"capacity_reservation"`
+	// OSStats is the resource-usage snapshot reported by lite-engine on its
+	// final destroy call. Populated only on the cleanup response. Consumed by
+	// CI Manager (BuildMetricsAggregationService) for resource-class
+	// recommendation. omitempty so non-cleanup responses stay lean.
+	OSStats *lespec.OSStats `json:"os_stats,omitempty"`
 }
 
 type DelegateMetaInfo struct {
