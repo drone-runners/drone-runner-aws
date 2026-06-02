@@ -82,7 +82,7 @@ write_files:
     [Service]
     Type=simple
     ExecStartPre=/bin/mkdir -p /tmp/le-pcap
-    ExecStart=/usr/sbin/tcpdump -i any -s 96 -G 60 -W 30 \
+    ExecStart=/usr/bin/tcpdump -i any -s 96 -G 60 -W 30 \
       -w /tmp/le-pcap/le-%%Y%%m%%d-%%H%%M%%S.pcap \
       -Z root \
       'port 9079 or icmp'
