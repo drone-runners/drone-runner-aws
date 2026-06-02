@@ -1,0 +1,80 @@
+command/harness/recover_step_test.go
+  54401658-b169-4950-8226-9c21fc83f61e 1-244
+command/harness/step.go
+  54401658-b169-4950-8226-9c21fc83f61e 7-8,13,153-162,238-341
+app/cloudinit/user_data/ubuntu_linux
+  human 74-95,267-274
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 244,
+          "added_lines": 244,
+          "deleted_lines": 3,
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "1-244",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/recover_step_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 117,
+          "added_lines": 118,
+          "deleted_lines": 2,
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "7-8,13,153-162,238-341",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 30,
+          "added_lines": 30,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "74-95,267-274",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/ubuntu_linux"
+    }
+  ],
+  "base_commit_sha": "25a4acbb4370a4a6c279d6bce298c86a67105c0e",
+  "branch": "HEAD",
+  "commit_sha": "31dbd115ad0d824c0d172d5e8b57516393effad4",
+  "commit_time": "2026-06-02T15:32:09+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "54401658-b169-4950-8226-9c21fc83f61e": {
+      "accepted_lines": 361,
+      "agent_id": {
+        "id": "54401658-b169-4950-8226-9c21fc83f61e",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 362,
+      "total_deletions": 5
+    },
+    "human": {
+      "accepted_lines": 30,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 30,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
