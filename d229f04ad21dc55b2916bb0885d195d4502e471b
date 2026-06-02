@@ -1,0 +1,47 @@
+app/cloudinit/user_data/ubuntu_linux
+  human 85
+  human 74-95,267-274
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "85",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 29,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "74-95,267-274",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/ubuntu_linux"
+    }
+  ],
+  "base_commit_sha": "31dbd115ad0d824c0d172d5e8b57516393effad4",
+  "branch": "HEAD",
+  "commit_sha": "d229f04ad21dc55b2916bb0885d195d4502e471b",
+  "commit_time": "2026-06-02T15:55:33+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
