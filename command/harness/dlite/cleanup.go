@@ -37,7 +37,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Execute cleanup.
 	vmService := t.c.getVMService()
-	err := vmService.Destroy(ctx, req)
+	osStats, err := vmService.Destroy(ctx, req)
 	if err != nil {
 		t.c.runner.Metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not destroy VM")
@@ -45,13 +45,16 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Construct success response.
+	// Construct success response. OSStats is the lite-engine snapshot used
+	// downstream by CI Manager for resource-class recommendation; nil when
+	// lite-engine was unreachable or returned no stats.
 	resp := VMTaskExecutionResponse{
 		CommandExecutionStatus: Success,
 		DelegateMetaInfo: DelegateMetaInfo{
 			HostName: t.c.delegateInfo.Host,
 			ID:       t.c.delegateInfo.ID,
 		},
+		OSStats: osStats,
 	}
 
 	writeSuccessResponse(w, &resp)

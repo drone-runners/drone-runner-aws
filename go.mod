@@ -4,6 +4,11 @@ go 1.25.0
 
 toolchain go1.25.9
 
+// CI-19206 Phase 1b dev-only: point to local lite-engine that ships the new
+// os_stats percentile and disk fields. Remove before merge once lite-engine
+// publishes a release containing those fields.
+replace github.com/harness/lite-engine => /Users/abhijeet/harness/lite-engine
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0

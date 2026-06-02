@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/harness/lite-engine/api"
+	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/metric"
@@ -134,8 +135,11 @@ func (s *VMService) Step(ctx context.Context, req *ExecuteVMRequest, async bool)
 	)
 }
 
-// Destroy handles VM cleanup/destroy requests.
-func (s *VMService) Destroy(ctx context.Context, req *VMCleanupRequest) error {
+// Destroy handles VM cleanup/destroy requests. The OSStats pointer is the
+// snapshot lite-engine returned on its final destroy call; nil if unavailable.
+// Callers that surface the snapshot to a downstream consumer (the unified
+// runner attaches it to VMTaskExecutionResponse) read it here.
+func (s *VMService) Destroy(ctx context.Context, req *VMCleanupRequest) (*lespec.OSStats, error) {
 	return HandleDestroy(
 		ctx,
 		req,
