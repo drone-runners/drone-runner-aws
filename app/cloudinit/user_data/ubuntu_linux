@@ -71,6 +71,28 @@ write_files:
   permissions: '0600'
   encoding: b64
   content: {{ .TLSKey | base64 }}
+{{ if .IsHosted }}
+- path: /etc/systemd/system/le-pcap.service
+  permissions: '0644'
+  content: |
+    [Unit]
+    Description=Rolling tcpdump for lite-engine port 9079
+    After=network-online.target
+    Wants=network-online.target
+    [Service]
+    Type=simple
+    ExecStartPre=/bin/mkdir -p /tmp/le-pcap
+    ExecStart=/usr/sbin/tcpdump -i any -s 96 -G 60 -W 30 \
+      -w /tmp/le-pcap/le-%%Y%%m%%d-%%H%%M%%S.pcap \
+      -Z root \
+      'port 9079 or icmp'
+    Restart=always
+    RestartSec=2
+    MemoryMax=64M
+    CPUQuota=10%
+    [Install]
+    WantedBy=multi-user.target
+{{ end }}
 # Main runtime commands
 runcmd:
   # Enable command tracing
@@ -127,12 +149,10 @@ runcmd:
       fi
     fi
     log "Root source: $ROOT_SRC, root base: $ROOT_BASE"
-
     NVME_DEV=$(lsblk -bdno NAME,TYPE,SIZE | awk -v rb="$ROOT_BASE" '$1 ~ /^nvme/ && $2=="disk" && $1 != rb {print $1, $3}' | sort -k2,2n | tail -1 | awk '{print $1}')
     if [ -z "$NVME_DEV" ]; then
       NVME_DEV=$(lsblk -dno NAME | awk -v rb="$ROOT_BASE" '/^nvme/ && $1 != rb {print $1; exit}')
     fi
-
     if [ -n "${NVME_DEV:-}" ]; then
       DEV_PATH="/dev/$NVME_DEV"
       echo "$DEV_PATH" > /etc/nvme_device_path
@@ -142,17 +162,14 @@ runcmd:
       exit 1
     fi
     step_end "Disk detection"
-
     ### Step 2: Format disk (always fresh)
     step_start "Formatting disk"
     mkfs.ext4 -F "$DEV_PATH" | tee -a "$LOGFILE"
     step_end "Formatting disk"
-
     ### Step 3: Mount disk
     step_start "Mounting disk"
     mkdir -p "$MOUNT_POINT"
     mount "$DEV_PATH" "$MOUNT_POINT"
-
     # Get UUID for fstab
     UUID=$(blkid -s UUID -o value "$DEV_PATH")
     if ! grep -q "$UUID" /etc/fstab; then
@@ -160,40 +177,32 @@ runcmd:
       log "Added $MOUNT_POINT mount to /etc/fstab (UUID=$UUID)"
     fi
     step_end "Mounting disk"
-
     ### Step 4: Bind mounts for critical directories
     for dir in /tmp /harness; do
       step_start "Bind-mounting $dir"
-
       target="$MOUNT_POINT/$(basename "$dir")"
       [ ! -d "$dir" ] && { log "Creating $dir"; mkdir -p "$dir"; chmod 755 "$dir"; }
       mkdir -p "$target"
-
       if [ "$(ls -A "$dir" 2>/dev/null)" ]; then
         log "Copying content from $dir to $target..."
         cp -a "$dir/"* "$target/" 2>/dev/null || log "Warning: Some files could not be copied"
       else
         log "$dir is empty, nothing to copy"
       fi
-
       umount "$dir" 2>/dev/null || true
       mount --bind "$target" "$dir" || log "Failed to bind mount $dir"
-
       # Ensure persistence
       if ! grep -qE "[[:space:]]$dir[[:space:]]" /etc/fstab; then
         echo "$target  $dir  none  bind  0 0" >> /etc/fstab
         log "Added bind mount for $dir -> $target in /etc/fstab"
       fi
-
       step_end "Bind-mounting $dir"
     done
-
     ### Step 5: Verify mounts
     step_start "Verifying mounts"
     mount | grep -E "$UUID|$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a "$LOGFILE" || true
     df -h | grep -E "$MOUNT_POINT|/tmp|/var/lib/docker|/home|/harness" | tee -a "$LOGFILE" || true
     step_end "Verifying mounts"
-
     log "Setup complete. All mounts will persist across reboot."
     EOS
     chmod +x /tmp/nvme-setup.sh
@@ -247,7 +256,6 @@ runcmd:
     (echo "Primary URL failed for envman. Trying fallback URL..." && curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /usr/bin/envman && echo "Successfully downloaded envman binary from fallback URL.")
   - chmod 777 /usr/bin/envman
   {{ end }}
-
   # Download and install annotations CLI if configured
   {{ if .AnnotationsBinaryURI }}
   - |
@@ -256,6 +264,14 @@ runcmd:
   - chmod 755 /usr/bin/hcli
   {{ end }}
   
+  {{ if .IsHosted }}
+  # Install tcpdump and start a rolling 30-min capture of port-9079 traffic.
+  # Diagnostic aid for cross-region drops affecting RetryStartStep.
+  # Snap-len 96 = headers only, no payload. ~30MB total disk in /tmp/le-pcap.
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y tcpdump || true
+  - systemctl enable --now le-pcap.service || true
+  - systemctl is-active le-pcap.service && echo "le-pcap: active" || echo "le-pcap: NOT RUNNING"
+  {{ end }}
   # Setup environment and start lite-engine
   - touch /root/.env
   - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'

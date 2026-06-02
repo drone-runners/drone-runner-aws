@@ -4,10 +4,13 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"net/http"
+	"net/http/httputil"
 	"strings"
 	"time"
 
 	"github.com/harness/lite-engine/api"
+	lehttp "github.com/harness/lite-engine/cli/client"
 	lespec "github.com/harness/lite-engine/engine/spec"
 	"github.com/harness/lite-engine/logger"
 
@@ -147,12 +150,17 @@ func HandleStep(ctx context.Context,
 	}
 	startStepResponse, err := client.RetryStartStep(ctx, &r.StartStepRequest, poolManager.GetStartStepTimeout())
 	if err != nil {
-		if isStartStepDeadlineExceeded(err) {
-			if preserveErr := preserveInstanceForDebug(ctx, inst, poolManager, logr); preserveErr != nil {
-				logr.WithError(preserveErr).Warnln("failed to mark instance for debug preservation")
-			}
+		if !isStartStepDeadlineExceeded(err) {
+			return nil, fmt.Errorf("failed to call LE.RetryStartStep: %w", err)
 		}
-		return nil, fmt.Errorf("failed to call LE.RetryStartStep: %w", err)
+		logr.Errorln(fmt.Errorf("failed to call LE.RetryStartStep: %w", err))
+		// On a start-step deadline we preserve the VM for debugging, probe the
+		// lite-engine health and retry the start step. If a retry succeeds the
+		// step continues normally while the VM remains in the preserved state.
+		startStepResponse, err = recoverStartStepAfterTimeout(ctx, r, inst, client, poolManager, logr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	logr.WithField("startStepResponse", startStepResponse).Traceln("LE.StartStep complete")
@@ -225,6 +233,110 @@ func preserveInstanceForDebug(
 		WithField("instance_state", types.StatePreserved).
 		Warnln("updated instance state for debug preservation after lite-engine start step timeout")
 	return nil
+}
+
+const (
+	// maxStartStepDebugRetries is the number of additional RetryStartStep
+	// attempts performed after a start-step deadline while debugging.
+	maxStartStepDebugRetries = 5
+	// startStepDebugHealthTimeout bounds the debug health check call.
+	startStepDebugHealthTimeout = 30 * time.Second
+)
+
+// recoverStartStepAfterTimeout handles a lite-engine start-step deadline by
+// preserving the VM, probing lite-engine health (with verbose HTTP tracing)
+// and retrying the start step up to maxStartStepDebugRetries times. The VM is
+// left in the preserved state regardless of the retry outcome.
+func recoverStartStepAfterTimeout(
+	ctx context.Context,
+	r *ExecuteVMRequest,
+	inst *types.Instance,
+	client lehttp.Client,
+	poolManager drivers.IManager,
+	logr *logrus.Entry,
+) (*api.StartStepResponse, error) {
+	// 1. Preserve the VM so it is not cleaned up.
+	if preserveErr := preserveInstanceForDebug(ctx, inst, poolManager, logr); preserveErr != nil {
+		logr.WithError(preserveErr).Warnln("failed to mark instance for debug preservation")
+	}
+
+	// 4. Enable verbose HTTP tracing for the subsequent debug calls.
+	enableVerboseHTTP(client, logr)
+
+	// 2. Health check the lite-engine and print the response.
+	healthCtx, cancel := context.WithTimeout(ctx, startStepDebugHealthTimeout)
+	defer cancel()
+	healthResp, healthErr := client.Health(healthCtx, &api.HealthRequest{})
+	if healthErr != nil {
+		logr.WithError(healthErr).Warnln("lite-engine health check failed after start step timeout")
+	} else {
+		logr.WithField("health_ok", healthResp.OK).
+			WithField("health_version", healthResp.Version).
+			Infoln("lite-engine health check response after start step timeout")
+	}
+
+	// 3. Retry the start step up to maxStartStepDebugRetries with default timeout.
+	var lastErr error
+	for attempt := 1; attempt <= maxStartStepDebugRetries; attempt++ {
+		resp, retryErr := client.RetryStartStep(ctx, &r.StartStepRequest, poolManager.GetStartStepTimeout())
+		if retryErr == nil {
+			logr.WithField("attempt", attempt).
+				Infoln("retry start step succeeded after debug preservation; continuing step (vm remains preserved)")
+			return resp, nil
+		}
+		lastErr = retryErr
+		logr.WithError(retryErr).
+			WithField("attempt", attempt).
+			Warnln("retry start step after debug preservation failed")
+	}
+
+	return nil, fmt.Errorf("failed to call LE.RetryStartStep after %d debug retries: %w", maxStartStepDebugRetries, lastErr)
+}
+
+// enableVerboseHTTP wraps the lite-engine HTTP client transport so that each
+// request/response is dumped to the logs. It is a no-op for non-HTTP clients
+// (e.g. the mock client used in scale testing).
+func enableVerboseHTTP(client lehttp.Client, logr *logrus.Entry) {
+	hc, ok := client.(*lehttp.HTTPClient)
+	if !ok || hc.Client == nil {
+		logr.Warnln("verbose http tracing not enabled: unexpected lite-engine client type")
+		return
+	}
+	base := hc.Client.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	if _, already := base.(*verboseRoundTripper); already {
+		return
+	}
+	hc.Client.Transport = &verboseRoundTripper{base: base, logr: logr}
+}
+
+// verboseRoundTripper logs the full HTTP request and response for debugging.
+type verboseRoundTripper struct {
+	base http.RoundTripper
+	logr *logrus.Entry
+}
+
+func (v *verboseRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if dump, derr := httputil.DumpRequestOut(req, true); derr == nil {
+		v.logr.WithField("http_request", string(dump)).Infoln("lite-engine http request trace")
+	} else {
+		v.logr.WithError(derr).Debugln("failed to dump http request")
+	}
+
+	resp, err := v.base.RoundTrip(req)
+	if err != nil {
+		v.logr.WithError(err).WithField("url", req.URL.String()).Warnln("lite-engine http call error")
+		return resp, err
+	}
+
+	if dump, derr := httputil.DumpResponse(resp, true); derr == nil {
+		v.logr.WithField("http_response", string(dump)).Infoln("lite-engine http response trace")
+	} else {
+		v.logr.WithError(derr).Debugln("failed to dump http response")
+	}
+	return resp, err
 }
 
 func setPrevStepExportEnvs(r *ExecuteVMRequest) {
