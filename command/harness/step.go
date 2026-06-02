@@ -148,6 +148,8 @@ func HandleStep(ctx context.Context,
 			}
 		}
 	}
+	// Enable verbose HTTP tracing so the start step request/response is logged.
+	enableVerboseHTTP(client, logr)
 	startStepResponse, err := client.RetryStartStep(ctx, &r.StartStepRequest, poolManager.GetStartStepTimeout())
 	if err != nil {
 		if !isStartStepDeadlineExceeded(err) {
@@ -260,8 +262,7 @@ func recoverStartStepAfterTimeout(
 		logr.WithError(preserveErr).Warnln("failed to mark instance for debug preservation")
 	}
 
-	// 4. Enable verbose HTTP tracing for the subsequent debug calls.
-	enableVerboseHTTP(client, logr)
+	// Verbose HTTP tracing is already enabled before the initial start step call.
 
 	// 2. Health check the lite-engine and print the response.
 	healthCtx, cancel := context.WithTimeout(ctx, startStepDebugHealthTimeout)
