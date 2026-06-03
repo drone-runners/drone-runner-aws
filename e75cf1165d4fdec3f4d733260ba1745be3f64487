@@ -1,0 +1,53 @@
+go.mod
+  human 32,59,152-153,155
+go.sum
+  human 257-258,646-647,676-677,688-689,728-729
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "32,59,152-153,155",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "go.mod"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 10,
+          "added_lines": 10,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "257-258,646-647,676-677,688-689,728-729",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "go.sum"
+    }
+  ],
+  "base_commit_sha": "0c707894415b52498cbc429c42860f614bb470a4",
+  "branch": "HEAD",
+  "commit_sha": "e75cf1165d4fdec3f4d733260ba1745be3f64487",
+  "commit_time": "2026-06-03T15:23:52+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "human": {
+      "accepted_lines": 15,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 15,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
