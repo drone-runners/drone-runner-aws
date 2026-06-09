@@ -7,7 +7,8 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/cloudinit"
 	"github.com/drone-runners/drone-runner-aws/types"
-	yaml "gopkg.in/yaml.v2"
+
+	"gopkg.in/yaml.v2"
 )
 
 const (
