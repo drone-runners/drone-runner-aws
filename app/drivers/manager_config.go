@@ -41,6 +41,7 @@ type ManagerConfig struct {
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
 	Hosted                       bool
+	EnableLEDiagnostics          bool
 	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
 }
 
@@ -69,6 +70,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		tmateBinaryURI:               cfg.TmateBinaryURI,
 		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
 		hosted:                       cfg.Hosted,
+		enableLEDiagnostics:          cfg.EnableLEDiagnostics,
 		capacityReservationTTL:       cfg.CapacityReservationTTL,
 	}
 }
@@ -95,6 +97,7 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		EnvmanBinaryFallbackURI:      envConfig.Settings.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
 		TmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
+		EnableLEDiagnostics:          envConfig.Settings.EnableLEDiagnostics,
 		CapacityReservationTTL:       envConfig.Settings.FreeCapacityMaxAgeMinutes * 60,
 	}
 }
