@@ -66,6 +66,30 @@ write_files:
   permissions: '0600'
   encoding: b64
   content: {{ .TLSKey | base64 }}
+{{ if and .IsHosted .EnableLEDiagnostics }}
+- path: /etc/systemd/system/le-pcap.service
+  permissions: '0644'
+  content: |
+    [Unit]
+    Description=Rolling tcpdump for lite-engine port 9079
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Type=simple
+    ExecStartPre=/bin/mkdir -p /tmp/le-pcap
+    ExecStart=/usr/bin/tcpdump -i any -s 96 -G 60 -W 30 \
+      -w /tmp/le-pcap/le-%%Y%%m%%d-%%H%%M%%S.pcap \
+      -Z root \
+      'port 9079 or icmp'
+    Restart=always
+    RestartSec=2
+    MemoryMax=64M
+    CPUQuota=10%
+
+    [Install]
+    WantedBy=multi-user.target
+{{ end }}
 # Main runtime commands
 runcmd:
   # Enable command tracing
@@ -251,6 +275,15 @@ runcmd:
   - chmod 755 /usr/bin/hcli
   {{ end }}
   
+  {{ if and .IsHosted .EnableLEDiagnostics }}
+  # Install tcpdump and start a rolling 30-min capture of port-9079 traffic.
+  # Diagnostic aid for cross-region drops affecting RetryStartStep.
+  - |
+    DEBIAN_FRONTEND=noninteractive apt-get install -y tcpdump || true
+    systemctl enable --now le-pcap.service || true
+    systemctl is-active le-pcap.service && echo "le-pcap: active" || echo "le-pcap: NOT RUNNING"
+  {{ end }}
+
   # Setup environment and start lite-engine
   - touch /root/.env
   - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'

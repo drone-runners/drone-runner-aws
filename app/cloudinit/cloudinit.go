@@ -30,6 +30,7 @@ type Params struct {
 	PluginBinaryURI              string
 	Tmate                        types.Tmate
 	IsHosted                     bool
+	EnableLEDiagnostics          bool
 	GitspaceAgentConfig          types.GitspaceAgentConfig
 	StorageConfig                types.StorageConfig
 	AutoInjectionBinaryURI       string

@@ -44,6 +44,7 @@ type (
 		env                          string
 		capacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
 		hosted                       bool
+		enableLEDiagnostics          bool
 	}
 
 	poolEntry struct {
