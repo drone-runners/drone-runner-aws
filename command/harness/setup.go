@@ -666,9 +666,6 @@ func applyAndSaveEgressRules(
 	}
 }
 
-// egressCAHostPath is where cloud-init writes the mitm CA on egress-control VMs.
-const egressCAHostPath = "/etc/harness-certs/ca.crt"
-
 // appendEgressCAVolume registers the host-path Volume so step containers can bind-mount it.
 func appendEgressCAVolume(volumes []*lespec.Volume) []*lespec.Volume {
 	return append(volumes, &lespec.Volume{

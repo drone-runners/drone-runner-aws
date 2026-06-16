@@ -476,7 +476,7 @@ type EnvConfig struct {
 	}
 
 	TPA struct {
-		Address string `envconfig:"DRONE_TPA_ADDRESS" default:"172.16.0.124"`
+		Address string `envconfig:"DRONE_TPA_ADDRESS" default:"0.0.0.0"`
 		Port    string `envconfig:"DRONE_TPA_PORT" default:"5442"`
 	}
 
