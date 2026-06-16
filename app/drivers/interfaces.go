@@ -68,6 +68,9 @@ type PoolManager interface {
 
 	// GetPoolSpec returns the pool specification.
 	GetPoolSpec(poolName string) (interface{}, error)
+
+	// IsEgressPool returns if egress_control is true or false
+	IsEgressPool(poolName string) bool
 }
 
 // InstanceLifecycle handles instance lifecycle operations.

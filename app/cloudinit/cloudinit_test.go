@@ -85,6 +85,67 @@ func TestLinuxRendersValidYAML(t *testing.T) {
 	}
 }
 
+// TestLinuxEgressDispatch verifies EgressControl picks the egress template and substitutes the TPA endpoint.
+func TestLinuxEgressDispatch(t *testing.T) {
+	const (
+		egressMarker = "systemctl enable --now envoy-proxy"
+		tpaAddr      = "10.20.30.40"
+		tpaPort      = "5442"
+	)
+
+	t.Run("EgressControl=false uses default ubuntu_linux template", func(t *testing.T) {
+		params := &cloudinit.Params{
+			LiteEnginePath: liteEnginePath,
+			CACert:         caCertFile + "\n",
+			TLSCert:        certFile + "\n",
+			TLSKey:         keyFile + "\n",
+			Platform:       types.Platform{OS: "linux", Arch: "amd64"},
+		}
+		s, err := cloudinit.Linux(params)
+		if err != nil {
+			t.Fatalf("render failed: %v", err)
+		}
+		if strings.Contains(s, egressMarker) {
+			t.Errorf("default template unexpectedly contains egress marker %q", egressMarker)
+		}
+	})
+
+	t.Run("EgressControl=true uses hosted_ubuntu_linux_egress and substitutes TPA endpoint", func(t *testing.T) {
+		for _, arch := range []string{"amd64", "arm64"} {
+			arch := arch
+			t.Run("arch="+arch, func(t *testing.T) {
+				params := &cloudinit.Params{
+					LiteEnginePath: liteEnginePath,
+					CACert:         caCertFile + "\n",
+					TLSCert:        certFile + "\n",
+					TLSKey:         keyFile + "\n",
+					Platform:       types.Platform{OS: "linux", Arch: arch},
+					EgressControl:  true,
+					TPAAddress:     tpaAddr,
+					TPAPort:        tpaPort,
+				}
+				s, err := cloudinit.Linux(params)
+				if err != nil {
+					t.Fatalf("render failed: %v", err)
+				}
+				if !strings.Contains(s, egressMarker) {
+					t.Errorf("egress template missing marker %q", egressMarker)
+				}
+				if !strings.Contains(s, "TPA_ADDRESS="+tpaAddr) {
+					t.Errorf("rendered output missing TPA_ADDRESS=%s", tpaAddr)
+				}
+				if !strings.Contains(s, "TPA_PORT="+tpaPort) {
+					t.Errorf("rendered output missing TPA_PORT=%s", tpaPort)
+				}
+				archURL := fmt.Sprintf("lite-engine-linux-%s", arch)
+				if !strings.Contains(s, archURL) {
+					t.Errorf("rendered output missing arch-specific lite-engine URL fragment %q", archURL)
+				}
+			})
+		}
+	})
+}
+
 func TestWindows(t *testing.T) {
 	params := &cloudinit.Params{
 		LiteEnginePath: liteEnginePath,

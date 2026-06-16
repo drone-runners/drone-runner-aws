@@ -240,6 +240,7 @@ type (
 		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
 		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 		GPU                        bool              `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+		EgressControl              bool              `json:"egress_control,omitempty" yaml:"egress_control,omitempty"`
 	}
 
 	GoogleAccount struct {
@@ -472,6 +473,11 @@ type EnvConfig struct {
 		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.179/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
+	}
+
+	TPA struct {
+		Address string `envconfig:"DRONE_TPA_ADDRESS" default:"0.0.0.0"`
+		Port    string `envconfig:"DRONE_TPA_PORT" default:"5442"`
 	}
 
 	Server struct {

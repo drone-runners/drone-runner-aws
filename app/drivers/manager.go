@@ -24,6 +24,8 @@ type (
 		cleanupTimer                 *time.Ticker
 		runnerName                   string
 		liteEnginePath               string
+		tpaAddress                   string
+		tpaPort                      string
 		instanceStore                store.InstanceStore
 		stageOwnerStore              store.StageOwnerStore
 		capacityReservationStore     store.CapacityReservationStore
@@ -121,6 +123,18 @@ func (m *Manager) GetPoolSpec(poolName string) (interface{}, error) {
 		return nil, fmt.Errorf("manager: pool %s does not have a stored spec", poolName)
 	}
 	return entry.Spec, nil
+}
+
+// IsEgressPool reports whether the named pool has egress_control enabled.
+func (m *Manager) IsEgressPool(poolName string) bool {
+	entry := m.poolMap[poolName]
+	if entry == nil || entry.Spec == nil {
+		return false
+	}
+	if g, ok := entry.Spec.(*config.Google); ok {
+		return g.EgressControl
+	}
+	return false
 }
 
 // Inspect returns platform, root directory, and driver name for a pool.

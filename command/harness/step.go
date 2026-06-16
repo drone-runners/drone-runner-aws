@@ -117,6 +117,11 @@ func HandleStep(ctx context.Context,
 
 	logr.Traceln("running StartStep")
 
+	if inst.Platform.OS == oshelp.OSLinux && poolManager.IsEgressPool(inst.Pool) {
+		setHarnessCAEnv(&r.StartStepRequest)
+		r.Volumes = appendEgressCAMount(r.Volumes)
+	}
+
 	// Currently the OSX m1 architecture does not enable nested virtualization, so we disable docker.
 	if inst.Platform.OS == oshelp.OSMac {
 		b := false
@@ -194,4 +199,20 @@ func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 		}
 		r.StartStepRequest.Envs[k] = v
 	}
+}
+
+// setHarnessCAEnv exposes the bind-mounted Harness CA path via $HARNESS_CA_PATH.
+func setHarnessCAEnv(r *api.StartStepRequest) {
+	if r.Envs == nil {
+		r.Envs = make(map[string]string)
+	}
+	r.Envs["HARNESS_CA_PATH"] = egressCAHostPath
+}
+
+// appendEgressCAMount adds the per-step VolumeMount that pairs with appendEgressCAVolume.
+func appendEgressCAMount(volumes []*lespec.VolumeMount) []*lespec.VolumeMount {
+	return append(volumes, &lespec.VolumeMount{
+		Name: fileID("ca.crt"),
+		Path: egressCAHostPath,
+	})
 }

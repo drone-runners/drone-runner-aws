@@ -236,6 +236,13 @@ func WithEnableC4D(enableC4D bool) Option {
 	}
 }
 
+// WithEgressControl marks the pool as egress-controlled (uses hosted_ubuntu_linux_egress cloud-init).
+func WithEgressControl(egressControl bool) Option {
+	return func(p *config) {
+		p.egressControl = egressControl
+	}
+}
+
 // WithGPU returns an option to mark the pool as GPU-enabled.
 // GPU instances require OnHostMaintenance=TERMINATE (live migration is not supported).
 func WithGPU(gpu bool) Option {
