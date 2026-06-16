@@ -29,6 +29,10 @@ type ManagerConfig struct {
 	LiteEnginePath         string
 	LiteEngineFallbackPath string
 
+	// TPA endpoint for egress-control pools.
+	TPAAddress string
+	TPAPort    string
+
 	// Binary URIs
 	HarnessTestBinaryURI         string
 	PluginBinaryURI              string
@@ -59,6 +63,8 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		env:                          cfg.Env,
 		liteEnginePath:               cfg.LiteEnginePath,
 		liteEngineFallbackPath:       cfg.LiteEngineFallbackPath,
+		tpaAddress:                   cfg.TPAAddress,
+		tpaPort:                      cfg.TPAPort,
 		harnessTestBinaryURI:         cfg.HarnessTestBinaryURI,
 		pluginBinaryURI:              cfg.PluginBinaryURI,
 		pluginBinaryFallbackURI:      cfg.PluginBinaryFallbackURI,
@@ -87,6 +93,8 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		Env:                          envConfig.Settings.Env,
 		LiteEnginePath:               envConfig.LiteEngine.Path,
 		LiteEngineFallbackPath:       envConfig.LiteEngine.FallbackPath,
+		TPAAddress:                   envConfig.TPA.Address,
+		TPAPort:                      envConfig.TPA.Port,
 		HarnessTestBinaryURI:         envConfig.Settings.HarnessTestBinaryURI,
 		PluginBinaryURI:              envConfig.Settings.PluginBinaryURI,
 		PluginBinaryFallbackURI:      envConfig.Settings.PluginBinaryFallbackURI,

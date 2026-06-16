@@ -201,6 +201,8 @@ func (m *Manager) setupInstance(
 	createOptions.EnableLEDiagnostics = m.enableLEDiagnostics
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
+	createOptions.TPAAddress = m.tpaAddress
+	createOptions.TPAPort = m.tpaPort
 	createOptions.PoolName = pool.Name
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize

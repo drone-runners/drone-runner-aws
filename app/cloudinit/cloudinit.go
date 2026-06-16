@@ -30,6 +30,9 @@ type Params struct {
 	PluginBinaryURI              string
 	Tmate                        types.Tmate
 	IsHosted                     bool
+	EgressControl                bool
+	TPAAddress                   string
+	TPAPort                      string
 	EnableLEDiagnostics          bool
 	GitspaceAgentConfig          types.GitspaceAgentConfig
 	StorageConfig                types.StorageConfig
@@ -112,6 +115,10 @@ var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(func
 //go:embed user_data/ubuntu_linux
 var userDataUbuntu string
 var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataUbuntu))
+
+//go:embed user_data/hosted_ubuntu_linux_egress
+var userDataUbuntuEgress string
+var ubuntuEgressTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataUbuntuEgress))
 
 //go:embed user_data/gitspaces_ubuntu
 var userDataGitspacesUbuntu string
@@ -258,6 +265,8 @@ func Linux(params *Params) (payload string, err error) {
 			} else {
 				tmpl = gitspacesUbuntuTemplate
 			}
+		} else if params.EgressControl {
+			tmpl = ubuntuEgressTemplate
 		} else {
 			tmpl = ubuntuTemplate
 		}

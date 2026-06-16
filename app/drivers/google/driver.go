@@ -96,6 +96,7 @@ type config struct {
 	zones                      []string
 	userData                   string
 	userDataKey                string
+	egressControl              bool
 	service                    *compute.Service
 	labels                     map[string]string
 	enableNestedVirtualization bool
@@ -543,6 +544,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 
 	gpu := opts.GPU
 	opts.EnableC4D = p.enableC4D
+	opts.EgressControl = p.egressControl
+	// TPA endpoint is set on opts by the manager from runner-level env config.
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {

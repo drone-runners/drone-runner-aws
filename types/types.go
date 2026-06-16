@@ -175,6 +175,9 @@ type InstanceCreateOpts struct {
 	Tmate                        Tmate
 	AccountID                    string
 	IsHosted                     bool
+	EgressControl                bool
+	TPAAddress                   string
+	TPAPort                      string
 	EnableLEDiagnostics          bool
 	ResourceClass                string
 	GitspaceOpts                 GitspaceOpts
