@@ -33,6 +33,10 @@ type Params struct {
 	EgressControl                bool
 	TPAAddress                   string
 	TPAPort                      string
+	EgressProxyEnabled           bool
+	EgressProxyURL               string
+	EgressNoProxy                string
+	EgressCACert                 string
 	EnableLEDiagnostics          bool
 	GitspaceAgentConfig          types.GitspaceAgentConfig
 	StorageConfig                types.StorageConfig
@@ -58,6 +62,32 @@ var funcs = map[string]interface{}{
 }
 
 const certsDir = "/tmp/certs/"
+
+// ubuntuPartials holds shared named templates (e.g. "ubuntu_binaries") that are
+// reused across the ubuntu cloud-init templates via {{ template ... }}.
+//
+//go:embed user_data/partials/ubuntu_binaries.tmpl
+var ubuntuPartials string
+
+// mustParseUbuntu parses an ubuntu cloud-init template with the shared ubuntu
+// partials available, so templates can include the common binary-download block.
+func mustParseUbuntu(name, body string) *template.Template {
+	t := template.Must(template.New(name).Funcs(funcs).Parse(ubuntuPartials))
+	return template.Must(t.Parse(body))
+}
+
+// windowsPartials holds shared named templates (e.g. "windows_binaries") that are
+// reused across the windows cloud-init templates via {{ template ... }}.
+//
+//go:embed user_data/partials/windows_binaries.tmpl
+var windowsPartials string
+
+// mustParseWindows parses a windows cloud-init template with the shared windows
+// partials available, so templates can include the common binary-download block.
+func mustParseWindows(name, body string) *template.Template {
+	t := template.Must(template.New(name).Funcs(funcs).Parse(windowsPartials))
+	return template.Must(t.Parse(body))
+}
 
 // Custom creates a custom userdata file.
 func Custom(templateText string, params *Params) (payload string, err error) {
@@ -114,11 +144,15 @@ var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(func
 
 //go:embed user_data/ubuntu_linux
 var userDataUbuntu string
-var ubuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataUbuntu))
+var ubuntuTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntu)
 
 //go:embed user_data/hosted_ubuntu_linux_egress
 var userDataUbuntuEgress string
-var ubuntuEgressTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataUbuntuEgress))
+var ubuntuEgressTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntuEgress)
+
+//go:embed user_data/ubuntu_linux_egress_v2
+var userDataUbuntuEgressProxy string
+var ubuntuEgressProxyTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntuEgressProxy)
 
 //go:embed user_data/gitspaces_ubuntu
 var userDataGitspacesUbuntu string
@@ -138,7 +172,11 @@ var gitspacesAmazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Fu
 
 //go:embed user_data/windows
 var userDataWindows string
-var windowsTemplate = template.Must(template.New(oshelp.OSWindows).Funcs(funcs).Parse(userDataWindows))
+var windowsTemplate = mustParseWindows(oshelp.OSWindows, userDataWindows)
+
+//go:embed user_data/windows_egress
+var userDataWindowsEgressProxy string
+var windowsEgressProxyTemplate = mustParseWindows(oshelp.OSWindows, userDataWindowsEgressProxy)
 
 func Mac(params *Params) (payload string) {
 	sb := &strings.Builder{}
@@ -266,7 +304,11 @@ func Linux(params *Params) (payload string, err error) {
 				tmpl = gitspacesUbuntuTemplate
 			}
 		} else if params.EgressControl {
-			tmpl = ubuntuEgressTemplate
+			if params.EgressProxyEnabled {
+				tmpl = ubuntuEgressProxyTemplate
+			} else {
+				tmpl = ubuntuEgressTemplate
+			}
 		} else {
 			tmpl = ubuntuTemplate
 		}
@@ -287,7 +329,12 @@ func Windows(params *Params) (payload string) {
 	certPath := filepath.Join(certsDir, "server-cert.pem")
 	keyPath := filepath.Join(certsDir, "server-key.pem")
 
-	_ = windowsTemplate.Execute(sb, struct {
+	tmpl := windowsTemplate
+	if params.EgressControl && params.EgressProxyEnabled {
+		tmpl = windowsEgressProxyTemplate
+	}
+
+	_ = tmpl.Execute(sb, struct {
 		Params
 		CertDir    string
 		CaCertPath string

@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+// harnessDownloadBase is the canonical Harness binary download origin. Under
+// egress control + proxy, all binaries must be pulled from this single origin so
+// the proxy allow-list only needs to permit one destination.
+const harnessDownloadBase = "https://app.harness.io/storage/harness-download"
+
 // callerPathDepth is the number of path components to keep when shortening file paths.
 const callerPathDepth = 3
 

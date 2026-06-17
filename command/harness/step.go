@@ -14,6 +14,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	ierrors "github.com/drone-runners/drone-runner-aws/app/types"
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
 	"github.com/drone-runners/drone-runner-aws/command/harness/scripts"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
@@ -48,6 +49,7 @@ func HandleStep(ctx context.Context,
 	mockTimeoutSecs int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
+	egressProxy config.EgressProxy,
 	async bool) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
 		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
@@ -117,9 +119,8 @@ func HandleStep(ctx context.Context,
 
 	logr.Traceln("running StartStep")
 
-	if inst.Platform.OS == oshelp.OSLinux && poolManager.IsEgressPool(inst.Pool) {
-		setHarnessCAEnv(&r.StartStepRequest)
-		r.Volumes = appendEgressCAMount(r.Volumes)
+	if poolManager.IsEgressPool(inst.Pool) {
+		configureEgressStep(r, inst.Platform.OS, egressProxy)
 	}
 
 	// Currently the OSX m1 architecture does not enable nested virtualization, so we disable docker.
@@ -201,18 +202,38 @@ func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 	}
 }
 
-// setHarnessCAEnv exposes the bind-mounted Harness CA path via $HARNESS_CA_PATH.
-func setHarnessCAEnv(r *api.StartStepRequest) {
+// configureEgressStep applies the egress-control proxy settings and bind-mounts
+// the Harness mitm CA for a step running in an egress pool. It pairs with
+// appendEgressCAVolume (setup side), which registers the host-path volume.
+func configureEgressStep(r *ExecuteVMRequest, os string, proxy config.EgressProxy) {
 	if r.Envs == nil {
 		r.Envs = make(map[string]string)
 	}
-	r.Envs["HARNESS_CA_PATH"] = egressCAHostPath
-}
 
-// appendEgressCAMount adds the per-step VolumeMount that pairs with appendEgressCAVolume.
-func appendEgressCAMount(volumes []*lespec.VolumeMount) []*lespec.VolumeMount {
-	return append(volumes, &lespec.VolumeMount{
-		Name: fileID("ca.crt"),
-		Path: egressCAHostPath,
-	})
+	if proxy.Enabled {
+		r.Envs["HTTPS_PROXY"] = proxy.URL
+		r.Envs["HTTP_PROXY"] = proxy.URL
+		r.Envs["https_proxy"] = proxy.URL
+		r.Envs["http_proxy"] = proxy.URL
+		r.Envs["NO_PROXY"] = proxy.NoProxy
+		r.Envs["no_proxy"] = proxy.NoProxy
+	}
+
+	switch os {
+	case oshelp.OSLinux:
+		r.Envs["HARNESS_CA_PATH"] = egressCAHostPath
+		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
+			Name: fileID("ca.crt"),
+			Path: egressCAHostPath,
+		})
+	case oshelp.OSWindows:
+		// Windows containers cannot bind-mount individual files (the daemon
+		// errors "Only directories can be mapped on this platform"). Mount the
+		// parent directory; the CA remains at C:\harness-certs\ca.crt inside.
+		r.Envs["HARNESS_CA_PATH"] = egressCAWindowsHostPath 
+		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
+			Name: fileID("ca.crt"),
+			Path: "C:\\harness-certs",
+		})
+	}
 }

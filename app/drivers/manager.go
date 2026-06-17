@@ -26,6 +26,10 @@ type (
 		liteEnginePath               string
 		tpaAddress                   string
 		tpaPort                      string
+		egressProxyEnabled           bool
+		egressProxyURL               string
+		egressNoProxy                string
+		egressCACert                 string
 		instanceStore                store.InstanceStore
 		stageOwnerStore              store.StageOwnerStore
 		capacityReservationStore     store.CapacityReservationStore

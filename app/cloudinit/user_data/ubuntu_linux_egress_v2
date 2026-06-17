@@ -1,0 +1,154 @@
+#cloud-config
+# Egress-control cloud-init (proxy variant). Deltas vs ubuntu_linux: bakes the
+# Harness Egress CA, points Docker + the host env at the fleet forward-proxy
+# (172.16.0.11:3128), verifies proxy reachability, then starts lite-engine last
+# so all outbound HTTP/S flows through the fleet. Leaner than ubuntu_linux: no
+# apt install and no EnableC4D NVMe setup (assumes a baked image).
+bootcmd:
+  - mkdir -p /var/log
+  - touch /var/log/nvme-setup.log
+  - echo "NVME setup is disabled. Skipping NVME disk detection." >> /var/log/nvme-setup.log
+# Certificate files
+write_files:
+- path: {{ .CaCertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .CACert | base64 }}
+- path: {{ .CertPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSCert | base64 }}
+- path: {{ .KeyPath }}
+  permissions: '0600'
+  encoding: b64
+  content: {{ .TLSKey | base64 }}
+
+# Harness Egress CA (signs the on-demand leaf certs the fleet presents).
+# Single source: dropped under /usr/local/share/ca-certificates so
+# update-ca-certificates folds it into /etc/ssl/certs/ca-certificates.crt.
+# That's what curl/pip/git/openssl-using tools trust by default, AND what
+# REQUESTS_CA_BUNDLE/GIT_SSL_CAINFO/SSL_CERT_FILE point at below.
+# Node is the one consumer that doesn't merge with the system bundle --
+# NODE_EXTRA_CA_CERTS in /etc/environment points directly at this same file.
+- path: /usr/local/share/ca-certificates/harness-ca.crt
+  permissions: '0644'
+  encoding: b64
+  content: {{ .EgressCACert | base64 }}
+
+- path: /etc/harness-certs/ca.crt
+  permissions: '0644'
+  encoding: b64
+  content: {{ .EgressCACert | base64 }}
+
+# Docker daemon picks up proxy via systemd drop-in (env vars don't work).
+- path: /etc/systemd/system/docker.service.d/http-proxy.conf
+  permissions: '0644'
+  content: |
+    [Service]
+    Environment="HTTP_PROXY={{ .EgressProxyURL }}"
+    Environment="HTTPS_PROXY={{ .EgressProxyURL }}"
+    Environment="NO_PROXY={{ .EgressNoProxy }}"
+{{ if .EnableLEDiagnostics }}
+- path: /etc/systemd/system/le-pcap.service
+  permissions: '0644'
+  content: |
+    [Unit]
+    Description=Rolling tcpdump for lite-engine port 9079
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Type=simple
+    ExecStartPre=/bin/mkdir -p /tmp/le-pcap
+    ExecStart=/usr/bin/tcpdump -i any -s 96 -G 60 -W 30 \
+      -w /tmp/le-pcap/le-%%Y%%m%%d-%%H%%M%%S.pcap \
+      -Z root \
+      'port 9079 or icmp'
+    Restart=always
+    RestartSec=2
+    MemoryMax=64M
+    CPUQuota=10%
+
+    [Install]
+    WantedBy=multi-user.target
+{{ end }}
+# Main runtime commands
+runcmd:
+  # Enable command tracing
+  - set -x
+
+  # Configure Google DNS for hosted builds
+  - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
+  - systemctl restart systemd-resolved
+
+  # Open healthcheck port
+  - ufw allow 9079
+
+{{ template "ubuntu_binaries" . }}
+
+  {{ if .EnableLEDiagnostics }}
+  # Install tcpdump and start a rolling 30-min capture of port-9079 traffic.
+  # Diagnostic aid for cross-region drops affecting RetryStartStep.
+  - |
+    DEBIAN_FRONTEND=noninteractive apt-get install -y tcpdump || true
+    systemctl enable --now le-pcap.service || true
+    systemctl is-active le-pcap.service && echo "le-pcap: active" || echo "le-pcap: NOT RUNNING"
+  {{ end }}
+
+  # ────────────────────────────────────────────────────────────────────
+  # ALL bootstrap downloads done. Arm the egress proxy:
+  #   - Append proxy + CA env vars to /etc/environment (DO NOT replace it
+  #     -- the base image's PATH= line lives there and PAM-loaded sessions
+  #     rely on it).
+  #   - Trust the Harness Egress CA (system-wide TLS verify works).
+  #   - Docker daemon restarted to pick up the systemd drop-in.
+  #   - lite-engine inherits the env via --env-file /root/.env.
+  # From here on, all outbound HTTP/S goes through the fleet.
+  # ────────────────────────────────────────────────────────────────────
+  # Only proxy vars are appended. update-ca-certificates folds the Harness
+  # CA into the system bundle, so curl/git/wget/openssl-using tools just
+  # work. Tools that read their own bundle (Node certifi, Python certifi,
+  # custom git builds) need NODE_EXTRA_CA_CERTS / REQUESTS_CA_BUNDLE /
+  # GIT_SSL_CAINFO / SSL_CERT_FILE -- left to the user to set per-step
+  # since the right value depends on whether they run in a container (own
+  # rootfs, own bundle) vs on the host.
+  - |
+    cat >> /etc/environment <<'EOF'
+    HTTPS_PROXY={{ .EgressProxyURL }}
+    HTTP_PROXY={{ .EgressProxyURL }}
+    https_proxy={{ .EgressProxyURL }}
+    http_proxy={{ .EgressProxyURL }}
+    NO_PROXY={{ .EgressNoProxy }}
+    no_proxy={{ .EgressNoProxy }}
+    EOF
+  - update-ca-certificates
+  - systemctl daemon-reload
+  - systemctl restart docker || true
+
+  # Egress proxy reachability check. Fails the build VM bootstrap if the
+  # fleet ILB is not reachable on the proxy port. /healthz on :3128 is a
+  # direct_response 200 from Envoy — short-circuits before TPA, so it
+  # works regardless of TPA allowlist state and is sub-ms when the
+  # listener is up. We retry briefly to ride out a fleet pod restart.
+  - |
+    ok=0
+    for i in 1 2 3 4 5; do
+      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 {{ .EgressProxyURL }}/healthz || true)
+      if [ "$code" = "200" ]; then
+        echo "[egress] proxy /healthz=200 (attempt $i)"
+        ok=1
+        break
+      fi
+      echo "[egress] proxy /healthz=$code (attempt $i/10) — retrying"
+      sleep 3
+    done
+    if [ "$ok" != "1" ]; then
+      echo "[egress] FATAL: proxy /healthz failed after 10 attempts; aborting bootstrap" >&2
+      exit 1
+    fi
+
+  # Start lite-engine (last step — proxy already armed above).
+  - touch /root/.env
+  - '[ -f "/etc/environment" ] && cp "/etc/environment" /root/.env'
+  - echo "CLOUD_DRIVER={{ .DriverName }}" >> /root/.env
+  - /usr/bin/lite-engine server --env-file /root/.env > /var/log/lite-engine.log 2>&1 &
