@@ -18,7 +18,7 @@ import (
 
 // egressCAHostPath is where cloud-init writes the mitm CA on egress-control VMs.
 const (
-	egressCAHostPath = "/etc/harness-certs/ca.crt"
+	egressCAHostPath        = "/etc/harness-certs/ca.crt"
 	egressCAWindowsHostPath = "C:\\harness-certs\\ca.crt"
 )
 

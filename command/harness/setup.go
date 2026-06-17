@@ -667,8 +667,8 @@ func applyAndSaveEgressRules(
 }
 
 // appendEgressCAVolume registers the host-path Volume so step containers can bind-mount it.
-func appendEgressCAVolume(volumes []*lespec.Volume, os string) []*lespec.Volume {
-	if os == oshelp.OSLinux {
+func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Volume {
+	if osName == oshelp.OSLinux {
 		return append(volumes, &lespec.Volume{
 			HostPath: &lespec.VolumeHostPath{
 				ID:       fileID("ca.crt"),
@@ -677,7 +677,7 @@ func appendEgressCAVolume(volumes []*lespec.Volume, os string) []*lespec.Volume 
 				ReadOnly: true,
 			},
 		})
-	} else if os == oshelp.OSWindows {
+	} else if osName == oshelp.OSWindows {
 		return append(volumes, &lespec.Volume{
 			HostPath: &lespec.VolumeHostPath{
 				ID:       fileID("ca.crt"),

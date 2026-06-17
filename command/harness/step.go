@@ -230,7 +230,7 @@ func configureEgressStep(r *ExecuteVMRequest, os string, proxy config.EgressProx
 		// Windows containers cannot bind-mount individual files (the daemon
 		// errors "Only directories can be mapped on this platform"). Mount the
 		// parent directory; the CA remains at C:\harness-certs\ca.crt inside.
-		r.Envs["HARNESS_CA_PATH"] = egressCAWindowsHostPath 
+		r.Envs["HARNESS_CA_PATH"] = egressCAWindowsHostPath
 		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
 			Name: fileID("ca.crt"),
 			Path: "C:\\harness-certs",
