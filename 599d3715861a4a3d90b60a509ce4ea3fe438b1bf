@@ -1,53 +1,53 @@
-command/config/config.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 286-297,481,492
-  human 480,485
-app/cloudinit/user_data/hosted_ubuntu_linux_egress
-  8824546c-cb1d-429f-af7d-4985ce4874c2 69
-types/types.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 181-184
-command/harness/step_test.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 1-82
-app/cloudinit/user_data/ubuntu_linux_egress_v2
-  8824546c-cb1d-429f-af7d-4985ce4874c2 1-154
-app/drivers/util.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 9-12
-  human 13
-app/cloudinit/cloudinit.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 36-39,66-91,147,151,153-155,175,177-179,307-311,332-337
-  human 152,176
-app/lehelper/lehelper.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 34-37
-app/cloudinit/user_data/partials/windows_binaries.tmpl
-  8824546c-cb1d-429f-af7d-4985ce4874c2 1-61
-app/drivers/manager_config.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 36-40,74-77,108-111
-  human 41
 app/drivers/provisioner.go
   8824546c-cb1d-429f-af7d-4985ce4874c2 7,9,208-211,269-273,494-543
-app/cloudinit/user_data/windows_egress
-  8824546c-cb1d-429f-af7d-4985ce4874c2 1-154
-app/drivers/manager.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 29-32
-app/cloudinit/user_data/windows
-  8824546c-cb1d-429f-af7d-4985ce4874c2 35
-app/cloudinit/user_data/partials/ubuntu_binaries.tmpl
-  8824546c-cb1d-429f-af7d-4985ce4874c2 1-72
+app/cloudinit/user_data/partials/windows_binaries.tmpl
+  8824546c-cb1d-429f-af7d-4985ce4874c2 1-61
 command/harness/step.go
   8824546c-cb1d-429f-af7d-4985ce4874c2 17,52,122-123,205-208,213-237
   fde3ede3-c829-4535-8583-b56aaf5ebdd3
   human 238
 command/harness/service.go
   8824546c-cb1d-429f-af7d-4985ce4874c2 9,41,58,76,96,138
+app/cloudinit/user_data/ubuntu_linux_egress_v2
+  8824546c-cb1d-429f-af7d-4985ce4874c2 1-154
+types/types.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 181-184
+app/cloudinit/user_data/hosted_ubuntu_linux_egress
+  8824546c-cb1d-429f-af7d-4985ce4874c2 69
+app/cloudinit/user_data/partials/ubuntu_binaries.tmpl
+  8824546c-cb1d-429f-af7d-4985ce4874c2 1-72
+app/lehelper/lehelper.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 34-37
+app/drivers/manager_config.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 36-40,74-77,108-111
+  human 41
+app/cloudinit/user_data/windows
+  8824546c-cb1d-429f-af7d-4985ce4874c2 35
+command/harness/step_test.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 1-82
 app/cloudinit/cloudinit_test.go
   8824546c-cb1d-429f-af7d-4985ce4874c2 4,150-230,232-304,319-368,371-420
   human 231,369-370
-command/config/egress_proxy_test.go
-  8824546c-cb1d-429f-af7d-4985ce4874c2 1-50
 app/drivers/provisioner_rebase_test.go
   8824546c-cb1d-429f-af7d-4985ce4874c2 1-56
 app/cloudinit/user_data/ubuntu_linux
   8824546c-cb1d-429f-af7d-4985ce4874c2 230
   human 245
+app/drivers/manager.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 29-32
+app/drivers/util.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 9-12
+  human 13
+command/config/config.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 286-297,481,492
+  human 480,485
+app/cloudinit/user_data/windows_egress
+  8824546c-cb1d-429f-af7d-4985ce4874c2 1-154
+command/config/egress_proxy_test.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 1-50
+app/cloudinit/cloudinit.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 36-39,66-91,147,151,153-155,175,177-179,307-311,332-337
+  human 152,176
 command/harness/helper.go
   human 20-23
 command/harness/setup.go
@@ -58,171 +58,9 @@ command/harness/setup.go
     {
       "entries": [
         {
-          "accepted_lines": 14,
-          "added_lines": 15,
-          "deleted_lines": 3,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "286-297,481,492",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 2,
-          "added_lines": 2,
-          "deleted_lines": 0,
-          "hash": "human",
-          "lines": "480,485",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "command/config/config.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "69",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/cloudinit/user_data/hosted_ubuntu_linux_egress"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 4,
-          "added_lines": 4,
-          "deleted_lines": 0,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "181-184",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "types/types.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 82,
-          "added_lines": 82,
-          "deleted_lines": 16,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "1-82",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "command/harness/step_test.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 154,
-          "added_lines": 154,
-          "deleted_lines": 31,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "1-154",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/cloudinit/user_data/ubuntu_linux_egress_v2"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 4,
-          "added_lines": 4,
-          "deleted_lines": 0,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "9-12",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "human",
-          "lines": "13",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/drivers/util.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 50,
-          "added_lines": 52,
-          "deleted_lines": 10,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "36-39,66-91,147,151,153-155,175,177-179,307-311,332-337",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 2,
-          "added_lines": 2,
-          "deleted_lines": 0,
-          "hash": "human",
-          "lines": "152,176",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/cloudinit/cloudinit.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 4,
-          "added_lines": 4,
-          "deleted_lines": 0,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "34-37",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/lehelper/lehelper.go"
-    },
-    {
-      "entries": [
-        {
           "accepted_lines": 61,
-          "added_lines": 61,
-          "deleted_lines": 12,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "1-61",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/cloudinit/user_data/partials/windows_binaries.tmpl"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 13,
-          "added_lines": 13,
-          "deleted_lines": 2,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "36-40,74-77,108-111",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "human",
-          "lines": "41",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/drivers/manager_config.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 61,
-          "added_lines": 61,
-          "deleted_lines": 12,
+          "added_lines": 66,
+          "deleted_lines": 11,
           "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
           "lines": "7,9,208-211,269-273,494-543",
           "overridden_lines": 0
@@ -233,61 +71,22 @@ command/harness/setup.go
     {
       "entries": [
         {
-          "accepted_lines": 154,
-          "added_lines": 154,
-          "deleted_lines": 31,
+          "accepted_lines": 61,
+          "added_lines": 61,
+          "deleted_lines": 10,
           "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "1-154",
+          "lines": "1-61",
           "overridden_lines": 0
         }
       ],
-      "file": "app/cloudinit/user_data/windows_egress"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 4,
-          "added_lines": 4,
-          "deleted_lines": 0,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "29-32",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/drivers/manager.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "35",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/cloudinit/user_data/windows"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 72,
-          "added_lines": 72,
-          "deleted_lines": 14,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "1-72",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/cloudinit/user_data/partials/ubuntu_binaries.tmpl"
+      "file": "app/cloudinit/user_data/partials/windows_binaries.tmpl"
     },
     {
       "entries": [
         {
           "accepted_lines": 33,
-          "added_lines": 40,
-          "deleted_lines": 8,
+          "added_lines": 42,
+          "deleted_lines": 7,
           "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
           "lines": "17,52,122-123,205-208,213-237",
           "overridden_lines": 0
@@ -323,9 +122,121 @@ command/harness/setup.go
     {
       "entries": [
         {
+          "accepted_lines": 154,
+          "added_lines": 214,
+          "deleted_lines": 38,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "1-154",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/ubuntu_linux_egress_v2"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "181-184",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "types/types.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "69",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/hosted_ubuntu_linux_egress"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 72,
+          "added_lines": 73,
+          "deleted_lines": 13,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "1-72",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/partials/ubuntu_binaries.tmpl"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "34-37",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/lehelper/lehelper.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 13,
+          "deleted_lines": 2,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "36-40,74-77,108-111",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "41",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/manager_config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "35",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/windows"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 82,
+          "added_lines": 82,
+          "deleted_lines": 14,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "1-82",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step_test.go"
+    },
+    {
+      "entries": [
+        {
           "accepted_lines": 255,
           "added_lines": 257,
-          "deleted_lines": 52,
+          "deleted_lines": 46,
           "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
           "lines": "4,150-230,232-304,319-368,371-420",
           "overridden_lines": 0
@@ -344,22 +255,9 @@ command/harness/setup.go
     {
       "entries": [
         {
-          "accepted_lines": 50,
-          "added_lines": 50,
-          "deleted_lines": 10,
-          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
-          "lines": "1-50",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "command/config/egress_proxy_test.go"
-    },
-    {
-      "entries": [
-        {
           "accepted_lines": 56,
           "added_lines": 56,
-          "deleted_lines": 11,
+          "deleted_lines": 10,
           "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
           "lines": "1-56",
           "overridden_lines": 0
@@ -371,8 +269,8 @@ command/harness/setup.go
       "entries": [
         {
           "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 8,
+          "added_lines": 2,
+          "deleted_lines": 0,
           "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
           "lines": "230",
           "overridden_lines": 0
@@ -387,6 +285,108 @@ command/harness/setup.go
         }
       ],
       "file": "app/cloudinit/user_data/ubuntu_linux"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "29-32",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/manager.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "9-12",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "13",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/util.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 14,
+          "added_lines": 15,
+          "deleted_lines": 2,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "286-297,481,492",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "480,485",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 154,
+          "added_lines": 225,
+          "deleted_lines": 40,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "1-154",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/windows_egress"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 50,
+          "added_lines": 50,
+          "deleted_lines": 8,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "1-50",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/egress_proxy_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 50,
+          "added_lines": 52,
+          "deleted_lines": 19,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "36-39,66-91,147,151,153-155,175,177-179,307-311,332-337",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "152,176",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/cloudinit.go"
     },
     {
       "entries": [
@@ -431,7 +431,7 @@ command/harness/setup.go
       },
       "human_author": "Raghav <raghav.gupta@harness.io>",
       "overriden_lines": 0,
-      "total_additions": 1092,
+      "total_additions": 1233,
       "total_deletions": 221
     },
     "fde3ede3-c829-4535-8583-b56aaf5ebdd3": {
@@ -443,7 +443,7 @@ command/harness/setup.go
       },
       "human_author": "Raghav <raghav.gupta@harness.io>",
       "overriden_lines": 0,
-      "total_additions": 2,
+      "total_additions": 25,
       "total_deletions": 0
     },
     "human": {
