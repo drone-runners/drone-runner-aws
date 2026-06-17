@@ -1,0 +1,38 @@
+command/config/config.go
+  human 485
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "485",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/config.go"
+    }
+  ],
+  "base_commit_sha": "fef7b62c85accd5d93a0b5736ae6bef4d5ddc448",
+  "branch": "CI-23161",
+  "commit_sha": "64f2c266cb48593cc33d35a5db55ef7f6d771557",
+  "commit_time": "2026-06-17T18:59:52+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
