@@ -1,0 +1,80 @@
+command/harness/setup.go
+  8824546c-cb1d-429f-af7d-4985ce4874c2 670-671,680
+command/harness/helper.go
+  human 21
+command/harness/step.go
+  human 233
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 3,
+          "hash": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+          "lines": "670-671,680",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/setup.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "21",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/helper.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "233",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step.go"
+    }
+  ],
+  "base_commit_sha": "599d3715861a4a3d90b60a509ce4ea3fe438b1bf",
+  "branch": "CI-23161",
+  "commit_sha": "1c240b091ac4f77e3198394a90a083237db861cb",
+  "commit_time": "2026-06-17T18:24:18+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "8824546c-cb1d-429f-af7d-4985ce4874c2": {
+      "accepted_lines": 3,
+      "agent_id": {
+        "id": "8824546c-cb1d-429f-af7d-4985ce4874c2",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 3,
+      "total_deletions": 3
+    },
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
