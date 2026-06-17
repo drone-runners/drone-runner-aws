@@ -17,6 +17,7 @@ echo "[DRONE] Setup LiteEngine Certificates"
 
 mkdir "C:\Program Files\lite-engine"
 mkdir "{{ .CertDir }}"
+mkdir "C:\harness-certs" -Force | Out-Null
 
 $object0 = "{{ .CACert | base64 }}"
 $Object = [System.Convert]::FromBase64String($object0)
