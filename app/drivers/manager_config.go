@@ -33,6 +33,12 @@ type ManagerConfig struct {
 	TPAAddress string
 	TPAPort    string
 
+	// Egress forward-proxy settings injected into egress-control build VMs.
+	EgressProxyEnabled bool
+	EgressProxyURL     string
+	EgressNoProxy      string
+	EgressCACert       string
+
 	// Binary URIs
 	HarnessTestBinaryURI         string
 	PluginBinaryURI              string
@@ -65,6 +71,10 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		liteEngineFallbackPath:       cfg.LiteEngineFallbackPath,
 		tpaAddress:                   cfg.TPAAddress,
 		tpaPort:                      cfg.TPAPort,
+		egressProxyEnabled:           cfg.EgressProxyEnabled,
+		egressProxyURL:               cfg.EgressProxyURL,
+		egressNoProxy:                cfg.EgressNoProxy,
+		egressCACert:                 cfg.EgressCACert,
 		harnessTestBinaryURI:         cfg.HarnessTestBinaryURI,
 		pluginBinaryURI:              cfg.PluginBinaryURI,
 		pluginBinaryFallbackURI:      cfg.PluginBinaryFallbackURI,
@@ -95,6 +105,10 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		LiteEngineFallbackPath:       envConfig.LiteEngine.FallbackPath,
 		TPAAddress:                   envConfig.TPA.Address,
 		TPAPort:                      envConfig.TPA.Port,
+		EgressProxyEnabled:           envConfig.Egress.Proxy.Enabled,
+		EgressProxyURL:               envConfig.Egress.Proxy.URL,
+		EgressNoProxy:                envConfig.Egress.Proxy.NoProxy,
+		EgressCACert:                 envConfig.Egress.Proxy.CACert,
 		HarnessTestBinaryURI:         envConfig.Settings.HarnessTestBinaryURI,
 		PluginBinaryURI:              envConfig.Settings.PluginBinaryURI,
 		PluginBinaryFallbackURI:      envConfig.Settings.PluginBinaryFallbackURI,

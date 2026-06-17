@@ -17,7 +17,10 @@ import (
 )
 
 // egressCAHostPath is where cloud-init writes the mitm CA on egress-control VMs.
-const egressCAHostPath = "/etc/harness-certs/ca.crt"
+const (
+	egressCAHostPath        = "/etc/harness-certs/ca.crt"
+	egressCAWindowsHostPath = "C:\\harness-certs\\ca.crt"
+)
 
 func getStreamLogger(cfg *leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, correlationID string) *lelivelog.Writer {
 	client := lestream.NewHTTPClient(cfg.URL, cfg.AccountID,

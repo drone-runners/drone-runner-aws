@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/drone/runner-go/logger"
@@ -203,6 +205,10 @@ func (m *Manager) setupInstance(
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
 	createOptions.TPAAddress = m.tpaAddress
 	createOptions.TPAPort = m.tpaPort
+	createOptions.EgressProxyEnabled = m.egressProxyEnabled
+	createOptions.EgressProxyURL = m.egressProxyURL
+	createOptions.EgressNoProxy = m.egressNoProxy
+	createOptions.EgressCACert = m.egressCACert
 	createOptions.PoolName = pool.Name
 	createOptions.Limit = pool.MaxSize
 	createOptions.Pool = pool.MinSize
@@ -260,6 +266,11 @@ func (m *Manager) setupInstance(
 	createOptions.EnvmanBinaryFallbackURI = m.envmanBinaryFallbackURI
 	createOptions.TmateBinaryURI = m.tmateBinaryURI
 	createOptions.TmateBinaryFallbackURI = m.tmateBinaryFallbackURI
+	// Under egress control + proxy, all binaries must be fetched from the single
+	// allow-listed Harness download origin through the mitm proxy.
+	if m.egressProxyEnabled && m.IsEgressPool(pool.Name) {
+		pinBinaryDownloadsToHarness(createOptions)
+	}
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
 		createOptions.GitspaceOpts = types.GitspaceOpts{
 			Secret:                   agentConfig.Secret,
@@ -479,4 +490,54 @@ func resolveInstanceSource(params *types.SetupInstanceParams) types.InstanceSour
 		return params.Source
 	}
 	return types.InstanceSourcePool
+}
+
+// pinBinaryDownloadsToHarness rewrites every binary download URL to the canonical
+// Harness origin and collapses each primary/fallback pair onto the same (rebased)
+// primary, leaving no non-allow-listed destination to fall back to.
+func pinBinaryDownloadsToHarness(o *types.InstanceCreateOpts) {
+	// Primary/fallback pairs: fallback mirrors the rebased primary.
+	for _, p := range []struct{ primary, fallback *string }{
+		{&o.LiteEnginePath, &o.LiteEngineFallbackPath},
+		{&o.PluginBinaryURI, &o.PluginBinaryFallbackURI},
+		{&o.AnnotationsBinaryURI, &o.AnnotationsBinaryFallbackURI},
+		{&o.EnvmanBinaryURI, &o.EnvmanBinaryFallbackURI},
+		{&o.TmateBinaryURI, &o.TmateBinaryFallbackURI},
+	} {
+		*p.primary = rebaseToHarnessDownload(*p.primary)
+		*p.fallback = *p.primary
+	}
+
+	// Binaries without a fallback URL.
+	for _, u := range []*string{&o.AutoInjectionBinaryURI, &o.HarnessTestBinaryURI} {
+		*u = rebaseToHarnessDownload(*u)
+	}
+}
+
+// rebaseToHarnessDownload forces a binary download URL onto harnessDownloadBase.
+// The path that lives under the download root is preserved and re-rooted at the
+// canonical origin:
+//   - canonical host (.../storage/harness-download/<path>) -> kept as-is
+//   - GCS bucket host (storage.googleapis.com/<path>)      -> base + /<path>
+//
+// Empty or unparseable values are returned unchanged.
+func rebaseToHarnessDownload(rawURL string) string {
+	if rawURL == "" {
+		return rawURL
+	}
+	const marker = "/storage/harness-download"
+	if idx := strings.Index(rawURL, marker); idx >= 0 {
+		return harnessDownloadBase + rawURL[idx+len(marker):]
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return rawURL
+	}
+	// Non-canonical origin (e.g. the raw GCS bucket): its path already mirrors the
+	// layout under the download root, so just re-root it at the canonical base.
+	suffix := u.Path
+	if u.RawQuery != "" {
+		suffix += "?" + u.RawQuery
+	}
+	return harnessDownloadBase + suffix
 }

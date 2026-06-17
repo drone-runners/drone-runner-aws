@@ -6,6 +6,7 @@ import (
 	"github.com/harness/lite-engine/api"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
+	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -37,6 +38,7 @@ type VMService struct {
 	mockTimeoutSecs  int
 	fallbackPoolIDs  []string
 	egressDefaultIPs []string
+	egressProxy      config.EgressProxy
 }
 
 // VMServiceConfig holds configuration for creating a VMService.
@@ -53,6 +55,7 @@ type VMServiceConfig struct {
 	MockTimeoutSecs          int
 	FallbackPoolIDs          []string
 	EgressDefaultIPs         []string
+	EgressProxy              config.EgressProxy
 }
 
 // NewVMService creates a new VMService with the provided configuration.
@@ -70,6 +73,7 @@ func NewVMService(cfg *VMServiceConfig) *VMService {
 		mockTimeoutSecs:          cfg.MockTimeoutSecs,
 		fallbackPoolIDs:          cfg.FallbackPoolIDs,
 		egressDefaultIPs:         cfg.EgressDefaultIPs,
+		egressProxy:              cfg.EgressProxy,
 	}
 }
 
@@ -89,6 +93,7 @@ func NewVMServiceFromRunner(r *Runner) *VMService {
 		mockTimeoutSecs:  r.Config.LiteEngine.MockStepTimeoutSecs,
 		fallbackPoolIDs:  r.Config.Settings.FallbackPoolIDs,
 		egressDefaultIPs: r.Config.Egress.DefaultIPs,
+		egressProxy:      r.Config.Egress.Proxy,
 	}
 }
 
@@ -130,6 +135,7 @@ func (s *VMService) Step(ctx context.Context, req *ExecuteVMRequest, async bool)
 		s.mockTimeoutSecs,
 		s.poolManager,
 		s.metrics,
+		s.egressProxy,
 		async,
 	)
 }

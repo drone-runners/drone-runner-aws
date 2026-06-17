@@ -283,6 +283,18 @@ type (
 	}
 )
 
+// EgressProxy holds the forward-proxy settings injected into steps that run in
+// egress-controlled pools. Steps in these pools must route outbound traffic
+// through the mitm proxy so egress rules can be enforced.
+type EgressProxy struct {
+	Enabled bool   `json:"enabled" yaml:"enabled" envconfig:"DRONE_EGRESS_PROXY_ENABLED" default:"false"`
+	URL     string `json:"url" yaml:"url" envconfig:"DRONE_EGRESS_PROXY_URL" default:"http://127.0.0.1:3128"`
+	NoProxy string `json:"no_proxy" yaml:"no_proxy" envconfig:"DRONE_EGRESS_NO_PROXY" default:"localhost,127.0.0.1,169.254.169.254,172.16.0.0/12,10.0.0.0/8,.svc.cluster.local"`
+	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
+	// fleet proxy presents. Baked into the build VM so TLS interception is trusted.
+	CACert string `json:"ca_cert" yaml:"ca_cert" envconfig:"DRONE_EGRESS_PROXY_CA_CERT"`
+}
+
 type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
 	Trace bool `envconfig:"DRONE_TRACE"`
@@ -465,7 +477,8 @@ type EnvConfig struct {
 	}
 
 	Egress struct {
-		DefaultIPs []string `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
+		DefaultIPs []string    `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
+		Proxy      EgressProxy `json:"proxy" yaml:"proxy"`
 	}
 
 	LiteEngine struct {
@@ -476,7 +489,7 @@ type EnvConfig struct {
 	}
 
 	TPA struct {
-		Address string `envconfig:"DRONE_TPA_ADDRESS" default:"0.0.0.0"`
+		Address string `envconfig:"DRONE_TPA_ADDRESS" default:"127.0.0.1"`
 		Port    string `envconfig:"DRONE_TPA_PORT" default:"5442"`
 	}
 
