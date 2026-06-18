@@ -43,6 +43,7 @@ const (
 	secSleep            = 1
 	tagRetrySleepMs     = 1000
 	operationGetTimeout = 30
+	maxStockoutAttempts = 3
 )
 
 var (
@@ -569,41 +570,38 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		bootDiskType = opts.StorageOpts.BootDiskType
 	}
 
+	// Stockout retry is only safe when the request is not pinned to a specific
+	// zone. A per-attempt persistent disk (StorageOpts.Identifier) is zonal and a
+	// capacity reservation binds the zone via ReservationAffinity, so in those
+	// cases we keep the single original candidate and let pool fallback handle
+	// failures.
+	stockoutRetryEnabled := opts.StorageOpts.Identifier == "" &&
+		!(opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "")
+
+	candidates := []createCandidate{{
+		zone:       zone,
+		network:    resolvedNetwork,
+		subnetwork: resolvedSubnetwork,
+		tags:       resolvedTags,
+	}}
+	if stockoutRetryEnabled {
+		candidates = p.buildCreateCandidates(candidates[0])
+	}
+
+	// Build the zone-independent instance spec once. Per-attempt fields (zone,
+	// machine type, disk type, network, tags) are set inside the retry loop.
 	in := &compute.Instance{
 		Name:           name,
-		Zone:           fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone),
 		MinCpuPlatform: "Automatic",
-		MachineType:    fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.projectID, zone, machineType),
 		Metadata: &compute.Metadata{
 			Items: []*compute.MetadataItems{
-				{
-					Key:   p.userDataKey,
-					Value: googleapi.String(userData),
-				},
-				{
-					Key:   "harness-account-id",
-					Value: googleapi.String(opts.AccountID),
-				},
-				{
-					Key:   "harness-pool-name",
-					Value: googleapi.String(opts.PoolName),
-				},
-				{
-					Key:   "harness-runner-name",
-					Value: googleapi.String(opts.RunnerName),
-				},
-				{
-					Key:   "harness-resource-class",
-					Value: googleapi.String(opts.ResourceClass),
-				},
-				{
-					Key:   "harness-platform-os",
-					Value: googleapi.String(opts.Platform.OS),
-				},
-				{
-					Key:   "harness-platform-arch",
-					Value: googleapi.String(opts.Platform.Arch),
-				},
+				{Key: p.userDataKey, Value: googleapi.String(userData)},
+				{Key: "harness-account-id", Value: googleapi.String(opts.AccountID)},
+				{Key: "harness-pool-name", Value: googleapi.String(opts.PoolName)},
+				{Key: "harness-runner-name", Value: googleapi.String(opts.RunnerName)},
+				{Key: "harness-resource-class", Value: googleapi.String(opts.ResourceClass)},
+				{Key: "harness-platform-os", Value: googleapi.String(opts.Platform.OS)},
+				{Key: "harness-platform-arch", Value: googleapi.String(opts.Platform.Arch)},
 			},
 		},
 		Disks: []*compute.AttachedDisk{
@@ -615,53 +613,31 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				DeviceName: opts.PoolName,
 				InitializeParams: &compute.AttachedDiskInitializeParams{
 					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", image),
-					DiskType:    fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, bootDiskType),
 					DiskSizeGb:  bootDiskSize,
 				},
 			},
 		},
 		AdvancedMachineFeatures: advancedMachineFeatures,
 		CanIpForward:            false,
-		NetworkInterfaces: []*compute.NetworkInterface{
-			{
-				Network:       resolvedNetwork,
-				Subnetwork:    resolvedSubnetwork,
-				AccessConfigs: networkConfig,
-			},
-		},
+		NetworkInterfaces:       []*compute.NetworkInterface{{AccessConfigs: networkConfig}},
 		Scheduling: &compute.Scheduling{
 			Preemptible:       false,
 			OnHostMaintenance: onHostMaintenance(gpu),
 			AutomaticRestart:  googleapi.Bool(true),
 		},
 		DeletionProtection: false,
-		Tags: &compute.Tags{
-			Items: append(resolvedTags, name),
-		},
-		Labels: p.labels,
+		Labels:             p.buildLabelsWithGitspace(opts),
 	}
-
-	// Apply GitspaceConfigIdentifier to labels if present
-	in.Labels = p.buildLabelsWithGitspace(opts)
 
 	// Add BYOI metadata for custom images
 	if isByoiImage(image) {
 		logr.Debugln("google: adding BYOI metadata items for custom image")
 		in.Metadata.Items = append(in.Metadata.Items,
-			&compute.MetadataItems{
-				Key:   "harness-byoi",
-				Value: googleapi.String("true"),
-			},
-		)
+			&compute.MetadataItems{Key: "harness-byoi", Value: googleapi.String("true")})
 	}
 
 	if !p.noServiceAccount {
-		in.ServiceAccounts = []*compute.ServiceAccount{
-			{
-				Scopes: p.scopes,
-				Email:  p.serviceAccountEmail,
-			},
-		}
+		in.ServiceAccounts = []*compute.ServiceAccount{{Scopes: p.scopes, Email: p.serviceAccountEmail}}
 	}
 
 	// Set reservation affinity if capacity reservation is provided
@@ -674,34 +650,62 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	if opts.StorageOpts.Identifier != "" {
-		operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
-		if attachDiskErr != nil {
-			logr.WithError(attachDiskErr).Errorln("google: failed to attach persistent disk")
-			return nil, attachDiskErr
-		}
-		for _, operation := range operations {
-			if operation != nil {
-				// Disk not present, wait for creation
-				err = p.waitZoneOperation(ctx, operation.Name, zone)
-				if err != nil {
-					logr.WithError(err).Errorln("google: persistent disk creation operation failed")
-					return nil, err
+	var op *compute.Operation
+	for attempt := 0; attempt < len(candidates); attempt++ {
+		cand := candidates[attempt]
+		zone = cand.zone
+		resolvedNetwork = cand.network
+		resolvedSubnetwork = cand.subnetwork
+
+		attemptLogr := logr.WithField("zone", zone).WithField("attempt", attempt+1)
+
+		// Apply the per-attempt zone/network selection onto the shared spec.
+		in.Zone = fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone)
+		in.MachineType = fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.projectID, zone, machineType)
+		in.Disks[0].InitializeParams.DiskType = fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, bootDiskType)
+		in.NetworkInterfaces[0].Network = resolvedNetwork
+		in.NetworkInterfaces[0].Subnetwork = resolvedSubnetwork
+		// Copy tags so appending name does not mutate the network config's backing slice.
+		in.Tags = &compute.Tags{Items: append(append([]string{}, cand.tags...), name)}
+
+		if opts.StorageOpts.Identifier != "" {
+			operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
+			if attachDiskErr != nil {
+				attemptLogr.WithError(attachDiskErr).Errorln("google: failed to attach persistent disk")
+				return nil, attachDiskErr
+			}
+			for _, operation := range operations {
+				if operation != nil {
+					// Disk not present, wait for creation
+					if diskErr := p.waitZoneOperation(ctx, operation.Name, zone); diskErr != nil {
+						attemptLogr.WithError(diskErr).Errorln("google: persistent disk creation operation failed")
+						return nil, diskErr
+					}
 				}
 			}
 		}
+
+		var attemptErr error
+		op, attemptErr = p.insertInstance(ctx, p.projectID, zone, uuid.New().String(), in)
+		if attemptErr == nil {
+			attemptErr = p.waitZoneOperation(ctx, op.Name, zone)
+		}
+		if attemptErr == nil {
+			break
+		}
+
+		// Retry alternate candidates only on stockout/capacity errors. All other
+		// failures fail fast so pool fallback in HandleSetup can take over.
+		if stockoutRetryEnabled && isStockoutError(attemptErr) && attempt < len(candidates)-1 {
+			attemptLogr.WithError(attemptErr).Warnln("google: zone stockout, retrying alternate zone/network candidate")
+			continue
+		}
+		attemptLogr.WithError(attemptErr).Errorln("google: failed to provision VM")
+		return nil, attemptErr
 	}
 
-	op, err := p.insertInstance(ctx, p.projectID, zone, uuid.New().String(), in)
-	if err != nil {
-		logr.WithError(err).Errorln("google: failed to provision VM")
-		return nil, err
-	}
-	err = p.waitZoneOperation(ctx, op.Name, zone)
-	if err != nil {
-		logr.WithError(err).Errorln("instance insert operation failed")
-		return nil, err
-	}
+	// Reflect the zone that actually succeeded in subsequent log lines.
+	logr = logr.WithField("zone", zone)
 
 	logr.Debugln("instance insert operation completed")
 
@@ -1467,6 +1471,105 @@ func getInstanceName(runner, pool string) string {
 		trimmedName = "d" + trimmedName[1:]
 	}
 	return trimmedName
+}
+
+// stockoutMarkers are substrings that identify a GCP zonal stockout / capacity
+// exhaustion error. ZONE_RESOURCE_POOL_EXHAUSTED also matches the
+// ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS variant. Generic 429/503 errors are
+// intentionally not treated as stockout.
+var stockoutMarkers = []string{
+	"ZONE_RESOURCE_POOL_EXHAUSTED",
+	"POOL_CAPACITY_INSUFFICIENT",
+	"does not have enough resources available",
+	"STOCKOUT",
+}
+
+// isStockoutError reports whether err represents a GCP zonal stockout/capacity
+// exhaustion failure. It inspects both the synchronous googleapi.Error reasons
+// (from Instances.Insert) and the wrapped operation message (from
+// waitZoneOperation, which only propagates op.Error.Errors[0].Message).
+func isStockoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	candidates := []string{err.Error()}
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) {
+		for _, e := range gerr.Errors {
+			candidates = append(candidates, e.Reason, e.Message)
+		}
+	}
+	for _, s := range candidates {
+		for _, marker := range stockoutMarkers {
+			if strings.Contains(s, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// createCandidate holds the resolved zone and network details for a single VM
+// create attempt.
+type createCandidate struct {
+	zone       string
+	network    string
+	subnetwork string
+	tags       []string
+}
+
+// buildCreateCandidates returns an ordered list of create candidates for the
+// pool, starting with the first (already resolved) selection. After a stockout,
+// the create loop walks the remaining candidates: network configs are visited in
+// declared order, while zones within each config are visited in random order.
+// Zones already present are skipped and the list is capped at maxStockoutAttempts.
+func (p *config) buildCreateCandidates(first createCandidate) []createCandidate {
+	candidates := []createCandidate{first}
+	seen := map[string]bool{}
+	if first.zone != "" {
+		seen[first.zone] = true
+	}
+
+	// add returns false when the candidate cap has been reached.
+	add := func(c createCandidate) bool {
+		if len(candidates) >= maxStockoutAttempts {
+			return false
+		}
+		if c.zone == "" || seen[c.zone] {
+			return true
+		}
+		seen[c.zone] = true
+		candidates = append(candidates, c)
+		return true
+	}
+
+	enumerate := func(nc *networkConfig) bool {
+		// Randomize zone order within a network config so multiple runner pods
+		// hitting the same stockout do not all retry the same next zone. Network
+		// configs themselves are still walked in declared order by the caller.
+		zones := append([]string{}, nc.zones...)
+		rand.Shuffle(len(zones), func(i, j int) { zones[i], zones[j] = zones[j], zones[i] }) //nolint:gosec
+		for _, z := range zones {
+			network, subnetwork, zone, tags := nc.resolve(p.projectID, z, p.GetRegion)
+			if !add(createCandidate{zone: zone, network: network, subnetwork: subnetwork, tags: tags}) {
+				return false
+			}
+		}
+		return true
+	}
+
+	if len(p.networkConfigs) > 0 {
+		for i := range p.networkConfigs {
+			if !enumerate(&p.networkConfigs[i]) {
+				break
+			}
+		}
+	} else {
+		single := &networkConfig{network: p.network, subnetwork: p.subnetwork, tags: p.tags, zones: p.zones}
+		enumerate(single)
+	}
+
+	return candidates
 }
 
 func shouldRetry(err error) bool {
