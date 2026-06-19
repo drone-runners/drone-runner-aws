@@ -66,7 +66,7 @@ func TestRegistryHostnameDerivedFromImage(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			script := generateScriptForTest(t, tc.vmImage, tc.registry)
-			wantHost := tc.vmImage[:strings.Index(tc.vmImage, "/")]
+			wantHost := strings.SplitN(tc.vmImage, "/", 2)[0]
 			wantExport := `export TART_REGISTRY_HOSTNAME="${VM_IMAGE%%/*}"`
 			if !strings.Contains(script, wantExport) {
 				t.Fatalf("script does not derive hostname from image; want %q in:\n%s", wantExport, script)
