@@ -3,9 +3,13 @@ package google
 import (
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/api/googleapi"
 )
+
+const testMachineType = "c4d-standard-8"
 
 // --- isStockoutError ---
 
@@ -18,6 +22,7 @@ func TestIsStockoutError(t *testing.T) {
 		{name: "nil", err: nil, want: false},
 		{
 			name: "operation message resource exhausted",
+			//nolint:revive // reproduces GCP's exact stockout message verbatim
 			err:  errors.New("The zone 'projects/p/zones/us-west1-a' does not have enough resources available to fulfill the request."),
 			want: true,
 		},
@@ -28,6 +33,7 @@ func TestIsStockoutError(t *testing.T) {
 		},
 		{
 			name: "plain string with details variant",
+			//nolint:revive // reproduces GCP's exact stockout error code verbatim
 			err:  errors.New("ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS: ..."),
 			want: true,
 		},
@@ -104,7 +110,7 @@ func TestBuildCreateCandidates_PreservesFirst(t *testing.T) {
 	}
 	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral, subnetwork: subnetworkCentral}
 
-	got := p.buildCreateCandidates(first)
+	got := p.buildCreateCandidates(first, testMachineType)
 
 	if len(got) == 0 || got[0].zone != zoneUSCentral1A || got[0].network != networkVPCCentral {
 		t.Fatalf("first candidate not preserved, got %+v", got)
@@ -120,7 +126,7 @@ func TestBuildCreateCandidates_NoNetworkConfigs_UsesPoolZones(t *testing.T) {
 	}
 	first := createCandidate{zone: zoneUSCentral1A, network: networkVPC1}
 
-	got := p.buildCreateCandidates(first)
+	got := p.buildCreateCandidates(first, testMachineType)
 
 	gotZones := zonesOf(got)
 	if len(gotZones) != 3 {
@@ -155,7 +161,7 @@ func TestBuildCreateCandidates_NetworkConfigsStayInOrder(t *testing.T) {
 	}
 	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral}
 
-	got := p.buildCreateCandidates(first)
+	got := p.buildCreateCandidates(first, testMachineType)
 
 	want := []string{zoneUSCentral1A, zoneUSCentral1B, zoneUSEast1B}
 	gotZones := zonesOf(got)
@@ -175,7 +181,7 @@ func TestBuildCreateCandidates_ExcludesDuplicateFirstZone(t *testing.T) {
 	}
 	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral}
 
-	got := zonesOf(p.buildCreateCandidates(first))
+	got := zonesOf(p.buildCreateCandidates(first, testMachineType))
 
 	// us-central1-a is the first attempt and must not be repeated.
 	count := 0
@@ -199,7 +205,7 @@ func TestBuildCreateCandidates_CapsAtMaxAttempts(t *testing.T) {
 	}
 	first := createCandidate{zone: "z-a", network: "projects/proj/global/networks/vpc-a"}
 
-	got := p.buildCreateCandidates(first)
+	got := p.buildCreateCandidates(first, testMachineType)
 
 	if len(got) != maxStockoutAttempts {
 		t.Errorf("expected %d candidates, got %d (%v)", maxStockoutAttempts, len(got), zonesOf(got))
@@ -216,7 +222,7 @@ func TestBuildCreateCandidates_EnumeratesAcrossNetworkConfigs(t *testing.T) {
 	}
 	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral}
 
-	got := p.buildCreateCandidates(first)
+	got := p.buildCreateCandidates(first, testMachineType)
 
 	if len(got) != 2 {
 		t.Fatalf("expected 2 candidates, got %d (%v)", len(got), zonesOf(got))
@@ -226,5 +232,101 @@ func TestBuildCreateCandidates_EnumeratesAcrossNetworkConfigs(t *testing.T) {
 	}
 	if got[1].network != networkVPCEast {
 		t.Errorf("second candidate network: want %s, got %s", networkVPCEast, got[1].network)
+	}
+}
+
+// --- stockout cache deprioritization ---
+
+func newTestStockoutCache() *expirable.LRU[string, struct{}] {
+	return expirable.NewLRU[string, struct{}](16, nil, time.Minute)
+}
+
+func TestBuildCreateCandidates_DeprioritizesCachedStockoutFirst(t *testing.T) {
+	// nc0 first zone is the initial pick; mark it stocked out so it gets pushed
+	// to the back even though it is candidate 0.
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-central", zones: []string{zoneUSCentral1A, zoneUSCentral1B}},
+			{network: "vpc-east", zones: []string{zoneUSEast1B}},
+		},
+		stockoutCache: newTestStockoutCache(),
+	}
+	p.markStockout(zoneUSCentral1A, testMachineType)
+
+	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral}
+	got := p.buildCreateCandidates(first, testMachineType)
+	gotZones := zonesOf(got)
+
+	if gotZones[0] == zoneUSCentral1A {
+		t.Fatalf("cached-bad zone should not be first, got %v", gotZones)
+	}
+	// Deprioritized, not removed: it must still appear, at the back.
+	if gotZones[len(gotZones)-1] != zoneUSCentral1A {
+		t.Fatalf("cached-bad zone should be deprioritized to the back, got %v", gotZones)
+	}
+}
+
+func TestBuildCreateCandidates_StockoutDeprioritizationIsStable(t *testing.T) {
+	// nc1's zone is stocked out; healthy nc0 zones keep their relative order
+	// ahead of it.
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-central", zones: []string{zoneUSCentral1A}},
+			{network: "vpc-east", zones: []string{zoneUSEast1B}},
+		},
+		stockoutCache: newTestStockoutCache(),
+	}
+	p.markStockout(zoneUSEast1B, testMachineType)
+
+	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral}
+	gotZones := zonesOf(p.buildCreateCandidates(first, testMachineType))
+
+	want := []string{zoneUSCentral1A, zoneUSEast1B}
+	for i, z := range want {
+		if gotZones[i] != z {
+			t.Fatalf("want %v (healthy before cached-bad), got %v", want, gotZones)
+		}
+	}
+}
+
+func TestBuildCreateCandidates_AllCachedStillTried(t *testing.T) {
+	// Every zone is cached as stocked out: the list must still be non-empty so a
+	// create attempt is always made.
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-central", zones: []string{zoneUSCentral1A, zoneUSCentral1B}},
+		},
+		stockoutCache: newTestStockoutCache(),
+	}
+	p.markStockout(zoneUSCentral1A, testMachineType)
+	p.markStockout(zoneUSCentral1B, testMachineType)
+
+	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral}
+	got := p.buildCreateCandidates(first, testMachineType)
+
+	if len(got) == 0 {
+		t.Fatal("candidate list must not be empty when all zones are cached-bad")
+	}
+}
+
+func TestBuildCreateCandidates_StockoutKeyedByMachineType(t *testing.T) {
+	// A stockout for a different machine type must not deprioritize the zone.
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-central", zones: []string{zoneUSCentral1A, zoneUSCentral1B}},
+		},
+		stockoutCache: newTestStockoutCache(),
+	}
+	p.markStockout(zoneUSCentral1A, "e2-standard-2")
+
+	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral}
+	gotZones := zonesOf(p.buildCreateCandidates(first, testMachineType))
+
+	if gotZones[0] != zoneUSCentral1A {
+		t.Fatalf("stockout for a different machine type should not deprioritize zone, got %v", gotZones)
 	}
 }

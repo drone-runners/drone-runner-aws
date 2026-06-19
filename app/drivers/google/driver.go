@@ -26,6 +26,7 @@ import (
 
 	"github.com/dchest/uniuri"
 	"github.com/google/uuid"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -44,6 +45,13 @@ const (
 	tagRetrySleepMs     = 1000
 	operationGetTimeout = 30
 	maxStockoutAttempts = 3
+
+	// stockoutCacheTTL is how long a (project, zone, machineType) is remembered as
+	// recently stocked out. It is short and fixed (no backoff): exhausted zones are
+	// only deprioritized for this window, then become first-class candidates again.
+	stockoutCacheTTL = 30 * time.Second
+	// stockoutCacheSize bounds the number of remembered (zone, machineType) keys.
+	stockoutCacheSize = 1024
 )
 
 var (
@@ -105,6 +113,12 @@ type config struct {
 	gpu                        bool
 	networkConfigs             []networkConfig
 	networkConfigIndex         uint64
+
+	// stockoutCache remembers (project, zone, machineType) tuples that recently
+	// returned a GCP stockout so create candidate ordering can deprioritize them.
+	// Entries expire after stockoutCacheTTL. May be nil (e.g. in tests), in which
+	// case candidate ordering is unaffected.
+	stockoutCache *expirable.LRU[string, struct{}]
 }
 
 // resolveNetworkAndZone determines the final zone, network, subnetwork, and tags for an instance.
@@ -241,6 +255,8 @@ func New(opts ...Option) (drivers.Driver, error) {
 	for _, opt := range opts {
 		opt(p)
 	}
+
+	p.stockoutCache = expirable.NewLRU[string, struct{}](stockoutCacheSize, nil, stockoutCacheTTL)
 
 	ctx := context.Background()
 	var err error
@@ -575,8 +591,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	// capacity reservation binds the zone via ReservationAffinity, so in those
 	// cases we keep the single original candidate and let pool fallback handle
 	// failures.
-	stockoutRetryEnabled := opts.StorageOpts.Identifier == "" &&
-		!(opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "")
+	usesPersistentDisk := opts.StorageOpts.Identifier != ""
+	usesReservation := opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != ""
+	stockoutRetryEnabled := !usesPersistentDisk && !usesReservation
 
 	candidates := []createCandidate{{
 		zone:       zone,
@@ -585,7 +602,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		tags:       resolvedTags,
 	}}
 	if stockoutRetryEnabled {
-		candidates = p.buildCreateCandidates(candidates[0])
+		candidates = p.buildCreateCandidates(candidates[0], machineType)
+		p.logStockoutDeprioritization(logr, candidates, machineType)
 	}
 
 	// Build the zone-independent instance spec once. Per-attempt fields (zone,
@@ -650,59 +668,12 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	var op *compute.Operation
-	for attempt := 0; attempt < len(candidates); attempt++ {
-		cand := candidates[attempt]
-		zone = cand.zone
-		resolvedNetwork = cand.network
-		resolvedSubnetwork = cand.subnetwork
-
-		attemptLogr := logr.WithField("zone", zone).WithField("attempt", attempt+1)
-
-		// Apply the per-attempt zone/network selection onto the shared spec.
-		in.Zone = fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone)
-		in.MachineType = fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.projectID, zone, machineType)
-		in.Disks[0].InitializeParams.DiskType = fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, bootDiskType)
-		in.NetworkInterfaces[0].Network = resolvedNetwork
-		in.NetworkInterfaces[0].Subnetwork = resolvedSubnetwork
-		// Copy tags so appending name does not mutate the network config's backing slice.
-		in.Tags = &compute.Tags{Items: append(append([]string{}, cand.tags...), name)}
-
-		if opts.StorageOpts.Identifier != "" {
-			operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
-			if attachDiskErr != nil {
-				attemptLogr.WithError(attachDiskErr).Errorln("google: failed to attach persistent disk")
-				return nil, attachDiskErr
-			}
-			for _, operation := range operations {
-				if operation != nil {
-					// Disk not present, wait for creation
-					if diskErr := p.waitZoneOperation(ctx, operation.Name, zone); diskErr != nil {
-						attemptLogr.WithError(diskErr).Errorln("google: persistent disk creation operation failed")
-						return nil, diskErr
-					}
-				}
-			}
-		}
-
-		var attemptErr error
-		op, attemptErr = p.insertInstance(ctx, p.projectID, zone, uuid.New().String(), in)
-		if attemptErr == nil {
-			attemptErr = p.waitZoneOperation(ctx, op.Name, zone)
-		}
-		if attemptErr == nil {
-			break
-		}
-
-		// Retry alternate candidates only on stockout/capacity errors. All other
-		// failures fail fast so pool fallback in HandleSetup can take over.
-		if stockoutRetryEnabled && isStockoutError(attemptErr) && attempt < len(candidates)-1 {
-			attemptLogr.WithError(attemptErr).Warnln("google: zone stockout, retrying alternate zone/network candidate")
-			continue
-		}
-		attemptLogr.WithError(attemptErr).Errorln("google: failed to provision VM")
-		return nil, attemptErr
+	op, succeeded, err := p.insertWithStockoutRetry(ctx, in, candidates, opts, machineType, bootDiskType, stockoutRetryEnabled, usesReservation, logr)
+	if err != nil {
+		return nil, err
 	}
+	zone = succeeded.zone
+	resolvedNetwork = succeeded.network
 
 	// Reflect the zone that actually succeeded in subsequent log lines.
 	logr = logr.WithField("zone", zone)
@@ -731,6 +702,80 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		Debugln("google: [provision] complete")
 
 	return &instanceMap, nil
+}
+
+// insertWithStockoutRetry creates the instance by walking the ordered candidates,
+// applying each candidate's zone/network onto the shared spec. On a stockout it
+// records the zone (unless a reservation was used) and, when retries are enabled,
+// advances to the next candidate. It returns the successful operation and the
+// candidate that provisioned the VM.
+func (p *config) insertWithStockoutRetry(
+	ctx context.Context,
+	in *compute.Instance,
+	candidates []createCandidate,
+	opts *types.InstanceCreateOpts,
+	machineType, bootDiskType string,
+	stockoutRetryEnabled, usesReservation bool,
+	logr logger.Logger,
+) (*compute.Operation, createCandidate, error) {
+	for attempt := 0; attempt < len(candidates); attempt++ {
+		cand := candidates[attempt]
+		zone := cand.zone
+		attemptLogr := logr.WithField("zone", zone).WithField("attempt", attempt+1)
+
+		// Apply the per-attempt zone/network selection onto the shared spec.
+		in.Zone = fmt.Sprintf("projects/%s/zones/%s", p.projectID, zone)
+		in.MachineType = fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", p.projectID, zone, machineType)
+		in.Disks[0].InitializeParams.DiskType = fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", p.projectID, zone, bootDiskType)
+		in.NetworkInterfaces[0].Network = cand.network
+		in.NetworkInterfaces[0].Subnetwork = cand.subnetwork
+		// Copy tags so appending name does not mutate the network config's backing slice.
+		in.Tags = &compute.Tags{Items: append(append([]string{}, cand.tags...), in.Name)}
+
+		if opts.StorageOpts.Identifier != "" {
+			operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
+			if attachDiskErr != nil {
+				attemptLogr.WithError(attachDiskErr).Errorln("google: failed to attach persistent disk")
+				return nil, cand, attachDiskErr
+			}
+			for _, operation := range operations {
+				if operation != nil {
+					// Disk not present, wait for creation
+					if diskErr := p.waitZoneOperation(ctx, operation.Name, zone); diskErr != nil {
+						attemptLogr.WithError(diskErr).Errorln("google: persistent disk creation operation failed")
+						return nil, cand, diskErr
+					}
+				}
+			}
+		}
+
+		op, attemptErr := p.insertInstance(ctx, p.projectID, zone, uuid.New().String(), in)
+		if attemptErr == nil {
+			attemptErr = p.waitZoneOperation(ctx, op.Name, zone)
+		}
+		if attemptErr == nil {
+			return op, cand, nil
+		}
+
+		// Retry alternate candidates only on stockout/capacity errors. All other
+		// failures fail fast so pool fallback in HandleSetup can take over.
+		if isStockoutError(attemptErr) {
+			// Remember this zone so future create calls deprioritize it. Skip when
+			// the request consumed a specific reservation: that failure reflects
+			// reservation exhaustion, not general on-demand capacity in the zone.
+			if !usesReservation {
+				p.markStockout(zone, machineType)
+			}
+			if stockoutRetryEnabled && attempt < len(candidates)-1 {
+				attemptLogr.WithError(attemptErr).Warnln("google: zone stockout, retrying alternate zone/network candidate")
+				continue
+			}
+		}
+		attemptLogr.WithError(attemptErr).Errorln("google: failed to provision VM")
+		return nil, cand, attemptErr
+	}
+	// Unreachable in practice: candidates always holds at least the first selection.
+	return nil, createCandidate{}, errors.New("google: no create candidates available")
 }
 
 func (p *config) attachPersistentDisk(
@@ -1518,58 +1563,122 @@ type createCandidate struct {
 	tags       []string
 }
 
+// stockoutKey is the cache key for a recently-exhausted (project, zone, machineType).
+func (p *config) stockoutKey(zone, machineType string) string {
+	return p.projectID + ":" + zone + ":" + machineType
+}
+
+// markStockout records that (zone, machineType) just returned a GCP stockout so
+// future create candidate ordering deprioritizes it until the entry expires.
+func (p *config) markStockout(zone, machineType string) {
+	if p.stockoutCache == nil || zone == "" {
+		return
+	}
+	p.stockoutCache.Add(p.stockoutKey(zone, machineType), struct{}{})
+}
+
+// isStockoutZone reports whether (zone, machineType) is currently remembered as
+// recently exhausted.
+func (p *config) isStockoutZone(zone, machineType string) bool {
+	if p.stockoutCache == nil {
+		return false
+	}
+	_, found := p.stockoutCache.Get(p.stockoutKey(zone, machineType))
+	return found
+}
+
+// logStockoutDeprioritization emits a debug line when the candidate ordering was
+// influenced by recently stocked-out zones, so the cache's effect on VM init time
+// is observable in production logs.
+func (p *config) logStockoutDeprioritization(logr logger.Logger, candidates []createCandidate, machineType string) {
+	if p.stockoutCache == nil {
+		return
+	}
+	var flagged []string
+	order := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		order = append(order, c.zone)
+		if p.isStockoutZone(c.zone, machineType) {
+			flagged = append(flagged, c.zone)
+		}
+	}
+	if len(flagged) == 0 {
+		return
+	}
+	logr.WithField("deprioritized_zones", flagged).
+		WithField("candidate_order", order).
+		Debugln("google: deprioritized recently stocked-out zones in create candidate order")
+}
+
 // buildCreateCandidates returns an ordered list of create candidates for the
-// pool, starting with the first (already resolved) selection. After a stockout,
-// the create loop walks the remaining candidates: network configs are visited in
-// declared order, while zones within each config are visited in random order.
-// Zones already present are skipped and the list is capped at maxStockoutAttempts.
-func (p *config) buildCreateCandidates(first createCandidate) []createCandidate {
+// pool, starting with the first (already resolved) selection. Network configs are
+// visited in declared order, while zones within each config are visited in random
+// order. Candidates whose (zone, machineType) was recently stocked out are
+// deprioritized to the back (stable partition) rather than removed, so they are
+// still tried if everything else fails. The list is capped at maxStockoutAttempts
+// only after ordering, so healthy zones are never crowded out by the cap.
+func (p *config) buildCreateCandidates(first createCandidate, machineType string) []createCandidate {
 	candidates := []createCandidate{first}
 	seen := map[string]bool{}
 	if first.zone != "" {
 		seen[first.zone] = true
 	}
 
-	// add returns false when the candidate cap has been reached.
-	add := func(c createCandidate) bool {
-		if len(candidates) >= maxStockoutAttempts {
-			return false
-		}
+	add := func(c createCandidate) {
 		if c.zone == "" || seen[c.zone] {
-			return true
+			return
 		}
 		seen[c.zone] = true
 		candidates = append(candidates, c)
-		return true
 	}
 
-	enumerate := func(nc *networkConfig) bool {
+	enumerate := func(nc *networkConfig) {
 		// Randomize zone order within a network config so multiple runner pods
 		// hitting the same stockout do not all retry the same next zone. Network
-		// configs themselves are still walked in declared order by the caller.
+		// configs themselves are still walked in declared order.
 		zones := append([]string{}, nc.zones...)
 		rand.Shuffle(len(zones), func(i, j int) { zones[i], zones[j] = zones[j], zones[i] }) //nolint:gosec
 		for _, z := range zones {
 			network, subnetwork, zone, tags := nc.resolve(p.projectID, z, p.GetRegion)
-			if !add(createCandidate{zone: zone, network: network, subnetwork: subnetwork, tags: tags}) {
-				return false
-			}
+			add(createCandidate{zone: zone, network: network, subnetwork: subnetwork, tags: tags})
 		}
-		return true
 	}
 
 	if len(p.networkConfigs) > 0 {
 		for i := range p.networkConfigs {
-			if !enumerate(&p.networkConfigs[i]) {
-				break
-			}
+			enumerate(&p.networkConfigs[i])
 		}
 	} else {
 		single := &networkConfig{network: p.network, subnetwork: p.subnetwork, tags: p.tags, zones: p.zones}
 		enumerate(single)
 	}
 
+	candidates = p.deprioritizeStockoutZones(candidates, machineType)
+
+	if len(candidates) > maxStockoutAttempts {
+		candidates = candidates[:maxStockoutAttempts]
+	}
 	return candidates
+}
+
+// deprioritizeStockoutZones stable-partitions candidates so that zones not
+// recently stocked out come first (in their existing order) and recently
+// exhausted zones move to the back. Nothing is removed, so the candidate set is
+// never emptied.
+func (p *config) deprioritizeStockoutZones(candidates []createCandidate, machineType string) []createCandidate {
+	if p.stockoutCache == nil {
+		return candidates
+	}
+	healthy := make([]createCandidate, 0, len(candidates))
+	exhausted := make([]createCandidate, 0)
+	for _, c := range candidates {
+		if p.isStockoutZone(c.zone, machineType) {
+			exhausted = append(exhausted, c)
+		} else {
+			healthy = append(healthy, c)
+		}
+	}
+	return append(healthy, exhausted...)
 }
 
 func shouldRetry(err error) bool {
