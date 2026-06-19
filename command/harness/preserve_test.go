@@ -351,7 +351,8 @@ func (m *testPoolManager) GetInstanceByStageID(ctx context.Context, poolName, st
 func (m *testPoolManager) List(context.Context, string, *types.QueryParams) (busy, free, hibernating, provisioning, terminating []*types.Instance, err error) {
 	panic("not implemented")
 }
-func (m *testPoolManager) Exists(string) bool { return true }
+func (m *testPoolManager) Exists(string) bool      { return true }
+func (m *testPoolManager) IsEgressPool(string) bool { return false }
 func (m *testPoolManager) Add(...drivers.Pool) error {
 	return nil
 }
