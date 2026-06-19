@@ -106,23 +106,6 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
 
-	// Declare capacity variable early and defer its destruction to ensure cleanup happens regardless of errors
-	defer func() {
-		var capacity *types.CapacityReservation
-		var err error
-		if crs != nil {
-			capacity, err = crs.Find(ctx, r.StageRuntimeID)
-			if err == nil {
-				logr.WithField("destroy_caller", "destroy_handler:deferred_capacity_cleanup").
-					WithField("reservation_id", capacity.ReservationID).
-					Infoln("destroy_capacity: deferred capacity reservation cleanup")
-				if destroyCapErr := poolManager.DestroyCapacity(ctx, capacity); destroyCapErr != nil {
-					logr.WithError(destroyCapErr).Errorln("failed to destroy capacity reservation")
-				}
-			}
-		}
-	}()
-
 	var poolID string
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
