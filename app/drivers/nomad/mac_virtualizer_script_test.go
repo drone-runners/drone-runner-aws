@@ -28,6 +28,75 @@ func TestGenerateStartupScriptSyntax(t *testing.T) {
 	}
 }
 
+// TestRegistryHostnameDerivedFromImage guards against the regression where
+// TART_REGISTRY_HOSTNAME was set from the connector URL (e.g.
+// https://index.docker.io/v1/) instead of the image host (registry-1.docker.io).
+// tart only applies credentials when the hostname matches the image host, so a
+// mismatch causes anonymous pulls and 401s for private images.
+func TestRegistryHostnameDerivedFromImage(t *testing.T) {
+	cases := []struct {
+		name     string
+		vmImage  string
+		registry string
+	}{
+		{
+			name:     "docker hub connector url does not leak into hostname",
+			vmImage:  "registry-1.docker.io/dhirajharness/byoi-paypal-test:tag",
+			registry: "https://index.docker.io/v1/",
+		},
+		{
+			// GAR worked before because its connector host already equals the
+			// image host; deriving from the image keeps it identical.
+			name:     "gar host stays correct",
+			vmImage:  "us-west1-docker.pkg.dev/proj/repo/macos-base:latest",
+			registry: "https://us-west1-docker.pkg.dev",
+		},
+		{
+			name:     "ghcr image host",
+			vmImage:  "ghcr.io/example/macos-base:latest",
+			registry: "https://ghcr.io",
+		},
+		{
+			name:     "registry with port",
+			vmImage:  "registry.local:5000/team/macos-base:latest",
+			registry: "https://registry.local:5000/v2/",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			script := generateScriptForTest(t, tc.vmImage, tc.registry)
+			wantHost := strings.SplitN(tc.vmImage, "/", 2)[0]
+			wantExport := `export TART_REGISTRY_HOSTNAME="${VM_IMAGE%%/*}"`
+			if !strings.Contains(script, wantExport) {
+				t.Fatalf("script does not derive hostname from image; want %q in:\n%s", wantExport, script)
+			}
+			// The connector URL must not be used as the hostname value.
+			badExport := `export TART_REGISTRY_HOSTNAME="$REGISTRY"`
+			if strings.Contains(script, badExport) {
+				t.Fatalf("script still sets hostname from connector URL %q", tc.registry)
+			}
+			// Sanity: confirm the derived value resolves to the image host.
+			resolved := resolveRegistryHostname(t, tc.vmImage)
+			if resolved != wantHost {
+				t.Fatalf("derived hostname = %q, want %q", resolved, wantHost)
+			}
+		})
+	}
+}
+
+// resolveRegistryHostname runs the bash parameter expansion the script uses so
+// the test verifies the actual runtime value, not just the literal source.
+func resolveRegistryHostname(t *testing.T, vmImage string) string {
+	t.Helper()
+	cmd := exec.CommandContext(context.Background(), "bash", "-c", `VM_IMAGE="$1"; printf '%s' "${VM_IMAGE%%/*}"`, "bash", vmImage)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("bash expansion failed: %v", err)
+	}
+	return string(out)
+}
+
 // TestImageCleanup exercises the tart image cleanup + pull logic with a mock
 // `tart` binary, verifying which images get deleted and pulled in each case.
 func TestImageCleanup(t *testing.T) {
