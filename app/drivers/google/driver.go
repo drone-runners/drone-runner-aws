@@ -46,10 +46,7 @@ const (
 	operationGetTimeout = 30
 	maxStockoutAttempts = 3
 
-	// stockoutCacheTTL is how long a (project, zone, machineType) is remembered as
-	// recently stocked out. It is short and fixed (no backoff): exhausted zones are
-	// only deprioritized for this window, then become first-class candidates again.
-	stockoutCacheTTL = 30 * time.Second
+	stockoutCacheTTL = 300 * time.Second
 	// stockoutCacheSize bounds the number of remembered (zone, machineType) keys.
 	stockoutCacheSize = 1024
 )
@@ -114,10 +111,6 @@ type config struct {
 	networkConfigs             []networkConfig
 	networkConfigIndex         uint64
 
-	// stockoutCache remembers (project, zone, machineType) tuples that recently
-	// returned a GCP stockout so create candidate ordering can deprioritize them.
-	// Entries expire after stockoutCacheTTL. May be nil (e.g. in tests), in which
-	// case candidate ordering is unaffected.
 	stockoutCache *expirable.LRU[string, struct{}]
 }
 
@@ -586,11 +579,6 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		bootDiskType = opts.StorageOpts.BootDiskType
 	}
 
-	// Stockout retry is only safe when the request is not pinned to a specific
-	// zone. A per-attempt persistent disk (StorageOpts.Identifier) is zonal and a
-	// capacity reservation binds the zone via ReservationAffinity, so in those
-	// cases we keep the single original candidate and let pool fallback handle
-	// failures.
 	usesPersistentDisk := opts.StorageOpts.Identifier != ""
 	usesReservation := opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != ""
 	stockoutRetryEnabled := !usesPersistentDisk && !usesReservation
@@ -760,6 +748,9 @@ func (p *config) insertWithStockoutRetry(
 		// Retry alternate candidates only on stockout/capacity errors. All other
 		// failures fail fast so pool fallback in HandleSetup can take over.
 		if isStockoutError(attemptErr) {
+			attemptLogr.WithError(attemptErr).
+				WithField("machine_type", machineType).
+				Warnln("google: stockout detected for zone")
 			// Remember this zone so future create calls deprioritize it. Skip when
 			// the request consumed a specific reservation: that failure reflects
 			// reservation exhaustion, not general on-demand capacity in the zone.
@@ -1518,10 +1509,6 @@ func getInstanceName(runner, pool string) string {
 	return trimmedName
 }
 
-// stockoutMarkers are substrings that identify a GCP zonal stockout / capacity
-// exhaustion error. ZONE_RESOURCE_POOL_EXHAUSTED also matches the
-// ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS variant. Generic 429/503 errors are
-// intentionally not treated as stockout.
 var stockoutMarkers = []string{
 	"ZONE_RESOURCE_POOL_EXHAUSTED",
 	"POOL_CAPACITY_INSUFFICIENT",
@@ -1529,10 +1516,6 @@ var stockoutMarkers = []string{
 	"STOCKOUT",
 }
 
-// isStockoutError reports whether err represents a GCP zonal stockout/capacity
-// exhaustion failure. It inspects both the synchronous googleapi.Error reasons
-// (from Instances.Insert) and the wrapped operation message (from
-// waitZoneOperation, which only propagates op.Error.Errors[0].Message).
 func isStockoutError(err error) bool {
 	if err == nil {
 		return false
@@ -1554,8 +1537,7 @@ func isStockoutError(err error) bool {
 	return false
 }
 
-// createCandidate holds the resolved zone and network details for a single VM
-// create attempt.
+// createCandidate holds the resolved zone and network details for a single VM create attempt.
 type createCandidate struct {
 	zone       string
 	network    string
@@ -1610,13 +1592,10 @@ func (p *config) logStockoutDeprioritization(logr logger.Logger, candidates []cr
 		Debugln("google: deprioritized recently stocked-out zones in create candidate order")
 }
 
-// buildCreateCandidates returns an ordered list of create candidates for the
-// pool, starting with the first (already resolved) selection. Network configs are
-// visited in declared order, while zones within each config are visited in random
-// order. Candidates whose (zone, machineType) was recently stocked out are
-// deprioritized to the back (stable partition) rather than removed, so they are
-// still tried if everything else fails. The list is capped at maxStockoutAttempts
-// only after ordering, so healthy zones are never crowded out by the cap.
+// buildCreateCandidates returns an ordered, capped list of create candidates:
+// network configs in declared order, zones shuffled within each, recently
+// stocked-out (zone, machineType) deprioritized to the back, then capped at
+// maxStockoutAttempts.
 func (p *config) buildCreateCandidates(first createCandidate, machineType string) []createCandidate {
 	candidates := []createCandidate{first}
 	seen := map[string]bool{}
