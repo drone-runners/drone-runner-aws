@@ -281,6 +281,9 @@ func (m *Manager) setupInstance(
 		}
 		retain = "true"
 	}
+	if agentConfig != nil && agentConfig.ShutdownScript != "" {
+		createOptions.ShutdownScript = agentConfig.ShutdownScript
+	}
 	createOptions.InternalLabels = map[string]string{"retain": retain}
 	source := resolveInstanceSource(setupParams)
 	if createOptions.IsHosted {

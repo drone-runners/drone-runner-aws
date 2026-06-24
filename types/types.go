@@ -207,6 +207,7 @@ type InstanceCreateOpts struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	ShutdownScript               string
 }
 
 // Platform defines the target platform.
@@ -284,6 +285,7 @@ type GitspaceAgentConfig struct {
 	AccessToken              string `json:"access_token"` // Deprecated: VMInitScript should be used to send the whole script
 	Ports                    []int  `json:"ports"`
 	VMInitScript             string `json:"vm_init_script"`
+	ShutdownScript           string `json:"shutdown_script,omitempty"`
 	GitspaceConfigIdentifier string `json:"gitspace_config_identifier"`
 }
 

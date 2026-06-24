@@ -655,6 +655,15 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		)
 	}
 
+	if opts.ShutdownScript != "" {
+		in.Metadata.Items = append(in.Metadata.Items,
+			&compute.MetadataItems{
+				Key:   "shutdown-script",
+				Value: googleapi.String(opts.ShutdownScript),
+			},
+		)
+	}
+
 	if !p.noServiceAccount {
 		in.ServiceAccounts = []*compute.ServiceAccount{
 			{
