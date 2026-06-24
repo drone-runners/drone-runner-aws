@@ -14,6 +14,7 @@ type Context struct {
 	RunSequence   int    `json:"run_sequence,omitempty"`
 	IsFreeAccount bool   `json:"is_free_account,omitempty"`
 	TaskID        string `json:"task_id,omitempty"`
+	IsRunner      bool   `json:"is_runner,omitempty"`
 }
 
 const (
@@ -27,7 +28,7 @@ func AddContext(logr *logrus.Entry, context *Context, tags map[string]string) *l
 		WithField("pipeline_id", getPipelineID(context, tags)).
 		WithField("build_id", getRunSequence(context, tags)).
 		WithField("task_id", getTaskID(context, tags)).
-		WithField("is_runner", getIsRunner(tags))
+		WithField("is_runner", getIsRunner(context, tags))
 }
 
 // These functions can be removed in the next release once we start populating context
@@ -46,11 +47,11 @@ func getIsFreeAccount(context *Context, tags map[string]string) bool {
 	return context.IsFreeAccount
 }
 
-func getIsRunner(tags map[string]string) string {
+func getIsRunner(context *Context, tags map[string]string) string {
 	if tags["isRunner"] == trueString {
 		return trueString
 	}
-	return "false"
+	return strconv.FormatBool(context.IsRunner)
 }
 
 func getTaskID(context *Context, tags map[string]string) string {
