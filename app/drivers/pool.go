@@ -36,6 +36,7 @@ type Driver interface {
 	Hibernate(ctx context.Context, instanceID, poolName, zone string) error
 	Start(ctx context.Context, instance *types.Instance, poolName string) (ipAddress string, err error)
 	SetTags(context.Context, *types.Instance, map[string]string) error
+	SetLabels(context.Context, *types.Instance, map[string]string) error
 	Ping(ctx context.Context) error
 	// Logs returns the console logs for the instance.
 	Logs(ctx context.Context, instanceID string) (string, error)

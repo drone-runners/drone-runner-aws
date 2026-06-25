@@ -7,13 +7,14 @@ import (
 )
 
 type Context struct {
-	AccountID     string `json:"account_id,omitempty"`
-	OrgID         string `json:"org_id,omitempty"`
-	ProjectID     string `json:"project_id,omitempty"`
-	PipelineID    string `json:"pipeline_id,omitempty"`
-	RunSequence   int    `json:"run_sequence,omitempty"`
-	IsFreeAccount bool   `json:"is_free_account,omitempty"`
-	TaskID        string `json:"task_id,omitempty"`
+	AccountID           string `json:"account_id,omitempty"`
+	OrgID               string `json:"org_id,omitempty"`
+	ProjectID           string `json:"project_id,omitempty"`
+	PipelineID          string `json:"pipeline_id,omitempty"`
+	PipelineExecutionID string `json:"pipeline_execution_id,omitempty"`
+	RunSequence         int    `json:"run_sequence,omitempty"`
+	IsFreeAccount       bool   `json:"is_free_account,omitempty"`
+	TaskID              string `json:"task_id,omitempty"`
 }
 
 const (
@@ -25,6 +26,7 @@ func AddContext(logr *logrus.Entry, context *Context, tags map[string]string) *l
 		WithField("org_id", getOrgID(context, tags)).
 		WithField("project_id", getProjectID(context, tags)).
 		WithField("pipeline_id", getPipelineID(context, tags)).
+		WithField("pipeline_execution_id", getPipelineExecutionID(context, tags)).
 		WithField("build_id", getRunSequence(context, tags)).
 		WithField("task_id", getTaskID(context, tags)).
 		WithField("is_runner", getIsRunner(tags))
@@ -72,6 +74,13 @@ func getPipelineID(context *Context, tags map[string]string) string {
 		return context.PipelineID
 	}
 	return tags["pipelineID"]
+}
+
+func getPipelineExecutionID(context *Context, tags map[string]string) string {
+	if context.PipelineExecutionID != "" {
+		return context.PipelineExecutionID
+	}
+	return tags["pipelineExecutionID"]
 }
 
 func getProjectID(context *Context, tags map[string]string) string {

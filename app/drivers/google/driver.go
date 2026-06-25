@@ -585,6 +585,14 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 					Value: googleapi.String(opts.AccountID),
 				},
 				{
+					Key:   "harness-stage-execution-id",
+					Value: googleapi.String(opts.StageRuntimeID),
+				},
+				{
+					Key:   "harness-pipeline-execution-id",
+					Value: googleapi.String(opts.PipelineExecutionID),
+				},
+				{
 					Key:   "harness-pool-name",
 					Value: googleapi.String(opts.PoolName),
 				},
@@ -811,6 +819,51 @@ func (p *config) setTags(ctx context.Context, instance *types.Instance,
 	}
 	_, err = p.service.Instances.SetMetadata(p.projectID, instance.Zone,
 		instance.ID, metadata).Context(ctx).Do()
+	return err
+}
+
+// SetLabels overlays the supplied labels onto the GCP VM's existing labels
+// using Instances.setLabels. Existing label keys not present in `labels` are
+// preserved; matching keys are overwritten. Retries on conflicting label
+// fingerprint (concurrent label change races).
+func (p *config) SetLabels(ctx context.Context, instance *types.Instance, labels map[string]string) error {
+	if len(labels) == 0 {
+		return nil
+	}
+	logr := logger.FromContext(ctx).
+		WithField("id", instance.ID).
+		WithField("cloud", types.Google)
+	var err error
+	for i := 0; i < tagRetries; i++ {
+		err = p.setLabels(ctx, instance, labels, logr)
+		if err == nil {
+			return nil
+		}
+		logr.WithError(err).Warnln("failed to set labels on the instance. retrying")
+		time.Sleep(tagRetrySleepMs * time.Millisecond)
+	}
+	return err
+}
+
+func (p *config) setLabels(ctx context.Context, instance *types.Instance,
+	labels map[string]string, logr logger.Logger) error {
+	vm, err := p.service.Instances.Get(p.projectID, instance.Zone, instance.ID).Context(ctx).Do()
+	if err != nil {
+		logr.WithError(err).Errorln("google: failed to get VM")
+		return err
+	}
+	merged := make(map[string]string, len(vm.Labels)+len(labels))
+	for k, v := range vm.Labels {
+		merged[k] = v
+	}
+	for k, v := range labels {
+		merged[k] = v
+	}
+	req := &compute.InstancesSetLabelsRequest{
+		LabelFingerprint: vm.LabelFingerprint,
+		Labels:           merged,
+	}
+	_, err = p.service.Instances.SetLabels(p.projectID, instance.Zone, instance.ID, req).Context(ctx).Do()
 	return err
 }
 

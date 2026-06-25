@@ -98,6 +98,10 @@ func (p *config) SetTags(context.Context, *types.Instance, map[string]string) er
 	return nil
 }
 
+func (p *config) SetLabels(context.Context, *types.Instance, map[string]string) error {
+	return nil
+}
+
 func (p *config) Ping(_ context.Context) error {
 	return nil
 }
