@@ -1,0 +1,57 @@
+command/harness/preserve_test.go
+  54401658-b169-4950-8226-9c21fc83f61e 1-394
+command/harness/destroy.go
+  54401658-b169-4950-8226-9c21fc83f61e 104,175-177
+command/harness/step.go
+  54401658-b169-4950-8226-9c21fc83f61e 202-204,255-265,279
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "1-394"
+        }
+      ],
+      "file": "command/harness/preserve_test.go"
+    },
+    {
+      "entries": [
+        {
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "104,175-177"
+        }
+      ],
+      "file": "command/harness/destroy.go"
+    },
+    {
+      "entries": [
+        {
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "202-204,255-265,279"
+        }
+      ],
+      "file": "command/harness/step.go"
+    }
+  ],
+  "base_commit_sha": "50bab5928de37a14166054e48ee3db199a417c80",
+  "commit_sha": "",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "54401658-b169-4950-8226-9c21fc83f61e": {
+      "accepted_lines": 413,
+      "agent_id": {
+        "id": "54401658-b169-4950-8226-9c21fc83f61e",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 3,
+      "total_deletions": 2
+    }
+  },
+  "schema_version": "authorship/3.0.0"
+}
