@@ -501,7 +501,7 @@ func handleSetup(
 
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
-	printTitle(buildLog, "Preparing a machine to execute this stage...")
+	printTitle(buildLog, "Preparing the machine to execute this stage...")
 
 	ilog.WithFields(logrus.Fields{
 		"pool_id":       pool,
