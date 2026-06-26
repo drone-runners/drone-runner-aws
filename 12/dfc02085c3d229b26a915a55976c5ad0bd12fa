@@ -1,0 +1,42 @@
+command/harness/destroy.go
+  54401658-b169-4950-8226-9c21fc83f61e 104,175-177
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 0,
+          "deleted_lines": 0,
+          "hash": "54401658-b169-4950-8226-9c21fc83f61e",
+          "lines": "104,175-177",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/destroy.go"
+    }
+  ],
+  "base_commit_sha": "12dfc02085c3d229b26a915a55976c5ad0bd12fa",
+  "branch": "HEAD",
+  "commit_sha": "7c73ce331331bd419bc500b970dde5b748cce594",
+  "commit_time": "2026-06-19T17:10:08+05:30",
+  "commit_type": "cherry_pick",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "54401658-b169-4950-8226-9c21fc83f61e": {
+      "accepted_lines": 413,
+      "agent_id": {
+        "id": "54401658-b169-4950-8226-9c21fc83f61e",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 3,
+      "total_deletions": 2
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
