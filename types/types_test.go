@@ -76,3 +76,39 @@ func TestSetupInstanceParams_EmptySourceOmittedInJSON(t *testing.T) {
 		t.Error("expected empty source to be omitted from JSON, but it was present")
 	}
 }
+
+func TestSetupInstanceParams_IdentityFieldsJSONRoundTrip(t *testing.T) {
+	in := SetupInstanceParams{
+		AccountID:           "acc-123",
+		StageRuntimeID:      "stage-456",
+		PipelineExecutionID: "pe-789",
+		LongRunning:         true,
+		CreatedAt:           1700000000,
+	}
+
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var out SetupInstanceParams
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if out.AccountID != in.AccountID {
+		t.Errorf("AccountID: got %q want %q", out.AccountID, in.AccountID)
+	}
+	if out.StageRuntimeID != in.StageRuntimeID {
+		t.Errorf("StageRuntimeID: got %q want %q", out.StageRuntimeID, in.StageRuntimeID)
+	}
+	if out.PipelineExecutionID != in.PipelineExecutionID {
+		t.Errorf("PipelineExecutionID: got %q want %q", out.PipelineExecutionID, in.PipelineExecutionID)
+	}
+	if out.LongRunning != in.LongRunning {
+		t.Errorf("LongRunning: got %v want %v", out.LongRunning, in.LongRunning)
+	}
+	if out.CreatedAt != in.CreatedAt {
+		t.Errorf("CreatedAt: got %d want %d", out.CreatedAt, in.CreatedAt)
+	}
+}

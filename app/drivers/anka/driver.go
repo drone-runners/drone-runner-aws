@@ -262,6 +262,10 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
+func (p *config) SetLabels(context.Context, *types.Instance, map[string]string) error {
+	return nil
+}
+
 func commandCloneVM(ctx context.Context, vmID, newVMName string) *exec.Cmd {
 	return exec.CommandContext(
 		ctx,
