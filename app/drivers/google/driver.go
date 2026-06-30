@@ -751,14 +751,12 @@ func (p *config) insertWithStockoutRetry(
 			attemptLogr.WithError(attemptErr).
 				WithField("machine_type", machineType).
 				Warnln("google: stockout detected for zone")
-			// Remember this zone so future create calls deprioritize it. Skip when
-			// the request consumed a specific reservation: that failure reflects
-			// reservation exhaustion, not general on-demand capacity in the zone.
 			if !usesReservation {
 				p.markStockout(zone, machineType)
 			}
 			if stockoutRetryEnabled && attempt < len(candidates)-1 {
 				attemptLogr.WithError(attemptErr).Warnln("google: zone stockout, retrying alternate zone/network candidate")
+				p.cleanupFailedInstance(ctx, zone, in.Name, attemptLogr)
 				continue
 			}
 		}
@@ -767,6 +765,22 @@ func (p *config) insertWithStockoutRetry(
 	}
 	// Unreachable in practice: candidates always holds at least the first selection.
 	return nil, createCandidate{}, errors.New("google: no create candidates available")
+}
+
+func (p *config) cleanupFailedInstance(ctx context.Context, zone, name string, logr logger.Logger) {
+	op, err := p.deleteInstance(ctx, p.projectID, zone, name, uuid.New().String())
+	if err != nil {
+		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+			return
+		}
+		logr.WithError(err).Warnln("google: failed to delete stocked-out instance before retry")
+		return
+	}
+	if op != nil {
+		if werr := p.waitZoneOperation(ctx, op.Name, zone); werr != nil {
+			logr.WithError(werr).Warnln("google: delete of stocked-out instance did not complete before retry")
+		}
+	}
 }
 
 func (p *config) attachPersistentDisk(
