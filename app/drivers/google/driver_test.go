@@ -13,12 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drone-runners/drone-runner-aws/types"
 	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 const testMachineType = "c4d-standard-8"
@@ -430,7 +431,7 @@ func (f *fakeCompute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func newFakeComputeConfig(t *testing.T, f *fakeCompute) (*config, func()) {
+func newFakeComputeConfig(t *testing.T, f *fakeCompute) (cfg *config, cleanup func()) {
 	t.Helper()
 	srv := httptest.NewServer(f)
 	svc, err := compute.NewService(context.Background(), option.WithHTTPClient(srv.Client()))
