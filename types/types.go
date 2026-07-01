@@ -390,12 +390,12 @@ type SetupInstanceParams struct {
 	GPU                  bool           `json:"gpu,omitempty" yaml:"gpu,omitempty"`
 	Source               InstanceSource `json:"source,omitempty" yaml:"source,omitempty"`
 
-	// SkipCloudVmCleanup, when true, causes the instance to be labeled
+	// SkipCloudVMCleanup, when true, causes the instance to be labeled
 	// retain=true so the runner's background purger leaves it alone.
 	// CI Manager sets this when the CI_SKIP_CLOUD_VM_CLEANUP FF (CI-23070)
 	// is on for the target. Explicit cleanup tasks from CI Manager still
 	// destroy the VM, preserving the 2-day defer cap.
-	SkipCloudVmCleanup bool `json:"skip_cloud_vm_cleanup,omitempty" yaml:"skip_cloud_vm_cleanup,omitempty"`
+	SkipCloudVMCleanup bool `json:"skip_cloud_vm_cleanup,omitempty" yaml:"skip_cloud_vm_cleanup,omitempty"`
 }
 
 // ScaleJobParams represents the parameters for a scaling job.
@@ -450,7 +450,7 @@ type ProvisionParams struct {
 	NestedVirtualization bool
 	ResourceClass        string
 	Zones                []string
-	SkipCloudVmCleanup   bool
+	SkipCloudVMCleanup   bool
 }
 
 // ToSetupInstanceParams converts request-level ProvisionParams to internal SetupInstanceParams.
@@ -461,7 +461,7 @@ func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
 	s := &SetupInstanceParams{
 		NestedVirtualization: p.NestedVirtualization,
 		ResourceClass:        p.ResourceClass,
-		SkipCloudVmCleanup:   p.SkipCloudVmCleanup,
+		SkipCloudVMCleanup:   p.SkipCloudVMCleanup,
 	}
 	if len(p.Zones) > 0 {
 		s.Zones = make([]string, len(p.Zones))
