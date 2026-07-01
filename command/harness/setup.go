@@ -36,6 +36,10 @@ type SetupVMRequest struct {
 	GitspaceAgentConfig   types.GitspaceAgentConfig `json:"gitspace_agent_config"`
 	InstanceInfo          common.InstanceInfo       `json:"instance_info"`
 	IsMarkedForInfraReset bool                      `json:"is_marked_for_infra_reset,omitempty"`
+	// SkipCloudVMCleanup, when true, instructs the runner to label the VM
+	// retain=true so the background purger leaves it alone. Set by CI Manager
+	// when the CI_SKIP_CLOUD_VM_CLEANUP FF is on for the target.
+	SkipCloudVMCleanup bool `json:"skip_cloud_vm_cleanup,omitempty"`
 }
 
 type SetupVMResponse struct {
@@ -453,6 +457,7 @@ func handleSetup(
 		VMImageConfig:        &r.VMImageConfig,
 		NestedVirtualization: r.NestedVirtualization,
 		ResourceClass:        r.ResourceClass,
+		SkipCloudVMCleanup:   r.SkipCloudVMCleanup,
 	}
 	if r.Zone != "" {
 		provisionParams.Zones = []string{r.Zone}
