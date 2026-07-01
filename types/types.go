@@ -207,6 +207,11 @@ type InstanceCreateOpts struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	// Identity carried into Instances.Insert metadata for reverse lookup.
+	// Raw, case-preserved values; the lowercased forms are stamped onto
+	// VMLabels via buildIdentityVMLabels for server-side label filtering.
+	StageRuntimeID      string
+	PipelineExecutionID string
 }
 
 // Platform defines the target platform.
@@ -389,6 +394,14 @@ type SetupInstanceParams struct {
 	ResourceClass        string         `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
 	GPU                  bool           `json:"gpu,omitempty" yaml:"gpu,omitempty"`
 	Source               InstanceSource `json:"source,omitempty" yaml:"source,omitempty"`
+
+	// Identity fields used to label the instance for cleanup eligibility.
+	// All optional; empty values mean the label is not written.
+	AccountID           string `json:"account_id,omitempty" yaml:"account_id,omitempty"`
+	StageRuntimeID      string `json:"stage_runtime_id,omitempty" yaml:"stage_runtime_id,omitempty"`
+	PipelineExecutionID string `json:"pipeline_execution_id,omitempty" yaml:"pipeline_execution_id,omitempty"`
+	LongRunning         bool   `json:"long_running,omitempty" yaml:"long_running,omitempty"`
+	CreatedAt           int64  `json:"created_at,omitempty" yaml:"created_at,omitempty"`
 }
 
 // ScaleJobParams represents the parameters for a scaling job.
@@ -443,6 +456,15 @@ type ProvisionParams struct {
 	NestedVirtualization bool
 	ResourceClass        string
 	Zones                []string
+
+	// Identity used to label the instance for cleanup eligibility.
+	// Populated from harness Context + stage runtime id. Optional —
+	// non-CI callers (drone-aws standalone, internal pool fill) may
+	// leave these empty.
+	AccountID           string
+	StageRuntimeID      string
+	PipelineExecutionID string
+	LongRunning         bool
 }
 
 // ToSetupInstanceParams converts request-level ProvisionParams to internal SetupInstanceParams.
@@ -453,6 +475,10 @@ func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
 	s := &SetupInstanceParams{
 		NestedVirtualization: p.NestedVirtualization,
 		ResourceClass:        p.ResourceClass,
+		AccountID:            p.AccountID,
+		StageRuntimeID:       p.StageRuntimeID,
+		PipelineExecutionID:  p.PipelineExecutionID,
+		LongRunning:          p.LongRunning,
 	}
 	if len(p.Zones) > 0 {
 		s.Zones = make([]string, len(p.Zones))

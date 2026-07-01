@@ -299,6 +299,10 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
+func (p *config) SetLabels(context.Context, *types.Instance, map[string]string) error {
+	return nil
+}
+
 func commandCopyFileToGuest(ctx context.Context, src, dest, username, password, path string) *exec.Cmd {
 	return exec.CommandContext(ctx, vmrunbin, "-gu", username, "-gp", password, "copyFileFromHostToGuest", path, src, dest)
 }
