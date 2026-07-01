@@ -93,7 +93,11 @@ runcmd:
 
   # ──────────────────────────────────────────────────────────────
   # [EGRESS] Phase 3: arm iptables — all egress now flows through mitm:8080.
+  # OUTPUT covers host-originated traffic. PREROUTING covers routed
+  # traffic from container bridges (docker0 + per-build br-* user-defined
+  # networks that drone-runner-aws/lite-engine create per pipeline).
   # ──────────────────────────────────────────────────────────────
+  # --- OUTPUT (host processes) ---
   - iptables -t nat -F OUTPUT
   - iptables -t nat -A OUTPUT -o lo -j ACCEPT
   - iptables -t nat -A OUTPUT -d 169.254.169.254 -j ACCEPT
@@ -102,6 +106,22 @@ runcmd:
   - iptables -t nat -A OUTPUT -p tcp -m owner --uid-owner envoy     -j ACCEPT
   - iptables -t nat -A OUTPUT -p tcp --dport 443 -j REDIRECT --to-port 8080
   - iptables -t nat -A OUTPUT -p tcp --dport 80  -j REDIRECT --to-port 8080
+
+  # --- PREROUTING (container bridges) ---
+  # Source qualifier 172.17.0.0/12 = Docker default-address-pools range
+  # (172.17 through 172.31). Catches docker0 + every per-build user-defined
+  # bridge regardless of allocated subnet within Docker's default pool.
+  # Destination ACCEPTs use RFC1918 ranges so any internal/VPC/peered traffic
+  # from containers bypasses mitm without needing env-specific values.
+  # Implicit destination (everything else, i.e. public internet): REDIRECT.
+  # Do NOT flush PREROUTING — Docker's DOCKER chain jump lives there.
+  - iptables -t nat -A PREROUTING -s 172.17.0.0/12 -d 169.254.169.254 -j ACCEPT
+  - iptables -t nat -A PREROUTING -s 172.17.0.0/12 -d 10.0.0.0/8      -j ACCEPT
+  - iptables -t nat -A PREROUTING -s 172.17.0.0/12 -d 172.16.0.0/12   -j ACCEPT
+  - iptables -t nat -A PREROUTING -s 172.17.0.0/12 -d 192.168.0.0/16  -j ACCEPT
+  - iptables -t nat -A PREROUTING -s 172.17.0.0/12 -p tcp --dport 443 -j REDIRECT --to-port 8080
+  - iptables -t nat -A PREROUTING -s 172.17.0.0/12 -p tcp --dport 80  -j REDIRECT --to-port 8080
+
   - mkdir -p /etc/iptables
   - iptables-save  > /etc/iptables/rules.v4
   - ip6tables-save > /etc/iptables/rules.v6 2>/dev/null || true
