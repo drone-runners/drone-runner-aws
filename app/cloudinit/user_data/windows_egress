@@ -1,0 +1,154 @@
+<powershell>
+$ProgressPreference = 'SilentlyContinue'
+echo "[DRONE] Initialization Starting"
+
+echo "[DRONE] Setup LiteEngine Certificates"
+
+mkdir "C:\Program Files\lite-engine"
+mkdir "{{ .CertDir }}"
+
+$object0 = "{{ .CACert | base64 }}"
+$Object = [System.Convert]::FromBase64String($object0)
+[system.io.file]::WriteAllBytes("{{ .CaCertPath }}",$object)
+
+$object1 = "{{ .TLSCert | base64 }}"
+$Object = [System.Convert]::FromBase64String($object1)
+[system.io.file]::WriteAllBytes("{{ .CertPath }}",$object)
+
+$object2 = "{{ .TLSKey | base64 }}"
+$Object = [System.Convert]::FromBase64String($object2)
+[system.io.file]::WriteAllBytes("{{ .KeyPath }}",$object)
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
+
+{{ template "windows_binaries" . }}
+
+New-NetFirewallRule -DisplayName "ALLOW TCP PORT 9079" -Direction inbound -Profile Any -Action Allow -LocalPort 9079 -Protocol TCP
+
+# ----------------------------------------------------------------------
+# Egress-proxy mode: route all outbound HTTP/S through the Harness fleet.
+# Proxy endpoint, no-proxy list and CA come from runner config/env.
+#
+# All bootstrap downloads above happened DIRECTLY (no proxy). From the
+# point we install the CA + set env vars below, everything else (docker
+# pulls, build-time HTTP, lite-engine telemetry) goes through the fleet.
+# ----------------------------------------------------------------------
+$EgressProxy   = "{{ .EgressProxyURL }}"
+$EgressNoProxy = "{{ .EgressNoProxy }}"
+$EgressCaPath  = "C:\harness-certs\ca.crt"
+
+echo "[egress] Writing Harness Egress CA"
+mkdir "C:\harness-certs" -Force | Out-Null
+$egressCaB64 = "{{ .EgressCACert | base64 }}"
+[System.IO.File]::WriteAllBytes($EgressCaPath, [System.Convert]::FromBase64String($egressCaB64))
+
+echo "[egress] Importing CA into LocalMachine\Root trust store"
+Import-Certificate -FilePath $EgressCaPath -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+
+echo "[egress] Disabling Schannel revocation check"
+# Our SDS-minted leaves carry a CDP URL (http://<proxy>:3128/crl/leaf.crl)
+# but Schannel inside Windows containers can't reliably reach it -- HTTPS_PROXY
+# rerouting causes recursive lookups, and direct fetches may be blocked by
+# the container's network namespace. The leaves are 24h ephemerals that
+# rotate on their own; we never actually revoke them, so the practical
+# value of revocation checking is zero. Set the SChannel policy to
+# best-effort (mode=0 / NO_CHECK) so any client using Schannel
+# (curl.exe, .NET HttpClient with strict policy, etc.) doesn't fail
+# closed when CRL/OCSP can't be reached.
+$schannelPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\CertificateRevocationCheckMode"
+New-Item -Path $schannelPath -Force | Out-Null
+Set-ItemProperty -Path $schannelPath -Name Mode -Value 0 -Type DWord
+
+echo "[egress] Configuring Git for Windows to trust Harness CA"
+# Git for Windows defaults to OpenSSL with its bundled ca-bundle.crt -- it
+# does NOT read Windows Cert Store, so the Import-Certificate above is
+# invisible to git. Two complementary fixes:
+#   1. Append our CA to git's bundled ca-bundle.crt (works even if user
+#      reverts http.sslBackend back to openssl in their pipeline).
+#   2. Switch http.sslBackend to schannel system-wide (so git uses Windows
+#      Cert Store; future-proof for any user that wipes the bundle).
+$gitCaBundle = 'C:\Program Files\Git\mingw64\etc\ssl\certs\ca-bundle.crt'
+if (Test-Path $gitCaBundle) {
+    # Idempotent: only append if our CA isn't already there.
+    if (-not (Select-String -Path $gitCaBundle -Pattern 'Harness Build VM CA' -Quiet)) {
+        Add-Content -Path $gitCaBundle -Value "`n# Harness Egress CA"
+        Get-Content $EgressCaPath | Add-Content -Path $gitCaBundle
+        echo "[egress] appended Harness CA to $gitCaBundle"
+    } else {
+        echo "[egress] Harness CA already in $gitCaBundle"
+    }
+} else {
+    echo "[egress] Git for Windows ca-bundle.crt not found at $gitCaBundle"
+}
+try {
+    & "C:\Program Files\Git\cmd\git.exe" config --system http.sslBackend schannel 2>$null
+    echo "[egress] git --system http.sslBackend=schannel set"
+} catch {
+    echo "[egress] git --system config write failed: $($_.Exception.Message)"
+}
+
+echo "[egress] Setting machine-wide proxy env vars"
+# Only proxy vars are set machine-wide. Tools that honour the Windows Cert
+# Store (Schannel-based: curl.exe, git with sslBackend=schannel, .NET, IE,
+# Edge) trust the Harness CA automatically once it's imported above. Tools
+# that read their own bundle (Node certifi, Python certifi, custom git
+# builds via libcurl) need NODE_EXTRA_CA_CERTS / REQUESTS_CA_BUNDLE /
+# GIT_SSL_CAINFO / SSL_CERT_FILE -- left to the user to set per-step
+# since the right value depends on whether the step runs in a container
+# (own rootfs, own bundle) vs on the host.
+[Environment]::SetEnvironmentVariable("HTTPS_PROXY", $EgressProxy,   "Machine")
+[Environment]::SetEnvironmentVariable("HTTP_PROXY",  $EgressProxy,   "Machine")
+[Environment]::SetEnvironmentVariable("NO_PROXY",    $EgressNoProxy, "Machine")
+# Mirror into the current process so the rest of this script (and the
+# lite-engine started below) sees them without a logoff/refresh.
+$env:HTTPS_PROXY = $EgressProxy
+$env:HTTP_PROXY  = $EgressProxy
+$env:NO_PROXY    = $EgressNoProxy
+
+echo "[egress] Restarting Docker so dockerd picks up the new HTTPS_PROXY machine env"
+# Docker on Windows reads HTTPS_PROXY/HTTP_PROXY/NO_PROXY from the service
+# environment on start. We've already set those at Machine scope above; a
+# restart makes the running daemon honour them for registry pulls.
+# (We do NOT write daemon.json -- "proxies" is a Docker CLI config key,
+# the daemon rejects it as an unknown directive and refuses to start.)
+try {
+    Restart-Service docker -Force -ErrorAction Stop
+    echo "[egress] docker restarted"
+} catch {
+    echo "[egress] docker service not running yet; will pick up env on next start"
+}
+
+echo "[egress] Proxy /healthz reachability check"
+# Direct_response 200 from Envoy -- short-circuits before TPA, so it works
+# regardless of TPA allowlist state. Fail the bootstrap if unreachable.
+$ok = $false
+for ($i = 1; $i -le 10; $i++) {
+    try {
+        $resp = Invoke-WebRequest -Uri "$EgressProxy/healthz" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) {
+            echo "[egress] proxy /healthz=200 (attempt $i)"
+            $ok = $true
+            break
+        }
+    } catch {
+        echo "[egress] proxy /healthz attempt $i/10 failed: $($_.Exception.Message) -- retrying"
+    }
+    Start-Sleep -Seconds 3
+}
+if (-not $ok) {
+    Write-Error "[egress] FATAL: proxy /healthz failed after 10 attempts; aborting bootstrap"
+    exit 1
+}
+
+netsh interface ipv4 add dnsserver "Ethernet" 8.8.8.8 index=1
+netsh interface ipv4 add dnsserver "Ethernet" 1.1.1.1 index=2
+netsh interface ipv4 add dnsserver "Ethernet" 8.8.4.4 index=3
+ipconfig /flushdns
+Write-Host "DNS server added to Ethernet interface."
+
+# Start lite-engine LAST -- it inherits the proxy + CA env from this shell.
+Start-Process -FilePath "C:\Program Files\lite-engine\lite-engine.exe" -ArgumentList "server --env-file=`"C:\Program Files\lite-engine\.env`"" -RedirectStandardOutput "{{ .LiteEngineLogsPath }}" -RedirectStandardError "C:\Program Files\lite-engine\log.err"
+
+echo "[DRONE] Initialization Complete"
+
+</powershell>

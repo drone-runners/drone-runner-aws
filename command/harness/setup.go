@@ -491,7 +491,7 @@ func handleSetup(
 
 	ilog.Traceln("successfully provisioned VM in pool")
 	printOK(buildLog, "Machine provisioned successfully")
-	printTitle(buildLog, "Preparing a machine to execute this stage...")
+	printTitle(buildLog, "Preparing the machine to execute this stage...")
 
 	ilog.WithFields(logrus.Fields{
 		"pool_id":       pool,
@@ -578,6 +578,10 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
+	if poolManager.IsEgressPool(pool) {
+		r.Volumes = appendEgressCAVolume(r.Volumes, instance.Platform.OS)
+	}
+
 	// If enabled, merge default Harness IPs with customer IPs into a new slice (don't mutate the request).
 	var mergedAllowedIPs []string
 	if r.SetupRequest.EgressPolicy != nil && r.SetupRequest.EgressPolicy.Enabled {
@@ -660,6 +664,30 @@ func applyAndSaveEgressRules(
 			ilog.WithError(updateErr).Warnln("egress: failed to update firewall rules state to active")
 		}
 	}
+}
+
+// appendEgressCAVolume registers the host-path Volume so step containers can bind-mount it.
+func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Volume {
+	if osName == oshelp.OSLinux {
+		return append(volumes, &lespec.Volume{
+			HostPath: &lespec.VolumeHostPath{
+				ID:       fileID("ca.crt"),
+				Name:     fileID("ca.crt"),
+				Path:     egressCAHostPath,
+				ReadOnly: true,
+			},
+		})
+	} else if osName == oshelp.OSWindows {
+		return append(volumes, &lespec.Volume{
+			HostPath: &lespec.VolumeHostPath{
+				ID:       fileID("ca.crt"),
+				Name:     fileID("ca.crt"),
+				Path:     "C:\\harness-certs",
+				ReadOnly: true,
+			},
+		})
+	}
+	return volumes
 }
 
 // logSerialConsoleOutput fetches and logs the serial console output for an instance.

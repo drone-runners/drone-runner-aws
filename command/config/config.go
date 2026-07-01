@@ -240,6 +240,7 @@ type (
 		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
 		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
 		GPU                        bool              `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+		EgressControl              bool              `json:"egress_control,omitempty" yaml:"egress_control,omitempty"`
 	}
 
 	GoogleAccount struct {
@@ -281,6 +282,18 @@ type (
 		KmsKeyID string            `json:"kms_key_id,omitempty" yaml:"kms_key_id,omitempty"`
 	}
 )
+
+// EgressProxy holds the forward-proxy settings injected into steps that run in
+// egress-controlled pools. Steps in these pools must route outbound traffic
+// through the mitm proxy so egress rules can be enforced.
+type EgressProxy struct {
+	Enabled bool   `json:"enabled" yaml:"enabled" envconfig:"DRONE_EGRESS_PROXY_ENABLED" default:"false"`
+	URL     string `json:"url" yaml:"url" envconfig:"DRONE_EGRESS_PROXY_URL" default:"http://127.0.0.1:3128"`
+	NoProxy string `json:"no_proxy" yaml:"no_proxy" envconfig:"DRONE_EGRESS_NO_PROXY" default:"localhost,127.0.0.1,169.254.169.254,172.16.0.0/12,10.0.0.0/8,.svc.cluster.local"`
+	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
+	// fleet proxy presents. Baked into the build VM so TLS interception is trusted.
+	CACert string `json:"ca_cert" yaml:"ca_cert" envconfig:"DRONE_EGRESS_PROXY_CA_CERT"`
+}
 
 type EnvConfig struct {
 	Debug bool `envconfig:"DRONE_DEBUG"`
@@ -380,7 +393,7 @@ type EnvConfig struct {
 		NomadToken              string        `envconfig:"NOMAD_TOKEN"`
 		ClientDisconnectTimeout time.Duration `envconfig:"NOMAD_CLIENT_DISCONNECT_TIMEOUT" default:"4m"`
 		ResourceJobTimeout      time.Duration `envconfig:"NOMAD_RESOURCE_JOB_TIMEOUT" default:"15s"`
-		BYOIInitTimeout         time.Duration `envconfig:"NOMAD_BYOI_INIT_TIMEOUT" default:"15m"`
+		BYOIInitTimeout         time.Duration `envconfig:"NOMAD_BYOI_INIT_TIMEOUT" default:"30m"`
 		InitTimeout             time.Duration `envconfig:"NOMAD_INIT_TIMEOUT" default:"1m"`
 		DestroyTimeout          time.Duration `envconfig:"NOMAD_DESTROY_TIMEOUT" default:"1m"`
 		GlobalAccount           string        `envconfig:"NOMAD_GLOBAL_ACCOUNT" default:"PAID_POOL"`
@@ -448,13 +461,14 @@ type EnvConfig struct {
 		MinPoolSize                  int      `envconfig:"DRONE_MIN_POOL_SIZE" default:"1"`
 		MaxPoolSize                  int      `envconfig:"DRONE_MAX_POOL_SIZE" default:"2"`
 		EnableAutoPool               bool     `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
+		EnableLEDiagnostics          bool     `envconfig:"DRONE_ENABLE_LE_DIAGNOSTICS" default:"false"`
 		HarnessTestBinaryURI         string   `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
 		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.7"`
 		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.7"`
 		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"15"`
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.19"`
-		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.15/"`
-		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.15/"`
+		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.18/"`
+		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.18/"`
 		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/v2.5.6/"`
 		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/v2.5.6/"`
 		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
@@ -463,14 +477,20 @@ type EnvConfig struct {
 	}
 
 	Egress struct {
-		DefaultIPs []string `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
+		DefaultIPs []string    `envconfig:"DRONE_EGRESS_DEFAULT_IPS"`
+		Proxy      EgressProxy `json:"proxy" yaml:"proxy"`
 	}
 
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.171/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.171/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.182/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.182/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
+	}
+
+	TPA struct {
+		Address string `envconfig:"DRONE_TPA_ADDRESS" default:"127.0.0.1"`
+		Port    string `envconfig:"DRONE_TPA_PORT" default:"5442"`
 	}
 
 	Server struct {

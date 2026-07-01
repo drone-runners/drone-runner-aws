@@ -198,7 +198,13 @@ if is_fully_qualified_image "$VM_IMAGE"; then
 
     if [ -n "$REGISTRY" ]; then
       echo "Pulling image $VM_IMAGE from registry $REGISTRY..."
-      export TART_REGISTRY_HOSTNAME="$REGISTRY"
+      # tart only applies the supplied credentials when TART_REGISTRY_HOSTNAME
+      # exactly matches the registry host of the image being pulled. The
+      # connector URL in $REGISTRY (e.g. https://index.docker.io/v1/) does not
+      # match the image host (e.g. registry-1.docker.io), which makes tart fall
+      # back to an anonymous pull and fail with 401 for private images. Derive
+      # the host from the image reference itself so it always matches.
+      export TART_REGISTRY_HOSTNAME="${VM_IMAGE%%%%/*}"
       if [ -n "$REGISTRY_USERNAME" ]; then
         export TART_REGISTRY_USERNAME="$REGISTRY_USERNAME"
       fi

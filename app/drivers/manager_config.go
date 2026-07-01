@@ -29,6 +29,16 @@ type ManagerConfig struct {
 	LiteEnginePath         string
 	LiteEngineFallbackPath string
 
+	// TPA endpoint for egress-control pools.
+	TPAAddress string
+	TPAPort    string
+
+	// Egress forward-proxy settings injected into egress-control build VMs.
+	EgressProxyEnabled bool
+	EgressProxyURL     string
+	EgressNoProxy      string
+	EgressCACert       string
+
 	// Binary URIs
 	HarnessTestBinaryURI         string
 	PluginBinaryURI              string
@@ -41,6 +51,7 @@ type ManagerConfig struct {
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
 	Hosted                       bool
+	EnableLEDiagnostics          bool
 	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
 }
 
@@ -58,6 +69,12 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		env:                          cfg.Env,
 		liteEnginePath:               cfg.LiteEnginePath,
 		liteEngineFallbackPath:       cfg.LiteEngineFallbackPath,
+		tpaAddress:                   cfg.TPAAddress,
+		tpaPort:                      cfg.TPAPort,
+		egressProxyEnabled:           cfg.EgressProxyEnabled,
+		egressProxyURL:               cfg.EgressProxyURL,
+		egressNoProxy:                cfg.EgressNoProxy,
+		egressCACert:                 cfg.EgressCACert,
 		harnessTestBinaryURI:         cfg.HarnessTestBinaryURI,
 		pluginBinaryURI:              cfg.PluginBinaryURI,
 		pluginBinaryFallbackURI:      cfg.PluginBinaryFallbackURI,
@@ -69,6 +86,7 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		tmateBinaryURI:               cfg.TmateBinaryURI,
 		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
 		hosted:                       cfg.Hosted,
+		enableLEDiagnostics:          cfg.EnableLEDiagnostics,
 		capacityReservationTTL:       cfg.CapacityReservationTTL,
 	}
 }
@@ -85,6 +103,12 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		Env:                          envConfig.Settings.Env,
 		LiteEnginePath:               envConfig.LiteEngine.Path,
 		LiteEngineFallbackPath:       envConfig.LiteEngine.FallbackPath,
+		TPAAddress:                   envConfig.TPA.Address,
+		TPAPort:                      envConfig.TPA.Port,
+		EgressProxyEnabled:           envConfig.Egress.Proxy.Enabled,
+		EgressProxyURL:               envConfig.Egress.Proxy.URL,
+		EgressNoProxy:                envConfig.Egress.Proxy.NoProxy,
+		EgressCACert:                 envConfig.Egress.Proxy.CACert,
 		HarnessTestBinaryURI:         envConfig.Settings.HarnessTestBinaryURI,
 		PluginBinaryURI:              envConfig.Settings.PluginBinaryURI,
 		PluginBinaryFallbackURI:      envConfig.Settings.PluginBinaryFallbackURI,
@@ -95,6 +119,7 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		EnvmanBinaryFallbackURI:      envConfig.Settings.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
 		TmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
+		EnableLEDiagnostics:          envConfig.Settings.EnableLEDiagnostics,
 		CapacityReservationTTL:       envConfig.Settings.FreeCapacityMaxAgeMinutes * 60,
 	}
 }
