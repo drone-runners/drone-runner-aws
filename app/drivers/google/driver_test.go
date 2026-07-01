@@ -15,6 +15,7 @@ import (
 
 	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	computebeta "google.golang.org/api/compute/v0.beta"
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -439,8 +440,14 @@ func newFakeComputeConfig(t *testing.T, f *fakeCompute) (cfg *config, cleanup fu
 		srv.Close()
 		t.Fatalf("compute.NewService: %v", err)
 	}
+	betaSvc, err := computebeta.NewService(context.Background(), option.WithHTTPClient(srv.Client()))
+	if err != nil {
+		srv.Close()
+		t.Fatalf("computebeta.NewService: %v", err)
+	}
 	svc.BasePath = srv.URL + "/"
-	return &config{projectID: "proj", service: svc}, srv.Close
+	betaSvc.BasePath = srv.URL + "/"
+	return &config{projectID: "proj", service: svc, betaService: betaSvc}, srv.Close
 }
 
 func twoZoneCandidates() []createCandidate {
@@ -450,11 +457,11 @@ func twoZoneCandidates() []createCandidate {
 	}
 }
 
-func newTestInstance() *compute.Instance {
-	return &compute.Instance{
+func newTestInstance() *computebeta.Instance {
+	return &computebeta.Instance{
 		Name:              "test-vm",
-		Disks:             []*compute.AttachedDisk{{InitializeParams: &compute.AttachedDiskInitializeParams{}}},
-		NetworkInterfaces: []*compute.NetworkInterface{{}},
+		Disks:             []*computebeta.AttachedDisk{{InitializeParams: &computebeta.AttachedDiskInitializeParams{}}},
+		NetworkInterfaces: []*computebeta.NetworkInterface{{}},
 	}
 }
 
