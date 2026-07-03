@@ -393,6 +393,7 @@ func (p *config) findReservationZone(ctx context.Context, reservationID string) 
 	logr := logger.FromContext(ctx)
 
 	for _, z := range p.allZones() {
+		waitIfGCPPaused()
 		_, err := p.service.Reservations.Get(p.projectID, z, reservationID).Context(ctx).Do()
 		if err == nil {
 			return z, nil
@@ -400,6 +401,10 @@ func (p *config) findReservationZone(ctx context.Context, reservationID string) 
 		// If not found in this zone, continue to next zone
 		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
 			continue
+		}
+		if isRateLimited(err) {
+			pauseGCPOn429()
+			return "", fmt.Errorf("google: rate limited while finding reservation zone: %w", err)
 		}
 		// For other errors, log and continue
 		logr.WithError(err).Warnf("google: error checking reservation in zone %s", z)
@@ -823,7 +828,12 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	var failedInstances []*types.Instance
 	var lastErr error
 
-	for _, instance := range instances {
+	for i, instance := range instances {
+		if i > 0 && isGCPPaused() {
+			waitIfGCPPaused()
+			time.Sleep(gcpDestroyBatchPace)
+		}
+
 		logr := logger.FromContext(ctx).
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
@@ -1135,6 +1145,11 @@ func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
 			continue
 		}
 
+		if isRateLimited(err) {
+			pauseGCPOn429()
+			return "", fmt.Errorf("google: rate limited while finding instance zone: %w", err)
+		}
+
 		// Non-404 error (rate limit, API error, etc.) - track it
 		allNotFound = false
 		lastErr = err
@@ -1161,6 +1176,7 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 			return ctx.Err()
 		default:
 		}
+		waitIfGCPPaused()
 		ctxGcp, cancel := context.WithTimeout(ctx, operationGetTimeout*time.Second)
 		client := p.service
 		op, err := client.ZoneOperations.Get(p.projectID, zone, name).Context(ctxGcp).Do()
@@ -1171,11 +1187,14 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 				return errors.New("not Found")
 			}
 			if shouldRetry(err) {
+				if isRateLimited(err) {
+					pauseGCPOn429()
+				}
 				logger.FromContext(ctx).
 					WithField("name", name).
 					WithField("zone", zone).
 					Warnf("google: wait operation failed with retryable error: %s. retrying\n", err)
-				time.Sleep(time.Second)
+				waitIfGCPPaused()
 				continue
 			}
 			return err
@@ -1376,10 +1395,14 @@ func (p *config) deleteFirewallRulesByID(ctx context.Context, firewallProject st
 
 func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 	for {
+		waitIfGCPPaused()
 		op, err := p.service.GlobalOperations.Get(p.projectID, name).Context(ctx).Do()
 		if err != nil {
 			if shouldRetry(err) {
-				time.Sleep(time.Second)
+				if isRateLimited(err) {
+					pauseGCPOn429()
+				}
+				waitIfGCPPaused()
 				continue
 			}
 			return err
@@ -1413,19 +1436,7 @@ func (p *config) getZone(ctx context.Context, instance *types.Instance) (string,
 		return zone, nil
 	}
 
-	// validate if instance is present
-	_, findInstanceErr := p.getInstance(ctx, p.projectID, instance.Zone, instance.ID)
-	if findInstanceErr != nil {
-		var googleErr *googleapi.Error
-		if errors.As(findInstanceErr, &googleErr) && googleErr.Code == http.StatusNotFound {
-			return "", ErrInstanceNotFound
-		}
-		return "", fmt.Errorf(
-			"google: failed to find instance in zone %s, error: %w",
-			instance.Zone,
-			findInstanceErr,
-		)
-	}
+	// Trust the stored zone; delete handles 404 if the VM is already gone.
 	return instance.Zone, nil
 }
 
@@ -1481,13 +1492,23 @@ func shouldRetry(err error) bool {
 
 func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, error)) (result T, err error) {
 	for i := 0; i < attempts; i++ {
+		waitIfGCPPaused()
 		if i > 0 {
 			logger.FromContext(ctx).Warnf("retrying after error: %s\n", err)
-			time.Sleep(time.Duration(sleepSecs) * time.Second)
+			sleep := retrySleepForError(err, sleepSecs)
+			select {
+			case <-ctx.Done():
+				return result, ctx.Err()
+			case <-time.After(sleep):
+			}
 		}
 		result, err = f()
 		if err == nil {
 			return result, nil
+		}
+
+		if isRateLimited(err) {
+			pauseGCPOn429()
 		}
 
 		if !shouldRetry(err) {
