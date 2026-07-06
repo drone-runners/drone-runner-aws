@@ -1,0 +1,57 @@
+app/scheduler/jobs/scaler_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 585
+app/scheduler/jobs/scaler.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 137,142,152,189,225,320,447
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "585",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/scheduler/jobs/scaler_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 7,
+          "added_lines": 7,
+          "deleted_lines": 7,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "137,142,152,189,225,320,447",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/scheduler/jobs/scaler.go"
+    }
+  ],
+  "base_commit_sha": "309e592ce4f14633cef0533210f2042faf4ae0d3",
+  "branch": "CI-22905",
+  "commit_sha": "8cc2249b2b167ad1d778842489bf4e58ceb83d13",
+  "commit_time": "2026-07-06T15:47:46+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "c742cea3-6744-4c06-813e-f095e0995d6a": {
+      "accepted_lines": 8,
+      "agent_id": {
+        "id": "c742cea3-6744-4c06-813e-f095e0995d6a",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 8,
+      "total_deletions": 8
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
