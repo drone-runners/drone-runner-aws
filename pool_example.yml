@@ -111,3 +111,46 @@ instances:
       registry_url: controller_url
       tag: tag
       auth_token: auth_token
+  # Multi-tenant pool (distributed mode). A single pool can serve multiple customers
+  # (tenants) with per-tenant network/config isolation (e.g. PrivateLink). This is
+  # optional: omit `tenants` and use a top-level `spec` (as above) for single-tenant pools.
+  #
+  # Exactly one tenant must be the default (id: default or default: true). Its spec is the
+  # base; every other tenant's spec is a partial override that is deep-merged over the
+  # default. `ids` lists the customer account ids routed to that tenant. Requests whose
+  # account id is not listed fall back to the default tenant.
+  - name: linux-amd64-multitenant
+    type: amazon
+    pool: 1
+    limit: 20
+    platform:
+      os: linux
+      arch: amd64
+    tenants:
+      - id: default
+        spec:
+          account:
+            region: us-east-1
+            key_pair_name: kp
+          ami: ami-base
+          size: t3.large
+          network:
+            security_groups:
+              - sg-base
+      # Two customer accounts sharing one isolated tenant; only the subnet differs.
+      - ids:
+          - acctA
+          - acctB
+        spec:
+          network:
+            subnet_id: subnet-aaa
+            security_groups:
+              - sg-aaa
+      # A tenant that also overrides sizing and AMI.
+      - ids:
+          - acctC
+        pool: 2
+        spec:
+          ami: ami-custom
+          network:
+            subnet_id: subnet-ccc

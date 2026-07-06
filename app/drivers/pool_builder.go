@@ -44,6 +44,10 @@ func (m *Manager) buildPool(
 	) (*types.Instance, error),
 	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
 ) error {
+	if pool.IsMultiTenant() {
+		return m.buildPoolMultiTenant(ctx, pool, tlsServerName, query, setupInstanceWithHibernate, setupInstanceAsync)
+	}
+
 	instBusy, instFree, instHibernating, _, _, err := m.list(ctx, pool, query)
 	if err != nil {
 		return err
@@ -120,6 +124,133 @@ func (m *Manager) buildPool(
 	}
 
 	return nil
+}
+
+// buildPoolMultiTenant seeds the warm pool per tenant. Each tenant gets its own base warm pool
+// (sized by the tenant's min/max) and, if configured, its own variant warm pools. Counting is
+// done per tenant so a busy tenant does not starve another.
+func (m *Manager) buildPoolMultiTenant(
+	ctx context.Context,
+	pool *poolEntry,
+	tlsServerName string,
+	query *types.QueryParams,
+	setupInstanceWithHibernate func(
+		context.Context,
+		*poolEntry,
+		string,
+		string,
+		*types.SetupInstanceParams,
+		*spec.VMImageConfig,
+		*types.GitspaceAgentConfig,
+		*types.StorageConfig,
+		int64,
+		*types.Platform,
+	) (*types.Instance, error),
+	setupInstanceAsync func(context.Context, string, string, *types.SetupInstanceParams),
+) error {
+	instBusy, instFree, instHibernating, _, _, err := m.list(ctx, pool, query)
+	if err != nil {
+		return err
+	}
+	instFree = append(instFree, instHibernating...)
+
+	// Group current counts by tenant (base instances only, i.e. default variant).
+	busyByTenant := map[string]int{}
+	freeByTenant := map[string][]*types.Instance{}
+	for _, inst := range instBusy {
+		if inst.VariantID != "" && inst.VariantID != defaultVariantID {
+			continue
+		}
+		busyByTenant[tenantOrDefault(inst.TenantID)]++
+	}
+	for _, inst := range instFree {
+		if inst.VariantID != "" && inst.VariantID != defaultVariantID {
+			continue
+		}
+		tid := tenantOrDefault(inst.TenantID)
+		freeByTenant[tid] = append(freeByTenant[tid], inst)
+	}
+
+	strategy := m.strategy
+	if strategy == nil {
+		strategy = Greedy{}
+	}
+
+	for i := range pool.Tenants {
+		tenant := &pool.Tenants[i]
+		logr := logger.FromContext(ctx).
+			WithField("driver", pool.Driver.DriverName()).
+			WithField("pool", pool.Name).
+			WithField("tenant_id", tenant.ID)
+
+		free := freeByTenant[tenant.ID]
+		shouldCreate, shouldRemove := strategy.CountCreateRemove(
+			tenant.MinSize, tenant.MaxSize,
+			busyByTenant[tenant.ID], len(free))
+
+		if shouldRemove > 0 {
+			removeCount := shouldRemove
+			if removeCount > len(free) {
+				removeCount = len(free)
+			}
+			instances := make([]*types.Instance, removeCount)
+			copy(instances, free[:removeCount])
+			logr.Infof("build pool: destroying %d excess instances for tenant", removeCount)
+			if _, derr := pool.DriverForTenant(tenant.ID).Destroy(ctx, instances); derr != nil {
+				logr.WithError(derr).Errorln("build pool: failed to destroy excess tenant instances")
+			}
+		}
+
+		for shouldCreate > 0 {
+			setupParams := &types.SetupInstanceParams{TenantID: tenant.ID}
+			inst, cerr := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, nil, nil, nil, 0, nil)
+			if cerr != nil {
+				logr.WithError(cerr).Errorln("build pool: failed to create tenant instance")
+				if setupInstanceAsync != nil {
+					setupInstanceAsync(ctx, pool.Name, m.runnerName, setupParams)
+				}
+			} else {
+				logr.WithField("id", inst.ID).WithField("name", inst.Name).
+					Infoln("build pool: created new tenant instance")
+			}
+			shouldCreate--
+		}
+
+		// Seed per-tenant variant warm pools.
+		for idx := range tenant.PoolVariants {
+			variant := &tenant.PoolVariants[idx]
+			instanceCount := variant.Pool
+			if instanceCount <= 0 {
+				continue
+			}
+			for j := 0; j < instanceCount; j++ {
+				variantParams := variant.SetupInstanceParams
+				setupParams := deepCopySetupParams(&variantParams)
+				setupParams.TenantID = tenant.ID
+				vmImageConfig := vmImageConfigFromSetupParams(setupParams)
+				inst, cerr := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, vmImageConfig, nil, nil, 0, nil)
+				if cerr != nil {
+					logr.WithError(cerr).WithField("variant_id", setupParams.VariantID).
+						Errorln("build pool: failed to create tenant variant instance")
+					if setupInstanceAsync != nil {
+						setupInstanceAsync(ctx, pool.Name, m.runnerName, setupParams)
+					}
+					continue
+				}
+				logr.WithField("id", inst.ID).WithField("variant_id", setupParams.VariantID).
+					Infoln("build pool: created new tenant variant instance")
+			}
+		}
+	}
+
+	return nil
+}
+
+func tenantOrDefault(tenantID string) string {
+	if tenantID == "" {
+		return defaultTenantID
+	}
+	return tenantID
 }
 
 // buildPoolWithVariants builds pool instances for each variant configuration.

@@ -31,6 +31,33 @@ type (
 		Spec      interface{}         `json:"spec,omitempty"`
 		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
 		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
+		// Tenants enables multi-tenant configuration for a single pool. When set, the pool
+		// hosts multiple tenants (e.g. per PrivateLink customer) that share the pool name but
+		// each get their own fully-merged spec. When empty, the pool is single-tenant and the
+		// flat Spec above is used unchanged (backward compatible).
+		Tenants []Tenant `json:"tenants,omitempty" yaml:"tenants,omitempty"`
+	}
+
+	// Tenant represents a single tenant configuration inside a multi-tenant pool.
+	// One tenant must be the default (ID == "default" or Default == true); its Spec is the
+	// base that every other tenant's (partial) Spec is deep-merged over. A tenant can map to
+	// multiple customer account IDs via IDs.
+	Tenant struct {
+		// ID is the stable tenant identifier stored on instances (tenant_id column). For the
+		// default tenant it is "default". If empty for a customer tenant, it defaults to the
+		// first entry of IDs.
+		ID string `json:"id,omitempty" yaml:"id,omitempty"`
+		// IDs is the list of customer account IDs that resolve to this tenant.
+		IDs []string `json:"ids,omitempty" yaml:"ids,omitempty"`
+		// Default marks this entry as the base/default tenant.
+		Default bool `json:"default,omitempty" yaml:"default,omitempty"`
+		// Pool/Limit optionally override the instance-level warm-pool sizing for this tenant.
+		Pool  int `json:"pool,omitempty" yaml:"pool,omitempty"`
+		Limit int `json:"limit,omitempty" yaml:"limit,omitempty"`
+		// Spec is the provider-specific spec (may be a subset that is merged over the default).
+		Spec interface{} `json:"spec,omitempty" yaml:"spec,omitempty"`
+		// Variants optionally override the instance-level variants for this tenant.
+		Variants []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
 	}
 
 	// Amazon specifies the configuration for an AWS instance.
@@ -643,39 +670,60 @@ func FromEnviron() (EnvConfig, error) {
 	return config, nil
 }
 
-// Populates the Spec field of the Instance struct based on the Type field.
-func (s *Instance) populateSpec() error {
+// newSpec returns a new, empty provider-specific spec pointer based on the instance Type.
+func (s *Instance) newSpec() (interface{}, error) {
 	switch s.Type {
 	case string(types.Amazon), "aws":
-		s.Spec = new(Amazon)
+		return new(Amazon), nil
 	case string(types.Anka):
-		s.Spec = new(Anka)
+		return new(Anka), nil
 	case string(types.AnkaBuild):
-		s.Spec = new(AnkaBuild)
+		return new(AnkaBuild), nil
 	case string(types.Azure):
-		s.Spec = new(Azure)
+		return new(Azure), nil
 	case string(types.DigitalOcean):
-		s.Spec = new(DigitalOcean)
+		return new(DigitalOcean), nil
 	case string(types.Google), "gcp":
-		s.Spec = new(Google)
+		return new(Google), nil
 	case string(types.VMFusion):
-		s.Spec = new(VMFusion)
+		return new(VMFusion), nil
 	case string(types.Noop):
-		s.Spec = new(Noop)
+		return new(Noop), nil
 	case string(types.Nomad):
-		s.Spec = new(Nomad)
+		return new(Nomad), nil
 	default:
-		return fmt.Errorf("unknown instance type %s", s.Type)
+		return nil, fmt.Errorf("unknown instance type %s", s.Type)
 	}
+}
+
+// Populates the Spec field of the Instance struct based on the Type field.
+func (s *Instance) populateSpec() error {
+	spec, err := s.newSpec()
+	if err != nil {
+		return err
+	}
+	s.Spec = spec
 	return nil
 }
 
 // UnmarshalJSON implement the json.Unmarshaler interface.
 func (s *Instance) UnmarshalJSON(data []byte) error {
 	type S Instance
+	// tenantRaw mirrors Tenant but keeps the spec as raw JSON so it can be unmarshalled into
+	// the typed provider spec after the instance Type is known.
+	type tenantRaw struct {
+		ID       string              `json:"id,omitempty"`
+		IDs      []string            `json:"ids,omitempty"`
+		Default  bool                `json:"default,omitempty"`
+		Pool     int                 `json:"pool,omitempty"`
+		Limit    int                 `json:"limit,omitempty"`
+		Spec     json.RawMessage     `json:"spec,omitempty"`
+		Variants []types.PoolVariant `json:"variants,omitempty"`
+	}
 	type T struct {
 		*S
-		Spec json.RawMessage `json:"spec"`
+		Spec    json.RawMessage `json:"spec"`
+		Tenants []tenantRaw     `json:"tenants,omitempty"`
 	}
 	obj := &T{S: (*S)(s)}
 	if err := json.Unmarshal(data, obj); err != nil {
@@ -686,5 +734,40 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	return json.Unmarshal(obj.Spec, s.Spec)
+	// Unmarshal the instance-level spec. When tenants are present the instance-level spec is
+	// optional, so only attempt to unmarshal when it is provided. When there are no tenants we
+	// preserve the previous behavior (attempt the unmarshal unconditionally).
+	if len(obj.Spec) > 0 || len(obj.Tenants) == 0 {
+		if err := json.Unmarshal(obj.Spec, s.Spec); err != nil {
+			return err
+		}
+	}
+
+	if len(obj.Tenants) > 0 {
+		s.Tenants = make([]Tenant, 0, len(obj.Tenants))
+		for i := range obj.Tenants {
+			tr := &obj.Tenants[i]
+			t := Tenant{
+				ID:       tr.ID,
+				IDs:      tr.IDs,
+				Default:  tr.Default,
+				Pool:     tr.Pool,
+				Limit:    tr.Limit,
+				Variants: tr.Variants,
+			}
+			if len(tr.Spec) > 0 {
+				spec, err := s.newSpec()
+				if err != nil {
+					return err
+				}
+				if err := json.Unmarshal(tr.Spec, spec); err != nil {
+					return err
+				}
+				t.Spec = spec
+			}
+			s.Tenants = append(s.Tenants, t)
+		}
+	}
+
+	return nil
 }

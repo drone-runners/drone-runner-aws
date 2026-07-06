@@ -151,6 +151,7 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
 		ctx,
 		input.PoolName,
+		input.TenantID,
 		input.VariantID,
 		input.ImageName,
 		ranges,
@@ -216,6 +217,7 @@ func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Cont
 	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
 		ctx,
 		input.PoolName,
+		input.TenantID,
 		input.VariantID,
 		input.ImageName,
 		ranges,

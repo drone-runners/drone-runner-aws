@@ -15,6 +15,11 @@ import (
 var _ store.InstanceStore = (*InstanceStore)(nil)
 var builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
+const (
+	colTenantID  = "tenant_id"
+	colVariantID = "variant_id"
+)
+
 func NewInstanceStore(db *sqlx.DB) *InstanceStore {
 	return &InstanceStore{db}
 }
@@ -101,7 +106,7 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 
 	for rows.Next() {
 		var deletedRow types.Instance
-		err := rows.Scan(&deletedRow.ID, &deletedRow.Name, &deletedRow.NodeID, &deletedRow.RunnerName)
+		err := rows.Scan(&deletedRow.ID, &deletedRow.Name, &deletedRow.NodeID, &deletedRow.RunnerName, &deletedRow.TenantID)
 		if err != nil {
 			tx.Rollback() //nolint
 			return nil, err
@@ -165,7 +170,11 @@ func (s InstanceStore) FindAndClaim(
 	subQuery = subQuery.Where(squirrel.Eq{"instance_gpu": params.GPU})
 
 	if params.VariantID != "" {
-		subQuery = subQuery.Where(squirrel.Eq{"variant_id": params.VariantID})
+		subQuery = subQuery.Where(squirrel.Eq{colVariantID: params.VariantID})
+	}
+
+	if params.TenantID != "" {
+		subQuery = subQuery.Where(squirrel.Eq{colTenantID: params.TenantID})
 	}
 
 	if len(allowedStates) > 0 {
@@ -233,7 +242,7 @@ RETURNING %s
 		&dst.TLSCert, &dst.Started, &dst.Updated, &dst.IsHibernated,
 		&dst.Port, &dst.OwnerID, &dst.StorageIdentifier, &dst.Labels,
 		&dst.EnableNestedVirtualization, &dst.RunnerName, &dst.VariantID,
-		&dst.GPU, &dst.Source, &dst.Network, &dst.ProxyURL,
+		&dst.GPU, &dst.Source, &dst.Network, &dst.ProxyURL, &dst.TenantID,
 	)
 	if err != nil {
 		return nil, err
@@ -286,6 +295,7 @@ const instanceColumns = `
 ,instance_source
 ,instance_network
 ,instance_proxy_url
+,tenant_id
 `
 
 const instanceFindByID = `SELECT ` + instanceColumns + `
@@ -330,6 +340,7 @@ INSERT INTO instances (
 ,instance_source
 ,instance_network
 ,instance_proxy_url
+,tenant_id
 ) values (
  :instance_id
 ,:instance_node_id
@@ -366,6 +377,7 @@ INSERT INTO instances (
 ,:instance_source
 ,:instance_network
 ,:instance_proxy_url
+,:tenant_id
 ) RETURNING instance_id
 `
 
@@ -387,15 +399,16 @@ SET
 WHERE instance_id   = :instance_id
 `
 
-// CountGroupedInstances returns instance counts grouped by pool, variant_id, and image.
+// CountGroupedInstances returns instance counts grouped by pool, tenant_id, variant_id, and image.
 func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
 	stmt := builder.Select(
 		"COALESCE(instance_pool, '') as pool",
+		"COALESCE(tenant_id, '') as tenant_id",
 		"COALESCE(variant_id, '') as variant_id",
 		"COALESCE(instance_image, '') as image_name",
 		"COUNT(*) as count",
 	).From("instances").
-		GroupBy("instance_pool", "variant_id", "instance_image")
+		GroupBy("instance_pool", colTenantID, colVariantID, "instance_image")
 
 	if status != "" {
 		stmt = stmt.Where(squirrel.Eq{"instance_state": status})

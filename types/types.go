@@ -110,7 +110,12 @@ type Instance struct {
 	Source                     InstanceSource `db:"instance_source" json:"source"`
 	Network                    string         `db:"instance_network" json:"network"`
 	ProxyURL                   string         `db:"instance_proxy_url" json:"proxy_url"`
+	TenantID                   string         `db:"tenant_id" json:"tenant_id"`
 }
+
+// DefaultTenantID is the tenant identifier used for single-tenant pools and as the DB default
+// for the tenant_id column. It matches config.DefaultTenantID.
+const DefaultTenantID = "default"
 
 // Passwords holds sensitive data.
 type Passwords struct {
@@ -210,6 +215,7 @@ type InstanceCreateOpts struct {
 	// VMLabels via buildIdentityVMLabels for server-side label filtering.
 	StageRuntimeID      string
 	PipelineExecutionID string
+	TenantID            string
 }
 
 // Platform defines the target platform.
@@ -234,6 +240,7 @@ type QueryParams struct {
 	NestedVirtualization bool
 	GPU                  bool
 	VariantID            string
+	TenantID             string
 	FilterSource         InstanceSource
 }
 
@@ -359,6 +366,7 @@ type SetupInstanceParams struct {
 	Hibernate            bool           `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
 	Zones                []string       `json:"zones,omitempty" yaml:"zones,omitempty"`
 	VariantID            string         `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	TenantID             string         `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
 	DiskSize             int64          `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
 	DiskType             string         `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
 	ResourceClass        string         `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
@@ -423,9 +431,10 @@ type ScalerConfig struct {
 	ScalePercent float64
 }
 
-// InstanceCount holds an instance count grouped by pool, variant, image, and GPU flag.
+// InstanceCount holds an instance count grouped by pool, tenant, variant, image, and GPU flag.
 type InstanceCount struct {
 	Pool      string `db:"pool"`
+	TenantID  string `db:"tenant_id"`
 	VariantID string `db:"variant_id"`
 	ImageName string `db:"image_name"`
 	Count     int    `db:"count"`
@@ -444,6 +453,10 @@ type ProvisionParams struct {
 	// Populated from harness Context + stage runtime id. Optional —
 	// non-CI callers (drone-aws standalone, internal pool fill) may
 	// leave these empty.
+	//
+	// AccountID is also the requesting Harness account id, used to resolve
+	// the tenant for multi-tenant pools. Empty resolves to the default
+	// tenant (backward compatible).
 	AccountID           string
 	StageRuntimeID      string
 	PipelineExecutionID string
@@ -493,6 +506,7 @@ type PoolVariant struct {
 type UtilizationRecord struct {
 	ID             int64  `db:"id" json:"id"`
 	Pool           string `db:"pool_name" json:"pool"`
+	TenantID       string `db:"tenant_id" json:"tenant_id"`
 	VariantID      string `db:"variant_id" json:"variant_id"`
 	ImageName      string `db:"image_name" json:"image_name"`
 	InUseInstances int    `db:"in_use_instances" json:"in_use_instances"`

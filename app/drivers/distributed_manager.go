@@ -26,9 +26,18 @@ var _ IManager = (*DistributedManager)(nil)
 
 const (
 	defaultVariantID        = "default"
+	defaultTenantID         = "default"
 	stuckTerminatingMaxAge  = 2 * time.Minute
 	stuckProvisioningMaxAge = 30 * time.Minute
 )
+
+// tenantIDForSetup returns the tenant id carried by setupParams, defaulting to the default tenant.
+func tenantIDForSetup(setupParams *types.SetupInstanceParams) string {
+	if setupParams != nil && setupParams.TenantID != "" {
+		return setupParams.TenantID
+	}
+	return defaultTenantID
+}
 
 type DistributedManager struct {
 	Manager
@@ -159,7 +168,7 @@ func (d *DistributedManager) cleanPool(ctx context.Context, pool *poolEntry, que
 		"destroy_free":   destroyFree,
 		"destroy_caller": "distributed_cleanPool",
 	}).Infoln("cleaning up instances")
-	failedInstances, err := pool.Driver.Destroy(ctx, instancesToDestroy)
+	failedInstances, err := destroyByTenant(ctx, &pool.Pool, instancesToDestroy)
 	if err != nil {
 		logrus.WithError(err).Warnf("failed to destroy some instances in pool %q", pool.Name)
 	}
@@ -318,6 +327,14 @@ func (d *DistributedManager) provisionFromPool(
 	setupParams := provisionParams.ToSetupInstanceParams()
 	vmImageConfig := provisionParams.GetVMImageConfig()
 
+	// Resolve the tenant for this request. Single-tenant pools always resolve to the default
+	// tenant, so this is a no-op for non-multi-tenant configurations.
+	tenantID := defaultTenantID
+	if provisionParams != nil {
+		tenantID = pool.ResolveTenant(provisionParams.AccountID)
+	}
+	setupParams.TenantID = tenantID
+
 	// Variant filtering: select all matching variants in priority order based on provisionParams
 	var matchedVariants []*types.PoolVariant
 	if len(pool.PoolVariants) > 0 {
@@ -368,6 +385,7 @@ func (d *DistributedManager) provisionFromPool(
 			MachineType:          setupParams.MachineType,
 			NestedVirtualization: setupParams.NestedVirtualization,
 			VariantID:            candidateVariantID,
+			TenantID:             tenantID,
 			ImageName:            fullyQualifiedImageName,
 			GPU:                  setupParams.GPU,
 		}
@@ -402,6 +420,7 @@ func (d *DistributedManager) provisionFromPool(
 					MachineType:          inst.Size,
 					Hibernate:            inst.IsHibernated,
 					VariantID:            inst.VariantID,
+					TenantID:             inst.TenantID,
 					DiskSize:             setupParams.DiskSize,
 					DiskType:             setupParams.DiskType,
 					ResourceClass:        setupParams.ResourceClass,
@@ -1123,7 +1142,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		Set("instance_state", types.StateTerminating).
 		Set("instance_updated", squirrel.Expr("extract(epoch FROM now())")).
 		Where(conditions).
-		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").
+		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id").
 		ToSql()
 	if err != nil {
 		return nil, err
@@ -1182,7 +1201,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		deleteSQL, deleteArgs, buildErr := builder.
 			Delete("instances").
 			Where(squirrel.Eq{"instance_id": successfulIDs}).
-			Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").
+			Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id").
 			ToSql()
 		if buildErr != nil {
 			return successfulInstances, fmt.Errorf("failed to build delete query for destroyed instances: %w", buildErr)
@@ -1222,7 +1241,7 @@ func (d *DistributedManager) forceDeleteLeakedInstances(
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Lt{"instance_started": leakCutoff},
 		}).
-		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name").
+		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id").
 		ToSql()
 	if err != nil {
 		logr.WithError(err).Error("distributed dlite: purger: failed to build leak-candidate delete query")

@@ -7,7 +7,9 @@ import (
 // PredictionInput contains the input data for making a prediction.
 type PredictionInput struct {
 	// PoolName is the name of the pool to predict for.
-	PoolName       string
+	PoolName string
+	// TenantID scopes the prediction to a single tenant of the pool. Empty means the default tenant.
+	TenantID       string
 	StartTimestamp int64
 	EndTimestamp   int64
 	VariantID      string

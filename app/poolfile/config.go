@@ -78,57 +78,19 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 			if platformErr != nil {
 				return nil, platformErr
 			}
-			if a.Account.AccessKeyID == "" && passwords.AWSAccessKeyID != "" {
-				a.Account.AccessKeyID = passwords.AWSAccessKeyID
-			}
-			if a.Account.AccessKeySecret == "" && passwords.AWSAccessKeySecret != "" {
-				a.Account.AccessKeySecret = passwords.AWSAccessKeySecret
-			}
-			if a.Account.SessionToken == "" && passwords.AWSSessionToken != "" {
-				a.Account.SessionToken = passwords.AWSSessionToken
-			}
 			instance.Platform = *platform
-			var driver, err = amazon.New(
-				amazon.WithAccessKeyID(a.Account.AccessKeyID),
-				amazon.WithSecretAccessKey(a.Account.AccessKeySecret),
-				amazon.WithSessionToken(a.Account.SessionToken),
-				amazon.WithZone(a.Account.AvailabilityZone),
-				amazon.WithKeyPair(a.Account.KeyPairName),
-				amazon.WithDeviceName(a.DeviceName, instance.Platform.OSName),
-				amazon.WithRootDirectory(a.RootDirectory),
-				amazon.WithAMI(a.AMI),
-				amazon.WithVpc(a.VPC),
-				amazon.WithUser(a.User, instance.Platform.OS),
-				amazon.WithRegion(a.Account.Region, a.Account.Region),
-				amazon.WithRetries(a.Account.Retries),
-				amazon.WithPrivateIP(a.Network.PrivateIP),
-				amazon.WithSecurityGroup(a.Network.SecurityGroups...),
-				amazon.WithSize(a.Size, instance.Platform.Arch),
-				amazon.WithSizeAlt(a.SizeAlt),
-				amazon.WithSubnet(a.Network.SubnetID),
-				amazon.WithUserData(a.UserData, a.UserDataPath),
-				amazon.WithVolumeSize(a.Disk.Size),
-				amazon.WithVolumeTags(a.Disk.Tags),
-				amazon.WithVolumeType(a.Disk.Type),
-				amazon.WithVolumeIops(a.Disk.Iops, a.Disk.Type),
-				amazon.WithKMSKeyID(a.Disk.KmsKeyID),
-				amazon.WithIamProfileArn(a.IamProfileArn),
-				amazon.WithMarketType(a.MarketType),
-				amazon.WithTags(a.Tags),
-				amazon.WithHibernate(a.Hibernate),
-				amazon.WithZoneDetails(func() []config.ZoneInfo {
-					if len(a.Network.ZoneDetails) > 0 {
-						return a.Network.ZoneDetails
-					}
-					return a.ZoneDetails
-				}()),
-				amazon.WithEnableC4D(a.EnableC4D),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
-			}
 			pool := mapPool(&instance, runnerName)
-			pool.Driver = driver
+			if len(instance.Tenants) > 0 {
+				if err := applyAmazonTenants(&pool, &instance, &passwords); err != nil {
+					return nil, err
+				}
+			} else {
+				driver, err := buildAmazonDriver(a, &instance, &passwords)
+				if err != nil {
+					return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
+				}
+				pool.Driver = driver
+			}
 			pools = append(pools, pool)
 		case string(types.Azure):
 			var az, ok = instance.Spec.(*config.Azure)
@@ -380,6 +342,178 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 		}
 	}
 	return pools, nil
+}
+
+// buildAmazonDriver constructs an Amazon driver from a (fully-resolved) Amazon spec, applying
+// credential backfill from passwords when the spec omits them.
+func buildAmazonDriver(a *config.Amazon, instance *config.Instance, passwords *types.Passwords) (drivers.Driver, error) {
+	if a.Account.AccessKeyID == "" && passwords.AWSAccessKeyID != "" {
+		a.Account.AccessKeyID = passwords.AWSAccessKeyID
+	}
+	if a.Account.AccessKeySecret == "" && passwords.AWSAccessKeySecret != "" {
+		a.Account.AccessKeySecret = passwords.AWSAccessKeySecret
+	}
+	if a.Account.SessionToken == "" && passwords.AWSSessionToken != "" {
+		a.Account.SessionToken = passwords.AWSSessionToken
+	}
+	return amazon.New(
+		amazon.WithAccessKeyID(a.Account.AccessKeyID),
+		amazon.WithSecretAccessKey(a.Account.AccessKeySecret),
+		amazon.WithSessionToken(a.Account.SessionToken),
+		amazon.WithZone(a.Account.AvailabilityZone),
+		amazon.WithKeyPair(a.Account.KeyPairName),
+		amazon.WithDeviceName(a.DeviceName, instance.Platform.OSName),
+		amazon.WithRootDirectory(a.RootDirectory),
+		amazon.WithAMI(a.AMI),
+		amazon.WithVpc(a.VPC),
+		amazon.WithUser(a.User, instance.Platform.OS),
+		amazon.WithRegion(a.Account.Region, a.Account.Region),
+		amazon.WithRetries(a.Account.Retries),
+		amazon.WithPrivateIP(a.Network.PrivateIP),
+		amazon.WithSecurityGroup(a.Network.SecurityGroups...),
+		amazon.WithSize(a.Size, instance.Platform.Arch),
+		amazon.WithSizeAlt(a.SizeAlt),
+		amazon.WithSubnet(a.Network.SubnetID),
+		amazon.WithUserData(a.UserData, a.UserDataPath),
+		amazon.WithVolumeSize(a.Disk.Size),
+		amazon.WithVolumeTags(a.Disk.Tags),
+		amazon.WithVolumeType(a.Disk.Type),
+		amazon.WithVolumeIops(a.Disk.Iops, a.Disk.Type),
+		amazon.WithKMSKeyID(a.Disk.KmsKeyID),
+		amazon.WithIamProfileArn(a.IamProfileArn),
+		amazon.WithMarketType(a.MarketType),
+		amazon.WithTags(a.Tags),
+		amazon.WithHibernate(a.Hibernate),
+		amazon.WithZoneDetails(func() []config.ZoneInfo {
+			if len(a.Network.ZoneDetails) > 0 {
+				return a.Network.ZoneDetails
+			}
+			return a.ZoneDetails
+		}()),
+		amazon.WithEnableC4D(a.EnableC4D),
+	)
+}
+
+// buildGoogleDriver constructs a Google driver from a (fully-resolved) Google spec.
+func buildGoogleDriver(g *config.Google, instance *config.Instance) (drivers.Driver, error) {
+	var googleOpts = []google.Option{
+		google.WithRootDirectory(&instance.Platform),
+		google.WithDiskSize(g.Disk.Size),
+		google.WithDiskType(g.Disk.Type),
+		google.WithMachineImage(g.Image),
+		google.WithSize(g.MachineType),
+		google.WithNetwork(g.Network),
+		google.WithSubnetwork(g.Subnetwork),
+		google.WithPrivateIP(g.PrivateIP),
+		google.WithServiceAccountEmail(g.Account.ServiceAccountEmail),
+		google.WithNoServiceAccount(g.Account.NoServiceAccount),
+		google.WithProject(g.Account.ProjectID),
+		google.WithJSONPath(g.Account.JSONPath),
+		google.WithTags(g.Tags...),
+		google.WithScopes(g.Scopes...),
+		google.WithUserData(g.UserData, g.UserDataPath),
+		google.WithZones(g.Zone...),
+		google.WithUserDataKey(g.UserDataKey, instance.Platform.OS),
+		google.WithHibernate(g.Hibernate),
+		google.WithLabels(map[string]string{
+			instance.Name: instance.Name,
+		}),
+		google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
+		google.WithEnableC4D(g.EnableC4D),
+		google.WithGPU(g.GPU),
+		google.WithEgressControl(g.EgressControl),
+	}
+	if len(g.Networks) > 0 {
+		var netInputs []google.NetworkConfigInput
+		for _, nc := range g.Networks {
+			netInputs = append(netInputs, google.NetworkConfigInput{
+				Network:    nc.Network,
+				Subnetwork: nc.Subnetwork,
+				Tags:       nc.Tags,
+				Zones:      nc.Zones,
+			})
+		}
+		googleOpts = append(googleOpts, google.WithNetworkConfigs(netInputs))
+	}
+	return google.New(googleOpts...)
+}
+
+// applyAmazonTenants resolves the instance's tenants and populates the pool with one Amazon
+// driver per tenant.
+func applyAmazonTenants(pool *drivers.Pool, instance *config.Instance, passwords *types.Passwords) error {
+	resolved, accountMap, err := config.ResolveTenants(instance)
+	if err != nil {
+		return err
+	}
+	pool.AccountToTenant = accountMap
+	pool.TenantDrivers = make(map[string]drivers.Driver, len(resolved))
+	for i := range resolved {
+		rt := &resolved[i]
+		spec, ok := rt.Spec.(*config.Amazon)
+		if !ok {
+			return fmt.Errorf("tenant %q of pool %q has invalid amazon spec", rt.ID, instance.Name)
+		}
+		driver, derr := buildAmazonDriver(spec, instance, passwords)
+		if derr != nil {
+			return fmt.Errorf("unable to create tenant %q of pool %q: %v", rt.ID, instance.Name, derr)
+		}
+		pool.TenantDrivers[rt.ID] = driver
+		pool.Tenants = append(pool.Tenants, drivers.TenantPool{
+			ID:           rt.ID,
+			Spec:         spec,
+			MinSize:      rt.Pool,
+			MaxSize:      rt.Limit,
+			PoolVariants: rt.Variants,
+		})
+	}
+	setDefaultTenantDriver(pool)
+	return nil
+}
+
+// applyGoogleTenants resolves the instance's tenants and populates the pool with one Google
+// driver per tenant.
+func applyGoogleTenants(pool *drivers.Pool, instance *config.Instance) error {
+	resolved, accountMap, err := config.ResolveTenants(instance)
+	if err != nil {
+		return err
+	}
+	pool.AccountToTenant = accountMap
+	pool.TenantDrivers = make(map[string]drivers.Driver, len(resolved))
+	for i := range resolved {
+		rt := &resolved[i]
+		spec, ok := rt.Spec.(*config.Google)
+		if !ok {
+			return fmt.Errorf("tenant %q of pool %q has invalid google spec", rt.ID, instance.Name)
+		}
+		driver, derr := buildGoogleDriver(spec, instance)
+		if derr != nil {
+			return fmt.Errorf("unable to create tenant %q of pool %q: %v", rt.ID, instance.Name, derr)
+		}
+		pool.TenantDrivers[rt.ID] = driver
+		pool.Tenants = append(pool.Tenants, drivers.TenantPool{
+			ID:           rt.ID,
+			Spec:         spec,
+			MinSize:      rt.Pool,
+			MaxSize:      rt.Limit,
+			PoolVariants: rt.Variants,
+		})
+	}
+	setDefaultTenantDriver(pool)
+	return nil
+}
+
+// setDefaultTenantDriver sets pool.Driver and pool.Spec from the default tenant so that
+// tenant-agnostic call sites (Ping, RootDir, DriverName) keep working.
+func setDefaultTenantDriver(pool *drivers.Pool) {
+	if d, ok := pool.TenantDrivers[types.DefaultTenantID]; ok {
+		pool.Driver = d
+	}
+	for i := range pool.Tenants {
+		if pool.Tenants[i].ID == types.DefaultTenantID {
+			pool.Spec = pool.Tenants[i].Spec
+			break
+		}
+	}
 }
 
 func mapPool(instance *config.Instance, runnerName string) (pool drivers.Pool) {

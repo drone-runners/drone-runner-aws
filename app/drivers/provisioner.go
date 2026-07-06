@@ -322,7 +322,10 @@ func (m *Manager) setupInstance(
 	if createOptions.IsHosted {
 		createOptions.VMLabels = buildIdentityVMLabels(setupParams, timeout, m.env, pool.Name, source)
 	}
-	createOptions.DriverName = pool.Driver.DriverName()
+	tenantID := tenantIDForSetup(setupParams)
+	driver := pool.DriverForTenant(tenantID)
+	createOptions.DriverName = driver.DriverName()
+	createOptions.TenantID = tenantID
 	createOptions.Timeout = timeout
 	createOptions.CapacityReservation = reservedCapacity
 	createOptions.CapacityReservationTTL = m.capacityReservationTTL
@@ -341,7 +344,7 @@ func (m *Manager) setupInstance(
 	if isCapacityTask {
 		// create instance
 		var capacity *types.CapacityReservation
-		capacity, err = pool.Driver.ReserveCapacity(ctx, createOptions)
+		capacity, err = driver.ReserveCapacity(ctx, createOptions)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("manager: failed to reserve capacity")
@@ -351,7 +354,7 @@ func (m *Manager) setupInstance(
 	}
 
 	// create instance
-	inst, err = pool.Driver.Create(ctx, createOptions)
+	inst, err = driver.Create(ctx, createOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to create instance")
@@ -372,6 +375,9 @@ func (m *Manager) setupInstance(
 		inst.VariantID = defaultVariantID
 	}
 
+	// Set TenantID ("default" for single-tenant pools)
+	inst.TenantID = tenantID
+
 	inst.Source = source
 
 	if inst.Labels == nil {
@@ -391,7 +397,7 @@ func (m *Manager) setupInstance(
 			"pool":           pool.Name,
 			"destroy_caller": "setupInstance:store_create_failed",
 		}).Infoln("destroy: destroying instance after store create failure")
-		_, _ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
+		_, _ = driver.Destroy(ctx, []*types.Instance{inst})
 		return nil, nil, err
 	}
 	return inst, nil, nil
@@ -440,7 +446,7 @@ func (m *Manager) processExistingInstance(
 					"destroy_caller": "processExistingInstance:infra_reset",
 				}).Infoln("destroy: destroying instance for infra reset")
 				storageCleanupType := storage.Detach
-				_, destroyInstanceErr := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
+				_, destroyInstanceErr := pool.DriverForTenant(inst.TenantID).DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
 				if destroyInstanceErr != nil {
 					logrus.Warnf(
 						"failed to destroy instance %s: %v",

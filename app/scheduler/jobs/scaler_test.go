@@ -197,12 +197,12 @@ func (m *MockUtilizationHistoryStore) Create(ctx context.Context, record *types.
 	return nil
 }
 
-func (m *MockUtilizationHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool, variantID, imageName string, ranges []store.TimeRange) ([][]types.UtilizationRecord, error) {
+func (m *MockUtilizationHistoryStore) GetUtilizationHistoryBatch(ctx context.Context, pool, tenantID, variantID, imageName string, ranges []store.TimeRange) ([][]types.UtilizationRecord, error) {
 	result := make([][]types.UtilizationRecord, len(ranges))
 	for i, r := range ranges {
 		var records []types.UtilizationRecord
 		for _, rec := range m.records {
-			if rec.Pool == pool && rec.VariantID == variantID &&
+			if rec.Pool == pool && scalerMockTenantMatch(rec.TenantID, tenantID) && rec.VariantID == variantID &&
 				rec.ImageName == imageName &&
 				rec.RecordedAt >= r.StartTime && rec.RecordedAt <= r.EndTime {
 				records = append(records, rec)
@@ -213,10 +213,10 @@ func (m *MockUtilizationHistoryStore) GetUtilizationHistoryBatch(ctx context.Con
 	return result, nil
 }
 
-func (m *MockUtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error) {
+func (m *MockUtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, tenantID, variantID string, since int64) ([]string, error) {
 	imageSet := make(map[string]bool)
 	for _, rec := range m.records {
-		if rec.Pool == pool && rec.VariantID == variantID &&
+		if rec.Pool == pool && scalerMockTenantMatch(rec.TenantID, tenantID) && rec.VariantID == variantID &&
 			rec.RecordedAt >= since && rec.InUseInstances > 0 {
 			imageSet[rec.ImageName] = true
 		}
@@ -228,15 +228,27 @@ func (m *MockUtilizationHistoryStore) GetActiveImages(ctx context.Context, pool,
 	return images, nil
 }
 
-func (m *MockUtilizationHistoryStore) HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error) {
+func (m *MockUtilizationHistoryStore) HasRecentUsage(ctx context.Context, pool, tenantID, variantID, imageName string, since int64) (bool, error) {
 	for _, rec := range m.records {
-		if rec.Pool == pool && rec.VariantID == variantID &&
+		if rec.Pool == pool && scalerMockTenantMatch(rec.TenantID, tenantID) && rec.VariantID == variantID &&
 			rec.ImageName == imageName &&
 			rec.RecordedAt >= since && rec.InUseInstances > 0 {
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+// scalerMockTenantMatch treats an empty stored tenant id as the default tenant so existing
+// single-tenant test fixtures keep matching.
+func scalerMockTenantMatch(recordTenant, queryTenant string) bool {
+	if recordTenant == "" {
+		recordTenant = types.DefaultTenantID
+	}
+	if queryTenant == "" {
+		queryTenant = types.DefaultTenantID
+	}
+	return recordTenant == queryTenant
 }
 
 func (m *MockUtilizationHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
@@ -576,13 +588,13 @@ func TestScaler_GetFreeInstanceCountsForPool(t *testing.T) {
 	}
 
 	// Check default variant, image-a: should have 2 free (1 created + 1 hibernating)
-	keyDefaultA := InstanceKey{VariantID: "default", ImageName: "image-a"}
+	keyDefaultA := InstanceKey{TenantID: types.DefaultTenantID, VariantID: "default", ImageName: "image-a"}
 	if counts[keyDefaultA] != 2 {
 		t.Errorf("expected 2 free instances for default/image-a, got %d", counts[keyDefaultA])
 	}
 
 	// Check variant-1, image-b: should have 1 free
-	keyVariant1B := InstanceKey{VariantID: "variant-1", ImageName: "image-b"}
+	keyVariant1B := InstanceKey{TenantID: types.DefaultTenantID, VariantID: "variant-1", ImageName: "image-b"}
 	if counts[keyVariant1B] != 1 {
 		t.Errorf("expected 1 free instance for variant-1/image-b, got %d", counts[keyVariant1B])
 	}
@@ -1512,5 +1524,61 @@ func TestScaler_ScalePercent_CeilingRounding(t *testing.T) {
 	}
 	if hibernatedCount != 1 {
 		t.Errorf("expected 1 hibernated buffer job, got %d", hibernatedCount)
+	}
+}
+
+func TestScaler_MultiTenantScalesIndependently(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	// Zero prediction so target == tenant MinSize.
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 0)
+
+	// Active-image history per tenant so GetActiveImages returns the image for each tenant.
+	historyStore.records = append(historyStore.records,
+		types.UtilizationRecord{Pool: "pool-1", TenantID: "default", VariantID: "default", ImageName: "ubuntu-2204", RecordedAt: time.Now().Unix(), InUseInstances: 1},
+		types.UtilizationRecord{Pool: "pool-1", TenantID: "acctA", VariantID: "default", ImageName: "ubuntu-2204", RecordedAt: time.Now().Unix(), InUseInstances: 1},
+	)
+
+	pools := []ScalablePool{
+		{
+			Name: "pool-1",
+			Tenants: []ScalableTenant{
+				{ID: "default", MinSize: 2},
+				{ID: "acctA", MinSize: 3},
+			},
+		},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	perTenant := map[string]int{}
+	for _, job := range setupJobs {
+		var params types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		perTenant[params.TenantID]++
+	}
+
+	if perTenant["default"] != 2 {
+		t.Errorf("expected 2 default-tenant jobs, got %d", perTenant["default"])
+	}
+	if perTenant["acctA"] != 3 {
+		t.Errorf("expected 3 acctA-tenant jobs, got %d", perTenant["acctA"])
 	}
 }

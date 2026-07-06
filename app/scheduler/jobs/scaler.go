@@ -21,12 +21,29 @@ const (
 	DefaultWindowDuration = 30 * time.Minute
 	// DefaultLeadTime is how long before a window to start scaling
 	DefaultLeadTime = 5 * time.Minute
+	// Structured log field keys (kept as constants to satisfy goconst).
+	logFieldTenantID  = "tenant_id"
+	logFieldVariantID = "variant_id"
+	logFieldImageName = "image_name"
+	logFieldCount     = "count"
+	logFieldPool      = "pool"
 )
 
 // ScalablePool represents a pool and its variants that can be scaled.
 type ScalablePool struct {
 	Name     string
 	Driver   string
+	MinSize  int
+	Variants []ScalableVariant
+	// Tenants, when non-empty, makes the pool multi-tenant: each tenant is scaled
+	// independently using its own min size and variants. When empty the pool is
+	// single-tenant and MinSize/Variants above are used with the default tenant.
+	Tenants []ScalableTenant
+}
+
+// ScalableTenant represents a tenant configuration for scaling within a multi-tenant pool.
+type ScalableTenant struct {
+	ID       string
 	MinSize  int
 	Variants []ScalableVariant
 }
@@ -40,6 +57,7 @@ type ScalableVariant struct {
 // InstanceKey identifies a unique combination of dimensions for counting free instances.
 // Add new fields here when new scaling dimensions are introduced.
 type InstanceKey struct {
+	TenantID  string
 	VariantID string
 	ImageName string
 }
@@ -90,7 +108,7 @@ func NewScaler(
 // This is called by the outbox processor for each pool-specific scale job.
 func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, windowEnd int64) error {
 	logrus.WithFields(logrus.Fields{
-		"pool":         poolName,
+		logFieldPool:   poolName,
 		"window_start": time.Unix(windowStart, 0).Format(time.RFC3339),
 		"window_end":   time.Unix(windowEnd, 0).Format(time.RFC3339),
 	}).Infoln("scaler: starting scaling operation for pool")
@@ -137,37 +155,53 @@ func (s *Scaler) scalePoolInternal(
 ) {
 	logr := logrus.WithField("pool", pool.Name)
 
-	// Scale the default variant (pool itself)
-	s.scaleVariantForActiveImages(ctx, pool, "default", pool.MinSize, nil, windowStart, windowEnd, freeCounts)
-
-	// Scale each variant
-	for i := range pool.Variants {
-		variant := &pool.Variants[i]
-		params := variant.Params // Copy to avoid pointer issues
-		s.scaleVariantForActiveImages(ctx, pool, params.VariantID, variant.MinSize, &params, windowStart, windowEnd, freeCounts)
+	// Normalize to a per-tenant view. Single-tenant pools become a single default tenant using
+	// the pool-level min size and variants, so the scaling logic below is uniform.
+	tenants := pool.Tenants
+	if len(tenants) == 0 {
+		tenants = []ScalableTenant{{
+			ID:       types.DefaultTenantID,
+			MinSize:  pool.MinSize,
+			Variants: pool.Variants,
+		}}
 	}
 
-	logr.Debugln("scaler: finished scaling all variants and images")
+	for ti := range tenants {
+		tenant := &tenants[ti]
+
+		// Scale the default variant (pool itself) for this tenant
+		s.scaleVariantForActiveImages(ctx, pool, tenant.ID, "default", tenant.MinSize, nil, windowStart, windowEnd, freeCounts)
+
+		// Scale each variant for this tenant
+		for i := range tenant.Variants {
+			variant := &tenant.Variants[i]
+			params := variant.Params // Copy to avoid pointer issues
+			s.scaleVariantForActiveImages(ctx, pool, tenant.ID, params.VariantID, variant.MinSize, &params, windowStart, windowEnd, freeCounts)
+		}
+	}
+
+	logr.Debugln("scaler: finished scaling all tenants, variants and images")
 }
 
 // scaleVariantForActiveImages discovers active images for a variant and scales each (variant, image) pair.
 func (s *Scaler) scaleVariantForActiveImages(
 	ctx context.Context,
 	pool ScalablePool,
-	variantID string,
+	tenantID, variantID string,
 	minSize int,
 	params *types.SetupInstanceParams,
 	windowStart, windowEnd int64,
 	freeCounts map[InstanceKey]int,
 ) {
 	logr := logrus.WithFields(logrus.Fields{
-		"pool":       pool.Name,
-		"variant_id": variantID,
+		logFieldPool:      pool.Name,
+		logFieldTenantID:  tenantID,
+		logFieldVariantID: variantID,
 	})
 
 	// Discover active images from utilization history
 	since := time.Now().AddDate(0, 0, -s.config.ActiveImageLookbackDays).Unix()
-	activeImages, err := s.historyStore.GetActiveImages(ctx, pool.Name, variantID, since)
+	activeImages, err := s.historyStore.GetActiveImages(ctx, pool.Name, tenantID, variantID, since)
 	if err != nil {
 		logr.WithError(err).Errorln("scaler: failed to get active images")
 		return
@@ -178,7 +212,7 @@ func (s *Scaler) scaleVariantForActiveImages(
 			logr.Debugln("scaler: no image name, skipping")
 			continue
 		}
-		if err := s.scaleVariant(ctx, pool, variantID, imageName, minSize, params, windowStart, windowEnd, freeCounts); err != nil {
+		if err := s.scaleVariant(ctx, pool, tenantID, variantID, imageName, minSize, params, windowStart, windowEnd, freeCounts); err != nil {
 			logr.WithError(err).WithField("image_name", imageName).
 				Errorln("scaler: failed to scale variant for image")
 		}
@@ -189,21 +223,23 @@ func (s *Scaler) scaleVariantForActiveImages(
 func (s *Scaler) scaleVariant(
 	ctx context.Context,
 	pool ScalablePool,
-	variantID, imageName string,
+	tenantID, variantID, imageName string,
 	minSize int,
 	params *types.SetupInstanceParams,
 	windowStart, windowEnd int64,
 	freeCounts map[InstanceKey]int,
 ) error {
 	logr := logrus.WithFields(logrus.Fields{
-		"pool":       pool.Name,
-		"variant_id": variantID,
-		"image_name": imageName,
+		logFieldPool:      pool.Name,
+		logFieldTenantID:  tenantID,
+		logFieldVariantID: variantID,
+		logFieldImageName: imageName,
 	})
 
-	// Get prediction for this pool/variant/image
+	// Get prediction for this pool/tenant/variant/image
 	prediction, err := s.predictor.Predict(ctx, &predictor.PredictionInput{
 		PoolName:       pool.Name,
+		TenantID:       tenantID,
 		VariantID:      variantID,
 		ImageName:      imageName,
 		StartTimestamp: windowStart,
@@ -213,7 +249,7 @@ func (s *Scaler) scaleVariant(
 		return fmt.Errorf("failed to get prediction: %w", err)
 	}
 
-	key := InstanceKey{VariantID: variantID, ImageName: imageName}
+	key := InstanceKey{TenantID: tenantID, VariantID: variantID, ImageName: imageName}
 	currentFree := freeCounts[key]
 
 	// Target = predicted demand, floored by MinSize.
@@ -227,7 +263,7 @@ func (s *Scaler) scaleVariant(
 	// predicted demand — only past usage justifying a small floor.
 	scaledByRecentUsage := false
 	if prediction.PredictedInstances == 0 && s.config.RecentUsageMinInstances > 0 {
-		hasRecentUsage, checkErr := s.hasRecentUsage(ctx, pool.Name, variantID, imageName)
+		hasRecentUsage, checkErr := s.hasRecentUsage(ctx, pool.Name, tenantID, variantID, imageName)
 		if checkErr != nil {
 			logr.WithError(checkErr).Warnln("scaler: failed to check recent usage, skipping recent usage minimum")
 		} else if hasRecentUsage && targetCount < s.config.RecentUsageMinInstances {
@@ -267,12 +303,12 @@ func (s *Scaler) scaleVariant(
 
 	if delta > 0 {
 		// Recent-usage-floored instances are hibernated; normal predicted demand is live.
-		s.scaleUp(ctx, pool, variantID, imageName, params, delta, scaledByRecentUsage)
+		s.scaleUp(ctx, pool, tenantID, variantID, imageName, params, delta, scaledByRecentUsage)
 		if bufferDelta > 0 {
-			s.scaleUp(ctx, pool, variantID, imageName, params, bufferDelta, true)
+			s.scaleUp(ctx, pool, tenantID, variantID, imageName, params, bufferDelta, true)
 		}
 	} else if delta < 0 {
-		s.scaleDown(ctx, pool.Name, variantID, imageName, -delta)
+		s.scaleDown(ctx, pool.Name, tenantID, variantID, imageName, -delta)
 	}
 
 	return nil
@@ -282,16 +318,17 @@ func (s *Scaler) scaleVariant(
 func (s *Scaler) scaleUp(
 	ctx context.Context,
 	pool ScalablePool,
-	variantID, imageName string,
+	tenantID, variantID, imageName string,
 	params *types.SetupInstanceParams,
 	count int,
 	hibernate bool,
 ) {
 	logr := logrus.WithFields(logrus.Fields{
-		"pool":       pool.Name,
-		"variant_id": variantID,
-		"image_name": imageName,
-		"count":      count,
+		logFieldPool:      pool.Name,
+		logFieldTenantID:  tenantID,
+		logFieldVariantID: variantID,
+		logFieldImageName: imageName,
+		logFieldCount:     count,
 	})
 
 	logr.Infoln("scaler: scaling up")
@@ -301,6 +338,7 @@ func (s *Scaler) scaleUp(
 		// Build setup params - create a copy to avoid modifying the original
 		setupParams := &types.SetupInstanceParams{
 			VariantID: variantID,
+			TenantID:  tenantID,
 			ImageName: imageName,
 			Source:    types.InstanceSourcePredictor,
 			Hibernate: hibernate,
@@ -308,6 +346,7 @@ func (s *Scaler) scaleUp(
 		if params != nil {
 			paramsCopy := *params
 			paramsCopy.VariantID = variantID
+			paramsCopy.TenantID = tenantID
 			paramsCopy.Source = types.InstanceSourcePredictor
 			if imageName != "" {
 				paramsCopy.ImageName = imageName
@@ -348,14 +387,15 @@ func (s *Scaler) scaleUp(
 // scaleDown destroys excess free instances (either live or hibernated).
 func (s *Scaler) scaleDown(
 	ctx context.Context,
-	poolName, variantID, imageName string,
+	poolName, tenantID, variantID, imageName string,
 	count int,
 ) {
 	logr := logrus.WithFields(logrus.Fields{
-		"pool":       poolName,
-		"variant_id": variantID,
-		"image_name": imageName,
-		"count":      count,
+		logFieldPool:      poolName,
+		logFieldTenantID:  tenantID,
+		logFieldVariantID: variantID,
+		logFieldImageName: imageName,
+		logFieldCount:     count,
 	})
 
 	logr.Infoln("scaler: scaling down")
@@ -364,6 +404,7 @@ func (s *Scaler) scaleDown(
 	// This avoids race conditions with other processes
 	queryParams := &types.QueryParams{
 		PoolName:     poolName,
+		TenantID:     tenantID,
 		VariantID:    variantID,
 		ImageName:    imageName,
 		FilterSource: types.InstanceSourcePredictor,
@@ -414,7 +455,11 @@ func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool Scalable
 	counts := make(map[InstanceKey]int)
 	for _, inst := range instances {
 		if inst.State == types.StateCreated || inst.State == types.StateHibernating || inst.State == types.StateProvisioning {
-			key := InstanceKey{VariantID: inst.VariantID, ImageName: inst.Image}
+			tenantID := inst.TenantID
+			if tenantID == "" {
+				tenantID = types.DefaultTenantID
+			}
+			key := InstanceKey{TenantID: tenantID, VariantID: inst.VariantID, ImageName: inst.Image}
 			counts[key]++
 		}
 	}
@@ -425,9 +470,9 @@ func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool Scalable
 // isPoolDisabled checks if the given pool name is in the disabled pools list.
 // hasRecentUsage checks if a variant/image combination had any non-zero utilization
 // within the configured lookback window.
-func (s *Scaler) hasRecentUsage(ctx context.Context, poolName, variantID, imageName string) (bool, error) {
+func (s *Scaler) hasRecentUsage(ctx context.Context, poolName, tenantID, variantID, imageName string) (bool, error) {
 	since := time.Now().AddDate(0, 0, -s.config.RecentUsageLookbackDays).Unix()
-	return s.historyStore.HasRecentUsage(ctx, poolName, variantID, imageName, since)
+	return s.historyStore.HasRecentUsage(ctx, poolName, tenantID, variantID, imageName, since)
 }
 
 func (s *Scaler) isPoolDisabled(poolName string) bool {
