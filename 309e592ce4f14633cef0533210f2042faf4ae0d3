@@ -1,0 +1,620 @@
+command/config/tenant_merge_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 1-233
+store/database/migrate/postgres/0025_update_table_instances_tenant_id.up.sql
+  c742cea3-6744-4c06-813e-f095e0995d6a 1
+app/predictor/ema_weekend_decay_predictor.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 154,220
+app/poolfile/config.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 83-93,146-149,151-156,311-482
+app/drivers/pool_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 1-79
+command/config/tenant_merge.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 1-204
+command/config/tenant_parse_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 1-132
+store/database/sql/instances.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 18-22,109,173,176-177,245,297,341,377,399,403,408
+  human 174-175
+app/scheduler/jobs/scaler.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 24-29,38-41,44-48,60,158-166,169-180,183,190,198,204,215,226,234,239,242,252,266,306,308,311,321,328,341,349,390,395,407,458-462,473,475
+  human 42-43,111,167,197,199,233,235-236,327,329-331,394,396-398
+command/harness/distributed.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 217-235,244-265
+  human 243
+store/database/tenant_instances_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 1-81
+app/poolfile/tenant_config_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 1-157
+app/predictor/predictor.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 10-12
+store/store.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 73,75-77
+app/drivers/distributed_manager.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 29,34-40,171,330-337,388,423,1148,1207,1247
+  human 41
+command/harness/capacity.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 264
+command/harness/setup.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 456
+app/drivers/pool_builder.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 47-49,129-255
+  human 50
+app/predictor/predictor_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 39,44,55,58,70,72,81-90
+  human 91-92
+app/scheduler/jobs/utilization_tracker.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 70
+app/scheduler/jobs/scaler_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 200,205,216,219,231,233,242-251,591,597,1529-1584
+  human 252-253
+app/drivers/provisioner.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 295-298,317,327,348-350,370,419
+types/types.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 113,116-118,215,240,394,439,442,455-457,493
+  human 119
+app/drivers/instance_ops.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 134,284,336,345
+.golangci.yml
+  c742cea3-6744-4c06-813e-f095e0995d6a 108
+store/database/sql/utilization_history.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 17-21,31-34,38,46,84,90-92,103,105-106,108-109,135-138,141-143,167-170,173-176
+app/drivers/purger.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 103,185
+pool_example.yml
+  c742cea3-6744-4c06-813e-f095e0995d6a 113-156
+store/database/migrate/sqlite/0016_update_table_instances_tenant_id.up.sql
+  c742cea3-6744-4c06-813e-f095e0995d6a 1
+app/drivers/hibernator.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 163
+store/database/migrate/postgres/0026_add_tenant_id_to_utilization_history.up.sql
+  c742cea3-6744-4c06-813e-f095e0995d6a 1-6
+app/drivers/pool.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 29-35,38-102
+  human 28,36-37
+command/config/config.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 34-38,41-60,676-677,680,682,684,686,688,690,692,694,696,698-706,708,715-725,728-729,740-772,775
+  human 39-40,773-774
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 233,
+          "added_lines": 233,
+          "deleted_lines": 28,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1-233",
+          "overridden_lines": 1
+        }
+      ],
+      "file": "command/config/tenant_merge_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0025_update_table_instances_tenant_id.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "154,220",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/predictor/ema_weekend_decay_predictor.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 193,
+          "added_lines": 193,
+          "deleted_lines": 23,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "83-93,146-149,151-156,311-482",
+          "overridden_lines": 1
+        }
+      ],
+      "file": "app/poolfile/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 79,
+          "added_lines": 79,
+          "deleted_lines": 9,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1-79",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/pool_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 204,
+          "added_lines": 204,
+          "deleted_lines": 25,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1-204",
+          "overridden_lines": 1
+        }
+      ],
+      "file": "command/config/tenant_merge.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 132,
+          "added_lines": 132,
+          "deleted_lines": 16,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1-132",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/tenant_parse_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 16,
+          "added_lines": 18,
+          "deleted_lines": 2,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "18-22,109,173,176-177,245,297,341,377,399,403,408",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "174-175",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/sql/instances.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 65,
+          "added_lines": 65,
+          "deleted_lines": 7,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "24-29,38-41,44-48,60,158-166,169-180,183,190,198,204,215,226,234,239,242,252,266,306,308,311,321,328,341,349,390,395,407,458-462,473,475",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 17,
+          "added_lines": 17,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "42-43,111,167,197,199,233,235-236,327,329-331,394,396-398",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/scheduler/jobs/scaler.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 41,
+          "added_lines": 41,
+          "deleted_lines": 5,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "217-235,244-265",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "243",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/distributed.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 81,
+          "added_lines": 81,
+          "deleted_lines": 9,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1-81",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/tenant_instances_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 157,
+          "added_lines": 157,
+          "deleted_lines": 19,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1-157",
+          "overridden_lines": 1
+        }
+      ],
+      "file": "app/poolfile/tenant_config_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "10-12",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/predictor/predictor.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "73,75-77",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/store.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 22,
+          "added_lines": 22,
+          "deleted_lines": 2,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "29,34-40,171,330-337,388,423,1148,1207,1247",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "41",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/distributed_manager.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "264",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/capacity.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "456",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/setup.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 130,
+          "added_lines": 130,
+          "deleted_lines": 15,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "47-49,129-255",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "50",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/pool_builder.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 16,
+          "added_lines": 18,
+          "deleted_lines": 2,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "39,44,55,58,70,72,81-90",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "91-92",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/predictor/predictor_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "70",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/scheduler/jobs/utilization_tracker.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 74,
+          "added_lines": 76,
+          "deleted_lines": 9,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "200,205,216,219,231,233,242-251,591,597,1529-1584",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "252-253",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/scheduler/jobs/scaler_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 11,
+          "added_lines": 11,
+          "deleted_lines": 1,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "295-298,317,327,348-350,370,419",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/provisioner.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 13,
+          "deleted_lines": 1,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "113,116-118,215,240,394,439,442,455-457,493",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "119",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "types/types.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "134,284,336,345",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/instance_ops.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "108",
+          "overridden_lines": 0
+        }
+      ],
+      "file": ".golangci.yml"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 35,
+          "added_lines": 35,
+          "deleted_lines": 4,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "17-21,31-34,38,46,84,90-92,103,105-106,108-109,135-138,141-143,167-170,173-176",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/sql/utilization_history.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "103,185",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/purger.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 44,
+          "added_lines": 44,
+          "deleted_lines": 5,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "113-156",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "pool_example.yml"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/sqlite/0016_update_table_instances_tenant_id.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "163",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/hibernator.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 6,
+          "added_lines": 6,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "1-6",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0026_add_tenant_id_to_utilization_history.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 72,
+          "added_lines": 73,
+          "deleted_lines": 8,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "29-35,38-102",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "28,36-37",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/pool.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 93,
+          "added_lines": 96,
+          "deleted_lines": 25,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "34-38,41-60,676-677,680,682,684,686,688,690,692,694,696,698-706,708,715-725,728-729,740-772,775",
+          "overridden_lines": 9
+        },
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "39-40,773-774",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/config.go"
+    }
+  ],
+  "base_commit_sha": "17c8361174bd28818b3b39ff9929b739a895504e",
+  "branch": "CI-22905",
+  "commit_sha": "309e592ce4f14633cef0533210f2042faf4ae0d3",
+  "commit_time": "2026-07-06T13:30:28+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "c742cea3-6744-4c06-813e-f095e0995d6a": {
+      "accepted_lines": 1739,
+      "agent_id": {
+        "id": "c742cea3-6744-4c06-813e-f095e0995d6a",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 13,
+      "total_additions": 1744,
+      "total_deletions": 215
+    },
+    "human": {
+      "accepted_lines": 34,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 34,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
