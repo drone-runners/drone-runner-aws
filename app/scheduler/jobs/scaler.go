@@ -134,12 +134,12 @@ func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, wi
 	}
 
 	// Get current free instance counts for this pool, grouped by (variant, image).
-	freeCounts, err := s.getFreeInstanceCountsForPool(ctx, *targetPool)
+	freeCounts, err := s.getFreeInstanceCountsForPool(ctx, targetPool)
 	if err != nil {
 		return fmt.Errorf("scaler: failed to get free instance counts: %w", err)
 	}
 
-	s.scalePoolInternal(ctx, *targetPool, windowStart, windowEnd, freeCounts)
+	s.scalePoolInternal(ctx, targetPool, windowStart, windowEnd, freeCounts)
 
 	logrus.WithField("pool", poolName).Infoln("scaler: scaling operation completed for pool")
 	return nil
@@ -149,7 +149,7 @@ func (s *Scaler) ScalePool(ctx context.Context, poolName string, windowStart, wi
 // It discovers active images per variant and scales each (variant, image) combination independently.
 func (s *Scaler) scalePoolInternal(
 	ctx context.Context,
-	pool ScalablePool,
+	pool *ScalablePool,
 	windowStart, windowEnd int64,
 	freeCounts map[InstanceKey]int,
 ) {
@@ -186,7 +186,7 @@ func (s *Scaler) scalePoolInternal(
 // scaleVariantForActiveImages discovers active images for a variant and scales each (variant, image) pair.
 func (s *Scaler) scaleVariantForActiveImages(
 	ctx context.Context,
-	pool ScalablePool,
+	pool *ScalablePool,
 	tenantID, variantID string,
 	minSize int,
 	params *types.SetupInstanceParams,
@@ -222,7 +222,7 @@ func (s *Scaler) scaleVariantForActiveImages(
 // scaleVariant scales a single (variant, image) combination within a pool.
 func (s *Scaler) scaleVariant(
 	ctx context.Context,
-	pool ScalablePool,
+	pool *ScalablePool,
 	tenantID, variantID, imageName string,
 	minSize int,
 	params *types.SetupInstanceParams,
@@ -317,7 +317,7 @@ func (s *Scaler) scaleVariant(
 // scaleUp creates new instances by adding outbox jobs.
 func (s *Scaler) scaleUp(
 	ctx context.Context,
-	pool ScalablePool,
+	pool *ScalablePool,
 	tenantID, variantID, imageName string,
 	params *types.SetupInstanceParams,
 	count int,
@@ -444,7 +444,7 @@ func (s *Scaler) scaleDown(
 
 // getFreeInstanceCountsForPool returns free instance counts keyed by InstanceKey for a specific pool.
 // Free instances are those in StateCreated, StateHibernating, or StateProvisioning.
-func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool ScalablePool) (
+func (s *Scaler) getFreeInstanceCountsForPool(ctx context.Context, pool *ScalablePool) (
 	map[InstanceKey]int, error,
 ) {
 	instances, err := s.instanceStore.List(ctx, pool.Name, nil)

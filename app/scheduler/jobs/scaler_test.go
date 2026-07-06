@@ -582,7 +582,7 @@ func TestScaler_GetFreeInstanceCountsForPool(t *testing.T) {
 
 	scaler := NewScaler(nil, mockPredictor, instanceStore, NewMockUtilizationHistoryStore(), outboxStore, config, pools, nil)
 
-	counts, err := scaler.getFreeInstanceCountsForPool(context.Background(), pool)
+	counts, err := scaler.getFreeInstanceCountsForPool(context.Background(), &pool)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
