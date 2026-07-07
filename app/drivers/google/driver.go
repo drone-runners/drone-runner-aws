@@ -27,8 +27,7 @@ import (
 	"github.com/dchest/uniuri"
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	computebeta "google.golang.org/api/compute/v0.beta"
-	compute "google.golang.org/api/compute/v1"
+	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 )
@@ -105,7 +104,6 @@ type config struct {
 	userDataKey                string
 	egressControl              bool
 	service                    *compute.Service
-	betaService                *computebeta.Service
 	labels                     map[string]string
 	enableNestedVirtualization bool
 	enableC4D                  bool
@@ -260,17 +258,6 @@ func New(opts ...Option) (drivers.Driver, error) {
 			p.service, err = compute.NewService(ctx, option.WithCredentialsFile(p.JSONPath)) //nolint:staticcheck // SA1019: pre-existing usage, not changed by this PR
 		} else {
 			p.service, err = compute.NewService(ctx)
-		}
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	if p.betaService == nil {
-		if p.JSONPath != "" {
-			p.betaService, err = computebeta.NewService(ctx, option.WithCredentialsFile(p.JSONPath)) //nolint:staticcheck // SA1019: pre-existing usage, not changed by this PR
-		} else {
-			p.betaService, err = computebeta.NewService(ctx)
 		}
 
 		if err != nil {
@@ -546,10 +533,10 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 
 	logr.Traceln("google: creating VM")
 
-	networkConfig := []*computebeta.AccessConfig{}
+	networkConfig := []*compute.AccessConfig{}
 
 	if !p.privateIP {
-		networkConfig = []*computebeta.AccessConfig{
+		networkConfig = []*compute.AccessConfig{
 			{
 				Name: "External NAT",
 				Type: "ONE_TO_ONE_NAT",
@@ -561,7 +548,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if !enableNestedVirtualization && opts.Platform.OS == oshelp.OSLinux && opts.Platform.Arch == oshelp.ArchAMD64 {
 		enableNestedVirtualization = p.enableNestedVirtualization
 	}
-	advancedMachineFeatures := &computebeta.AdvancedMachineFeatures{
+	advancedMachineFeatures := &compute.AdvancedMachineFeatures{
 		EnableNestedVirtualization: enableNestedVirtualization,
 	}
 
@@ -609,11 +596,11 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 
 	// Build the zone-independent instance spec once. Per-attempt fields (zone,
 	// machine type, disk type, network, tags) are set inside the retry loop.
-	in := &computebeta.Instance{
+	in := &compute.Instance{
 		Name:           name,
 		MinCpuPlatform: "Automatic",
-		Metadata: &computebeta.Metadata{
-			Items: []*computebeta.MetadataItems{
+		Metadata: &compute.Metadata{
+			Items: []*compute.MetadataItems{
 				{Key: p.userDataKey, Value: googleapi.String(userData)},
 				{Key: "harness-account-id", Value: googleapi.String(opts.AccountID)},
 				{Key: "harness-pool-name", Value: googleapi.String(opts.PoolName)},
@@ -623,14 +610,14 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 				{Key: "harness-platform-arch", Value: googleapi.String(opts.Platform.Arch)},
 			},
 		},
-		Disks: []*computebeta.AttachedDisk{
+		Disks: []*compute.AttachedDisk{
 			{
 				Type:       "PERSISTENT",
 				Boot:       true,
 				Mode:       "READ_WRITE",
 				AutoDelete: true,
 				DeviceName: opts.PoolName,
-				InitializeParams: &computebeta.AttachedDiskInitializeParams{
+				InitializeParams: &compute.AttachedDiskInitializeParams{
 					SourceImage: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s", image),
 					DiskSizeGb:  bootDiskSize,
 				},
@@ -638,14 +625,11 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		},
 		AdvancedMachineFeatures: advancedMachineFeatures,
 		CanIpForward:            false,
-		NetworkInterfaces:       []*computebeta.NetworkInterface{{AccessConfigs: networkConfig}},
-		Scheduling: &computebeta.Scheduling{
+		NetworkInterfaces:       []*compute.NetworkInterface{{AccessConfigs: networkConfig}},
+		Scheduling: &compute.Scheduling{
 			Preemptible:       false,
 			OnHostMaintenance: onHostMaintenance(gpu),
 			AutomaticRestart:  googleapi.Bool(true),
-			GracefulShutdown: &computebeta.SchedulingGracefulShutdown{
-				Enabled: true,
-			},
 		},
 		DeletionProtection: false,
 		Labels:             p.buildLabelsWithGitspace(opts),
@@ -655,17 +639,17 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if isByoiImage(image) {
 		logr.Debugln("google: adding BYOI metadata items for custom image")
 		in.Metadata.Items = append(in.Metadata.Items,
-			&computebeta.MetadataItems{Key: "harness-byoi", Value: googleapi.String("true")})
+			&compute.MetadataItems{Key: "harness-byoi", Value: googleapi.String("true")})
 	}
 
 	if !p.noServiceAccount {
-		in.ServiceAccounts = []*computebeta.ServiceAccount{{Scopes: p.scopes, Email: p.serviceAccountEmail}}
+		in.ServiceAccounts = []*compute.ServiceAccount{{Scopes: p.scopes, Email: p.serviceAccountEmail}}
 	}
 
 	// Set reservation affinity if capacity reservation is provided
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
 		logr.WithField("reservation", opts.CapacityReservation.ReservationID).Debugln("google: using capacity reservation")
-		in.ReservationAffinity = &computebeta.ReservationAffinity{
+		in.ReservationAffinity = &compute.ReservationAffinity{
 			ConsumeReservationType: "SPECIFIC_RESERVATION",
 			Key:                    "compute.googleapis.com/reservation-name",
 			Values:                 []string{opts.CapacityReservation.ReservationID},
@@ -715,13 +699,13 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 // candidate that provisioned the VM.
 func (p *config) insertWithStockoutRetry(
 	ctx context.Context,
-	in *computebeta.Instance,
+	in *compute.Instance,
 	candidates []createCandidate,
 	opts *types.InstanceCreateOpts,
 	machineType, bootDiskType string,
 	stockoutRetryEnabled, usesReservation bool,
 	logr logger.Logger,
-) (*computebeta.Operation, createCandidate, error) {
+) (*compute.Operation, createCandidate, error) {
 	for attempt := 0; attempt < len(candidates); attempt++ {
 		cand := candidates[attempt]
 		zone := cand.zone
@@ -734,7 +718,7 @@ func (p *config) insertWithStockoutRetry(
 		in.NetworkInterfaces[0].Network = cand.network
 		in.NetworkInterfaces[0].Subnetwork = cand.subnetwork
 		// Copy tags so appending name does not mutate the network config's backing slice.
-		in.Tags = &computebeta.Tags{Items: append(append([]string{}, cand.tags...), in.Name)}
+		in.Tags = &compute.Tags{Items: append(append([]string{}, cand.tags...), in.Name)}
 
 		if opts.StorageOpts.Identifier != "" {
 			operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
@@ -802,7 +786,7 @@ func (p *config) cleanupFailedInstance(ctx context.Context, zone, name string, l
 func (p *config) attachPersistentDisk(
 	ctx context.Context,
 	opts *types.InstanceCreateOpts,
-	in *computebeta.Instance,
+	in *compute.Instance,
 	diskZone string,
 ) ([]*compute.Operation, error) {
 	storageIdentifiers := strings.Split(opts.StorageOpts.Identifier, ",")
@@ -830,7 +814,7 @@ func (p *config) attachPersistentDisk(
 		}
 
 		// attach to instance
-		attachedDisk := &computebeta.AttachedDisk{
+		attachedDisk := &compute.AttachedDisk{
 			DeviceName: fmt.Sprintf("disk-%d", i),
 			Boot:       false,
 			Type:       "PERSISTENT",
@@ -1104,9 +1088,9 @@ func (p *config) resumeInstance(ctx context.Context, projectID, zone, name strin
 	})
 }
 
-func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *computebeta.Instance) (*computebeta.Operation, error) {
-	return retry(ctx, insertRetries, secSleep, func() (*computebeta.Operation, error) {
-		return p.betaService.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
+func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
+	return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
+		return p.service.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
