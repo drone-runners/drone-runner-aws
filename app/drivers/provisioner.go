@@ -308,6 +308,12 @@ func (m *Manager) setupInstance(
 		}
 		retain = "true"
 	}
+	// when CI_SKIP_CLOUD_VM_CLEANUP is on for the target, CI Manager
+	// asks the runner to retain the VM past the purger's maxAge window. Explicit
+	// cleanup tasks still destroy it, so the 2-day defer cap holds.
+	if setupParams != nil && setupParams.SkipCloudVMCleanup {
+		retain = "true"
+	}
 	createOptions.InternalLabels = map[string]string{"retain": retain}
 	source := resolveInstanceSource(setupParams)
 	if createOptions.IsHosted {

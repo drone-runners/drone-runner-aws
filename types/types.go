@@ -395,6 +395,13 @@ type SetupInstanceParams struct {
 	GPU                  bool           `json:"gpu,omitempty" yaml:"gpu,omitempty"`
 	Source               InstanceSource `json:"source,omitempty" yaml:"source,omitempty"`
 
+	// SkipCloudVMCleanup, when true, causes the instance to be labeled
+	// retain=true so the runner's background purger leaves it alone.
+	// CI Manager sets this when the CI_SKIP_CLOUD_VM_CLEANUP FF (CI-23070)
+	// is on for the target. Explicit cleanup tasks from CI Manager still
+	// destroy the VM, preserving the 2-day defer cap.
+	SkipCloudVMCleanup bool `json:"skip_cloud_vm_cleanup,omitempty" yaml:"skip_cloud_vm_cleanup,omitempty"`
+
 	// Identity fields used to label the instance for cleanup eligibility.
 	// All optional; empty values mean the label is not written.
 	AccountID           string `json:"account_id,omitempty" yaml:"account_id,omitempty"`
@@ -456,6 +463,7 @@ type ProvisionParams struct {
 	NestedVirtualization bool
 	ResourceClass        string
 	Zones                []string
+	SkipCloudVMCleanup   bool
 
 	// Identity used to label the instance for cleanup eligibility.
 	// Populated from harness Context + stage runtime id. Optional —
@@ -475,6 +483,7 @@ func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
 	s := &SetupInstanceParams{
 		NestedVirtualization: p.NestedVirtualization,
 		ResourceClass:        p.ResourceClass,
+		SkipCloudVMCleanup:   p.SkipCloudVMCleanup,
 		AccountID:            p.AccountID,
 		StageRuntimeID:       p.StageRuntimeID,
 		PipelineExecutionID:  p.PipelineExecutionID,
