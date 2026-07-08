@@ -890,6 +890,11 @@ func (p *amazonConfig) SetTags(ctx context.Context, instance *drtypes.Instance,
 	return err
 }
 
+// SetLabels is a noop on AWS. Identity labels are GCP-only today.
+func (p *amazonConfig) SetLabels(_ context.Context, _ *drtypes.Instance, _ map[string]string) error {
+	return nil
+}
+
 func (p *amazonConfig) Hibernate(ctx context.Context, instanceID, poolName, _ string) error {
 	logr := logger.FromContext(ctx).
 		WithField("driver", drtypes.Amazon).

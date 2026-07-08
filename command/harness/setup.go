@@ -54,6 +54,13 @@ var (
 	noContext   = context.Background()
 )
 
+// longRunningStageThresholdSec is the stage-timeout threshold above
+// which a CI VM is tagged with harness-long-running=true. Requests
+// whose stage timeout exceeds this value are marked so the reaper
+// applies its extended grace window (7 days) instead of the default
+// maxAge.
+const longRunningStageThresholdSec = int64(24 * 60 * 60)
+
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
 // Instead of passing in the env config, we pass in whatever is needed. This is because
@@ -458,6 +465,10 @@ func handleSetup(
 		NestedVirtualization: r.NestedVirtualization,
 		ResourceClass:        r.ResourceClass,
 		SkipCloudVMCleanup:   r.SkipCloudVMCleanup,
+		AccountID:            owner,
+		StageRuntimeID:       stageRuntimeID,
+		PipelineExecutionID:  getPipelineExecutionID(&r.Context, r.Tags),
+		LongRunning:          r.Timeout > longRunningStageThresholdSec,
 	}
 	if r.Zone != "" {
 		provisionParams.Zones = []string{r.Zone}

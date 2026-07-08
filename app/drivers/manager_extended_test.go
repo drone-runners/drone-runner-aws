@@ -238,6 +238,10 @@ func (m *flexibleMockDriver) SetTags(ctx context.Context, instance *types.Instan
 	return nil
 }
 
+func (m *flexibleMockDriver) SetLabels(_ context.Context, _ *types.Instance, _ map[string]string) error {
+	return nil
+}
+
 func (m *flexibleMockDriver) Ping(ctx context.Context) error {
 	if m.PingFunc != nil {
 		return m.PingFunc(ctx)

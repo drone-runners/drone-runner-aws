@@ -174,6 +174,31 @@ func (m *Manager) provisionFromPool(
 		return nil, nil, false, "", fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
 	}
 	pool.Unlock()
+
+	// Refresh GCP identity on the warmed instance. Pool-fill created the
+	// VM with only constant labels (no stage/pipeline). Overlay per-stage
+	// identity in two places so SRE workflows work:
+	//   1. labels (lowercased) — server-side filterable lookup key
+	//   2. custom metadata (raw, case-preserved) — source of truth for
+	//      reverse lookup into Harness systems
+	// Both calls are log-and-continue; the build should not fail when a
+	// best-effort label/metadata write fails. Non-GCP drivers return nil.
+	overlay := buildClaimIdentityLabels(setupParams, timeout)
+	if len(overlay) > 0 {
+		if labelErr := pool.Driver.SetLabels(ctx, inst, overlay); labelErr != nil {
+			logger.FromContext(ctx).WithError(labelErr).
+				WithField("instance_id", inst.ID).
+				Warnln("provision: failed to set identity labels on warm instance; continuing")
+		}
+	}
+	metaOverlay := buildClaimIdentityMetadata(setupParams)
+	if len(metaOverlay) > 0 {
+		if tagErr := pool.Driver.SetTags(ctx, inst, metaOverlay); tagErr != nil {
+			logger.FromContext(ctx).WithError(tagErr).
+				WithField("instance_id", inst.ID).
+				Warnln("provision: failed to set identity metadata on warm instance; continuing")
+		}
+	}
 	return inst, nil, true, "", nil
 }
 
@@ -223,6 +248,8 @@ func (m *Manager) setupInstance(
 		createOptions.MachineType = setupParams.MachineType
 		createOptions.NestedVirtualization = setupParams.NestedVirtualization
 		createOptions.GPU = setupParams.GPU
+		createOptions.StageRuntimeID = setupParams.StageRuntimeID
+		createOptions.PipelineExecutionID = setupParams.PipelineExecutionID
 	}
 	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
 		createOptions.VMImageConfig = types.VMImageConfig{
@@ -290,13 +317,7 @@ func (m *Manager) setupInstance(
 	createOptions.InternalLabels = map[string]string{"retain": retain}
 	source := resolveInstanceSource(setupParams)
 	if createOptions.IsHosted {
-		createOptions.VMLabels = map[string]string{
-			"pool_id": pool.Name,
-			"source":  string(source),
-		}
-		if m.env != "" {
-			createOptions.VMLabels["harness_env"] = m.env
-		}
+		createOptions.VMLabels = buildIdentityVMLabels(setupParams, timeout, m.env, pool.Name, source)
 	}
 	createOptions.DriverName = pool.Driver.DriverName()
 	createOptions.Timeout = timeout
@@ -496,6 +517,109 @@ func resolveInstanceSource(params *types.SetupInstanceParams) types.InstanceSour
 		return params.Source
 	}
 	return types.InstanceSourcePool
+}
+
+// Identity label keys written to the GCP VM's `labels` field at provision
+// time. SREs can query `gcloud compute instances list --filter='labels.X=Y'`
+// to find CI VMs by account / stage / pipeline. Harness IDs come from
+// UUIDGenerator.generateUuid() (base64url, mixed case); GCP label values
+// must match [a-z0-9_-]{1,63}, so all three identity IDs are lowercased
+// before being stamped as labels. The raw, case-preserved values are
+// stored on the VM as custom metadata (Instances.Insert and SetMetadata)
+// so reverse lookup into Harness systems still has the original case.
+const (
+	LabelCreatedBy           = "harness-created-by"
+	LabelAccountID           = "harness-account-id"
+	LabelPipelineExecutionID = "harness-pipeline-execution-id"
+	LabelStageExecutionID    = "harness-stage-execution-id"
+	LabelCreatedAt           = "harness-created-at"
+	LabelLongRunning         = "harness-long-running"
+
+	MetadataAccountID           = "harness-account-id"
+	MetadataStageExecutionID    = "harness-stage-execution-id"
+	MetadataPipelineExecutionID = "harness-pipeline-execution-id"
+
+	identityCreatedBy            = "harness-ci"
+	longRunningStageThresholdSec = int64(24 * 60 * 60)
+)
+
+// buildIdentityVMLabels returns the full GCP-labels set for a freshly
+// provisioned CI VM. Identity keys are omitted when their source value is
+// empty (e.g. pool-fill where setupParams is nil), so the VM is not
+// poisoned with blank labels; identity is filled in on warm-pool claim
+// via SetLabels.
+func buildIdentityVMLabels(setupParams *types.SetupInstanceParams, timeout int64, env, poolName string, source types.InstanceSource) map[string]string {
+	labels := map[string]string{
+		"pool_id":        poolName,
+		"source":         string(source),
+		LabelCreatedBy:   identityCreatedBy,
+		LabelCreatedAt:   fmt.Sprintf("%d", time.Now().Unix()),
+		LabelLongRunning: fmt.Sprintf("%t", timeout > longRunningStageThresholdSec),
+	}
+	if env != "" {
+		labels["harness_env"] = env
+	}
+	if setupParams != nil {
+		if setupParams.AccountID != "" {
+			labels[LabelAccountID] = strings.ToLower(setupParams.AccountID)
+		}
+		if setupParams.StageRuntimeID != "" {
+			labels[LabelStageExecutionID] = strings.ToLower(setupParams.StageRuntimeID)
+		}
+		if setupParams.PipelineExecutionID != "" {
+			labels[LabelPipelineExecutionID] = strings.ToLower(setupParams.PipelineExecutionID)
+		}
+	}
+	return labels
+}
+
+// buildClaimIdentityLabels returns the labels to overlay onto a warm-pool
+// VM when it is claimed for a real stage. Only the identity-changing keys
+// are returned; constant keys (pool_id, source, harness_env, created-by)
+// were already written at pool-fill time and do not need refreshing.
+func buildClaimIdentityLabels(setupParams *types.SetupInstanceParams, timeout int64) map[string]string {
+	labels := map[string]string{
+		LabelCreatedAt:   fmt.Sprintf("%d", time.Now().Unix()),
+		LabelLongRunning: fmt.Sprintf("%t", timeout > longRunningStageThresholdSec),
+	}
+	if setupParams != nil {
+		if setupParams.AccountID != "" {
+			labels[LabelAccountID] = strings.ToLower(setupParams.AccountID)
+		}
+		if setupParams.StageRuntimeID != "" {
+			labels[LabelStageExecutionID] = strings.ToLower(setupParams.StageRuntimeID)
+		}
+		if setupParams.PipelineExecutionID != "" {
+			labels[LabelPipelineExecutionID] = strings.ToLower(setupParams.PipelineExecutionID)
+		}
+	}
+	return labels
+}
+
+// buildClaimIdentityMetadata returns the raw, case-preserved identity
+// values for stamping onto a warm-pool VM as GCP custom metadata at claim
+// time. The raw values are the source-of-truth used for reverse lookup
+// into Harness systems (UI, Cloud Logging, API) that expect the original
+// casing. Returns nil when setupParams is nil; omits keys whose source
+// value is empty.
+func buildClaimIdentityMetadata(setupParams *types.SetupInstanceParams) map[string]string {
+	if setupParams == nil {
+		return nil
+	}
+	m := map[string]string{}
+	if setupParams.AccountID != "" {
+		m[MetadataAccountID] = setupParams.AccountID
+	}
+	if setupParams.StageRuntimeID != "" {
+		m[MetadataStageExecutionID] = setupParams.StageRuntimeID
+	}
+	if setupParams.PipelineExecutionID != "" {
+		m[MetadataPipelineExecutionID] = setupParams.PipelineExecutionID
+	}
+	if len(m) == 0 {
+		return nil
+	}
+	return m
 }
 
 // pinBinaryDownloadsToHarness rewrites every binary download URL to the canonical

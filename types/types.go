@@ -207,6 +207,11 @@ type InstanceCreateOpts struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	// Identity carried into Instances.Insert metadata for reverse lookup.
+	// Raw, case-preserved values; the lowercased forms are stamped onto
+	// VMLabels via buildIdentityVMLabels for server-side label filtering.
+	StageRuntimeID      string
+	PipelineExecutionID string
 }
 
 // Platform defines the target platform.
@@ -396,6 +401,14 @@ type SetupInstanceParams struct {
 	// is on for the target. Explicit cleanup tasks from CI Manager still
 	// destroy the VM, preserving the 2-day defer cap.
 	SkipCloudVMCleanup bool `json:"skip_cloud_vm_cleanup,omitempty" yaml:"skip_cloud_vm_cleanup,omitempty"`
+
+	// Identity fields used to label the instance for cleanup eligibility.
+	// All optional; empty values mean the label is not written.
+	AccountID           string `json:"account_id,omitempty" yaml:"account_id,omitempty"`
+	StageRuntimeID      string `json:"stage_runtime_id,omitempty" yaml:"stage_runtime_id,omitempty"`
+	PipelineExecutionID string `json:"pipeline_execution_id,omitempty" yaml:"pipeline_execution_id,omitempty"`
+	LongRunning         bool   `json:"long_running,omitempty" yaml:"long_running,omitempty"`
+	CreatedAt           int64  `json:"created_at,omitempty" yaml:"created_at,omitempty"`
 }
 
 // ScaleJobParams represents the parameters for a scaling job.
@@ -451,6 +464,15 @@ type ProvisionParams struct {
 	ResourceClass        string
 	Zones                []string
 	SkipCloudVMCleanup   bool
+
+	// Identity used to label the instance for cleanup eligibility.
+	// Populated from harness Context + stage runtime id. Optional —
+	// non-CI callers (drone-aws standalone, internal pool fill) may
+	// leave these empty.
+	AccountID           string
+	StageRuntimeID      string
+	PipelineExecutionID string
+	LongRunning         bool
 }
 
 // ToSetupInstanceParams converts request-level ProvisionParams to internal SetupInstanceParams.
@@ -462,6 +484,10 @@ func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
 		NestedVirtualization: p.NestedVirtualization,
 		ResourceClass:        p.ResourceClass,
 		SkipCloudVMCleanup:   p.SkipCloudVMCleanup,
+		AccountID:            p.AccountID,
+		StageRuntimeID:       p.StageRuntimeID,
+		PipelineExecutionID:  p.PipelineExecutionID,
+		LongRunning:          p.LongRunning,
 	}
 	if len(p.Zones) > 0 {
 		s.Zones = make([]string, len(p.Zones))

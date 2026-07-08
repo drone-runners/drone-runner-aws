@@ -57,6 +57,9 @@ func (m *mockDriver) DestroyCapacity(ctx context.Context, capacity *types.Capaci
 func (m *mockDriver) SetTags(ctx context.Context, instance *types.Instance, tags map[string]string) error {
 	return nil
 }
+func (m *mockDriver) SetLabels(ctx context.Context, instance *types.Instance, labels map[string]string) error {
+	return nil
+}
 func (m *mockDriver) RootDir() string {
 	return "/tmp"
 }
@@ -473,6 +476,9 @@ func (g *googleMockDriver) DestroyCapacity(context.Context, *types.CapacityReser
 	return nil
 }
 func (g *googleMockDriver) SetTags(context.Context, *types.Instance, map[string]string) error {
+	return nil
+}
+func (g *googleMockDriver) SetLabels(context.Context, *types.Instance, map[string]string) error {
 	return nil
 }
 func (g *googleMockDriver) ApplyEgressPolicy(context.Context, *types.Instance, []string) ([]string, error) {

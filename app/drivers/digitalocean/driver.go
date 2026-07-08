@@ -286,6 +286,10 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance,
 	return nil
 }
 
+func (p *config) SetLabels(context.Context, *types.Instance, map[string]string) error {
+	return nil
+}
+
 // helper function returns a new digitalocean client.
 func newClient(ctx context.Context, pat string) *godo.Client {
 	return godo.NewClient(
