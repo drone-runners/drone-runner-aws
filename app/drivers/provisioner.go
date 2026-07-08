@@ -539,8 +539,8 @@ const (
 	MetadataStageExecutionID    = "harness-stage-execution-id"
 	MetadataPipelineExecutionID = "harness-pipeline-execution-id"
 
-	identityCreatedBy = "harness-ci"
-	longRunningCutoff = int64(24 * 60 * 60)
+	identityCreatedBy            = "harness-ci"
+	longRunningStageThresholdSec = int64(24 * 60 * 60)
 )
 
 // buildIdentityVMLabels returns the full GCP-labels set for a freshly
@@ -554,7 +554,7 @@ func buildIdentityVMLabels(setupParams *types.SetupInstanceParams, timeout int64
 		"source":         string(source),
 		LabelCreatedBy:   identityCreatedBy,
 		LabelCreatedAt:   fmt.Sprintf("%d", time.Now().Unix()),
-		LabelLongRunning: fmt.Sprintf("%t", timeout > longRunningCutoff),
+		LabelLongRunning: fmt.Sprintf("%t", timeout > longRunningStageThresholdSec),
 	}
 	if env != "" {
 		labels["harness_env"] = env
@@ -580,7 +580,7 @@ func buildIdentityVMLabels(setupParams *types.SetupInstanceParams, timeout int64
 func buildClaimIdentityLabels(setupParams *types.SetupInstanceParams, timeout int64) map[string]string {
 	labels := map[string]string{
 		LabelCreatedAt:   fmt.Sprintf("%d", time.Now().Unix()),
-		LabelLongRunning: fmt.Sprintf("%t", timeout > longRunningCutoff),
+		LabelLongRunning: fmt.Sprintf("%t", timeout > longRunningStageThresholdSec),
 	}
 	if setupParams != nil {
 		if setupParams.AccountID != "" {

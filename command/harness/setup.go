@@ -54,11 +54,12 @@ var (
 	noContext   = context.Background()
 )
 
-// longRunningTimeoutCutoffSec is the boundary used to set the
-// harness-long-running label on a CI VM. Requests whose stage timeout
-// exceeds this value are tagged so the reaper applies the extended
-// grace window (7 days) instead of the default maxAge.
-const longRunningTimeoutCutoffSec = int64(24 * 60 * 60)
+// longRunningStageThresholdSec is the stage-timeout threshold above
+// which a CI VM is tagged with harness-long-running=true. Requests
+// whose stage timeout exceeds this value are marked so the reaper
+// applies its extended grace window (7 days) instead of the default
+// maxAge.
+const longRunningStageThresholdSec = int64(24 * 60 * 60)
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
@@ -467,7 +468,7 @@ func handleSetup(
 		AccountID:            owner,
 		StageRuntimeID:       stageRuntimeID,
 		PipelineExecutionID:  getPipelineExecutionID(&r.Context, r.Tags),
-		LongRunning:          r.Timeout > longRunningTimeoutCutoffSec,
+		LongRunning:          r.Timeout > longRunningStageThresholdSec,
 	}
 	if r.Zone != "" {
 		provisionParams.Zones = []string{r.Zone}

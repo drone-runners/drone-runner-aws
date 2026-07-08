@@ -50,7 +50,7 @@ func TestBuildIdentityVMLabels(t *testing.T) {
 			setupParams: &types.SetupInstanceParams{
 				StageRuntimeID: "stage-2",
 			},
-			timeout:  longRunningCutoff + 1,
+			timeout:  longRunningStageThresholdSec + 1,
 			env:      "prod",
 			poolName: "linux-amd64",
 			source:   types.InstanceSourcePool,
@@ -159,7 +159,7 @@ func TestBuildClaimIdentityLabels(t *testing.T) {
 			setupParams: &types.SetupInstanceParams{
 				StageRuntimeID: "stage-2",
 			},
-			timeout: longRunningCutoff + 1,
+			timeout: longRunningStageThresholdSec + 1,
 			wantKeys: map[string]string{
 				LabelLongRunning: "true",
 			},
