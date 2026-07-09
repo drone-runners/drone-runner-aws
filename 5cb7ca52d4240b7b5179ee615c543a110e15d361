@@ -1,0 +1,161 @@
+command/config/tenant_parse_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 16-23,45-46,49-50,52,55,59,69-70,73,81-82
+  human 83
+pool_example.yml
+  c742cea3-6744-4c06-813e-f095e0995d6a 115-117,119-122,130-139
+app/poolfile/tenant_config_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 19-26,125-131
+command/config/config.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 34-37,41-44,46-47,50-54,716-717,735-738,740-741
+  human 739
+command/config/tenant_merge_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 128,136,190-227,236,240,244,246,250,254,258,260-261,265,273,275-276
+  human 237-239,241-243,245,247-249
+command/config/tenant_merge.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 29-36,40-41,44-54,57,61-64,66,73-75,82,85-86,169-174,176
+  human 87-88
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 20,
+          "added_lines": 21,
+          "deleted_lines": 18,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "16-23,45-46,49-50,52,55,59,69-70,73,81-82",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "83",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/tenant_parse_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 17,
+          "added_lines": 17,
+          "deleted_lines": 15,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "115-117,119-122,130-139",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "pool_example.yml"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 15,
+          "added_lines": 15,
+          "deleted_lines": 13,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "19-26,125-131",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/poolfile/tenant_config_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 23,
+          "added_lines": 24,
+          "deleted_lines": 21,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "34-37,41-44,46-47,50-54,716-717,735-738,740-741",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "739",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 53,
+          "added_lines": 63,
+          "deleted_lines": 56,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "128,136,190-227,236,240,244,246,250,254,258,260-261,265,273,275-276",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 10,
+          "added_lines": 10,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "237-239,241-243,245,247-249",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/tenant_merge_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 40,
+          "added_lines": 40,
+          "deleted_lines": 38,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "29-36,40-41,44-54,57,61-64,66,73-75,82,85-86,169-174,176",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "87-88",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/tenant_merge.go"
+    }
+  ],
+  "base_commit_sha": "5dc2221e006e0dd5b662c08d05b02141a1d7bddc",
+  "branch": "CI-22905",
+  "commit_sha": "5cb7ca52d4240b7b5179ee615c543a110e15d361",
+  "commit_time": "2026-07-09T19:27:48+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "c742cea3-6744-4c06-813e-f095e0995d6a": {
+      "accepted_lines": 168,
+      "agent_id": {
+        "id": "c742cea3-6744-4c06-813e-f095e0995d6a",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 180,
+      "total_deletions": 161
+    },
+    "human": {
+      "accepted_lines": 14,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 14,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
