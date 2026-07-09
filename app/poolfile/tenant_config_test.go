@@ -16,16 +16,15 @@ instances:
     type: amazon
     pool: 1
     limit: 20
+    spec:
+      account:
+        region: us-east-1
+        key_pair_name: kp
+      ami: ami-base
+      size: t3.large
+      network:
+        security_groups: [sg-base]
     tenants:
-      - id: default
-        spec:
-          account:
-            region: us-east-1
-            key_pair_name: kp
-          ami: ami-base
-          size: t3.large
-          network:
-            security_groups: [sg-base]
       - ids: [acctA, acctB]
         spec:
           network:
@@ -123,15 +122,14 @@ instances:
     type: google
     pool: 1
     limit: 20
+    spec:
+      account:
+        project_id: proj-base
+      image: img-base
+      network: net-base
+      subnetwork: subnet-base
+      zone: [us-central1-a]
     tenants:
-      - id: default
-        spec:
-          account:
-            project_id: proj-base
-          image: img-base
-          network: net-base
-          subnetwork: subnet-base
-          zone: [us-central1-a]
       - ids: [acctA]
         spec:
           subnetwork: subnet-a

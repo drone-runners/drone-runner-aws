@@ -13,16 +13,15 @@ instances:
     type: amazon
     pool: 1
     limit: 20
+    spec:
+      account:
+        region: us-east-1
+        key_pair_name: kp
+      ami: ami-base
+      size: t3.large
+      network:
+        security_groups: [sg-base]
     tenants:
-      - id: default
-        spec:
-          account:
-            region: us-east-1
-            key_pair_name: kp
-          ami: ami-base
-          size: t3.large
-          network:
-            security_groups: [sg-base]
       - ids: [acctA, acctB]
         spec:
           network:
@@ -43,25 +42,21 @@ instances:
 		t.Fatalf("expected 1 instance, got %d", len(pf.Instances))
 	}
 	inst := pf.Instances[0]
-	if len(inst.Tenants) != 3 {
-		t.Fatalf("expected 3 tenants, got %d", len(inst.Tenants))
+	if len(inst.Tenants) != 2 {
+		t.Fatalf("expected 2 tenant overrides, got %d", len(inst.Tenants))
 	}
 
-	// Default tenant spec typed correctly.
-	def := inst.Tenants[0]
-	if def.ID != "default" {
-		t.Errorf("expected default id, got %q", def.ID)
-	}
-	amz, ok := def.Spec.(*Amazon)
+	// Base (default) spec parsed from the top-level spec.
+	amz, ok := inst.Spec.(*Amazon)
 	if !ok {
-		t.Fatalf("expected default tenant spec *Amazon, got %T", def.Spec)
+		t.Fatalf("expected base spec *Amazon, got %T", inst.Spec)
 	}
 	if amz.AMI != "ami-base" || amz.Account.Region != "us-east-1" {
-		t.Errorf("default tenant spec parsed wrong: %+v", amz)
+		t.Errorf("base spec parsed wrong: %+v", amz)
 	}
 
 	// Customer tenant with multiple ids.
-	cust := inst.Tenants[1]
+	cust := inst.Tenants[0]
 	if len(cust.IDs) != 2 || cust.IDs[0] != "acctA" {
 		t.Errorf("expected customer ids [acctA acctB], got %v", cust.IDs)
 	}
@@ -71,17 +66,20 @@ instances:
 	}
 
 	// Per-tenant sizing override.
-	if inst.Tenants[2].Pool != 2 {
-		t.Errorf("expected acctC pool 2, got %d", inst.Tenants[2].Pool)
+	if inst.Tenants[1].Pool == nil || *inst.Tenants[1].Pool != 2 {
+		t.Errorf("expected acctC pool 2, got %v", inst.Tenants[1].Pool)
 	}
 
-	// End-to-end resolve.
+	// End-to-end resolve: base default + 2 overrides = 3 resolved tenants.
 	resolved, accountMap, err := ResolveTenants(&inst)
 	if err != nil {
 		t.Fatalf("ResolveTenants error: %v", err)
 	}
 	if len(resolved) != 3 {
 		t.Fatalf("expected 3 resolved tenants, got %d", len(resolved))
+	}
+	if resolved[0].ID != DefaultTenantID {
+		t.Errorf("expected first resolved tenant to be default, got %q", resolved[0].ID)
 	}
 	if accountMap["acctB"] != "acctA" {
 		t.Errorf("expected acctB->acctA, got %v", accountMap)

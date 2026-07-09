@@ -112,13 +112,14 @@ instances:
       tag: tag
       auth_token: auth_token
   # Multi-tenant pool (distributed mode). A single pool can serve multiple customers
-  # (tenants) with per-tenant network/config isolation (e.g. PrivateLink). This is
-  # optional: omit `tenants` and use a top-level `spec` (as above) for single-tenant pools.
+  # with per-tenant network/config isolation (e.g. PrivateLink). This is optional: the
+  # top-level `spec` is the base/default config used by every account, and `tenants` adds
+  # per-account overrides. A pool with no `tenants` block is single-tenant (as above).
   #
-  # Exactly one tenant must be the default (id: default or default: true). Its spec is the
-  # base; every other tenant's spec is a partial override that is deep-merged over the
-  # default. `ids` lists the customer account ids routed to that tenant. Requests whose
-  # account id is not listed fall back to the default tenant.
+  # Each tenant entry lists the customer account `ids` it applies to and a partial `spec`
+  # that is deep-merged over the base spec. Accounts not listed in any tenant use the base
+  # spec unchanged. The tenant's stable id (stored on instances as tenant_id) is the first
+  # id in its `ids` list.
   - name: linux-amd64-multitenant
     type: amazon
     pool: 1
@@ -126,17 +127,17 @@ instances:
     platform:
       os: linux
       arch: amd64
+    # Base spec = the default tenant.
+    spec:
+      account:
+        region: us-east-1
+        key_pair_name: kp
+      ami: ami-base
+      size: t3.large
+      network:
+        security_groups:
+          - sg-base
     tenants:
-      - id: default
-        spec:
-          account:
-            region: us-east-1
-            key_pair_name: kp
-          ami: ami-base
-          size: t3.large
-          network:
-            security_groups:
-              - sg-base
       # Two customer accounts sharing one isolated tenant; only the subnet differs.
       - ids:
           - acctA

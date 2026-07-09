@@ -26,70 +26,66 @@ type ResolvedTenant struct {
 // ResolveTenants expands an instance into its list of resolved tenants along with a map from
 // customer account ID to tenant ID.
 //
-// Backward compatibility: when the instance has no `tenants` block, it returns a single
-// tenant with ID "default" using the instance-level Spec/Pool/Limit/Variants, and an empty
-// account map (so every request resolves to the default tenant).
+// The instance-level Spec is the base (default) tenant: it is always returned first with ID
+// "default" and the instance-level Pool/Limit/Variants. Each entry in inst.Tenants is a
+// per-account override whose (partial) Spec is deep-merged over the base; its tenant ID is the
+// first entry of its IDs list, and every account in IDs is routed to that tenant. Accounts not
+// listed in any override resolve to the default tenant.
+//
+// Backward compatibility: an instance with no `tenants` block resolves to the single default
+// tenant and an empty account map (so every request resolves to the default tenant).
 func ResolveTenants(inst *Instance) (tenants []ResolvedTenant, accountToTenant map[string]string, err error) {
 	accountToTenant = map[string]string{}
 
+	if inst.Spec == nil {
+		return nil, nil, fmt.Errorf("pool %q: missing base spec", inst.Name)
+	}
+
+	// The base pool spec is always the default tenant.
+	tenants = append(tenants, ResolvedTenant{
+		ID:       DefaultTenantID,
+		Spec:     inst.Spec,
+		Pool:     inst.Pool,
+		Limit:    inst.Limit,
+		Variants: inst.Variants,
+	})
+
 	if len(inst.Tenants) == 0 {
-		return []ResolvedTenant{{
-			ID:       DefaultTenantID,
-			Spec:     inst.Spec,
-			Pool:     inst.Pool,
-			Limit:    inst.Limit,
-			Variants: inst.Variants,
-		}}, accountToTenant, nil
+		return tenants, accountToTenant, nil
 	}
 
-	// Locate the default tenant (exactly one required).
-	var defaultTenant *Tenant
+	seenTenantIDs := map[string]bool{DefaultTenantID: true}
 	for i := range inst.Tenants {
 		t := &inst.Tenants[i]
-		if t.Default || t.ID == DefaultTenantID {
-			if defaultTenant != nil {
-				return nil, nil, fmt.Errorf("pool %q: multiple default tenants defined", inst.Name)
-			}
-			defaultTenant = t
+
+		if len(t.IDs) == 0 {
+			return nil, nil, fmt.Errorf("pool %q: tenant override must define a non-empty ids list", inst.Name)
 		}
-	}
-	if defaultTenant == nil {
-		return nil, nil, fmt.Errorf("pool %q: multi-tenant config requires a default tenant (id: default)", inst.Name)
-	}
-	if defaultTenant.Spec == nil {
-		return nil, nil, fmt.Errorf("pool %q: default tenant must define a spec", inst.Name)
-	}
-
-	seenTenantIDs := map[string]bool{}
-	for i := range inst.Tenants {
-		t := &inst.Tenants[i]
-
-		tenantID := tenantIdentifier(t)
+		tenantID := t.IDs[0]
 		if tenantID == "" {
-			return nil, nil, fmt.Errorf("pool %q: tenant must define an id or a non-empty ids list", inst.Name)
+			return nil, nil, fmt.Errorf("pool %q: tenant override has an empty account id", inst.Name)
 		}
 		if seenTenantIDs[tenantID] {
 			return nil, nil, fmt.Errorf("pool %q: duplicate tenant id %q", inst.Name, tenantID)
 		}
 		seenTenantIDs[tenantID] = true
 
-		spec := t.Spec
-		if t != defaultTenant {
-			merged, mergeErr := MergeSpec(defaultTenant.Spec, t.Spec)
+		spec := inst.Spec
+		if t.Spec != nil {
+			merged, mergeErr := MergeSpec(inst.Spec, t.Spec)
 			if mergeErr != nil {
 				return nil, nil, fmt.Errorf("pool %q: failed to merge tenant %q: %w", inst.Name, tenantID, mergeErr)
 			}
 			spec = merged
 		}
 
-		resolved := ResolvedTenant{
+		tenants = append(tenants, ResolvedTenant{
 			ID:       tenantID,
 			Spec:     spec,
-			Pool:     firstNonZero(t.Pool, defaultTenant.Pool, inst.Pool),
-			Limit:    firstNonZero(t.Limit, defaultTenant.Limit, inst.Limit),
-			Variants: firstNonEmptyVariants(t.Variants, defaultTenant.Variants, inst.Variants),
-		}
-		tenants = append(tenants, resolved)
+			Pool:     intOrDefault(t.Pool, inst.Pool),
+			Limit:    intOrDefault(t.Limit, inst.Limit),
+			Variants: firstNonEmptyVariants(t.Variants, inst.Variants),
+		})
 
 		for _, accountID := range t.IDs {
 			if accountID == "" {
@@ -103,21 +99,6 @@ func ResolveTenants(inst *Instance) (tenants []ResolvedTenant, accountToTenant m
 	}
 
 	return tenants, accountToTenant, nil
-}
-
-// tenantIdentifier returns the stable tenant identifier: the explicit ID when set, otherwise
-// the first account id in IDs.
-func tenantIdentifier(t *Tenant) string {
-	if t.ID != "" {
-		return t.ID
-	}
-	if t.Default {
-		return DefaultTenantID
-	}
-	if len(t.IDs) > 0 {
-		return t.IDs[0]
-	}
-	return ""
 }
 
 // MergeSpec deep-merges an override spec over a base spec and returns a new spec of the same
@@ -185,13 +166,14 @@ func deepMerge(base, override map[string]interface{}) map[string]interface{} {
 	return out
 }
 
-func firstNonZero(vals ...int) int {
-	for _, v := range vals {
-		if v != 0 {
-			return v
-		}
+// intOrDefault returns *p when p is non-nil (honoring an explicit 0), otherwise def. This lets a
+// tenant set `pool: 0`/`limit: 0` to opt out of warm instances instead of inheriting the
+// instance-level sizing.
+func intOrDefault(p *int, def int) int {
+	if p != nil {
+		return *p
 	}
-	return 0
+	return def
 }
 
 func firstNonEmptyVariants(vals ...[]types.PoolVariant) []types.PoolVariant {

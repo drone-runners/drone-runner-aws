@@ -125,18 +125,15 @@ func TestResolveTenants_MultiTenant(t *testing.T) {
 		Name: "linux-amd64-aws",
 		Type: "amazon",
 		Pool: 1,
+		Spec: &Amazon{Account: AmazonAccount{Region: "us-east-1"}, AMI: "ami-base", Network: AmazonNetwork{SecurityGroups: []string{"sg-base"}}},
 		Tenants: []Tenant{
-			{
-				ID:   DefaultTenantID,
-				Spec: &Amazon{Account: AmazonAccount{Region: "us-east-1"}, AMI: "ami-base", Network: AmazonNetwork{SecurityGroups: []string{"sg-base"}}},
-			},
 			{
 				IDs:  []string{"acctA", "acctB"},
 				Spec: &Amazon{Network: AmazonNetwork{SubnetID: "subnet-aaa"}},
 			},
 			{
 				IDs:  []string{"acctC"},
-				Pool: 2,
+				Pool: intPtr(2),
 				Spec: &Amazon{AMI: "ami-custom", Network: AmazonNetwork{SubnetID: "subnet-ccc"}},
 			},
 		},
@@ -190,7 +187,44 @@ func TestResolveTenants_MultiTenant(t *testing.T) {
 	}
 }
 
-func TestResolveTenants_MissingDefault(t *testing.T) {
+func intPtr(i int) *int { return &i }
+
+// A tenant that sets pool: 0 must resolve to MinSize 0 (no warm pool), not inherit the
+// instance-level pool. A tenant that omits pool inherits the instance-level pool.
+func TestResolveTenants_ExplicitZeroPool(t *testing.T) {
+	inst := &Instance{
+		Name:  "p",
+		Type:  "amazon",
+		Pool:  3,
+		Limit: 5,
+		Spec:  &Amazon{AMI: "ami-base"},
+		Tenants: []Tenant{
+			{IDs: []string{"free"}, Pool: intPtr(0), Spec: &Amazon{Network: AmazonNetwork{SubnetID: "s-free"}}},
+			{IDs: []string{"acctX"}, Spec: &Amazon{Network: AmazonNetwork{SubnetID: "s-x"}}},
+		},
+	}
+	resolved, _, err := ResolveTenants(inst)
+	if err != nil {
+		t.Fatalf("ResolveTenants error: %v", err)
+	}
+	byID := map[string]ResolvedTenant{}
+	for _, tn := range resolved {
+		byID[tn.ID] = tn
+	}
+	if byID["free"].Pool != 0 {
+		t.Errorf("free tenant: expected pool 0 (explicit), got %d", byID["free"].Pool)
+	}
+	// Limit omitted -> inherits instance-level 5.
+	if byID["free"].Limit != 5 {
+		t.Errorf("free tenant: expected inherited limit 5, got %d", byID["free"].Limit)
+	}
+	// Pool omitted -> inherits instance-level 3.
+	if byID["acctX"].Pool != 3 {
+		t.Errorf("acctX tenant: expected inherited pool 3, got %d", byID["acctX"].Pool)
+	}
+}
+
+func TestResolveTenants_MissingBaseSpec(t *testing.T) {
 	inst := &Instance{
 		Name: "p",
 		Type: "amazon",
@@ -199,21 +233,36 @@ func TestResolveTenants_MissingDefault(t *testing.T) {
 		},
 	}
 	if _, _, err := ResolveTenants(inst); err == nil {
-		t.Fatalf("expected error for missing default tenant")
+		t.Fatalf("expected error for missing base spec")
 	}
 }
 
-func TestResolveTenants_DuplicateDefault(t *testing.T) {
+func TestResolveTenants_OverrideMissingIDs(t *testing.T) {
 	inst := &Instance{
 		Name: "p",
 		Type: "amazon",
+		Spec: &Amazon{},
 		Tenants: []Tenant{
-			{ID: DefaultTenantID, Spec: &Amazon{}},
-			{Default: true, Spec: &Amazon{}},
+			{Spec: &Amazon{Network: AmazonNetwork{SubnetID: "subnet-aaa"}}},
 		},
 	}
 	if _, _, err := ResolveTenants(inst); err == nil {
-		t.Fatalf("expected error for duplicate default tenant")
+		t.Fatalf("expected error for override without ids")
+	}
+}
+
+func TestResolveTenants_DuplicateTenantID(t *testing.T) {
+	inst := &Instance{
+		Name: "p",
+		Type: "amazon",
+		Spec: &Amazon{},
+		Tenants: []Tenant{
+			{IDs: []string{"acctX"}, Spec: &Amazon{}},
+			{IDs: []string{"acctX"}, Spec: &Amazon{}},
+		},
+	}
+	if _, _, err := ResolveTenants(inst); err == nil {
+		t.Fatalf("expected error for duplicate tenant id")
 	}
 }
 
@@ -221,10 +270,10 @@ func TestResolveTenants_AccountCollision(t *testing.T) {
 	inst := &Instance{
 		Name: "p",
 		Type: "amazon",
+		Spec: &Amazon{},
 		Tenants: []Tenant{
-			{ID: DefaultTenantID, Spec: &Amazon{}},
-			{ID: "t1", IDs: []string{"acctX"}, Spec: &Amazon{}},
-			{ID: "t2", IDs: []string{"acctX"}, Spec: &Amazon{}},
+			{IDs: []string{"t1", "acctX"}, Spec: &Amazon{}},
+			{IDs: []string{"t2", "acctX"}, Spec: &Amazon{}},
 		},
 	}
 	if _, _, err := ResolveTenants(inst); err == nil {
