@@ -1,0 +1,131 @@
+command/config/tenant_merge_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 284-416
+  human 283
+command/config/tenant_parse_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 89-208
+  human 209
+pool_example.yml
+  c742cea3-6744-4c06-813e-f095e0995d6a 115,120-131,139-140,147-148,150,153-157,159-160,166,169-173,180-187,189-191
+  human 188
+app/poolfile/tenant_config_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 78-212
+  human 213
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 133,
+          "added_lines": 133,
+          "deleted_lines": 2,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "284-416",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "283",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/tenant_merge_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 120,
+          "added_lines": 120,
+          "deleted_lines": 2,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "89-208",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "209",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/tenant_parse_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 42,
+          "added_lines": 43,
+          "deleted_lines": 0,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "115,120-131,139-140,147-148,150,153-157,159-160,166,169-173,180-187,189-191",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "188",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "pool_example.yml"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 135,
+          "added_lines": 135,
+          "deleted_lines": 5,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "78-212",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "213",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/poolfile/tenant_config_test.go"
+    }
+  ],
+  "base_commit_sha": "5cb7ca52d4240b7b5179ee615c543a110e15d361",
+  "branch": "CI-22905",
+  "commit_sha": "096c24daa6273e8efdee5ef4531bffd579363aa3",
+  "commit_time": "2026-07-10T12:57:25+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "c742cea3-6744-4c06-813e-f095e0995d6a": {
+      "accepted_lines": 430,
+      "agent_id": {
+        "id": "c742cea3-6744-4c06-813e-f095e0995d6a",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 431,
+      "total_deletions": 9
+    },
+    "human": {
+      "accepted_lines": 4,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 4,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
