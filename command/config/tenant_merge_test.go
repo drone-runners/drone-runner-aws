@@ -280,3 +280,137 @@ func TestResolveTenants_AccountCollision(t *testing.T) {
 		t.Fatalf("expected error for account mapped to multiple tenants")
 	}
 }
+
+// TestMergeSpec_AmazonChartShape mirrors the AWS pool spec produced by the Harness runner helm
+// chart (account + ami + size + disk + network{private_ip, security_groups, zone_details}). It
+// verifies a per-tenant PrivateLink network override deep-merges correctly over the base:
+// overridden fields win, list fields are replaced wholesale, and everything the tenant does not
+// touch (including a zone_details list) is inherited.
+func TestMergeSpec_AmazonChartShape(t *testing.T) {
+	base := &Amazon{
+		Account: AmazonAccount{Region: "us-east-1", KeyPairName: "kp"},
+		AMI:     "ami-base",
+		Size:    "t3.large",
+		Disk:    disk{Size: 100},
+		Network: AmazonNetwork{
+			PrivateIP:      false,
+			SecurityGroups: []string{"sg-base"},
+			ZoneDetails: []ZoneInfo{
+				{AvailabilityZone: "us-east-1a", SubnetID: "subnet-base-a"},
+				{AvailabilityZone: "us-east-1b", SubnetID: "subnet-base-b"},
+			},
+		},
+	}
+	// PrivateLink customer: private networking + its own security groups; everything else
+	// (ami, size, disk, account, zone_details) is inherited from the base.
+	override := &Amazon{
+		Network: AmazonNetwork{
+			PrivateIP:      true,
+			SecurityGroups: []string{"sg-customer"},
+		},
+	}
+
+	mergedIface, err := MergeSpec(base, override)
+	if err != nil {
+		t.Fatalf("MergeSpec error: %v", err)
+	}
+	merged := mergedIface.(*Amazon)
+
+	// Inherited scalars / nested objects.
+	if merged.AMI != "ami-base" || merged.Size != "t3.large" {
+		t.Errorf("expected ami/size inherited, got ami=%q size=%q", merged.AMI, merged.Size)
+	}
+	if merged.Account.Region != "us-east-1" || merged.Account.KeyPairName != "kp" {
+		t.Errorf("expected account inherited, got %+v", merged.Account)
+	}
+	if merged.Disk.Size != 100 {
+		t.Errorf("expected disk size inherited 100, got %d", merged.Disk.Size)
+	}
+	// Overridden.
+	if !merged.Network.PrivateIP {
+		t.Errorf("expected private_ip overridden to true")
+	}
+	if len(merged.Network.SecurityGroups) != 1 || merged.Network.SecurityGroups[0] != "sg-customer" {
+		t.Errorf("expected security_groups replaced with [sg-customer], got %v", merged.Network.SecurityGroups)
+	}
+	// zone_details not touched by the override -> inherited wholesale.
+	if len(merged.Network.ZoneDetails) != 2 {
+		t.Fatalf("expected 2 inherited zone_details, got %d", len(merged.Network.ZoneDetails))
+	}
+	if merged.Network.ZoneDetails[0].SubnetID != "subnet-base-a" || merged.Network.ZoneDetails[1].SubnetID != "subnet-base-b" {
+		t.Errorf("zone_details not inherited correctly: %+v", merged.Network.ZoneDetails)
+	}
+	// Base must not be mutated by the merge.
+	if base.Network.PrivateIP {
+		t.Errorf("base spec mutated: private_ip became true")
+	}
+}
+
+// TestMergeSpec_AmazonZoneDetailsReplace verifies that when a tenant supplies its own
+// zone_details, the whole list replaces the base list (list semantics are replace, not merge) --
+// so a PrivateLink customer gets exactly its AZ/subnet mappings.
+func TestMergeSpec_AmazonZoneDetailsReplace(t *testing.T) {
+	base := &Amazon{
+		AMI: "ami-base",
+		Network: AmazonNetwork{
+			ZoneDetails: []ZoneInfo{
+				{AvailabilityZone: "us-east-1a", SubnetID: "subnet-base-a"},
+				{AvailabilityZone: "us-east-1b", SubnetID: "subnet-base-b"},
+			},
+		},
+	}
+	override := &Amazon{
+		Network: AmazonNetwork{
+			PrivateIP: true,
+			ZoneDetails: []ZoneInfo{
+				{AvailabilityZone: "us-east-1c", SubnetID: "subnet-customer-c"},
+			},
+		},
+	}
+
+	merged := mustMerge(t, base, override).(*Amazon)
+	if len(merged.Network.ZoneDetails) != 1 {
+		t.Fatalf("expected zone_details replaced (len 1), got %d: %+v", len(merged.Network.ZoneDetails), merged.Network.ZoneDetails)
+	}
+	if merged.Network.ZoneDetails[0].SubnetID != "subnet-customer-c" {
+		t.Errorf("expected zone_details subnet-customer-c, got %q", merged.Network.ZoneDetails[0].SubnetID)
+	}
+	if merged.AMI != "ami-base" {
+		t.Errorf("expected ami inherited, got %q", merged.AMI)
+	}
+}
+
+// TestMergeSpec_AmazonPrivateIPDirection documents the (intended) limitation of the JSON
+// omitempty-based merge for boolean/zero-value fields: an override can only flip a bool in the
+// truthy direction. A tenant CAN turn private_ip false->true (the PrivateLink use case), but an
+// override cannot force it back to false because a false bool is elided from the override JSON
+// and therefore inherits the base value. Callers that need per-tenant "public" networking should
+// keep the base private_ip=false and opt individual tenants into private_ip=true.
+func TestMergeSpec_AmazonPrivateIPDirection(t *testing.T) {
+	// false -> true works.
+	up := mustMerge(t,
+		&Amazon{Network: AmazonNetwork{PrivateIP: false}},
+		&Amazon{Network: AmazonNetwork{PrivateIP: true}},
+	).(*Amazon)
+	if !up.Network.PrivateIP {
+		t.Errorf("expected private_ip false->true override to apply")
+	}
+
+	// true -> false does NOT downgrade (false is omitted from the override); base value wins.
+	down := mustMerge(t,
+		&Amazon{Network: AmazonNetwork{PrivateIP: true}},
+		&Amazon{Network: AmazonNetwork{PrivateIP: false}},
+	).(*Amazon)
+	if !down.Network.PrivateIP {
+		t.Errorf("documented limitation changed: expected private_ip to remain true (cannot override true->false)")
+	}
+}
+
+func mustMerge(t *testing.T, base, override interface{}) interface{} {
+	t.Helper()
+	merged, err := MergeSpec(base, override)
+	if err != nil {
+		t.Fatalf("MergeSpec error: %v", err)
+	}
+	return merged
+}

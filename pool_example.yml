@@ -112,14 +112,23 @@ instances:
       tag: tag
       auth_token: auth_token
   # Multi-tenant pool (distributed mode). A single pool can serve multiple customers
-  # with per-tenant network/config isolation (e.g. PrivateLink). This is optional: the
+  # with per-tenant network isolation (e.g. AWS PrivateLink). This is optional: the
   # top-level `spec` is the base/default config used by every account, and `tenants` adds
   # per-account overrides. A pool with no `tenants` block is single-tenant (as above).
   #
   # Each tenant entry lists the customer account `ids` it applies to and a partial `spec`
-  # that is deep-merged over the base spec. Accounts not listed in any tenant use the base
-  # spec unchanged. The tenant's stable id (stored on instances as tenant_id) is the first
-  # id in its `ids` list.
+  # that is deep-merged over the base spec: nested objects (account, network, disk) merge
+  # recursively, list fields (security_groups, zone_details) are replaced wholesale, and
+  # anything a tenant omits is inherited from the base. Accounts not listed in any tenant
+  # use the base spec unchanged. The tenant's stable id (stored on instances as tenant_id)
+  # is the first id in its `ids` list.
+  #
+  # Notes:
+  #  - `pool`/`limit` are optional per tenant: omit to inherit the pool-level sizing, or set
+  #    `0` to explicitly give a tenant no warm pool (on-demand only).
+  #  - Boolean/zero-value fields can only be overridden in the truthy direction (a tenant can
+  #    set private_ip: true, but cannot force it back to false once the base is true). Keep the
+  #    base at the less-restrictive value (private_ip: false) and opt individual tenants in.
   - name: linux-amd64-multitenant
     type: amazon
     pool: 1
@@ -127,31 +136,56 @@ instances:
     platform:
       os: linux
       arch: amd64
-    # Base spec = the default tenant.
+    # Base spec = the default tenant. Matches the AWS pool shape emitted by the runner helm
+    # chart (account + ami + size + disk + network{private_ip, security_groups, zone_details}).
     spec:
       account:
         region: us-east-1
         key_pair_name: kp
       ami: ami-base
       size: t3.large
+      disk:
+        size: 100
       network:
+        private_ip: false
         security_groups:
           - sg-base
+        zone_details:
+          - availability_zone: us-east-1a
+            subnet_id: subnet-base-a
+          - availability_zone: us-east-1b
+            subnet_id: subnet-base-b
     tenants:
-      # Two customer accounts sharing one isolated tenant; only the subnet differs.
+      # PrivateLink customer: two accounts share one isolated tenant. Private networking with
+      # customer-specific subnets/security groups; ami, size and disk are inherited from base.
       - ids:
           - acctA
           - acctB
         spec:
           network:
-            subnet_id: subnet-aaa
+            private_ip: true
             security_groups:
               - sg-aaa
-      # A tenant that also overrides sizing and AMI.
+            zone_details:
+              - availability_zone: us-east-1a
+                subnet_id: subnet-aaa
+      # A tenant that also overrides sizing and AMI; network zone_details replaced, the rest
+      # (region, key_pair, security_groups, private_ip) inherited from base.
       - ids:
           - acctC
         pool: 2
         spec:
           ami: ami-custom
           network:
-            subnet_id: subnet-ccc
+            zone_details:
+              - availability_zone: us-east-1a
+                subnet_id: subnet-ccc
+      # A free/on-demand tenant: pool: 0 opts out of a warm pool entirely.
+      - ids:
+          - freeAcct
+        pool: 0
+        spec:
+          network:
+            zone_details:
+              - availability_zone: us-east-1b
+                subnet_id: subnet-free
