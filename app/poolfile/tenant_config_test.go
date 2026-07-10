@@ -1,12 +1,41 @@
 package poolfile
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
+
+// wantEqual fails the test unless got == want.
+func wantEqual[T comparable](t *testing.T, name string, got, want T) {
+	t.Helper()
+	if got != want {
+		t.Errorf("%s: got %v, want %v", name, got, want)
+	}
+}
+
+// wantStringSlice fails the test unless got deep-equals want.
+func wantStringSlice(t *testing.T, name string, got, want []string) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s: got %v, want %v", name, got, want)
+	}
+}
+
+// wantSubnetIDs fails the test unless the subnet ids in got match want (in order).
+func wantSubnetIDs(t *testing.T, name string, got []config.ZoneInfo, want ...string) {
+	t.Helper()
+	subnets := make([]string, len(got))
+	for i := range got {
+		subnets[i] = got[i].SubnetID
+	}
+	if !reflect.DeepEqual(subnets, want) {
+		t.Errorf("%s subnet ids: got %v, want %v", name, subnets, want)
+	}
+}
 
 func TestProcessPool_AmazonTenants(t *testing.T) {
 	yaml := `
@@ -147,14 +176,13 @@ instances:
 	if len(p.TenantDrivers) != 3 {
 		t.Errorf("expected 3 tenant drivers, got %d", len(p.TenantDrivers))
 	}
-	if p.ResolveTenant("acctPrivateLink") != "acctPrivateLink" {
-		t.Errorf("expected acctPrivateLink tenant, got %q", p.ResolveTenant("acctPrivateLink"))
-	}
-	if p.ResolveTenant("freeAcct") != "freeAcct" {
-		t.Errorf("expected freeAcct tenant, got %q", p.ResolveTenant("freeAcct"))
-	}
-	if p.ResolveTenant("someoneElse") != types.DefaultTenantID {
-		t.Errorf("expected unknown account to resolve to default")
+	// Account -> tenant routing (unknown accounts fall back to the default tenant).
+	for acct, want := range map[string]string{
+		"acctPrivateLink": "acctPrivateLink",
+		"freeAcct":        "freeAcct",
+		"someoneElse":     types.DefaultTenantID,
+	} {
+		wantEqual(t, "ResolveTenant("+acct+")", p.ResolveTenant(acct), want)
 	}
 
 	specByTenant := map[string]*config.Amazon{}
@@ -169,7 +197,7 @@ instances:
 		sizeByTenant[tp.ID] = tp.MinSize
 	}
 
-	// PrivateLink tenant: overrides applied, base inherited.
+	// PrivateLink tenant: private networking + customer subnet/SGs; ami/region/disk inherited.
 	cust := specByTenant["acctPrivateLink"]
 	if cust == nil {
 		t.Fatalf("missing acctPrivateLink tenant spec")
@@ -177,38 +205,24 @@ instances:
 	if !cust.Network.PrivateIP {
 		t.Errorf("expected private_ip true for acctPrivateLink")
 	}
-	if len(cust.Network.SecurityGroups) != 1 || cust.Network.SecurityGroups[0] != "sg-customer" {
-		t.Errorf("expected sg-customer, got %v", cust.Network.SecurityGroups)
-	}
-	if len(cust.Network.ZoneDetails) != 1 || cust.Network.ZoneDetails[0].SubnetID != "subnet-customer-a" {
-		t.Errorf("expected zone_details subnet-customer-a, got %+v", cust.Network.ZoneDetails)
-	}
-	if cust.AMI != "ami-base" || cust.Account.Region != "us-east-1" || cust.Disk.Size != 100 {
-		t.Errorf("expected inherited ami/region/disk, got ami=%q region=%q disk=%d", cust.AMI, cust.Account.Region, cust.Disk.Size)
-	}
+	wantStringSlice(t, "acctPrivateLink security_groups", cust.Network.SecurityGroups, []string{"sg-customer"})
+	wantSubnetIDs(t, "acctPrivateLink zone_details", cust.Network.ZoneDetails, "subnet-customer-a")
+	wantEqual(t, "acctPrivateLink ami", cust.AMI, "ami-base")
+	wantEqual(t, "acctPrivateLink region", cust.Account.Region, "us-east-1")
+	wantEqual(t, "acctPrivateLink disk size", cust.Disk.Size, int64(100))
 
-	// free tenant: pool:0 opt-out honored, subnet overridden, security_groups + zone_details inherited.
+	// free tenant: pool:0 opt-out honored, subnet overridden, SGs + zone_details inherited.
 	free := specByTenant["freeAcct"]
 	if free == nil {
 		t.Fatalf("missing freeAcct tenant spec")
 	}
-	if sizeByTenant["freeAcct"] != 0 {
-		t.Errorf("expected freeAcct min size 0 (explicit pool:0), got %d", sizeByTenant["freeAcct"])
-	}
-	if free.Network.SubnetID != "subnet-free" {
-		t.Errorf("expected subnet-free, got %q", free.Network.SubnetID)
-	}
-	if len(free.Network.SecurityGroups) != 1 || free.Network.SecurityGroups[0] != "sg-base" {
-		t.Errorf("expected inherited [sg-base], got %v", free.Network.SecurityGroups)
-	}
-	if len(free.Network.ZoneDetails) != 1 || free.Network.ZoneDetails[0].SubnetID != "subnet-base-a" {
-		t.Errorf("expected inherited base zone_details, got %+v", free.Network.ZoneDetails)
-	}
+	wantEqual(t, "freeAcct min size", sizeByTenant["freeAcct"], 0)
+	wantEqual(t, "freeAcct subnet_id", free.Network.SubnetID, "subnet-free")
+	wantStringSlice(t, "freeAcct security_groups", free.Network.SecurityGroups, []string{"sg-base"})
+	wantSubnetIDs(t, "freeAcct zone_details", free.Network.ZoneDetails, "subnet-base-a")
 
 	// default tenant keeps instance-level sizing.
-	if sizeByTenant[types.DefaultTenantID] != 2 {
-		t.Errorf("expected default tenant min size 2, got %d", sizeByTenant[types.DefaultTenantID])
-	}
+	wantEqual(t, "default min size", sizeByTenant[types.DefaultTenantID], 2)
 }
 
 func TestProcessPool_AmazonSingleTenantUnchanged(t *testing.T) {
