@@ -254,41 +254,8 @@ func (m *Manager) setupInstance(
 	if createOptions.ReservationPerPoolTimeout <= 0 {
 		createOptions.ReservationPerPoolTimeout = defaultReservationPerPoolTimeoutMs
 	}
-	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
-		createOptions.VMImageConfig = types.VMImageConfig{
-			ImageName:    vmImageConfig.ImageName,
-			Username:     vmImageConfig.Username,
-			Password:     vmImageConfig.Password,
-			ImageVersion: vmImageConfig.ImageVersion,
-		}
-
-		if vmImageConfig.Auth != nil {
-			createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
-				Registry: vmImageConfig.Auth.Address,
-				Username: vmImageConfig.Auth.Username,
-				Password: vmImageConfig.Auth.Password,
-			}
-		}
-	}
-	if storageConfig != nil {
-		createOptions.StorageOpts = types.StorageOpts{
-			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
-			Identifier:         storageConfig.Identifier,
-			Size:               storageConfig.Size,
-			Type:               storageConfig.Type,
-			BootDiskSize:       storageConfig.BootDiskSize,
-			BootDiskType:       storageConfig.BootDiskType,
-		}
-	}
-	// Set boot disk settings from setupParams if provided and not already set
-	if setupParams != nil {
-		if setupParams.DiskSize != 0 && createOptions.StorageOpts.BootDiskSize == "" {
-			createOptions.StorageOpts.BootDiskSize = fmt.Sprintf("%d", setupParams.DiskSize)
-		}
-		if setupParams.DiskType != "" && createOptions.StorageOpts.BootDiskType == "" {
-			createOptions.StorageOpts.BootDiskType = setupParams.DiskType
-		}
-	}
+	applyVMImageConfig(createOptions, vmImageConfig)
+	applyStorageConfig(createOptions, storageConfig, setupParams)
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	createOptions.AnnotationsBinaryURI = m.annotationsBinaryURI
 	createOptions.AnnotationsBinaryFallbackURI = m.annotationsBinaryFallbackURI
@@ -401,6 +368,51 @@ func (m *Manager) setupInstance(
 		return nil, nil, err
 	}
 	return inst, nil, nil
+}
+
+// applyVMImageConfig copies the (optional) VM image configuration, including any registry auth,
+// onto the create options.
+func applyVMImageConfig(o *types.InstanceCreateOpts, vmImageConfig *spec.VMImageConfig) {
+	if vmImageConfig == nil || vmImageConfig.ImageName == "" {
+		return
+	}
+	o.VMImageConfig = types.VMImageConfig{
+		ImageName:    vmImageConfig.ImageName,
+		Username:     vmImageConfig.Username,
+		Password:     vmImageConfig.Password,
+		ImageVersion: vmImageConfig.ImageVersion,
+	}
+	if vmImageConfig.Auth != nil {
+		o.VMImageConfig.VMImageAuth = types.VMImageAuth{
+			Registry: vmImageConfig.Auth.Address,
+			Username: vmImageConfig.Auth.Username,
+			Password: vmImageConfig.Auth.Password,
+		}
+	}
+}
+
+// applyStorageConfig copies the (optional) storage configuration onto the create options and
+// backfills boot disk size/type from setupParams when they are not already set.
+func applyStorageConfig(o *types.InstanceCreateOpts, storageConfig *types.StorageConfig, setupParams *types.SetupInstanceParams) {
+	if storageConfig != nil {
+		o.StorageOpts = types.StorageOpts{
+			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
+			Identifier:         storageConfig.Identifier,
+			Size:               storageConfig.Size,
+			Type:               storageConfig.Type,
+			BootDiskSize:       storageConfig.BootDiskSize,
+			BootDiskType:       storageConfig.BootDiskType,
+		}
+	}
+	// Set boot disk settings from setupParams if provided and not already set
+	if setupParams != nil {
+		if setupParams.DiskSize != 0 && o.StorageOpts.BootDiskSize == "" {
+			o.StorageOpts.BootDiskSize = fmt.Sprintf("%d", setupParams.DiskSize)
+		}
+		if setupParams.DiskType != "" && o.StorageOpts.BootDiskType == "" {
+			o.StorageOpts.BootDiskType = setupParams.DiskType
+		}
+	}
 }
 
 // isGitspaceRequest checks if the request is for a GitSpace configuration with ports.
