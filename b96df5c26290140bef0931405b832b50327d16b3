@@ -1,0 +1,59 @@
+app/poolfile/tenant_config_test.go
+  c742cea3-6744-4c06-813e-f095e0995d6a 4,12-26,28-38,179-185,200,208-212,214,219-222,225
+  human 27,39
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 46,
+          "added_lines": 47,
+          "deleted_lines": 34,
+          "hash": "c742cea3-6744-4c06-813e-f095e0995d6a",
+          "lines": "4,12-26,28-38,179-185,200,208-212,214,219-222,225",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "27,39",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/poolfile/tenant_config_test.go"
+    }
+  ],
+  "base_commit_sha": "97387133f42ed30f6a6d9baa48af9cb80013d276",
+  "branch": "CI-22905",
+  "commit_sha": "b96df5c26290140bef0931405b832b50327d16b3",
+  "commit_time": "2026-07-10T13:08:33+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.5",
+  "prompts": {
+    "c742cea3-6744-4c06-813e-f095e0995d6a": {
+      "accepted_lines": 46,
+      "agent_id": {
+        "id": "c742cea3-6744-4c06-813e-f095e0995d6a",
+        "model": "claude-opus-4-8",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 47,
+      "total_deletions": 34
+    },
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
