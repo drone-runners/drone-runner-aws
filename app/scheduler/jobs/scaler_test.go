@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -31,7 +32,20 @@ func (m *MockPredictor) SetPredictionForImage(poolName, variantID, imageName str
 	m.predictions[poolName+":"+variantID+":"+imageName] = predictor.PredictionResult{PredictedInstances: instances}
 }
 
+// SetPredictionForTenant sets a prediction scoped to a specific (tenant, variant, image). Predict
+// prefers a tenant-scoped entry and otherwise falls back to the tenant-agnostic key, so existing
+// SetPrediction / SetPredictionForImage callers keep working unchanged.
+func (m *MockPredictor) SetPredictionForTenant(poolName, tenantID, variantID, imageName string, instances int) {
+	m.predictions[poolName+":"+tenantID+":"+variantID+":"+imageName] = predictor.PredictionResult{PredictedInstances: instances}
+}
+
 func (m *MockPredictor) Predict(ctx context.Context, input *predictor.PredictionInput) (*predictor.PredictionResult, error) {
+	// Prefer a tenant-scoped prediction, then fall back to the tenant-agnostic key.
+	tenantKey := input.PoolName + ":" + input.TenantID + ":" + input.VariantID + ":" + input.ImageName
+	if result, ok := m.predictions[tenantKey]; ok {
+		r := result
+		return &r, nil
+	}
 	key := input.PoolName + ":" + input.VariantID + ":" + input.ImageName
 	if result, ok := m.predictions[key]; ok {
 		r := result
@@ -123,6 +137,7 @@ func (m *MockInstanceStore) FindAndClaim(
 
 	matches := func(inst *types.Instance) bool {
 		return inst.Pool == params.PoolName && isAllowed(inst.State) &&
+			scalerMockTenantMatch(inst.TenantID, params.TenantID) &&
 			(params.VariantID == "" || inst.VariantID == params.VariantID) &&
 			(params.ImageName == "" || inst.Image == params.ImageName)
 	}
@@ -1580,5 +1595,241 @@ func TestScaler_MultiTenantScalesIndependently(t *testing.T) {
 	}
 	if perTenant["acctA"] != 3 {
 		t.Errorf("expected 3 acctA-tenant jobs, got %d", perTenant["acctA"])
+	}
+}
+
+// tenantVariant identifies a (tenant, variant) bucket for assertions in the tests below.
+type tenantVariant struct {
+	tenant  string
+	variant string
+}
+
+// TestScaler_MultiTenantVariantsScaleUpIndependently verifies the scaler scales every
+// (tenant, variant) combination independently: predictions, MinSize floors and current free
+// counts are all bucketed per tenant AND per variant, and the resulting setup jobs carry the
+// correct TenantID + VariantID.
+//
+// Matrix (image is constant):
+//
+//	tenant=default variant=default  predicted=0 minSize=2 free=1 -> +1
+//	tenant=default variant=large    predicted=0 minSize=1 free=0 -> +1
+//	tenant=acctA   variant=default  predicted=5 minSize=1 free=2 -> +3
+//	tenant=acctA   variant=large    predicted=0 minSize=4 free=1 -> +3
+func TestScaler_MultiTenantVariantsScaleUpIndependently(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	const image = "ubuntu-2204"
+
+	// Per-(tenant, variant) predictions. Only acctA/default is demand-driven; the rest are 0 so
+	// their MinSize floor decides the target. Distinct values prove predictions are keyed by
+	// tenant AND variant, not shared across the pool.
+	mockPredictor.SetPredictionForTenant("pool-1", "default", "default", image, 0)
+	mockPredictor.SetPredictionForTenant("pool-1", "default", "large", image, 0)
+	mockPredictor.SetPredictionForTenant("pool-1", "acctA", "default", image, 5)
+	mockPredictor.SetPredictionForTenant("pool-1", "acctA", "large", image, 0)
+
+	// Active-image history for every (tenant, variant) so GetActiveImages returns the image.
+	for _, tv := range []tenantVariant{
+		{"default", "default"}, {"default", "large"}, {"acctA", "default"}, {"acctA", "large"},
+	} {
+		historyStore.records = append(historyStore.records, types.UtilizationRecord{
+			Pool: "pool-1", TenantID: tv.tenant, VariantID: tv.variant, ImageName: image,
+			RecordedAt: time.Now().Unix(), InUseInstances: 1,
+		})
+	}
+
+	// Pre-seed free instances so each bucket starts from its own count.
+	seed := func(tenant, variant string, n int) {
+		for i := 0; i < n; i++ {
+			instanceStore.AddInstance(&types.Instance{
+				ID:        fmt.Sprintf("free-%s-%s-%d", tenant, variant, i),
+				Pool:      "pool-1",
+				TenantID:  tenant,
+				VariantID: variant,
+				Image:     image,
+				State:     types.StateCreated,
+				Source:    types.InstanceSourcePredictor,
+			})
+		}
+	}
+	seed("default", "default", 1)
+	seed("default", "large", 0)
+	seed("acctA", "default", 2)
+	seed("acctA", "large", 1)
+
+	largeParams := func() types.SetupInstanceParams {
+		return types.SetupInstanceParams{VariantID: "large", MachineType: "n1-standard-8"}
+	}
+	pools := []ScalablePool{
+		{
+			Name: "pool-1",
+			Tenants: []ScalableTenant{
+				{ID: "default", MinSize: 2, Variants: []ScalableVariant{{MinSize: 1, Params: largeParams()}}},
+				{ID: "acctA", MinSize: 1, Variants: []ScalableVariant{{MinSize: 4, Params: largeParams()}}},
+			},
+		},
+	}
+
+	config := types.ScalerConfig{
+		WindowDuration:          30 * time.Minute,
+		LeadTime:                5 * time.Minute,
+		Enabled:                 true,
+		ActiveImageLookbackDays: 7,
+	}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, config, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := map[tenantVariant]int{}
+	for _, job := range outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance) {
+		var p types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &p); err != nil {
+			t.Fatalf("failed to unmarshal job params: %v", err)
+		}
+		if p.Source != types.InstanceSourcePredictor {
+			t.Errorf("expected predictor source, got %q", p.Source)
+		}
+		if p.TenantID == "" || p.VariantID == "" {
+			t.Errorf("job missing tenant/variant: tenant=%q variant=%q", p.TenantID, p.VariantID)
+		}
+		got[tenantVariant{p.TenantID, p.VariantID}]++
+	}
+
+	want := map[tenantVariant]int{
+		{"default", "default"}: 1,
+		{"default", "large"}:   1,
+		{"acctA", "default"}:   3,
+		{"acctA", "large"}:     3,
+	}
+	if len(got) != len(want) {
+		t.Errorf("expected %d (tenant,variant) buckets, got %d: %v", len(want), len(got), got)
+	}
+	for k, w := range want {
+		if got[k] != w {
+			t.Errorf("tenant=%s variant=%s: expected %d jobs, got %d", k.tenant, k.variant, w, got[k])
+		}
+	}
+}
+
+// TestScaler_FreeInstanceCounts_BucketedByTenantAndVariant verifies free-instance counting keeps
+// separate buckets per (tenant, variant, image) so one tenant's or variant's inventory is never
+// counted against another's.
+func TestScaler_FreeInstanceCounts_BucketedByTenantAndVariant(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	const image = "ubuntu-2204"
+
+	seed := func(tenant, variant string, state types.InstanceState, n int) {
+		for i := 0; i < n; i++ {
+			instanceStore.AddInstance(&types.Instance{
+				ID:        fmt.Sprintf("i-%s-%s-%s-%d", tenant, variant, state, i),
+				Pool:      "pool-1",
+				TenantID:  tenant,
+				VariantID: variant,
+				Image:     image,
+				State:     state,
+			})
+		}
+	}
+	// default/default: 1 created + 1 hibernating = 2 free; the in-use one is ignored.
+	seed("default", "default", types.StateCreated, 1)
+	seed("default", "default", types.StateHibernating, 1)
+	seed("default", "default", types.StateInUse, 1)
+	// default/large: 1 provisioning counts as free.
+	seed("default", "large", types.StateProvisioning, 1)
+	// acctA/default: 3 created.
+	seed("acctA", "default", types.StateCreated, 3)
+	// acctA/large: none.
+
+	pool := ScalablePool{Name: "pool-1"}
+	scaler := NewScaler(nil, NewMockPredictor(), instanceStore, NewMockUtilizationHistoryStore(),
+		NewMockOutboxStore(), types.ScalerConfig{Enabled: true}, []ScalablePool{pool}, nil)
+
+	counts, err := scaler.getFreeInstanceCountsForPool(context.Background(), &pool)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	checks := []struct {
+		tenant, variant string
+		want            int
+	}{
+		{"default", "default", 2},
+		{"default", "large", 1},
+		{"acctA", "default", 3},
+		{"acctA", "large", 0},
+	}
+	for _, c := range checks {
+		key := InstanceKey{TenantID: c.tenant, VariantID: c.variant, ImageName: image}
+		if counts[key] != c.want {
+			t.Errorf("tenant=%s variant=%s: expected %d free, got %d", c.tenant, c.variant, c.want, counts[key])
+		}
+	}
+}
+
+// TestScaler_ScaleDown_ClaimsByTenantAndVariant verifies scale-down claims free predictor
+// instances only from the matching (tenant, variant) bucket, leaving other tenants' and other
+// variants' instances untouched. This exercises the tenant-partitioned FindAndClaim query used by
+// Scaler.scaleDown.
+func TestScaler_ScaleDown_ClaimsByTenantAndVariant(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	const image = "ubuntu-2204"
+
+	add := func(id, tenant, variant string) {
+		instanceStore.AddInstance(&types.Instance{
+			ID: id, Pool: "pool-1", TenantID: tenant, VariantID: variant,
+			Image: image, State: types.StateCreated, Source: types.InstanceSourcePredictor,
+		})
+	}
+	add("a-large-1", "acctA", "large")
+	add("a-large-2", "acctA", "large")
+	add("a-default-1", "acctA", "default") // same tenant, different variant
+	add("b-large-1", "acctB", "large")     // different tenant, same variant
+
+	query := &types.QueryParams{
+		PoolName: "pool-1", TenantID: "acctA", VariantID: "large",
+		ImageName: image, FilterSource: types.InstanceSourcePredictor,
+	}
+	allowed := []types.InstanceState{types.StateCreated, types.StateHibernating}
+
+	// Two claims should return exactly the two acctA/large instances.
+	claimed := map[string]bool{}
+	for i := 0; i < 2; i++ {
+		inst, err := instanceStore.FindAndClaim(context.Background(), query, types.StateTerminating, allowed, false)
+		if err != nil {
+			t.Fatalf("claim %d: unexpected error: %v", i, err)
+		}
+		if inst == nil {
+			t.Fatalf("claim %d: expected an instance, got nil", i)
+		}
+		if inst.TenantID != "acctA" || inst.VariantID != "large" {
+			t.Errorf("claim %d: expected acctA/large, got %s/%s (id=%s)", i, inst.TenantID, inst.VariantID, inst.ID)
+		}
+		claimed[inst.ID] = true
+	}
+	if !claimed["a-large-1"] || !claimed["a-large-2"] {
+		t.Errorf("expected both acctA/large instances claimed, got %v", claimed)
+	}
+
+	// A third claim finds nothing left in this bucket.
+	if inst, _ := instanceStore.FindAndClaim(context.Background(), query, types.StateTerminating, allowed, false); inst != nil {
+		t.Errorf("expected no more acctA/large instances, got id=%s (%s/%s)", inst.ID, inst.TenantID, inst.VariantID)
+	}
+
+	// Other buckets (same tenant/other variant, other tenant/same variant) remain untouched.
+	for _, id := range []string{"a-default-1", "b-large-1"} {
+		other, _ := instanceStore.Find(context.Background(), id)
+		if other == nil {
+			t.Fatalf("instance %s missing", id)
+		}
+		if other.State != types.StateCreated {
+			t.Errorf("instance %s should be untouched, but state=%s", id, other.State)
+		}
 	}
 }
