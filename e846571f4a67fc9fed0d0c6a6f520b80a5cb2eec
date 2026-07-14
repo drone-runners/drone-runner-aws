@@ -1,0 +1,107 @@
+app/drivers/google/network_test.go
+  07453323-1a03-4392-b114-e181afbe69a8 4,48,56-82
+  human 47,55
+command/config/config.go
+  07453323-1a03-4392-b114-e181afbe69a8 469,475,477,488
+  human 469,475,477,488
+command/harness/step.go
+  07453323-1a03-4392-b114-e181afbe69a8 212
+  human 212
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 29,
+          "added_lines": 31,
+          "deleted_lines": 6,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "4,48,56-82",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 2,
+          "hash": "human",
+          "lines": "47,55",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/network_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "469,475,477,488",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 4,
+          "hash": "human",
+          "lines": "469,475,477,488",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "212",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "212",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step.go"
+    }
+  ],
+  "base_commit_sha": "368458001d651f0440fd9b38d3ef3cdb0622f808",
+  "branch": "CI-23727",
+  "commit_sha": "e846571f4a67fc9fed0d0c6a6f520b80a5cb2eec",
+  "commit_time": "2026-07-14T12:13:31+05:30",
+  "commit_type": "direct_commit",
+  "harness_aidlc_version": "1.4.25",
+  "prompts": {
+    "07453323-1a03-4392-b114-e181afbe69a8": {
+      "accepted_lines": 34,
+      "agent_id": {
+        "id": "07453323-1a03-4392-b114-e181afbe69a8",
+        "model": "grok-4.5",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 36,
+      "total_deletions": 7
+    },
+    "human": {
+      "accepted_lines": 0,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 0,
+      "total_deletions": 7
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
