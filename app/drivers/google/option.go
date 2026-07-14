@@ -236,7 +236,7 @@ func WithEnableC4D(enableC4D bool) Option {
 	}
 }
 
-// WithEgressControl marks the pool as egress-controlled (uses hosted_ubuntu_linux_egress cloud-init).
+// WithEgressControl marks the pool as egress-controlled (uses ubuntu_linux_egress_v2 cloud-init).
 func WithEgressControl(egressControl bool) Option {
 	return func(p *config) {
 		p.egressControl = egressControl
@@ -266,6 +266,7 @@ type NetworkConfigInput struct {
 	Subnetwork string
 	Tags       []string
 	Zones      []string
+	ProxyURL   string
 }
 
 // WithNetworkConfigs returns an option to set multiple network configurations.
@@ -278,6 +279,7 @@ func WithNetworkConfigs(configs []NetworkConfigInput) Option {
 				network:    c.Network,
 				subnetwork: c.Subnetwork,
 				zones:      c.Zones,
+				proxyURL:   c.ProxyURL,
 			}
 			if len(c.Tags) > 0 {
 				nc.tags = c.Tags

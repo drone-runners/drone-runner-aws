@@ -216,9 +216,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 						Subnetwork: nc.Subnetwork,
 						Tags:       nc.Tags,
 						Zones:      nc.Zones,
+						ProxyURL:   nc.ProxyURL,
 					})
 				}
 				googleOpts = append(googleOpts, google.WithNetworkConfigs(netInputs))
+			} else if g.Network != "" || g.Subnetwork != "" {
+				logrus.Warnf("pool %q: top-level network/subnetwork fields are deprecated; use networks[] instead", instance.Name)
 			}
 			var driver, err = google.New(googleOpts...)
 			if err != nil {

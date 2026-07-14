@@ -86,12 +86,14 @@ func TestLinuxRendersValidYAML(t *testing.T) {
 	}
 }
 
-// TestLinuxEgressDispatch verifies EgressControl picks the egress template and substitutes the TPA endpoint.
+// TestLinuxEgressDispatch verifies EgressControl selects ubuntu_linux_egress_v2
+// (fleet forward-proxy) and never the removed v1 envoy/mitm template.
 func TestLinuxEgressDispatch(t *testing.T) {
 	const (
-		egressMarker = "systemctl enable --now envoy-proxy"
-		tpaAddr      = "10.20.30.40"
-		tpaPort      = "5442"
+		envoyMarker = "systemctl enable --now envoy-proxy"
+		proxyURL    = "http://egress-proxy.internal:3128"
+		noProxy     = "localhost,127.0.0.1,10.0.0.0/8"
+		caCert      = "EGRESS-CA-PEM-CONTENT"
 	)
 
 	t.Run("EgressControl=false uses default ubuntu_linux template", func(t *testing.T) {
@@ -106,37 +108,47 @@ func TestLinuxEgressDispatch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("render failed: %v", err)
 		}
-		if strings.Contains(s, egressMarker) {
-			t.Errorf("default template unexpectedly contains egress marker %q", egressMarker)
+		if strings.Contains(s, envoyMarker) {
+			t.Errorf("default template unexpectedly contains envoy marker %q", envoyMarker)
+		}
+		if strings.Contains(s, "HTTPS_PROXY=") {
+			t.Errorf("default template unexpectedly contains HTTPS_PROXY")
 		}
 	})
 
-	t.Run("EgressControl=true uses hosted_ubuntu_linux_egress and substitutes TPA endpoint", func(t *testing.T) {
+	t.Run("EgressControl=true uses ubuntu_linux_egress_v2", func(t *testing.T) {
 		for _, arch := range []string{"amd64", "arm64"} {
 			arch := arch
 			t.Run("arch="+arch, func(t *testing.T) {
 				params := &cloudinit.Params{
-					LiteEnginePath: liteEnginePath,
-					CACert:         caCertFile + "\n",
-					TLSCert:        certFile + "\n",
-					TLSKey:         keyFile + "\n",
-					Platform:       types.Platform{OS: "linux", Arch: arch},
-					EgressControl:  true,
-					TPAAddress:     tpaAddr,
-					TPAPort:        tpaPort,
+					LiteEnginePath:         liteEnginePath,
+					LiteEngineFallbackPath: liteEnginePath,
+					CACert:                 caCertFile + "\n",
+					TLSCert:                certFile + "\n",
+					TLSKey:                 keyFile + "\n",
+					Platform:               types.Platform{OS: "linux", Arch: arch},
+					EgressControl:          true,
+					EgressProxyURL:         proxyURL,
+					EgressNoProxy:          noProxy,
+					EgressCACert:           caCert,
 				}
 				s, err := cloudinit.Linux(params)
 				if err != nil {
 					t.Fatalf("render failed: %v", err)
 				}
-				if !strings.Contains(s, egressMarker) {
-					t.Errorf("egress template missing marker %q", egressMarker)
+				if strings.Contains(s, envoyMarker) {
+					t.Errorf("v2 template unexpectedly contains v1 envoy marker")
 				}
-				if !strings.Contains(s, "TPA_ADDRESS="+tpaAddr) {
-					t.Errorf("rendered output missing TPA_ADDRESS=%s", tpaAddr)
-				}
-				if !strings.Contains(s, "TPA_PORT="+tpaPort) {
-					t.Errorf("rendered output missing TPA_PORT=%s", tpaPort)
+				for _, want := range []string{
+					"HTTPS_PROXY=" + proxyURL,
+					"HTTP_PROXY=" + proxyURL,
+					"NO_PROXY=" + noProxy,
+					proxyURL + "/healthz",
+					base64.StdEncoding.EncodeToString([]byte(caCert)),
+				} {
+					if !strings.Contains(s, want) {
+						t.Errorf("v2 egress output missing %q", want)
+					}
 				}
 				archURL := fmt.Sprintf("lite-engine-linux-%s", arch)
 				if !strings.Contains(s, archURL) {
@@ -148,8 +160,7 @@ func TestLinuxEgressDispatch(t *testing.T) {
 }
 
 // TestUbuntuBinariesPartialShared verifies the shared "ubuntu_binaries" partial
-// renders correctly in all three ubuntu templates (default, egress, egress+proxy):
-// the output must contain every binary-download command and parse as valid YAML.
+// renders correctly in default and egress_v2 templates.
 func TestUbuntuBinariesPartialShared(t *testing.T) {
 	base := func() *cloudinit.Params {
 		return &cloudinit.Params{
@@ -171,6 +182,8 @@ func TestUbuntuBinariesPartialShared(t *testing.T) {
 			TmateBinaryFallbackURI:       "https://example.com/tmate-fb/",
 			Tmate:                        types.Tmate{Enabled: true},
 			EgressCACert:                 caCertFile + "\n",
+			EgressProxyURL:               "http://127.0.0.1:3128",
+			EgressNoProxy:                "localhost",
 		}
 	}
 
@@ -190,11 +203,9 @@ func TestUbuntuBinariesPartialShared(t *testing.T) {
 		wantPcap bool
 	}{
 		{"default", func(p *cloudinit.Params) {}, false},
-		{"egress", func(p *cloudinit.Params) { p.EgressControl = true }, false},
-		{"egress_proxy", func(p *cloudinit.Params) { p.EgressControl = true; p.EgressProxyEnabled = true }, false},
-		{"egress_proxy_diagnostics", func(p *cloudinit.Params) {
+		{"egress_v2", func(p *cloudinit.Params) { p.EgressControl = true }, false},
+		{"egress_v2_diagnostics", func(p *cloudinit.Params) {
 			p.EgressControl = true
-			p.EgressProxyEnabled = true
 			p.EnableLEDiagnostics = true
 		}, true},
 	}
@@ -229,79 +240,6 @@ func TestUbuntuBinariesPartialShared(t *testing.T) {
 	}
 }
 
-// TestLinuxEgressProxyDispatch verifies that when both EgressControl and
-// EgressProxyEnabled are set, the ubuntu_linux_egress_v2 template is selected and
-// the proxy URL, no-proxy list and mitm CA are substituted from params. It also
-// guards that EgressControl alone (proxy disabled) keeps using the v1 egress
-// template and does not leak proxy wiring.
-func TestLinuxEgressProxyDispatch(t *testing.T) {
-	const (
-		proxyURL = "http://egress-proxy.internal:3128"
-		noProxy  = "localhost,127.0.0.1,10.0.0.0/8"
-		caCert   = "EGRESS-CA-PEM-CONTENT"
-	)
-
-	t.Run("EgressControl+EgressProxyEnabled uses v2 proxy template", func(t *testing.T) {
-		params := &cloudinit.Params{
-			LiteEnginePath:         liteEnginePath,
-			LiteEngineFallbackPath: liteEnginePath,
-			CACert:                 caCertFile + "\n",
-			TLSCert:                certFile + "\n",
-			TLSKey:                 keyFile + "\n",
-			Platform:               types.Platform{OS: "linux", Arch: "amd64"},
-			EgressControl:          true,
-			EgressProxyEnabled:     true,
-			EgressProxyURL:         proxyURL,
-			EgressNoProxy:          noProxy,
-			EgressCACert:           caCert,
-		}
-
-		s, err := cloudinit.Linux(params)
-		if err != nil {
-			t.Fatalf("render failed: %v", err)
-		}
-
-		var out map[string]interface{}
-		if err := yaml.Unmarshal([]byte(s), &out); err != nil {
-			t.Fatalf("rendered cloud-config is not valid YAML: %v\n---\n%s", err, s)
-		}
-
-		for _, want := range []string{
-			"HTTPS_PROXY=" + proxyURL,
-			"HTTP_PROXY=" + proxyURL,
-			"NO_PROXY=" + noProxy,
-			proxyURL + "/healthz",
-			base64.StdEncoding.EncodeToString([]byte(caCert)),
-		} {
-			if !strings.Contains(s, want) {
-				t.Errorf("v2 egress-proxy output missing %q", want)
-			}
-		}
-	})
-
-	t.Run("EgressControl without proxy keeps v1 egress template", func(t *testing.T) {
-		params := &cloudinit.Params{
-			LiteEnginePath:         liteEnginePath,
-			LiteEngineFallbackPath: liteEnginePath,
-			CACert:                 caCertFile + "\n",
-			TLSCert:                certFile + "\n",
-			TLSKey:                 keyFile + "\n",
-			Platform:               types.Platform{OS: "linux", Arch: "amd64"},
-			EgressControl:          true,
-			EgressProxyEnabled:     false,
-			EgressProxyURL:         proxyURL,
-		}
-
-		s, err := cloudinit.Linux(params)
-		if err != nil {
-			t.Fatalf("render failed: %v", err)
-		}
-		if strings.Contains(s, proxyURL) {
-			t.Errorf("v1 egress template unexpectedly contains proxy URL %q", proxyURL)
-		}
-	})
-}
-
 func TestWindows(t *testing.T) {
 	params := &cloudinit.Params{
 		LiteEnginePath: liteEnginePath,
@@ -318,8 +256,7 @@ func TestWindows(t *testing.T) {
 }
 
 // TestWindowsBinariesPartialShared verifies the shared "windows_binaries" partial
-// renders correctly in both windows templates (default and egress+proxy): the
-// output must contain every binary-download command.
+// renders correctly in both windows templates (default and egress).
 func TestWindowsBinariesPartialShared(t *testing.T) {
 	base := func() *cloudinit.Params {
 		return &cloudinit.Params{
@@ -335,6 +272,8 @@ func TestWindowsBinariesPartialShared(t *testing.T) {
 			AnnotationsBinaryURI:         "https://example.com/hcli/",
 			AnnotationsBinaryFallbackURI: "https://example.com/hcli-fb/",
 			EgressCACert:                 caCertFile + "\n",
+			EgressProxyURL:               "http://127.0.0.1:3128",
+			EgressNoProxy:                "localhost",
 		}
 	}
 
@@ -350,7 +289,7 @@ func TestWindowsBinariesPartialShared(t *testing.T) {
 		mutate func(p *cloudinit.Params)
 	}{
 		{"default", func(p *cloudinit.Params) {}},
-		{"egress_proxy", func(p *cloudinit.Params) { p.EgressControl = true; p.EgressProxyEnabled = true }},
+		{"egress", func(p *cloudinit.Params) { p.EgressControl = true }},
 	}
 
 	for _, tc := range cases {
@@ -369,10 +308,7 @@ func TestWindowsBinariesPartialShared(t *testing.T) {
 	}
 }
 
-// TestWindowsEgressProxyDispatch verifies that when both EgressControl and
-// EgressProxyEnabled are set, the windows_egress template is selected and the
-// proxy URL, no-proxy list and mitm CA are substituted from params. The default
-// windows template (no egress) must not contain any of that proxy wiring.
+// TestWindowsEgressProxyDispatch verifies EgressControl alone selects windows_egress.
 func TestWindowsEgressProxyDispatch(t *testing.T) {
 	const (
 		proxyURL = "http://egress-proxy.internal:3128"
@@ -394,10 +330,9 @@ func TestWindowsEgressProxyDispatch(t *testing.T) {
 		}
 	}
 
-	t.Run("EgressControl+EgressProxyEnabled uses windows_egress template", func(t *testing.T) {
+	t.Run("EgressControl uses windows_egress template", func(t *testing.T) {
 		params := base()
 		params.EgressControl = true
-		params.EgressProxyEnabled = true
 
 		s := cloudinit.Windows(params)
 		for _, want := range []string{

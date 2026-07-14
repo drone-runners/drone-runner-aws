@@ -210,11 +210,15 @@ type (
 
 	// GoogleNetwork specifies a network/subnetwork/tags/zone combination for a GCP instance.
 	// Multiple entries can be defined and will be used in round-robin fashion.
+	// Prefer networks[] over the deprecated top-level network/subnetwork/tags fields.
 	GoogleNetwork struct {
 		Network    string   `json:"network,omitempty" yaml:"network,omitempty"`
 		Subnetwork string   `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
 		Tags       []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 		Zones      []string `json:"zones,omitempty" yaml:"zones,omitempty"`
+		// ProxyURL is the forward-proxy for this network when egress_control is enabled.
+		// Empty falls back to DRONE_EGRESS_PROXY_URL.
+		ProxyURL string `json:"proxy_url,omitempty" yaml:"proxy_url,omitempty"`
 	}
 
 	// Google specifies the configuration for a GCP instance.
@@ -222,15 +226,15 @@ type (
 		Account                    GoogleAccount     `json:"account,omitempty"  yaml:"account"`
 		Image                      string            `json:"image,omitempty" yaml:"image,omitempty"`
 		Name                       string            `json:"name,omitempty" yaml:"name,omitempty"`
-		Tags                       []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+		Tags                       []string          `json:"tags,omitempty" yaml:"tags,omitempty"` // Deprecated: use networks[].tags
 		Size                       string            `json:"size,omitempty" yaml:"size,omitempty"`
 		MachineType                string            `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
 		UserData                   string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
 		UserDataPath               string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
 		UserDataKey                string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
 		Disk                       disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
-		Network                    string            `json:"network,omitempty" yaml:"network,omitempty"`
-		Subnetwork                 string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
+		Network                    string            `json:"network,omitempty" yaml:"network,omitempty"`       // Deprecated: use networks[]
+		Subnetwork                 string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"` // Deprecated: use networks[]
 		Networks                   []GoogleNetwork   `json:"networks,omitempty" yaml:"networks,omitempty"`
 		PrivateIP                  bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
 		Zone                       []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
@@ -283,11 +287,10 @@ type (
 	}
 )
 
-// EgressProxy holds the forward-proxy settings injected into steps that run in
-// egress-controlled pools. Steps in these pools must route outbound traffic
-// through the mitm proxy so egress rules can be enforced.
+// EgressProxy holds runner-global forward-proxy settings. Enablement comes from
+// pool egress_control; per-network proxy_url overrides URL when set.
+// NoProxy and CACert stay global (same for all regions/networks).
 type EgressProxy struct {
-	Enabled bool   `json:"enabled" yaml:"enabled" envconfig:"DRONE_EGRESS_PROXY_ENABLED" default:"false"`
 	URL     string `json:"url" yaml:"url" envconfig:"DRONE_EGRESS_PROXY_URL" default:"http://127.0.0.1:3128"`
 	NoProxy string `json:"no_proxy" yaml:"no_proxy" envconfig:"DRONE_EGRESS_NO_PROXY" default:"localhost,127.0.0.1,169.254.169.254,172.16.0.0/12,10.0.0.0/8,.svc.cluster.local"`
 	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
@@ -463,15 +466,15 @@ type EnvConfig struct {
 		EnableAutoPool               bool     `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		EnableLEDiagnostics          bool     `envconfig:"DRONE_ENABLE_LE_DIAGNOSTICS" default:"false"`
 		HarnessTestBinaryURI         string   `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.7"`
+		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.7"`
 		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.7"`
 		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"15"`
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.19"`
 		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.18/"`
 		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.18/"`
-		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/v2.5.6/"`
+		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/v2.5.6/"`
 		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/v2.5.6/"`
-		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
+		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
 		TmateBinaryFallbackURI       string   `envconfig:"DRONE_TMATE_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-tmate/1.0/"`
 		FallbackPoolIDs              []string `envconfig:"DRONE_FALLBACK_POOL_IDS"`
 	}
@@ -482,15 +485,10 @@ type EnvConfig struct {
 	}
 
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.183/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.183/"`
 		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.183/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
-	}
-
-	TPA struct {
-		Address string `envconfig:"DRONE_TPA_ADDRESS" default:"127.0.0.1"`
-		Port    string `envconfig:"DRONE_TPA_PORT" default:"5442"`
 	}
 
 	Server struct {

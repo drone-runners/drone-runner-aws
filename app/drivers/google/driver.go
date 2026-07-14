@@ -75,6 +75,7 @@ type networkConfig struct {
 	subnetwork string
 	tags       []string
 	zones      []string
+	proxyURL   string
 }
 
 type config struct {
@@ -121,6 +122,13 @@ type config struct {
 // Zone priority: reservationZone > random zone from requestZones > network config zone > pool RandomZone.
 // Network priority: networkConfigs (zone-matched or round-robin) > single network/subnetwork/tags.
 func (p *config) resolveNetworkAndZone(reservationZone string, requestZones []string) (zone, network, subnetwork string, tags []string) {
+	zone, network, subnetwork, tags, _ = p.resolveNetworkAndZoneWithProxy(reservationZone, requestZones)
+	return
+}
+
+// resolveNetworkAndZoneWithProxy is resolveNetworkAndZone plus the selected network's proxy_url
+// (empty when unset — caller should keep the env fallback on InstanceCreateOpts).
+func (p *config) resolveNetworkAndZoneWithProxy(reservationZone string, requestZones []string) (zone, network, subnetwork string, tags []string, proxyURL string) {
 	zone = reservationZone
 
 	// Fallback to a random zone from the request so load is spread across zones
@@ -137,7 +145,15 @@ func (p *config) resolveNetworkAndZone(reservationZone string, requestZones []st
 	if zone == "" && resolvedZone != "" {
 		zone = resolvedZone
 	}
-	return zone, network, subnetwork, tags
+	return zone, network, subnetwork, tags, selected.proxyURL
+}
+
+// applyNetworkProxyURL overrides opts.EgressProxyURL when the selected network
+// provides a non-empty proxy_url. Empty keeps the provisioner-stamped env fallback.
+func applyNetworkProxyURL(opts *types.InstanceCreateOpts, networkProxyURL string) {
+	if networkProxyURL != "" {
+		opts.EgressProxyURL = networkProxyURL
+	}
 }
 
 // selectNetwork returns the network entry to use for an instance.
@@ -504,8 +520,8 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	// Step 2-3: Select network, resolve zone
-	zone, resolvedNetwork, resolvedSubnetwork, resolvedTags := p.resolveNetworkAndZone(zone, opts.Zones)
+	// Step 2-3: Select network, resolve zone, capture per-network proxy_url
+	zone, resolvedNetwork, resolvedSubnetwork, resolvedTags, networkProxyURL := p.resolveNetworkAndZoneWithProxy(zone, opts.Zones)
 
 	machineType := p.size
 	if opts.MachineType != "" {
@@ -555,7 +571,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	gpu := opts.GPU
 	opts.EnableC4D = p.enableC4D
 	opts.EgressControl = p.egressControl
-	// TPA endpoint is set on opts by the manager from runner-level env config.
+	applyNetworkProxyURL(opts, networkProxyURL)
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {
@@ -1220,6 +1236,7 @@ func (p *config) mapToInstance(
 		Labels:                     labelsBytes,
 		GitspacePortMappings:       gitspacePortMappings,
 		Network:                    resolvedNetwork,
+		ProxyURL:                   opts.EgressProxyURL,
 	}, nil
 }
 

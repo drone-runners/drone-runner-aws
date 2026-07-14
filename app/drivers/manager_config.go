@@ -29,15 +29,10 @@ type ManagerConfig struct {
 	LiteEnginePath         string
 	LiteEngineFallbackPath string
 
-	// TPA endpoint for egress-control pools.
-	TPAAddress string
-	TPAPort    string
-
-	// Egress forward-proxy settings injected into egress-control build VMs.
-	EgressProxyEnabled bool
-	EgressProxyURL     string
-	EgressNoProxy      string
-	EgressCACert       string
+	// Egress forward-proxy settings (URL is env fallback; per-network proxy_url overrides).
+	EgressProxyURL string
+	EgressNoProxy  string
+	EgressCACert   string
 
 	// Binary URIs
 	HarnessTestBinaryURI         string
@@ -69,9 +64,6 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		env:                          cfg.Env,
 		liteEnginePath:               cfg.LiteEnginePath,
 		liteEngineFallbackPath:       cfg.LiteEngineFallbackPath,
-		tpaAddress:                   cfg.TPAAddress,
-		tpaPort:                      cfg.TPAPort,
-		egressProxyEnabled:           cfg.EgressProxyEnabled,
 		egressProxyURL:               cfg.EgressProxyURL,
 		egressNoProxy:                cfg.EgressNoProxy,
 		egressCACert:                 cfg.EgressCACert,
@@ -103,9 +95,6 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		Env:                          envConfig.Settings.Env,
 		LiteEnginePath:               envConfig.LiteEngine.Path,
 		LiteEngineFallbackPath:       envConfig.LiteEngine.FallbackPath,
-		TPAAddress:                   envConfig.TPA.Address,
-		TPAPort:                      envConfig.TPA.Port,
-		EgressProxyEnabled:           envConfig.Egress.Proxy.Enabled,
 		EgressProxyURL:               envConfig.Egress.Proxy.URL,
 		EgressNoProxy:                envConfig.Egress.Proxy.NoProxy,
 		EgressCACert:                 envConfig.Egress.Proxy.CACert,
