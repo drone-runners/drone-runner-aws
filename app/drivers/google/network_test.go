@@ -1,6 +1,7 @@
 package google
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -44,7 +45,7 @@ func TestApplyNetworkProxyURL(t *testing.T) {
 	})
 }
 
-func TestResolveNetworkAndZoneWithProxy_ReturnsProxyURL(t *testing.T) {
+func TestSelectNetwork_ReturnsProxyURL(t *testing.T) {
 	p := &config{
 		projectID: "proj",
 		networkConfigs: []networkConfig{
@@ -52,7 +53,33 @@ func TestResolveNetworkAndZoneWithProxy_ReturnsProxyURL(t *testing.T) {
 			{network: "vpc-central", subnetwork: "sub-central", zones: []string{zoneUSCentral1A}, proxyURL: "http://central:3128"},
 		},
 	}
-	_, _, _, _, proxyURL := p.resolveNetworkAndZoneWithProxy(zoneUSCentral1A, nil)
+	nc := p.selectNetwork(zoneUSCentral1A)
+	if nc.proxyURL != "http://central:3128" {
+		t.Errorf("proxyURL = %q, want http://central:3128", nc.proxyURL)
+	}
+}
+
+func TestResolveNetworkAndZoneWithProxy_ReturnsProxyURL(t *testing.T) {
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-west", subnetwork: "sub-west", zones: []string{zoneUSWest1A}, proxyURL: "http://west:3128"},
+			{network: "vpc-central", subnetwork: "sub-central", zones: []string{zoneUSCentral1A}, proxyURL: "http://central:3128", tags: []string{"allow-docker"}},
+		},
+	}
+	zone, network, subnetwork, tags, proxyURL := p.resolveNetworkAndZoneWithProxy(zoneUSCentral1A, nil)
+	if zone != zoneUSCentral1A {
+		t.Errorf("zone = %q, want %s", zone, zoneUSCentral1A)
+	}
+	if !strings.Contains(network, "vpc-central") {
+		t.Errorf("network = %q, want vpc-central", network)
+	}
+	if !strings.Contains(subnetwork, "sub-central") {
+		t.Errorf("subnetwork = %q, want sub-central", subnetwork)
+	}
+	if len(tags) != 1 || tags[0] != "allow-docker" {
+		t.Errorf("tags = %v, want [allow-docker]", tags)
+	}
 	if proxyURL != "http://central:3128" {
 		t.Errorf("proxyURL = %q, want http://central:3128", proxyURL)
 	}

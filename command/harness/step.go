@@ -209,7 +209,7 @@ func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 // configureEgressStep applies the egress-control proxy settings and bind-mounts
 // the Harness egress CA for a step running in an egress pool. It pairs with
 // appendEgressCAVolume (setup side), which registers the host-path volume.
-func configureEgressStep(r *ExecuteVMRequest, os string, proxyURL, noProxy string) {
+func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string) {
 	if r.Envs == nil {
 		r.Envs = make(map[string]string)
 	}
