@@ -31,9 +31,6 @@ type Params struct {
 	Tmate                        types.Tmate
 	IsHosted                     bool
 	EgressControl                bool
-	TPAAddress                   string
-	TPAPort                      string
-	EgressProxyEnabled           bool
 	EgressProxyURL               string
 	EgressNoProxy                string
 	EgressCACert                 string
@@ -145,10 +142,6 @@ var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(func
 //go:embed user_data/ubuntu_linux
 var userDataUbuntu string
 var ubuntuTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntu)
-
-//go:embed user_data/hosted_ubuntu_linux_egress
-var userDataUbuntuEgress string
-var ubuntuEgressTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntuEgress)
 
 //go:embed user_data/ubuntu_linux_egress_v2
 var userDataUbuntuEgressProxy string
@@ -304,11 +297,7 @@ func Linux(params *Params) (payload string, err error) {
 				tmpl = gitspacesUbuntuTemplate
 			}
 		} else if params.EgressControl {
-			if params.EgressProxyEnabled {
-				tmpl = ubuntuEgressProxyTemplate
-			} else {
-				tmpl = ubuntuEgressTemplate
-			}
+			tmpl = ubuntuEgressProxyTemplate
 		} else {
 			tmpl = ubuntuTemplate
 		}
@@ -330,7 +319,7 @@ func Windows(params *Params) (payload string) {
 	keyPath := filepath.Join(certsDir, "server-key.pem")
 
 	tmpl := windowsTemplate
-	if params.EgressControl && params.EgressProxyEnabled {
+	if params.EgressControl {
 		tmpl = windowsEgressProxyTemplate
 	}
 

@@ -24,9 +24,6 @@ type (
 		cleanupTimer                 *time.Ticker
 		runnerName                   string
 		liteEnginePath               string
-		tpaAddress                   string
-		tpaPort                      string
-		egressProxyEnabled           bool
 		egressProxyURL               string
 		egressNoProxy                string
 		egressCACert                 string

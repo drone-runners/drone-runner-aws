@@ -120,7 +120,11 @@ func HandleStep(ctx context.Context,
 	logr.Traceln("running StartStep")
 
 	if poolManager.IsEgressPool(inst.Pool) {
-		configureEgressStep(r, inst.Platform.OS, egressProxy)
+		proxyURL := inst.ProxyURL
+		if proxyURL == "" {
+			proxyURL = egressProxy.URL
+		}
+		configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy)
 	}
 
 	// Currently the OSX m1 architecture does not enable nested virtualization, so we disable docker.
@@ -203,20 +207,20 @@ func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 }
 
 // configureEgressStep applies the egress-control proxy settings and bind-mounts
-// the Harness mitm CA for a step running in an egress pool. It pairs with
+// the Harness egress CA for a step running in an egress pool. It pairs with
 // appendEgressCAVolume (setup side), which registers the host-path volume.
-func configureEgressStep(r *ExecuteVMRequest, os string, proxy config.EgressProxy) {
+func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string) {
 	if r.Envs == nil {
 		r.Envs = make(map[string]string)
 	}
 
-	if proxy.Enabled {
-		r.Envs["HTTPS_PROXY"] = proxy.URL
-		r.Envs["HTTP_PROXY"] = proxy.URL
-		r.Envs["https_proxy"] = proxy.URL
-		r.Envs["http_proxy"] = proxy.URL
-		r.Envs["NO_PROXY"] = proxy.NoProxy
-		r.Envs["no_proxy"] = proxy.NoProxy
+	if proxyURL != "" {
+		r.Envs["HTTPS_PROXY"] = proxyURL
+		r.Envs["HTTP_PROXY"] = proxyURL
+		r.Envs["https_proxy"] = proxyURL
+		r.Envs["http_proxy"] = proxyURL
+		r.Envs["NO_PROXY"] = noProxy
+		r.Envs["no_proxy"] = noProxy
 	}
 
 	switch os {

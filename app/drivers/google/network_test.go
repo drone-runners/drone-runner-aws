@@ -1,8 +1,11 @@
 package google
 
 import (
+	"strings"
 	"sync"
 	"testing"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 const (
@@ -24,6 +27,63 @@ const (
 
 	tagTag1 = "tag-1"
 )
+
+func TestApplyNetworkProxyURL(t *testing.T) {
+	t.Run("non-empty network proxy overrides opts", func(t *testing.T) {
+		opts := &types.InstanceCreateOpts{EgressProxyURL: "http://fallback:3128"}
+		applyNetworkProxyURL(opts, "http://west-proxy:3128")
+		if opts.EgressProxyURL != "http://west-proxy:3128" {
+			t.Errorf("got %q, want west proxy", opts.EgressProxyURL)
+		}
+	})
+	t.Run("empty network proxy keeps env fallback", func(t *testing.T) {
+		opts := &types.InstanceCreateOpts{EgressProxyURL: "http://fallback:3128"}
+		applyNetworkProxyURL(opts, "")
+		if opts.EgressProxyURL != "http://fallback:3128" {
+			t.Errorf("got %q, want fallback", opts.EgressProxyURL)
+		}
+	})
+}
+
+func TestSelectNetwork_ReturnsProxyURL(t *testing.T) {
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-west", subnetwork: "sub-west", zones: []string{zoneUSWest1A}, proxyURL: "http://west:3128"},
+			{network: "vpc-central", subnetwork: "sub-central", zones: []string{zoneUSCentral1A}, proxyURL: "http://central:3128"},
+		},
+	}
+	nc := p.selectNetwork(zoneUSCentral1A)
+	if nc.proxyURL != "http://central:3128" {
+		t.Errorf("proxyURL = %q, want http://central:3128", nc.proxyURL)
+	}
+}
+
+func TestResolveNetworkAndZoneWithProxy_ReturnsProxyURL(t *testing.T) {
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-west", subnetwork: "sub-west", zones: []string{zoneUSWest1A}, proxyURL: "http://west:3128"},
+			{network: "vpc-central", subnetwork: "sub-central", zones: []string{zoneUSCentral1A}, proxyURL: "http://central:3128", tags: []string{"allow-docker"}},
+		},
+	}
+	zone, network, subnetwork, tags, proxyURL := p.resolveNetworkAndZoneWithProxy(zoneUSCentral1A, nil)
+	if zone != zoneUSCentral1A {
+		t.Errorf("zone = %q, want %s", zone, zoneUSCentral1A)
+	}
+	if !strings.Contains(network, "vpc-central") {
+		t.Errorf("network = %q, want vpc-central", network)
+	}
+	if !strings.Contains(subnetwork, "sub-central") {
+		t.Errorf("subnetwork = %q, want sub-central", subnetwork)
+	}
+	if len(tags) != 1 || tags[0] != "allow-docker" {
+		t.Errorf("tags = %v, want [allow-docker]", tags)
+	}
+	if proxyURL != "http://central:3128" {
+		t.Errorf("proxyURL = %q, want http://central:3128", proxyURL)
+	}
+}
 
 // --- selectNetwork ---
 
@@ -298,7 +358,7 @@ func TestWithNetworkConfigs_SetsConfigs(t *testing.T) {
 	p := &config{}
 
 	opt := WithNetworkConfigs([]NetworkConfigInput{
-		{Network: "vpc-1", Subnetwork: "sub-1", Tags: []string{"t1"}, Zones: []string{"z1"}},
+		{Network: "vpc-1", Subnetwork: "sub-1", Tags: []string{"t1"}, Zones: []string{"z1"}, ProxyURL: "http://10.0.1.10:3128"},
 		{Network: "vpc-2", Subnetwork: "sub-2", Zones: []string{"z2"}},
 	})
 	opt(p)
@@ -312,12 +372,18 @@ func TestWithNetworkConfigs_SetsConfigs(t *testing.T) {
 	if p.networkConfigs[0].tags[0] != "t1" {
 		t.Errorf("config 0 tags: want [t1], got %v", p.networkConfigs[0].tags)
 	}
+	if p.networkConfigs[0].proxyURL != "http://10.0.1.10:3128" {
+		t.Errorf("config 0 proxyURL: want http://10.0.1.10:3128, got %s", p.networkConfigs[0].proxyURL)
+	}
 	// Config without tags should get defaults
 	if len(p.networkConfigs[1].tags) != 1 || p.networkConfigs[1].tags[0] != "allow-docker" {
 		t.Errorf("config 1 tags: want default [allow-docker], got %v", p.networkConfigs[1].tags)
 	}
 	if len(p.networkConfigs[1].zones) != 1 || p.networkConfigs[1].zones[0] != "z2" {
 		t.Errorf("config 1 zones: want [z2], got %v", p.networkConfigs[1].zones)
+	}
+	if p.networkConfigs[1].proxyURL != "" {
+		t.Errorf("config 1 proxyURL: want empty, got %s", p.networkConfigs[1].proxyURL)
 	}
 }
 

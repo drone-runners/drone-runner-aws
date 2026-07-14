@@ -23,6 +23,8 @@ type InstanceInfo struct {
 	CACert            []byte `json:"ca_cert"`
 	TLSKey            []byte `json:"tls_key"`
 	TLSCert           []byte `json:"tls_cert"`
+	// ProxyURL is optional; set for egress-controlled instances (per-network proxy).
+	ProxyURL string `json:"proxy_url,omitempty"`
 }
 
 // ValidateStruct checks if all fields of a struct are populated.
@@ -46,11 +48,22 @@ func ValidateStructForKeys(data interface{}, keys []string) error {
 		keySet[key] = struct{}{}
 	}
 
+	// Optional fields are allowed to be empty when validating the full struct.
+	optionalWhenCheckAll := map[string]struct{}{
+		"ProxyURL": {},
+	}
+
 	// Iterate over the fields of the struct
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldType := v.Type().Field(i)
 		fieldName := fieldType.Name
+
+		if checkAll {
+			if _, skip := optionalWhenCheckAll[fieldName]; skip {
+				continue
+			}
+		}
 
 		// Validate the field if we're checking all or it's in the keys list
 		if checkAll || containsKey(keySet, fieldName) {
@@ -88,5 +101,6 @@ func BuildInstanceFromRequest(instanceInfo InstanceInfo) *types.Instance { //nol
 		CACert:            instanceInfo.CACert,
 		TLSCert:           instanceInfo.TLSCert,
 		TLSKey:            instanceInfo.TLSKey,
+		ProxyURL:          instanceInfo.ProxyURL,
 	}
 }

@@ -375,6 +375,7 @@ func HandleSetup(
 		CACert:            instance.CACert,
 		TLSKey:            instance.TLSKey,
 		TLSCert:           instance.TLSCert,
+		ProxyURL:          instance.ProxyURL,
 	}
 	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
 

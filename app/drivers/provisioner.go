@@ -228,9 +228,6 @@ func (m *Manager) setupInstance(
 	createOptions.EnableLEDiagnostics = m.enableLEDiagnostics
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
-	createOptions.TPAAddress = m.tpaAddress
-	createOptions.TPAPort = m.tpaPort
-	createOptions.EgressProxyEnabled = m.egressProxyEnabled
 	createOptions.EgressProxyURL = m.egressProxyURL
 	createOptions.EgressNoProxy = m.egressNoProxy
 	createOptions.EgressCACert = m.egressCACert
@@ -293,9 +290,9 @@ func (m *Manager) setupInstance(
 	createOptions.EnvmanBinaryFallbackURI = m.envmanBinaryFallbackURI
 	createOptions.TmateBinaryURI = m.tmateBinaryURI
 	createOptions.TmateBinaryFallbackURI = m.tmateBinaryFallbackURI
-	// Under egress control + proxy, all binaries must be fetched from the single
-	// allow-listed Harness download origin through the mitm proxy.
-	if m.egressProxyEnabled && m.IsEgressPool(pool.Name) {
+	// Under egress control, all binaries must be fetched from the single
+	// allow-listed Harness download origin through the forward proxy.
+	if m.IsEgressPool(pool.Name) {
 		pinBinaryDownloadsToHarness(createOptions)
 	}
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {

@@ -110,6 +110,7 @@ type Instance struct {
 	GPU                        bool           `db:"instance_gpu" json:"gpu"`
 	Source                     InstanceSource `db:"instance_source" json:"source"`
 	Network                    string         `db:"instance_network" json:"network"`
+	ProxyURL                   string         `db:"instance_proxy_url" json:"proxy_url"`
 }
 
 // Passwords holds sensitive data.
@@ -176,9 +177,6 @@ type InstanceCreateOpts struct {
 	AccountID                    string
 	IsHosted                     bool
 	EgressControl                bool
-	TPAAddress                   string
-	TPAPort                      string
-	EgressProxyEnabled           bool
 	EgressProxyURL               string
 	EgressNoProxy                string
 	EgressCACert                 string
