@@ -1,0 +1,476 @@
+app/drivers/manager_config.go
+  07453323-1a03-4392-b114-e181afbe69a8 32-35
+  human 32-40,72-74,106-108
+command/config/egress_proxy_test.go
+  07453323-1a03-4392-b114-e181afbe69a8 9-10,45-54
+  human 55
+store/database/migrate/postgres/0025_update_table_instances_proxy_url.up.sql
+  07453323-1a03-4392-b114-e181afbe69a8 1
+app/drivers/google/network_test.go
+  07453323-1a03-4392-b114-e181afbe69a8 6-7,30-60,334,348-350,358-360
+  human 301
+command/harness/setup.go
+  07453323-1a03-4392-b114-e181afbe69a8 378
+command/harness/step.go
+  07453323-1a03-4392-b114-e181afbe69a8 123-127,210,212,217-223
+  human 123,206,208,213-219
+command/harness/step_test.go
+  07453323-1a03-4392-b114-e181afbe69a8 10-12,14-17,19,21,24-29,49,51,55,68
+  human 7,11-13,15-19,21,23,26-31,51,53,57,70
+store/database/migrate/sqlite/0016_update_table_instances_proxy_url.up.sql
+  07453323-1a03-4392-b114-e181afbe69a8 1
+store/database/sql/instances.go
+  07453323-1a03-4392-b114-e181afbe69a8 236,288,332,368
+  human 236
+app/drivers/provisioner.go
+  07453323-1a03-4392-b114-e181afbe69a8 293-295
+  human 231-233,296-298
+app/drivers/google/option.go
+  07453323-1a03-4392-b114-e181afbe69a8 239,269,282
+  human 239
+app/poolfile/config.go
+  07453323-1a03-4392-b114-e181afbe69a8 219,223-224
+command/config/config.go
+  07453323-1a03-4392-b114-e181afbe69a8 213,219-221,229,236-237,290-292
+  human 469,475,477,488
+app/cloudinit/cloudinit.go
+  07453323-1a03-4392-b114-e181afbe69a8 300,322
+  human 34-36,149-152,307-311,333
+app/cloudinit/cloudinit_test.go
+  07453323-1a03-4392-b114-e181afbe69a8 89-90,93-96,111-112,114-115,119,124-133,139-140,142-151,163,185-186,206-207,259,275-276,292,311,333
+  human 113
+command/harness/common/common.go
+  07453323-1a03-4392-b114-e181afbe69a8 26-27,51-55,62-66,104
+  human 67
+types/types.go
+  07453323-1a03-4392-b114-e181afbe69a8 113
+  human 179-181
+app/drivers/google/driver.go
+  07453323-1a03-4392-b114-e181afbe69a8 78,125-131,148-155,523-524,574,1239
+  human 156
+app/drivers/manager.go
+  human 27-29
+app/lehelper/lehelper.go
+  human 32-34
+app/cloudinit/user_data/hosted_ubuntu_linux_egress
+  human 1-136
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 4,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "32-35",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 15,
+          "hash": "human",
+          "lines": "32-40,72-74,106-108",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/manager_config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 12,
+          "added_lines": 13,
+          "deleted_lines": 13,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "9-10,45-54",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 8,
+          "hash": "human",
+          "lines": "55",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/egress_proxy_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0025_update_table_instances_proxy_url.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 40,
+          "added_lines": 40,
+          "deleted_lines": 42,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "6-7,30-60,334,348-350,358-360",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "301",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/network_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "378",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/setup.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 14,
+          "added_lines": 14,
+          "deleted_lines": 14,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "123-127,210,212,217-223",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 10,
+          "hash": "human",
+          "lines": "123,206,208,213-219",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 19,
+          "added_lines": 19,
+          "deleted_lines": 19,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "10-12,14-17,19,21,24-29,49,51,55,68",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 21,
+          "hash": "human",
+          "lines": "7,11-13,15-19,21,23,26-31,51,53,57,70",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/step_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/sqlite/0016_update_table_instances_proxy_url.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 4,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "236,288,332,368",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "236",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/sql/instances.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 3,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "293-295",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 6,
+          "hash": "human",
+          "lines": "231-233,296-298",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/provisioner.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 3,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "239,269,282",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "239",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/option.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 3,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "219,223-224",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/poolfile/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 10,
+          "added_lines": 10,
+          "deleted_lines": 10,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "213,219-221,229,236-237,290-292",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 16,
+          "hash": "human",
+          "lines": "469,475,477,488",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 2,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "300,322",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 13,
+          "hash": "human",
+          "lines": "34-36,149-152,307-311,333",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/cloudinit.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 44,
+          "added_lines": 45,
+          "deleted_lines": 47,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "89-90,93-96,111-112,114-115,119,124-133,139-140,142-151,163,185-186,206-207,259,275-276,292,311,333",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 110,
+          "hash": "human",
+          "lines": "113",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/cloudinit_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 14,
+          "deleted_lines": 14,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "26-27,51-55,62-66,104",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "67",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/common/common.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "113",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 3,
+          "hash": "human",
+          "lines": "179-181",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "types/types.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 20,
+          "added_lines": 21,
+          "deleted_lines": 27,
+          "hash": "07453323-1a03-4392-b114-e181afbe69a8",
+          "lines": "78,125-131,148-155,523-524,574,1239",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 4,
+          "hash": "human",
+          "lines": "156",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/driver.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 3,
+          "hash": "human",
+          "lines": "27-29",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/manager.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 3,
+          "hash": "human",
+          "lines": "32-34",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/lehelper/lehelper.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 136,
+          "hash": "human",
+          "lines": "1-136",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/cloudinit/user_data/hosted_ubuntu_linux_egress"
+    }
+  ],
+  "base_commit_sha": "3bc21332d2d212a37b722c24a9b258bc0b00f801",
+  "branch": "CI-23727",
+  "commit_sha": "368458001d651f0440fd9b38d3ef3cdb0622f808",
+  "commit_time": "2026-07-14T11:57:38+05:30",
+  "commit_type": "direct_commit",
+  "harness_aidlc_version": "1.4.25",
+  "prompts": {
+    "07453323-1a03-4392-b114-e181afbe69a8": {
+      "accepted_lines": 195,
+      "agent_id": {
+        "id": "07453323-1a03-4392-b114-e181afbe69a8",
+        "model": "grok-4.5",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 199,
+      "total_deletions": 209
+    },
+    "human": {
+      "accepted_lines": 8,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 8,
+      "total_deletions": 351
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
