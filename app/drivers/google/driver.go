@@ -387,9 +387,13 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 		Description:                 fmt.Sprintf("Capacity reservation for pool %s", opts.PoolName),
 	}
 
-	if opts.CapacityReservationTTL > 0 {
-		reservation.DeleteAfterDuration = &compute.Duration{Seconds: opts.CapacityReservationTTL}
-		zoneLogr.WithField("delete_after_seconds", opts.CapacityReservationTTL).
+	ttlSeconds := opts.CapacityReservationTTL
+	if strings.Contains(opts.PoolName, "free") && opts.FreePoolCapacityReservationTTL > 0 {
+		ttlSeconds = opts.FreePoolCapacityReservationTTL
+	}
+	if ttlSeconds > 0 {
+		reservation.DeleteAfterDuration = &compute.Duration{Seconds: ttlSeconds}
+		zoneLogr.WithField("delete_after_seconds", ttlSeconds).
 			Infoln("google: setting delete after duration on capacity reservation")
 	}
 

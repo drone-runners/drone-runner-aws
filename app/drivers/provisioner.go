@@ -320,6 +320,7 @@ func (m *Manager) setupInstance(
 	createOptions.Timeout = timeout
 	createOptions.CapacityReservation = reservedCapacity
 	createOptions.CapacityReservationTTL = m.capacityReservationTTL
+	createOptions.FreePoolCapacityReservationTTL = m.freePoolCapacityReservationTTL
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to generate certificates")
