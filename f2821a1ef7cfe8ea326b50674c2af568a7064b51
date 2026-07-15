@@ -1,0 +1,53 @@
+store/database/migrate/sqlite/0017_update_table_instances_tenant_id.up.sql
+  human 1
+store/database/migrate/sqlite/0016_update_table_instances_tenant_id.up.sql
+  human 1
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/sqlite/0017_update_table_instances_tenant_id.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/sqlite/0016_update_table_instances_tenant_id.up.sql"
+    }
+  ],
+  "base_commit_sha": "7932b13534aed42f2e720eba2b99a1f6f7818a6b",
+  "branch": "CI-22905",
+  "commit_sha": "f2821a1ef7cfe8ea326b50674c2af568a7064b51",
+  "commit_time": "2026-07-15T13:10:59+05:30",
+  "commit_type": "direct_commit",
+  "harness_aidlc_version": "1.4.25",
+  "prompts": {
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 1
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
