@@ -45,6 +45,27 @@ func TestApplyNetworkProxyURL(t *testing.T) {
 	})
 }
 
+func TestResolveEgressProxyURL(t *testing.T) {
+	t.Run("egress off clears proxy even when network and env are set", func(t *testing.T) {
+		got := resolveEgressProxyURL(false, "http://fallback:3128", "http://west:3128")
+		if got != "" {
+			t.Errorf("got %q, want empty when egress_control=false", got)
+		}
+	})
+	t.Run("egress on prefers network proxy", func(t *testing.T) {
+		got := resolveEgressProxyURL(true, "http://fallback:3128", "http://west:3128")
+		if got != "http://west:3128" {
+			t.Errorf("got %q, want network proxy", got)
+		}
+	})
+	t.Run("egress on falls back to env when network proxy empty", func(t *testing.T) {
+		got := resolveEgressProxyURL(true, "http://fallback:3128", "")
+		if got != "http://fallback:3128" {
+			t.Errorf("got %q, want env fallback", got)
+		}
+	})
+}
+
 func TestSelectNetwork_ReturnsProxyURL(t *testing.T) {
 	p := &config{
 		projectID: "proj",
