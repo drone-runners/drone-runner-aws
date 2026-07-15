@@ -143,54 +143,21 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				return nil, platformErr
 			}
 			instance.Platform = *platform
-			var googleOpts = []google.Option{
-				google.WithRootDirectory(&instance.Platform),
-				google.WithDiskSize(g.Disk.Size),
-				google.WithDiskType(g.Disk.Type),
-				google.WithMachineImage(g.Image),
-				google.WithSize(g.MachineType),
-				google.WithNetwork(g.Network),
-				google.WithSubnetwork(g.Subnetwork),
-				google.WithPrivateIP(g.PrivateIP),
-				google.WithServiceAccountEmail(g.Account.ServiceAccountEmail),
-				google.WithNoServiceAccount(g.Account.NoServiceAccount),
-				google.WithProject(g.Account.ProjectID),
-				google.WithJSONPath(g.Account.JSONPath),
-				google.WithTags(g.Tags...),
-				google.WithScopes(g.Scopes...),
-				google.WithUserData(g.UserData, g.UserDataPath),
-				google.WithZones(g.Zone...),
-				google.WithUserDataKey(g.UserDataKey, instance.Platform.OS),
-				google.WithHibernate(g.Hibernate),
-				google.WithLabels(map[string]string{
-					instance.Name: instance.Name,
-				}),
-				google.WithIsNestedVirtualizationEnabled(g.EnableNestedVirtualization),
-				google.WithEnableC4D(g.EnableC4D),
-				google.WithGPU(g.GPU),
-				google.WithEgressControl(g.EgressControl),
-			}
-			if len(g.Networks) > 0 {
-				var netInputs []google.NetworkConfigInput
-				for _, nc := range g.Networks {
-					netInputs = append(netInputs, google.NetworkConfigInput{
-						Network:    nc.Network,
-						Subnetwork: nc.Subnetwork,
-						Tags:       nc.Tags,
-						Zones:      nc.Zones,
-						ProxyURL:   nc.ProxyURL,
-					})
-				}
-				googleOpts = append(googleOpts, google.WithNetworkConfigs(netInputs))
-			} else if g.Network != "" || g.Subnetwork != "" {
-				logrus.Warnf("pool %q: top-level network/subnetwork fields are deprecated; use networks[] instead", instance.Name)
-			}
-			var driver, err = google.New(googleOpts...)
-			if err != nil {
-				return nil, err
-			}
 			pool := mapPool(&instance, runnerName)
-			pool.Driver = driver
+			if len(instance.Tenants) > 0 {
+				if err := applyGoogleTenants(&pool, &instance); err != nil {
+					return nil, err
+				}
+			} else {
+				driver, err := buildGoogleDriver(g, &instance)
+				if err != nil {
+					return nil, err
+				}
+				pool.Driver = driver
+				if g.Network != "" || g.Subnetwork != "" {
+					logrus.Warnf("pool %q: top-level network/subnetwork fields are deprecated; use networks[] instead", instance.Name)
+				}
+			}
 			pools = append(pools, pool)
 		case string(types.Anka):
 			var ak, ok = instance.Spec.(*config.Anka)
@@ -431,6 +398,7 @@ func buildGoogleDriver(g *config.Google, instance *config.Instance) (drivers.Dri
 				Subnetwork: nc.Subnetwork,
 				Tags:       nc.Tags,
 				Zones:      nc.Zones,
+				ProxyURL:   nc.ProxyURL,
 			})
 		}
 		googleOpts = append(googleOpts, google.WithNetworkConfigs(netInputs))

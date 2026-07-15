@@ -406,6 +406,34 @@ func TestMergeSpec_AmazonPrivateIPDirection(t *testing.T) {
 	}
 }
 
+// TestMergeSpec_GoogleEgressControlAndNetworks verifies a tenant can opt into egress_control
+// (false->true) and replace networks[] (including per-network proxy_url) wholesale.
+func TestMergeSpec_GoogleEgressControlAndNetworks(t *testing.T) {
+	base := &Google{
+		EgressControl: false,
+		Networks: []GoogleNetwork{
+			{Network: "net-base", Subnetwork: "subnet-base", ProxyURL: "http://base:3128"},
+		},
+	}
+	override := &Google{
+		EgressControl: true,
+		Networks: []GoogleNetwork{
+			{Network: "net-tenant", Subnetwork: "subnet-tenant", ProxyURL: "http://tenant:3128"},
+		},
+	}
+
+	merged := mustMerge(t, base, override).(*Google)
+	if !merged.EgressControl {
+		t.Errorf("expected egress_control false->true")
+	}
+	if len(merged.Networks) != 1 {
+		t.Fatalf("expected networks replaced (len 1), got %d", len(merged.Networks))
+	}
+	if merged.Networks[0].Network != "net-tenant" || merged.Networks[0].ProxyURL != "http://tenant:3128" {
+		t.Errorf("unexpected network: %+v", merged.Networks[0])
+	}
+}
+
 func mustMerge(t *testing.T, base, override interface{}) interface{} {
 	t.Helper()
 	merged, err := MergeSpec(base, override)

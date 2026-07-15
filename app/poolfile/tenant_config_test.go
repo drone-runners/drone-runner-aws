@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/command/config"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -276,13 +277,21 @@ instances:
       account:
         project_id: proj-base
       image: img-base
-      network: net-base
-      subnetwork: subnet-base
-      zone: [us-central1-a]
+      egress_control: false
+      networks:
+        - network: net-base
+          subnetwork: subnet-base
+          zones: [us-central1-a]
+          proxy_url: http://base-proxy:3128
     tenants:
       - ids: [acctA]
         spec:
-          subnetwork: subnet-a
+          egress_control: true
+          networks:
+            - network: net-a
+              subnetwork: subnet-a
+              zones: [us-central1-b]
+              proxy_url: http://tenant-proxy:3128
 `
 	pf, err := config.Parse(strings.NewReader(yaml))
 	if err != nil {
@@ -302,4 +311,53 @@ instances:
 	if p.ResolveTenant("acctA") != "acctA" {
 		t.Errorf("expected acctA tenant, got %q", p.ResolveTenant("acctA"))
 	}
+
+	var defaultSpec, tenantSpec *config.Google
+	for i := range p.Tenants {
+		g, ok := p.Tenants[i].Spec.(*config.Google)
+		if !ok {
+			t.Fatalf("tenant %q: expected *config.Google spec", p.Tenants[i].ID)
+		}
+		switch p.Tenants[i].ID {
+		case types.DefaultTenantID:
+			defaultSpec = g
+		case "acctA":
+			tenantSpec = g
+		}
+	}
+	if defaultSpec == nil || tenantSpec == nil {
+		t.Fatalf("missing default or acctA tenant spec")
+	}
+	if defaultSpec.EgressControl {
+		t.Errorf("default tenant: want egress_control=false")
+	}
+	if !tenantSpec.EgressControl {
+		t.Errorf("acctA tenant: want egress_control=true")
+	}
+	if len(tenantSpec.Networks) != 1 || tenantSpec.Networks[0].ProxyURL != "http://tenant-proxy:3128" {
+		t.Errorf("acctA networks proxy_url: got %+v", tenantSpec.Networks)
+	}
+	if got := networkProxyURLFromDriver(t, p.DriverForTenant("acctA")); got != "http://tenant-proxy:3128" {
+		t.Errorf("acctA driver proxyURL: got %q", got)
+	}
+	if got := networkProxyURLFromDriver(t, p.DriverForTenant(types.DefaultTenantID)); got != "http://base-proxy:3128" {
+		t.Errorf("default driver proxyURL: got %q", got)
+	}
+}
+
+// networkProxyURLFromDriver reads the first networkConfigs[].proxyURL from a Google driver via reflect.
+func networkProxyURLFromDriver(t *testing.T, d drivers.Driver) string {
+	t.Helper()
+	if d == nil {
+		t.Fatal("driver is nil")
+	}
+	v := reflect.ValueOf(d)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	ncs := v.FieldByName("networkConfigs")
+	if !ncs.IsValid() || ncs.Len() == 0 {
+		return ""
+	}
+	return ncs.Index(0).FieldByName("proxyURL").String()
 }

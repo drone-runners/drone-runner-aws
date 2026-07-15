@@ -265,7 +265,8 @@ func (m *Manager) setupInstance(
 	createOptions.TmateBinaryFallbackURI = m.tmateBinaryFallbackURI
 	// Under egress control, all binaries must be fetched from the single
 	// allow-listed Harness download origin through the forward proxy.
-	if m.IsEgressPool(pool.Name) {
+	tenantID := tenantIDForSetup(setupParams)
+	if m.IsEgressPool(pool.Name, tenantID) {
 		pinBinaryDownloadsToHarness(createOptions)
 	}
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
@@ -289,7 +290,6 @@ func (m *Manager) setupInstance(
 	if createOptions.IsHosted {
 		createOptions.VMLabels = buildIdentityVMLabels(setupParams, timeout, m.env, pool.Name, source)
 	}
-	tenantID := tenantIDForSetup(setupParams)
 	driver := pool.DriverForTenant(tenantID)
 	createOptions.DriverName = driver.DriverName()
 	createOptions.TenantID = tenantID
