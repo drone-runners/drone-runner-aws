@@ -35,51 +35,53 @@ type ManagerConfig struct {
 	EgressCACert   string
 
 	// Binary URIs
-	HarnessTestBinaryURI         string
-	PluginBinaryURI              string
-	PluginBinaryFallbackURI      string
-	AutoInjectionBinaryURI       string
-	AnnotationsBinaryURI         string
-	AnnotationsBinaryFallbackURI string
-	EnvmanBinaryURI              string
-	EnvmanBinaryFallbackURI      string
-	TmateBinaryURI               string
-	TmateBinaryFallbackURI       string
-	Hosted                       bool
-	EnableLEDiagnostics          bool
-	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
+	HarnessTestBinaryURI           string
+	PluginBinaryURI                string
+	PluginBinaryFallbackURI        string
+	AutoInjectionBinaryURI         string
+	AnnotationsBinaryURI           string
+	AnnotationsBinaryFallbackURI   string
+	EnvmanBinaryURI                string
+	EnvmanBinaryFallbackURI        string
+	TmateBinaryURI                 string
+	TmateBinaryFallbackURI         string
+	Hosted                         bool
+	EnableLEDiagnostics            bool
+	CapacityReservationTTL         int64 // seconds; GCP auto-deletes reservations after this duration
+	FreePoolCapacityReservationTTL int64 // seconds; TTL override when pool name contains "free"
 }
 
 // NewManagerFromConfig creates a new Manager from a ManagerConfig.
 func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 	return &Manager{
-		globalCtx:                    cfg.GlobalCtx,
-		instanceStore:                cfg.InstanceStore,
-		stageOwnerStore:              cfg.StageOwnerStore,
-		capacityReservationStore:     cfg.CapacityReservationStore,
-		firewallStore:                cfg.FirewallStore,
-		runnerName:                   cfg.RunnerName,
-		runnerConfig:                 cfg.RunnerConfig,
-		tmate:                        cfg.Tmate,
-		env:                          cfg.Env,
-		liteEnginePath:               cfg.LiteEnginePath,
-		liteEngineFallbackPath:       cfg.LiteEngineFallbackPath,
-		egressProxyURL:               cfg.EgressProxyURL,
-		egressNoProxy:                cfg.EgressNoProxy,
-		egressCACert:                 cfg.EgressCACert,
-		harnessTestBinaryURI:         cfg.HarnessTestBinaryURI,
-		pluginBinaryURI:              cfg.PluginBinaryURI,
-		pluginBinaryFallbackURI:      cfg.PluginBinaryFallbackURI,
-		autoInjectionBinaryURI:       cfg.AutoInjectionBinaryURI,
-		annotationsBinaryURI:         cfg.AnnotationsBinaryURI,
-		annotationsBinaryFallbackURI: cfg.AnnotationsBinaryFallbackURI,
-		envmanBinaryURI:              cfg.EnvmanBinaryURI,
-		envmanBinaryFallbackURI:      cfg.EnvmanBinaryFallbackURI,
-		tmateBinaryURI:               cfg.TmateBinaryURI,
-		tmateBinaryFallbackURI:       cfg.TmateBinaryFallbackURI,
-		hosted:                       cfg.Hosted,
-		enableLEDiagnostics:          cfg.EnableLEDiagnostics,
-		capacityReservationTTL:       cfg.CapacityReservationTTL,
+		globalCtx:                      cfg.GlobalCtx,
+		instanceStore:                  cfg.InstanceStore,
+		stageOwnerStore:                cfg.StageOwnerStore,
+		capacityReservationStore:       cfg.CapacityReservationStore,
+		firewallStore:                  cfg.FirewallStore,
+		runnerName:                     cfg.RunnerName,
+		runnerConfig:                   cfg.RunnerConfig,
+		tmate:                          cfg.Tmate,
+		env:                            cfg.Env,
+		liteEnginePath:                 cfg.LiteEnginePath,
+		liteEngineFallbackPath:         cfg.LiteEngineFallbackPath,
+		egressProxyURL:                 cfg.EgressProxyURL,
+		egressNoProxy:                  cfg.EgressNoProxy,
+		egressCACert:                   cfg.EgressCACert,
+		harnessTestBinaryURI:           cfg.HarnessTestBinaryURI,
+		pluginBinaryURI:                cfg.PluginBinaryURI,
+		pluginBinaryFallbackURI:        cfg.PluginBinaryFallbackURI,
+		autoInjectionBinaryURI:         cfg.AutoInjectionBinaryURI,
+		annotationsBinaryURI:           cfg.AnnotationsBinaryURI,
+		annotationsBinaryFallbackURI:   cfg.AnnotationsBinaryFallbackURI,
+		envmanBinaryURI:                cfg.EnvmanBinaryURI,
+		envmanBinaryFallbackURI:        cfg.EnvmanBinaryFallbackURI,
+		tmateBinaryURI:                 cfg.TmateBinaryURI,
+		tmateBinaryFallbackURI:         cfg.TmateBinaryFallbackURI,
+		hosted:                         cfg.Hosted,
+		enableLEDiagnostics:            cfg.EnableLEDiagnostics,
+		capacityReservationTTL:         cfg.CapacityReservationTTL,
+		freePoolCapacityReservationTTL: cfg.FreePoolCapacityReservationTTL,
 	}
 }
 
@@ -87,29 +89,30 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 // This is a convenience function for creating ManagerConfig from environment configuration.
 func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceStore, envConfig *config.EnvConfig) ManagerConfig {
 	return ManagerConfig{
-		GlobalCtx:                    ctx,
-		InstanceStore:                instanceStore,
-		RunnerName:                   envConfig.Runner.Name,
-		RunnerConfig:                 types.RunnerConfig(envConfig.RunnerConfig),
-		Tmate:                        types.Tmate(envConfig.Tmate),
-		Env:                          envConfig.Settings.Env,
-		LiteEnginePath:               envConfig.LiteEngine.Path,
-		LiteEngineFallbackPath:       envConfig.LiteEngine.FallbackPath,
-		EgressProxyURL:               envConfig.Egress.Proxy.URL,
-		EgressNoProxy:                envConfig.Egress.Proxy.NoProxy,
-		EgressCACert:                 envConfig.Egress.Proxy.CACert,
-		HarnessTestBinaryURI:         envConfig.Settings.HarnessTestBinaryURI,
-		PluginBinaryURI:              envConfig.Settings.PluginBinaryURI,
-		PluginBinaryFallbackURI:      envConfig.Settings.PluginBinaryFallbackURI,
-		AutoInjectionBinaryURI:       envConfig.Settings.AutoInjectionBinaryURI,
-		AnnotationsBinaryURI:         envConfig.Settings.AnnotationsBinaryURI,
-		AnnotationsBinaryFallbackURI: envConfig.Settings.AnnotationsBinaryFallbackURI,
-		EnvmanBinaryURI:              envConfig.Settings.EnvmanBinaryURI,
-		EnvmanBinaryFallbackURI:      envConfig.Settings.EnvmanBinaryFallbackURI,
-		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
-		TmateBinaryFallbackURI:       envConfig.Settings.TmateBinaryFallbackURI,
-		EnableLEDiagnostics:          envConfig.Settings.EnableLEDiagnostics,
-		CapacityReservationTTL:       envConfig.Settings.FreeCapacityMaxAgeMinutes * 60,
+		GlobalCtx:                      ctx,
+		InstanceStore:                  instanceStore,
+		RunnerName:                     envConfig.Runner.Name,
+		RunnerConfig:                   types.RunnerConfig(envConfig.RunnerConfig),
+		Tmate:                          types.Tmate(envConfig.Tmate),
+		Env:                            envConfig.Settings.Env,
+		LiteEnginePath:                 envConfig.LiteEngine.Path,
+		LiteEngineFallbackPath:         envConfig.LiteEngine.FallbackPath,
+		EgressProxyURL:                 envConfig.Egress.Proxy.URL,
+		EgressNoProxy:                  envConfig.Egress.Proxy.NoProxy,
+		EgressCACert:                   envConfig.Egress.Proxy.CACert,
+		HarnessTestBinaryURI:           envConfig.Settings.HarnessTestBinaryURI,
+		PluginBinaryURI:                envConfig.Settings.PluginBinaryURI,
+		PluginBinaryFallbackURI:        envConfig.Settings.PluginBinaryFallbackURI,
+		AutoInjectionBinaryURI:         envConfig.Settings.AutoInjectionBinaryURI,
+		AnnotationsBinaryURI:           envConfig.Settings.AnnotationsBinaryURI,
+		AnnotationsBinaryFallbackURI:   envConfig.Settings.AnnotationsBinaryFallbackURI,
+		EnvmanBinaryURI:                envConfig.Settings.EnvmanBinaryURI,
+		EnvmanBinaryFallbackURI:        envConfig.Settings.EnvmanBinaryFallbackURI,
+		TmateBinaryURI:                 envConfig.Settings.TmateBinaryURI,
+		TmateBinaryFallbackURI:         envConfig.Settings.TmateBinaryFallbackURI,
+		EnableLEDiagnostics:            envConfig.Settings.EnableLEDiagnostics,
+		CapacityReservationTTL:         envConfig.Settings.FreeCapacityMaxAgeMinutes * 60,
+		FreePoolCapacityReservationTTL: envConfig.Settings.FreePoolCapacityMaxAgeMinutes * 60,
 	}
 }
 

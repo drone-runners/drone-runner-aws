@@ -18,36 +18,37 @@ var _ IManager = (*Manager)(nil)
 type (
 	// Manager manages VM pools and instances.
 	Manager struct {
-		globalCtx                    context.Context
-		poolMap                      map[string]*poolEntry
-		strategy                     Strategy
-		cleanupTimer                 *time.Ticker
-		runnerName                   string
-		liteEnginePath               string
-		egressProxyURL               string
-		egressNoProxy                string
-		egressCACert                 string
-		instanceStore                store.InstanceStore
-		stageOwnerStore              store.StageOwnerStore
-		capacityReservationStore     store.CapacityReservationStore
-		firewallStore                store.FirewallStore
-		harnessTestBinaryURI         string
-		pluginBinaryURI              string
-		tmate                        types.Tmate
-		autoInjectionBinaryURI       string
-		liteEngineFallbackPath       string
-		pluginBinaryFallbackURI      string
-		runnerConfig                 types.RunnerConfig
-		annotationsBinaryURI         string
-		annotationsBinaryFallbackURI string
-		envmanBinaryURI              string
-		envmanBinaryFallbackURI      string
-		tmateBinaryURI               string
-		tmateBinaryFallbackURI       string
-		env                          string
-		capacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
-		hosted                       bool
-		enableLEDiagnostics          bool
+		globalCtx                      context.Context
+		poolMap                        map[string]*poolEntry
+		strategy                       Strategy
+		cleanupTimer                   *time.Ticker
+		runnerName                     string
+		liteEnginePath                 string
+		egressProxyURL                 string
+		egressNoProxy                  string
+		egressCACert                   string
+		instanceStore                  store.InstanceStore
+		stageOwnerStore                store.StageOwnerStore
+		capacityReservationStore       store.CapacityReservationStore
+		firewallStore                  store.FirewallStore
+		harnessTestBinaryURI           string
+		pluginBinaryURI                string
+		tmate                          types.Tmate
+		autoInjectionBinaryURI         string
+		liteEngineFallbackPath         string
+		pluginBinaryFallbackURI        string
+		runnerConfig                   types.RunnerConfig
+		annotationsBinaryURI           string
+		annotationsBinaryFallbackURI   string
+		envmanBinaryURI                string
+		envmanBinaryFallbackURI        string
+		tmateBinaryURI                 string
+		tmateBinaryFallbackURI         string
+		env                            string
+		capacityReservationTTL         int64 // seconds; GCP auto-deletes reservations after this duration
+		freePoolCapacityReservationTTL int64 // seconds; TTL override when pool name contains "free"
+		hosted                         bool
+		enableLEDiagnostics            bool
 	}
 
 	poolEntry struct {

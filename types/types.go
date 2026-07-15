@@ -167,44 +167,45 @@ type InstanceCreateOpts struct {
 	TLSCert        []byte
 	LiteEnginePath string
 	Platform
-	PoolName                     string
-	RunnerName                   string
-	Limit                        int
-	Pool                         int
-	HarnessTestBinaryURI         string
-	PluginBinaryURI              string
-	Tmate                        Tmate
-	AccountID                    string
-	IsHosted                     bool
-	EgressControl                bool
-	EgressProxyURL               string
-	EgressNoProxy                string
-	EgressCACert                 string
-	EnableLEDiagnostics          bool
-	ResourceClass                string
-	GitspaceOpts                 GitspaceOpts
-	StorageOpts                  StorageOpts
-	AutoInjectionBinaryURI       string
-	AnnotationsBinaryURI         string
-	AnnotationsBinaryFallbackURI string
-	InternalLabels               map[string]string
-	VMLabels                     map[string]string
-	Zones                        []string
-	MachineType                  string
-	LiteEngineFallbackPath       string
-	PluginBinaryFallbackURI      string
-	VMImageConfig                VMImageConfig
-	DriverName                   string
-	Timeout                      int64
-	EnableC4D                    bool
-	CapacityReservation          *CapacityReservation
-	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservation after this duration
-	NestedVirtualization         bool
-	GPU                          bool
-	EnvmanBinaryURI              string
-	EnvmanBinaryFallbackURI      string
-	TmateBinaryURI               string
-	TmateBinaryFallbackURI       string
+	PoolName                       string
+	RunnerName                     string
+	Limit                          int
+	Pool                           int
+	HarnessTestBinaryURI           string
+	PluginBinaryURI                string
+	Tmate                          Tmate
+	AccountID                      string
+	IsHosted                       bool
+	EgressControl                  bool
+	EgressProxyURL                 string
+	EgressNoProxy                  string
+	EgressCACert                   string
+	EnableLEDiagnostics            bool
+	ResourceClass                  string
+	GitspaceOpts                   GitspaceOpts
+	StorageOpts                    StorageOpts
+	AutoInjectionBinaryURI         string
+	AnnotationsBinaryURI           string
+	AnnotationsBinaryFallbackURI   string
+	InternalLabels                 map[string]string
+	VMLabels                       map[string]string
+	Zones                          []string
+	MachineType                    string
+	LiteEngineFallbackPath         string
+	PluginBinaryFallbackURI        string
+	VMImageConfig                  VMImageConfig
+	DriverName                     string
+	Timeout                        int64
+	EnableC4D                      bool
+	CapacityReservation            *CapacityReservation
+	CapacityReservationTTL         int64 // seconds; GCP auto-deletes reservation after this duration
+	FreePoolCapacityReservationTTL int64 // seconds; TTL override when pool name contains "free"
+	NestedVirtualization           bool
+	GPU                            bool
+	EnvmanBinaryURI                string
+	EnvmanBinaryFallbackURI        string
+	TmateBinaryURI                 string
+	TmateBinaryFallbackURI         string
 	// Identity carried into Instances.Insert metadata for reverse lookup.
 	// Raw, case-preserved values; the lowercased forms are stamped onto
 	// VMLabels via buildIdentityVMLabels for server-side label filtering.
