@@ -1,31 +1,31 @@
-app/poolfile/config.go
-  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 146-149,151-158,401
-  human 150
-app/poolfile/tenant_config_test.go
-  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 8,280-285,289-294,315-345,347-362
-  human 314,346
-command/harness/step.go
-  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 122
-  human 122
-command/config/tenant_merge_test.go
-  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 409-435
-  human 436
-store/database/migrate/postgres/0027_update_table_instances_tenant_id.up.sql
-  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 1
-app/drivers/manager.go
-  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 129-132,137-138,144-166
-  human 134,167
 app/drivers/provisioner.go
   58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 262-263
   human 262,286
-command/harness/setup.go
-  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 598
-  human 598
+app/drivers/manager.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 129-132,137-138,144-166
+  human 134,167
 app/drivers/manager_egress_test.go
   58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 1-54
 app/drivers/interfaces.go
   58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 72-74
   human 72-73
+store/database/migrate/postgres/0027_update_table_instances_tenant_id.up.sql
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 1
+app/poolfile/tenant_config_test.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 8,280-285,289-294,315-345,347-362
+  human 314,346
+command/harness/setup.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 598
+  human 598
+command/harness/step.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 122
+  human 122
+app/poolfile/config.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 146-149,151-158,401
+  human 150
+command/config/tenant_merge_test.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 409-435
+  human 436
 store/database/migrate/postgres/0025_update_table_instances_tenant_id.up.sql
   human 1
 ---
@@ -34,23 +34,91 @@ store/database/migrate/postgres/0025_update_table_instances_tenant_id.up.sql
     {
       "entries": [
         {
-          "accepted_lines": 13,
-          "added_lines": 14,
-          "deleted_lines": 4,
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
           "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "146-149,151-158,401",
+          "lines": "262-263",
           "overridden_lines": 0
         },
         {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 46,
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 2,
           "hash": "human",
-          "lines": "150",
+          "lines": "262,286",
           "overridden_lines": 0
         }
       ],
-      "file": "app/poolfile/config.go"
+      "file": "app/drivers/provisioner.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 29,
+          "added_lines": 30,
+          "deleted_lines": 9,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "129-132,137-138,144-166",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 4,
+          "hash": "human",
+          "lines": "134,167",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/manager.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 54,
+          "added_lines": 54,
+          "deleted_lines": 16,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "1-54",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/manager_egress_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "72-74",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 2,
+          "hash": "human",
+          "lines": "72-73",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/interfaces.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0027_update_table_instances_tenant_id.up.sql"
     },
     {
       "entries": [
@@ -80,103 +148,6 @@ store/database/migrate/postgres/0025_update_table_instances_tenant_id.up.sql
           "added_lines": 1,
           "deleted_lines": 0,
           "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "122",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 0,
-          "added_lines": 0,
-          "deleted_lines": 1,
-          "hash": "human",
-          "lines": "122",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "command/harness/step.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 27,
-          "added_lines": 27,
-          "deleted_lines": 8,
-          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "409-435",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "human",
-          "lines": "436",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "command/config/tenant_merge_test.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "1",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "store/database/migrate/postgres/0027_update_table_instances_tenant_id.up.sql"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 29,
-          "added_lines": 30,
-          "deleted_lines": 9,
-          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "129-132,137-138,144-166",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 2,
-          "added_lines": 2,
-          "deleted_lines": 4,
-          "hash": "human",
-          "lines": "134,167",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/drivers/manager.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 2,
-          "added_lines": 2,
-          "deleted_lines": 0,
-          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "262-263",
-          "overridden_lines": 0
-        },
-        {
-          "accepted_lines": 0,
-          "added_lines": 0,
-          "deleted_lines": 2,
-          "hash": "human",
-          "lines": "262,286",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/drivers/provisioner.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 1,
-          "added_lines": 1,
-          "deleted_lines": 0,
-          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
           "lines": "598",
           "overridden_lines": 0
         },
@@ -194,36 +165,65 @@ store/database/migrate/postgres/0025_update_table_instances_tenant_id.up.sql
     {
       "entries": [
         {
-          "accepted_lines": 54,
-          "added_lines": 54,
-          "deleted_lines": 16,
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
           "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "1-54",
-          "overridden_lines": 0
-        }
-      ],
-      "file": "app/drivers/manager_egress_test.go"
-    },
-    {
-      "entries": [
-        {
-          "accepted_lines": 3,
-          "added_lines": 3,
-          "deleted_lines": 5,
-          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
-          "lines": "72-74",
+          "lines": "122",
           "overridden_lines": 0
         },
         {
           "accepted_lines": 0,
           "added_lines": 0,
-          "deleted_lines": 2,
+          "deleted_lines": 1,
           "hash": "human",
-          "lines": "72-73",
+          "lines": "122",
           "overridden_lines": 0
         }
       ],
-      "file": "app/drivers/interfaces.go"
+      "file": "command/harness/step.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 14,
+          "deleted_lines": 4,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "146-149,151-158,401",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 46,
+          "hash": "human",
+          "lines": "150",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/poolfile/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 27,
+          "added_lines": 27,
+          "deleted_lines": 13,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "409-435",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "436",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/config/tenant_merge_test.go"
     },
     {
       "entries": [
