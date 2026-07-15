@@ -724,9 +724,21 @@ func (p *config) insertWithStockoutRetry(
 	stockoutRetryEnabled, usesReservation bool,
 	logr logger.Logger,
 ) (*compute.Operation, createCandidate, error) {
+	// Regions whose quota has been exhausted this call; skip further candidates
+	// in these regions so we don't repeatedly hit the same project-level cap.
+	skipRegions := map[string]bool{}
+
+	var lastErr error
+	var lastCand createCandidate
 	for attempt := 0; attempt < len(candidates); attempt++ {
 		cand := candidates[attempt]
 		zone := cand.zone
+		if skipRegions[regionOf(zone)] {
+			logr.WithField("zone", zone).
+				WithField("region", regionOf(zone)).
+				Debugln("google: skipping candidate in already-quota-exhausted region")
+			continue
+		}
 		attemptLogr := logr.WithField("zone", zone).WithField("attempt", attempt+1)
 
 		// Apply the per-attempt zone/network selection onto the shared spec.
@@ -763,23 +775,45 @@ func (p *config) insertWithStockoutRetry(
 			return op, cand, nil
 		}
 
-		// Retry alternate candidates only on stockout/capacity errors. All other
-		// failures fail fast so pool fallback in HandleSetup can take over.
-		if isStockoutError(attemptErr) {
+		lastErr = attemptErr
+		lastCand = cand
+
+		// Retry alternate candidates on capacity errors. All other failures fail
+		// fast so pool fallback in HandleSetup can take over.
+		stockout := isStockoutError(attemptErr)
+		quota := isQuotaError(attemptErr)
+		if !stockout && !quota {
+			attemptLogr.WithError(attemptErr).Errorln("google: failed to provision VM")
+			return nil, cand, attemptErr
+		}
+
+		switch {
+		case stockout:
 			attemptLogr.WithError(attemptErr).
 				WithField("machine_type", machineType).
 				Warnln("google: stockout detected for zone")
 			if !usesReservation {
 				p.markStockout(zone, machineType)
 			}
-			if stockoutRetryEnabled && attempt < len(candidates)-1 {
-				attemptLogr.WithError(attemptErr).Warnln("google: zone stockout, retrying alternate zone/network candidate")
-				p.cleanupFailedInstance(ctx, zone, in.Name, attemptLogr)
-				continue
-			}
+		case quota:
+			// ponytail: single-call regional skip; upgrade to shared LRU if
+			// quota errors flap across creates.
+			skipRegions[regionOf(zone)] = true
+			attemptLogr.WithError(attemptErr).
+				WithField("region", regionOf(zone)).
+				Warnln("google: quota exhausted for region; skipping remaining candidates in region")
+		}
+
+		if stockoutRetryEnabled && attempt < len(candidates)-1 {
+			attemptLogr.WithError(attemptErr).Warnln("google: capacity error, retrying alternate zone/network candidate")
+			p.cleanupFailedInstance(ctx, zone, in.Name, attemptLogr)
+			continue
 		}
 		attemptLogr.WithError(attemptErr).Errorln("google: failed to provision VM")
 		return nil, cand, attemptErr
+	}
+	if lastErr != nil {
+		return nil, lastCand, lastErr
 	}
 	// Unreachable in practice: candidates always holds at least the first selection.
 	return nil, createCandidate{}, errors.New("google: no create candidates available")
@@ -1594,7 +1628,23 @@ var stockoutMarkers = []string{
 	"STOCKOUT",
 }
 
-func isStockoutError(err error) bool {
+// quotaMarkers are project/region-scoped capacity errors. Retrying a sibling
+// zone in the same region hits the same quota, so on match we skip candidates
+// that share the failing region instead of just the zone. Both the GCP reason
+// codes (from googleapi.Error) and the plain-text message shapes surfaced by
+// waitZoneOperation are covered — including `Quota 'CPUS' exceeded ...` where
+// the apostrophe breaks a single-substring "Quota exceeded" match.
+var quotaMarkers = []string{
+	"QUOTA_EXCEEDED",
+	"quotaExceeded",
+	"Quota '",
+	"Quota exceeded",
+	"RESOURCE_EXHAUSTED",
+	"IP_SPACE_EXHAUSTED",
+	"IP_ADDRESS_EXHAUSTED",
+}
+
+func matchAnyMarker(err error, markers []string) bool {
 	if err == nil {
 		return false
 	}
@@ -1606,13 +1656,31 @@ func isStockoutError(err error) bool {
 		}
 	}
 	for _, s := range candidates {
-		for _, marker := range stockoutMarkers {
+		for _, marker := range markers {
 			if strings.Contains(s, marker) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func isStockoutError(err error) bool { return matchAnyMarker(err, stockoutMarkers) }
+func isQuotaError(err error) bool    { return matchAnyMarker(err, quotaMarkers) }
+
+// regionOf strips the trailing zone letter: us-central1-a -> us-central1.
+// Returns the input unchanged when it doesn't look like a GCP zone (regions
+// like "us-central1" end in a digit, not a single letter).
+func regionOf(zone string) string {
+	i := strings.LastIndex(zone, "-")
+	if i <= 0 || i != len(zone)-2 {
+		return zone
+	}
+	c := zone[len(zone)-1]
+	if c < 'a' || c > 'z' {
+		return zone
+	}
+	return zone[:i]
 }
 
 // createCandidate holds the resolved zone and network details for a single VM create attempt.
