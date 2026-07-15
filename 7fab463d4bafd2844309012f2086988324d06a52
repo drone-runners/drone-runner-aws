@@ -1,0 +1,83 @@
+app/drivers/google/network_test.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 48-67
+  human 68
+app/drivers/google/driver.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 159-170,587
+  human 171
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 20,
+          "added_lines": 20,
+          "deleted_lines": 0,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "48-67",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "68",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/network_test.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 13,
+          "deleted_lines": 1,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "159-170,587",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "171",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/driver.go"
+    }
+  ],
+  "base_commit_sha": "f2821a1ef7cfe8ea326b50674c2af568a7064b51",
+  "branch": "CI-22905",
+  "commit_sha": "7fab463d4bafd2844309012f2086988324d06a52",
+  "commit_time": "2026-07-15T13:40:01+05:30",
+  "commit_type": "direct_commit",
+  "harness_aidlc_version": "1.4.25",
+  "prompts": {
+    "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb": {
+      "accepted_lines": 33,
+      "agent_id": {
+        "id": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+        "model": "grok-4.5",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 33,
+      "total_deletions": 1
+    },
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 1
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
