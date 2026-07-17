@@ -32,6 +32,11 @@ type CapacityReservationRequest struct {
 	Zone                   string               `json:"zone"`
 	NestedVirtualization   bool                 `json:"nested_virtualization"`
 	ReservationTimeout     int64                `json:"timeout,omitempty"`
+	// ReservationPerPoolTimeout bounds, in milliseconds, how long a single pool's
+	// capacity reservation attempt may take before failing over to the next
+	// fallback pool. 0 lets the runner apply its default (60s). Milliseconds to
+	// stay consistent with ReservationTimeout above.
+	ReservationPerPoolTimeout int64 `json:"reservation_per_pool_timeout,omitempty"`
 }
 
 // HandleCapacityReservation tries to reserve capacity for a future vm init an in any of the pools given in the
@@ -258,9 +263,10 @@ func handleCapacityReservation(
 	timeoutSeconds := int64(timeout / time.Second)
 
 	provisionParams := &types.ProvisionParams{
-		VMImageConfig:        &r.RequestedVMImageConfig,
-		NestedVirtualization: r.NestedVirtualization,
-		ResourceClass:        r.ResourceClass,
+		VMImageConfig:             &r.RequestedVMImageConfig,
+		NestedVirtualization:      r.NestedVirtualization,
+		ResourceClass:             r.ResourceClass,
+		ReservationPerPoolTimeout: r.ReservationPerPoolTimeout,
 	}
 	if r.Zone != "" {
 		provisionParams.Zones = []string{r.Zone}

@@ -247,6 +247,12 @@ func (m *Manager) setupInstance(
 		createOptions.GPU = setupParams.GPU
 		createOptions.StageRuntimeID = setupParams.StageRuntimeID
 		createOptions.PipelineExecutionID = setupParams.PipelineExecutionID
+		createOptions.ReservationPerPoolTimeout = setupParams.ReservationPerPoolTimeout
+	}
+	// Default the per-pool reservation timeout centrally so every driver can rely
+	// on it being set, rather than each driver re-declaring its own default.
+	if createOptions.ReservationPerPoolTimeout <= 0 {
+		createOptions.ReservationPerPoolTimeout = defaultReservationPerPoolTimeoutMs
 	}
 	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
 		createOptions.VMImageConfig = types.VMImageConfig{
@@ -538,6 +544,12 @@ const (
 
 	identityCreatedBy            = "harness-ci"
 	longRunningStageThresholdSec = int64(24 * 60 * 60)
+
+	// defaultReservationPerPoolTimeoutMs bounds, in milliseconds, how long a
+	// single pool's capacity reservation attempt may take before failing over to
+	// the next fallback pool. Applied when the request does not specify one, so
+	// drivers can rely on opts.ReservationPerPoolTimeout always being set.
+	defaultReservationPerPoolTimeoutMs = int64(60 * 1000)
 )
 
 // buildIdentityVMLabels returns the full GCP-labels set for a freshly

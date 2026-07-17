@@ -199,6 +199,7 @@ type InstanceCreateOpts struct {
 	EnableC4D                    bool
 	CapacityReservation          *CapacityReservation
 	CapacityReservationTTL       int64 // seconds; GCP auto-deletes reservation after this duration
+	ReservationPerPoolTimeout    int64 // milliseconds; upper bound to wait for a single pool's capacity reservation to complete (0 = runner default)
 	NestedVirtualization         bool
 	GPU                          bool
 	EnvmanBinaryURI              string
@@ -407,6 +408,11 @@ type SetupInstanceParams struct {
 	PipelineExecutionID string `json:"pipeline_execution_id,omitempty" yaml:"pipeline_execution_id,omitempty"`
 	LongRunning         bool   `json:"long_running,omitempty" yaml:"long_running,omitempty"`
 	CreatedAt           int64  `json:"created_at,omitempty" yaml:"created_at,omitempty"`
+
+	// ReservationPerPoolTimeout bounds, in milliseconds, how long a single pool's
+	// capacity reservation attempt may take before failing over to the next
+	// fallback pool. 0 means use the runner default.
+	ReservationPerPoolTimeout int64 `json:"reservation_per_pool_timeout,omitempty" yaml:"reservation_per_pool_timeout,omitempty"`
 }
 
 // ScaleJobParams represents the parameters for a scaling job.
@@ -471,6 +477,10 @@ type ProvisionParams struct {
 	StageRuntimeID      string
 	PipelineExecutionID string
 	LongRunning         bool
+
+	// ReservationPerPoolTimeout bounds, in milliseconds, how long a single pool's
+	// capacity reservation attempt may take. 0 means use the runner default.
+	ReservationPerPoolTimeout int64
 }
 
 // ToSetupInstanceParams converts request-level ProvisionParams to internal SetupInstanceParams.
@@ -479,13 +489,14 @@ func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
 		return nil
 	}
 	s := &SetupInstanceParams{
-		NestedVirtualization: p.NestedVirtualization,
-		ResourceClass:        p.ResourceClass,
-		SkipCloudVMCleanup:   p.SkipCloudVMCleanup,
-		AccountID:            p.AccountID,
-		StageRuntimeID:       p.StageRuntimeID,
-		PipelineExecutionID:  p.PipelineExecutionID,
-		LongRunning:          p.LongRunning,
+		NestedVirtualization:      p.NestedVirtualization,
+		ResourceClass:             p.ResourceClass,
+		SkipCloudVMCleanup:        p.SkipCloudVMCleanup,
+		AccountID:                 p.AccountID,
+		StageRuntimeID:            p.StageRuntimeID,
+		PipelineExecutionID:       p.PipelineExecutionID,
+		LongRunning:               p.LongRunning,
+		ReservationPerPoolTimeout: p.ReservationPerPoolTimeout,
 	}
 	if len(p.Zones) > 0 {
 		s.Zones = make([]string, len(p.Zones))
