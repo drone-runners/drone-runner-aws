@@ -350,7 +350,7 @@ func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.Instan
 		InstancePlatform:      types.CapacityReservationInstancePlatform(instancePlatform),
 		AvailabilityZone:      aws.String(reqCfg.availabilityZone),
 		InstanceCount:         aws.Int32(1),
-		EndDateType:           types.EndDateTypeUnlimited,          // No end date
+		EndDateType:           types.EndDateTypeUnlimited,          // No end date unless a TTL is set below
 		InstanceMatchCriteria: types.InstanceMatchCriteriaTargeted, // Instances must explicitly target this reservation
 		TagSpecifications: []types.TagSpecification{
 			{
@@ -358,6 +358,21 @@ func (p *amazonConfig) ReserveCapacity(ctx context.Context, opts *drtypes.Instan
 				Tags:         convertTags(buildHarnessTags(opts)),
 			},
 		},
+	}
+
+	// Bound the reservation lifetime with an end date so a leaked reservation
+	// (e.g. runner crashes before DestroyCapacity runs) is auto-reclaimed by AWS
+	// instead of billing indefinitely. This mirrors the GCP DeleteAfterDuration TTL.
+	// Note: AWS ends a limited reservation within ~1h of EndDate (min duration 1h),
+	// and any instance already launched into the reservation keeps running as a
+	// normal On-Demand instance — it is not stopped when the reservation ends.
+	if opts.CapacityReservationTTL > 0 {
+		endDate := time.Now().Add(time.Duration(opts.CapacityReservationTTL) * time.Second)
+		input.EndDateType = types.EndDateTypeLimited
+		input.EndDate = aws.Time(endDate)
+		logr.WithField("end_date", endDate).
+			WithField("ttl_seconds", opts.CapacityReservationTTL).
+			Infoln("amazon: setting end date on capacity reservation")
 	}
 
 	result, err := client.CreateCapacityReservation(ctx, input)
