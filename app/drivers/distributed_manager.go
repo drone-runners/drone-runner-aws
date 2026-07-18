@@ -1199,10 +1199,14 @@ func (d *DistributedManager) executeInstanceCleanup(
 	return successfulInstances, nil
 }
 
-// forceDeleteLeakedInstances removes rows that have been stuck past 2 * maxAge.
+// forceDeleteLeakedInstances handles rows that have been stuck past 2 * maxAge.
 // These are instances the driver has been unable to destroy across many retry
-// ticks; keeping them forever would bloat the table and skew pool metrics.
-// We log loudly so operators can reconcile the cloud side.
+// ticks. Before we let go of the DB row we make one last attempt to destroy the
+// cloud VM, so we do not orphan a running instance that nothing will ever reap.
+// Rows are claimed atomically (DELETE ... RETURNING) so peer purger nodes do not
+// double-process them; any row whose cloud destroy still fails is re-inserted so
+// it stays tracked and can be retried/reconciled on a later tick, rather than
+// being silently forgotten while the VM keeps running.
 func (d *DistributedManager) forceDeleteLeakedInstances(
 	ctx context.Context,
 	pool *poolEntry,
@@ -1251,9 +1255,39 @@ func (d *DistributedManager) forceDeleteLeakedInstances(
 		WithField("instance_names", leakedNames).
 		WithField("max_age_seconds", int64(maxAge.Seconds())).
 		WithField("destroy_caller", "distributed_purger:leak_candidate").
-		Warnf("distributed dlite: purger: force-deleting %d instance_leak_candidate row(s) older than 2x maxAge; verify cloud-side cleanup", len(leaked))
+		Warnf("distributed dlite: purger: destroying %d instance_leak_candidate(s) older than 2x maxAge before dropping their rows", len(leaked))
 
-	d.destroyCapacity(ctx, leaked)
+	// Last-chance cloud cleanup before we relinquish the rows. Destroy treats a
+	// NotFound VM as success (not returned in failedInstances), so already-gone
+	// instances are correctly treated as destroyed.
+	failedInstances, destroyErr := pool.Driver.Destroy(ctx, leaked)
+	if destroyErr != nil {
+		logr.WithError(destroyErr).
+			WithField("destroy_caller", "distributed_purger:leak_candidate").
+			Warnf("distributed dlite: purger: cloud destroy failed for %d leak-candidate(s); their rows will be re-inserted for retry", len(failedInstances))
+	}
+
+	// Re-insert rows whose cloud VM could not be destroyed so they remain
+	// tracked and get retried/reconciled instead of leaking.
+	failedIDs := make(map[string]bool, len(failedInstances))
+	for _, inst := range failedInstances {
+		failedIDs[inst.ID] = true
+		if createErr := d.instanceStore.Create(ctx, inst); createErr != nil {
+			logr.WithError(createErr).
+				WithField("instance_id", inst.ID).
+				WithField("instance_name", inst.Name).
+				Error("distributed dlite: purger: failed to re-insert undestroyed leak-candidate; VM may leak, reconcile cloud-side")
+		}
+	}
+
+	// Free capacity only for instances we actually destroyed.
+	destroyed := leaked[:0]
+	for _, inst := range leaked {
+		if !failedIDs[inst.ID] {
+			destroyed = append(destroyed, inst)
+		}
+	}
+	d.destroyCapacity(ctx, destroyed)
 }
 
 func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*types.Instance) {
