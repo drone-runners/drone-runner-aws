@@ -392,13 +392,20 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 			Infoln("google: setting delete after duration on capacity reservation")
 	}
 
-	op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(ctx).Do()
+	// Bound the entire reservation attempt (submit + wait for it to reach DONE) so
+	// a zone stockout (op stuck PENDING) fails fast instead of consuming the caller's
+	// full request deadline. Both calls share this budget; whichever deadline is
+	// sooner (this cap or the caller's ctx) wins, so it only ever tightens ctx.
+	opCtx, cancel := context.WithTimeout(ctx, time.Duration(opts.ReservationPerPoolTimeout)*time.Millisecond)
+	defer cancel()
+
+	op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(opCtx).Do()
 	if err != nil {
 		zoneLogr.WithError(err).Warnln("google: failed to create capacity reservation")
 		return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
 	}
 
-	if err := p.waitZoneOperation(ctx, op.Name, zone); err != nil {
+	if err := p.waitZoneOperation(opCtx, op.Name, zone); err != nil {
 		zoneLogr.WithError(err).Warnln("google: capacity reservation creation operation failed")
 		return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
 	}
