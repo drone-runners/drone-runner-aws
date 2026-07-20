@@ -52,14 +52,6 @@ type CapacityReservationStore interface {
 	FindAndClaim(ctx context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState, allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) //nolint:lll
 }
 
-type FirewallStore interface {
-	CreateBatch(ctx context.Context, rules []*types.FirewallRule) error
-	ListByStageID(ctx context.Context, stageID string) ([]*types.FirewallRule, error)
-	ListOlderThan(ctx context.Context, createdBefore int64) ([]*types.FirewallRule, error)
-	UpdateState(ctx context.Context, stageID, state string) error
-	DeleteByStageID(ctx context.Context, stageID string) error
-}
-
 // TimeRange represents a time window for querying utilization history.
 type TimeRange struct {
 	StartTime int64

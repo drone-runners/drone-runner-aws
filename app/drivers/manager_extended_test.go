@@ -275,14 +275,6 @@ func (m *flexibleMockDriver) GetFullyQualifiedImage(ctx context.Context, config 
 	return "", nil
 }
 
-func (m *flexibleMockDriver) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []string) ([]string, error) {
-	return nil, nil
-}
-
-func (m *flexibleMockDriver) CleanupEgressPolicy(_ context.Context, _ []string, _ string) error {
-	return nil
-}
-
 // Test Manager creation and basic methods
 
 func TestNewManager(t *testing.T) {

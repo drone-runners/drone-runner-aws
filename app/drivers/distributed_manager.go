@@ -825,9 +825,6 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 					for _, pool := range d.poolMap {
 						d.startInstancePurger(ctx, pool, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, &queryParams)
 					}
-
-					// Purge stale firewall rules after instance cleanup
-					d.PurgeOrphanedFirewallRules(ctx, maxAgeBusy)
 				}
 			}()
 		}

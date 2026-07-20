@@ -86,9 +86,6 @@ type InstanceLifecycle interface {
 
 	// InstanceLogs returns logs for an instance.
 	InstanceLogs(ctx context.Context, poolName, instanceID string) (string, error)
-
-	// ApplyEgressPolicy creates cloud-level egress firewall rules for the instance.
-	ApplyEgressPolicy(ctx context.Context, instance *types.Instance, resolvedIPs []string) ([]string, error)
 }
 
 // HealthChecker provides health check operations.

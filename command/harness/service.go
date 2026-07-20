@@ -27,7 +27,6 @@ type VMService struct {
 	poolManager              drivers.IManager
 	stageOwnerStore          store.StageOwnerStore
 	capacityReservationStore store.CapacityReservationStore
-	firewallStore            store.FirewallStore
 	metrics                  *metric.Metrics
 
 	// Configuration
@@ -37,7 +36,6 @@ type VMService struct {
 	enableMock       bool
 	mockTimeoutSecs  int
 	fallbackPoolIDs  []string
-	egressDefaultIPs []string
 	egressProxy      config.EgressProxy
 }
 
@@ -46,7 +44,6 @@ type VMServiceConfig struct {
 	PoolManager              drivers.IManager
 	StageOwnerStore          store.StageOwnerStore
 	CapacityReservationStore store.CapacityReservationStore
-	FirewallStore            store.FirewallStore
 	Metrics                  *metric.Metrics
 	GlobalVolumes            []string
 	PoolMapByAccount         map[string]map[string]string
@@ -54,7 +51,6 @@ type VMServiceConfig struct {
 	EnableMock               bool
 	MockTimeoutSecs          int
 	FallbackPoolIDs          []string
-	EgressDefaultIPs         []string
 	EgressProxy              config.EgressProxy
 }
 
@@ -64,7 +60,6 @@ func NewVMService(cfg *VMServiceConfig) *VMService {
 		poolManager:              cfg.PoolManager,
 		stageOwnerStore:          cfg.StageOwnerStore,
 		capacityReservationStore: cfg.CapacityReservationStore,
-		firewallStore:            cfg.FirewallStore,
 		metrics:                  cfg.Metrics,
 		globalVolumes:            cfg.GlobalVolumes,
 		poolMapByAccount:         cfg.PoolMapByAccount,
@@ -72,7 +67,6 @@ func NewVMService(cfg *VMServiceConfig) *VMService {
 		enableMock:               cfg.EnableMock,
 		mockTimeoutSecs:          cfg.MockTimeoutSecs,
 		fallbackPoolIDs:          cfg.FallbackPoolIDs,
-		egressDefaultIPs:         cfg.EgressDefaultIPs,
 		egressProxy:              cfg.EgressProxy,
 	}
 }
@@ -83,7 +77,6 @@ func NewVMServiceFromRunner(r *Runner) *VMService {
 		poolManager:              r.PoolManager,
 		stageOwnerStore:          r.StageOwnerStore,
 		capacityReservationStore: r.CapacityReservationStore,
-		firewallStore:            r.FirewallStore,
 		metrics:                  r.Metrics,
 
 		globalVolumes:    r.Config.Runner.Volumes,
@@ -92,7 +85,6 @@ func NewVMServiceFromRunner(r *Runner) *VMService {
 		enableMock:       r.Config.LiteEngine.EnableMock,
 		mockTimeoutSecs:  r.Config.LiteEngine.MockStepTimeoutSecs,
 		fallbackPoolIDs:  r.Config.Settings.FallbackPoolIDs,
-		egressDefaultIPs: r.Config.Egress.DefaultIPs,
 		egressProxy:      r.Config.Egress.Proxy,
 	}
 }
@@ -119,8 +111,6 @@ func (s *VMService) Setup(ctx context.Context, req *SetupVMRequest) (*SetupVMRes
 		s.poolManager,
 		s.metrics,
 		s.fallbackPoolIDs,
-		s.egressDefaultIPs,
-		s.firewallStore,
 	)
 }
 
