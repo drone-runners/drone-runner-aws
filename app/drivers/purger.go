@@ -134,9 +134,6 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 						logger.FromContext(ctx).WithError(err).
 							Errorln("purger: Failed to purge stale instances")
 					}
-
-					// Purge stale firewall rules after instance cleanup
-					m.PurgeOrphanedFirewallRules(ctx, maxAgeBusy)
 				}
 			}()
 		}

@@ -45,7 +45,6 @@ type Runner struct {
 	// Stores
 	StageOwnerStore          store.StageOwnerStore
 	CapacityReservationStore store.CapacityReservationStore
-	FirewallStore            store.FirewallStore
 
 	// Pool config loaded during setup
 	PoolConfig *config.PoolFile
@@ -178,7 +177,6 @@ func (r *Runner) setupDistributedPools() error {
 	r.PoolManager = result.PoolManager
 	r.StageOwnerStore = result.StageOwnerStore
 	r.CapacityReservationStore = result.CapacityReservationStore
-	r.FirewallStore = result.FirewallStore
 	r.Scheduler = result.Scheduler
 	r.PoolConfig = result.PoolConfig
 

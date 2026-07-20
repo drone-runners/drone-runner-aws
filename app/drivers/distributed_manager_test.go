@@ -70,14 +70,6 @@ func (m *mockDriver) CanHibernate() bool {
 	return false
 }
 
-func (m *mockDriver) ApplyEgressPolicy(_ context.Context, _ *types.Instance, _ []string) ([]string, error) {
-	return nil, nil
-}
-
-func (m *mockDriver) CleanupEgressPolicy(_ context.Context, _ []string, _ string) error {
-	return nil
-}
-
 func TestFilterVariant(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	log.Logger.SetLevel(logrus.FatalLevel) // Suppress logs during tests
@@ -479,12 +471,6 @@ func (g *googleMockDriver) SetTags(context.Context, *types.Instance, map[string]
 	return nil
 }
 func (g *googleMockDriver) SetLabels(context.Context, *types.Instance, map[string]string) error {
-	return nil
-}
-func (g *googleMockDriver) ApplyEgressPolicy(context.Context, *types.Instance, []string) ([]string, error) {
-	return nil, nil
-}
-func (g *googleMockDriver) CleanupEgressPolicy(context.Context, []string, string) error {
 	return nil
 }
 func (g *googleMockDriver) RootDir() string    { return "/tmp" }
