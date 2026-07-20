@@ -1,0 +1,113 @@
+store/database/migrate/postgres/0027_add_tenant_id_to_utilization_history.up.sql
+  human 1-6
+store/database/migrate/postgres/0028_update_table_instances_tenant_id.up.sql
+  human 1
+store/database/migrate/sqlite/0018_update_table_instances_tenant_id.up.sql
+  human 1
+store/database/migrate/postgres/0026_add_tenant_id_to_utilization_history.up.sql
+  human 1-6
+store/database/migrate/sqlite/0017_update_table_instances_tenant_id.up.sql
+  human 1
+store/database/migrate/postgres/0027_update_table_instances_tenant_id.up.sql
+  human 1
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 6,
+          "added_lines": 6,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-6",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0027_add_tenant_id_to_utilization_history.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0028_update_table_instances_tenant_id.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/sqlite/0018_update_table_instances_tenant_id.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 6,
+          "hash": "human",
+          "lines": "1-6",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0026_add_tenant_id_to_utilization_history.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/sqlite/0017_update_table_instances_tenant_id.up.sql"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "1",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "store/database/migrate/postgres/0027_update_table_instances_tenant_id.up.sql"
+    }
+  ],
+  "base_commit_sha": "18ba7478699cf6698f00fed4acad785bcee6707b",
+  "branch": "CI-22905",
+  "commit_sha": "13ce47737aa99098322adfa4f58377e777177ffa",
+  "commit_time": "2026-07-20T15:48:24+05:30",
+  "commit_type": "direct_commit",
+  "harness_aidlc_version": "1.4.25",
+  "prompts": {
+    "human": {
+      "accepted_lines": 8,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 8,
+      "total_deletions": 8
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
