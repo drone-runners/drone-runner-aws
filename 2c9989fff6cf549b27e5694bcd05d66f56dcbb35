@@ -1,0 +1,122 @@
+app/poolfile/config.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 84-90,154-160,421-427,436,443
+  human 84,148,409-411,420-456,463
+command/harness/capacity.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 266-269
+  human 266-269
+app/drivers/google/driver.go
+  58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb 152-153
+  human 150-157,160
+app/drivers/google/network_test.go
+  human 7-8,31-47
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 23,
+          "added_lines": 23,
+          "deleted_lines": 44,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "84-90,154-160,421-427,436,443",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 43,
+          "hash": "human",
+          "lines": "84,148,409-411,420-456,463",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/poolfile/config.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 7,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "266-269",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 4,
+          "hash": "human",
+          "lines": "266-269",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "command/harness/capacity.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 5,
+          "hash": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+          "lines": "152-153",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 9,
+          "hash": "human",
+          "lines": "150-157,160",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/driver.go"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 19,
+          "hash": "human",
+          "lines": "7-8,31-47",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "app/drivers/google/network_test.go"
+    }
+  ],
+  "base_commit_sha": "e54c6daa975e5ab2286fa342c7af94af4b2732d0",
+  "branch": "CI-22905",
+  "commit_sha": "2c9989fff6cf549b27e5694bcd05d66f56dcbb35",
+  "commit_time": "2026-07-21T12:01:39+05:30",
+  "commit_type": "direct_commit",
+  "harness_aidlc_version": "1.4.25",
+  "prompts": {
+    "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb": {
+      "accepted_lines": 29,
+      "agent_id": {
+        "id": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+        "model": "grok-4.5",
+        "tool": "cursor"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 29,
+      "total_deletions": 56
+    },
+    "human": {
+      "accepted_lines": 0,
+      "agent_id": null,
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 0,
+      "total_deletions": 75
+    }
+  },
+  "repo": "https://github.com/drone-runners/drone-runner-aws",
+  "schema_version": "authorship/3.0.0"
+}
