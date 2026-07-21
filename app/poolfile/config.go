@@ -82,11 +82,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 			pool := mapPool(&instance, runnerName)
 			if len(instance.Tenants) > 0 {
 				if err := applyTenants(&pool, &instance, func(spec interface{}) (drivers.Driver, error) {
-					a, ok := spec.(*config.Amazon)
+					amazonSpec, ok := spec.(*config.Amazon)
 					if !ok {
 						return nil, fmt.Errorf("invalid amazon spec")
 					}
-					return buildAmazonDriver(a, &instance, &passwords)
+					return buildAmazonDriver(amazonSpec, &instance, &passwords)
 				}); err != nil {
 					return nil, err
 				}
