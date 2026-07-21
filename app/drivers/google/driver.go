@@ -34,13 +34,16 @@ import (
 var _ drivers.Driver = (*config)(nil)
 
 const (
-	maxInstanceNameLen  = 63
-	randStrLen          = 5
-	tagRetries          = 3
-	getRetries          = 3
-	insertRetries       = 3
-	deleteRetries       = 3
-	secSleep            = 1
+	maxInstanceNameLen = 63
+	randStrLen         = 5
+	tagRetries         = 3
+	getRetries         = 5
+	insertRetries      = 3
+	deleteRetries      = 5
+	secSleep           = 1
+	// maxRetrySleep caps the exponential backoff used by retry() so a run of
+	// retryable failures (e.g. quota exhaustion) cannot block a call unbounded.
+	maxRetrySleep       = 16 * time.Second
 	tagRetrySleepMs     = 1000
 	operationGetTimeout = 30
 	maxStockoutAttempts = 3
@@ -1610,23 +1613,49 @@ func (p *config) deprioritizeStockoutZones(candidates []createCandidate, machine
 }
 
 func shouldRetry(err error) bool {
-	switch e := err.(type) {
-	case *googleapi.Error:
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) {
 		// Retry on 429 and 5xx, according to
 		// https://cloud.google.com/storage/docs/exponential-backoff.
-		return e.Code == 429 || (e.Code >= 500 && e.Code < 600)
-	case interface{ Temporary() bool }:
-		return e.Temporary()
-	default:
+		if gerr.Code == 429 || (gerr.Code >= 500 && gerr.Code < 600) {
+			return true
+		}
+		// GCE surfaces quota/rate-limit exhaustion as HTTP 403 with a
+		// rateLimitExceeded/quotaExceeded reason (NOT 429). These are transient
+		// and must be retried with backoff; otherwise create/delete calls fail
+		// immediately under load and leak VMs.
+		if gerr.Code == http.StatusForbidden {
+			for i := range gerr.Errors {
+				switch gerr.Errors[i].Reason {
+				case "rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded":
+					return true
+				}
+			}
+		}
 		return false
 	}
+	var tmp interface{ Temporary() bool }
+	if errors.As(err, &tmp) {
+		return tmp.Temporary()
+	}
+	return false
 }
 
-func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, error)) (result T, err error) {
+// retry invokes f up to attempts times, sleeping between retryable failures
+// with exponential backoff (base baseSleepSecs, doubling each attempt, capped
+// at maxRetrySleep) plus random jitter. Jitter is important under quota
+// pressure: a fixed sleep synchronizes every runner's retries into the same
+// per-minute window and keeps the rate limit saturated.
+func retry[T any](ctx context.Context, attempts, baseSleepSecs int, f func() (T, error)) (result T, err error) {
 	for i := 0; i < attempts; i++ {
 		if i > 0 {
-			logger.FromContext(ctx).Warnf("retrying after error: %s\n", err)
-			time.Sleep(time.Duration(sleepSecs) * time.Second)
+			backoff := backoffDuration(baseSleepSecs, i)
+			logger.FromContext(ctx).Warnf("retrying after error (attempt %d/%d, sleeping %s): %s\n", i+1, attempts, backoff, err)
+			select {
+			case <-ctx.Done():
+				return result, ctx.Err()
+			case <-time.After(backoff):
+			}
 		}
 		result, err = f()
 		if err == nil {
@@ -1638,6 +1667,22 @@ func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, err
 		}
 	}
 	return result, err
+}
+
+// backoffDuration returns the sleep for retry attempt n (n >= 1): an
+// exponential base*2^(n-1) capped at maxRetrySleep, with up to 25% random
+// jitter added to desynchronize concurrent callers.
+func backoffDuration(baseSleepSecs, n int) time.Duration {
+	base := time.Duration(baseSleepSecs) * time.Second
+	if base <= 0 {
+		base = time.Second
+	}
+	backoff := base << (n - 1)
+	if backoff <= 0 || backoff > maxRetrySleep {
+		backoff = maxRetrySleep
+	}
+	jitter := time.Duration(rand.Int63n(int64(backoff)/4 + 1)) //nolint:gosec // jitter, not security-sensitive
+	return backoff + jitter
 }
 
 // buildLabelsWithGitspace creates a copy of the instance labels and adds

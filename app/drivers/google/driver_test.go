@@ -757,3 +757,75 @@ func TestPoolYAMLTopologies_Deprioritization(t *testing.T) {
 		}
 	}
 }
+
+// --- shouldRetry ---
+
+func TestShouldRetry(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"429 rate limited", &googleapi.Error{Code: http.StatusTooManyRequests}, true},
+		{"500 server error", &googleapi.Error{Code: http.StatusInternalServerError}, true},
+		{"503 unavailable", &googleapi.Error{Code: http.StatusServiceUnavailable}, true},
+		{"404 not found", &googleapi.Error{Code: http.StatusNotFound}, false},
+		{"400 bad request", &googleapi.Error{Code: http.StatusBadRequest}, false},
+		{"403 plain forbidden (no rate-limit reason)", &googleapi.Error{Code: http.StatusForbidden}, false},
+		{
+			"403 rateLimitExceeded",
+			&googleapi.Error{Code: http.StatusForbidden, Errors: []googleapi.ErrorItem{{Reason: "rateLimitExceeded"}}},
+			true,
+		},
+		{
+			"403 quotaExceeded",
+			&googleapi.Error{Code: http.StatusForbidden, Errors: []googleapi.ErrorItem{{Reason: "quotaExceeded"}}},
+			true,
+		},
+		{
+			"403 userRateLimitExceeded",
+			&googleapi.Error{Code: http.StatusForbidden, Errors: []googleapi.ErrorItem{{Reason: "userRateLimitExceeded"}}},
+			true,
+		},
+		{
+			"403 wrapped rateLimitExceeded",
+			fmt.Errorf("google: failed to delete the VM: %w", &googleapi.Error{Code: http.StatusForbidden, Errors: []googleapi.ErrorItem{{Reason: "rateLimitExceeded"}}}),
+			true,
+		},
+		{"non-google error", errors.New("boom"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldRetry(tt.err); got != tt.want {
+				t.Fatalf("shouldRetry(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- backoffDuration ---
+
+func TestBackoffDuration(t *testing.T) {
+	base := 1 // second
+	// Attempt n should be within [base*2^(n-1), base*2^(n-1)*1.25], capped at maxRetrySleep*1.25.
+	for n := 1; n <= 8; n++ {
+		got := backoffDuration(base, n)
+		expLower := (time.Duration(base) * time.Second) << (n - 1)
+		if expLower > maxRetrySleep {
+			expLower = maxRetrySleep
+		}
+		upper := expLower + expLower/4
+		if got < expLower || got > upper {
+			t.Fatalf("backoffDuration(%d, %d) = %s, want within [%s, %s]", base, n, got, expLower, upper)
+		}
+	}
+}
+
+func TestBackoffDurationCapped(t *testing.T) {
+	// A large attempt count must not overflow or exceed the cap (+ jitter).
+	got := backoffDuration(1, 40)
+	if got > maxRetrySleep+maxRetrySleep/4 {
+		t.Fatalf("backoffDuration cap exceeded: got %s, cap %s", got, maxRetrySleep)
+	}
+}
