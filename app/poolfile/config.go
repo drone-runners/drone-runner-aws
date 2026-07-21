@@ -81,7 +81,13 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 			instance.Platform = *platform
 			pool := mapPool(&instance, runnerName)
 			if len(instance.Tenants) > 0 {
-				if err := applyAmazonTenants(&pool, &instance, &passwords); err != nil {
+				if err := applyTenants(&pool, &instance, func(spec interface{}) (drivers.Driver, error) {
+					a, ok := spec.(*config.Amazon)
+					if !ok {
+						return nil, fmt.Errorf("invalid amazon spec")
+					}
+					return buildAmazonDriver(a, &instance, &passwords)
+				}); err != nil {
 					return nil, err
 				}
 			} else {
@@ -145,7 +151,13 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 			instance.Platform = *platform
 			pool := mapPool(&instance, runnerName)
 			if len(instance.Tenants) > 0 {
-				if err := applyGoogleTenants(&pool, &instance); err != nil {
+				if err := applyTenants(&pool, &instance, func(spec interface{}) (drivers.Driver, error) {
+					gSpec, ok := spec.(*config.Google)
+					if !ok {
+						return nil, fmt.Errorf("invalid google spec")
+					}
+					return buildGoogleDriver(gSpec, &instance)
+				}); err != nil {
 					return nil, err
 				}
 			} else {
@@ -406,9 +418,13 @@ func buildGoogleDriver(g *config.Google, instance *config.Instance) (drivers.Dri
 	return google.New(googleOpts...)
 }
 
-// applyAmazonTenants resolves the instance's tenants and populates the pool with one Amazon
-// driver per tenant.
-func applyAmazonTenants(pool *drivers.Pool, instance *config.Instance, passwords *types.Passwords) error {
+// applyTenants resolves the instance's tenants and populates the pool with one driver per
+// tenant. buildDriver constructs the provider driver from each tenant's fully-merged spec.
+func applyTenants(
+	pool *drivers.Pool,
+	instance *config.Instance,
+	buildDriver func(spec interface{}) (drivers.Driver, error),
+) error {
 	resolved, accountMap, err := config.ResolveTenants(instance)
 	if err != nil {
 		return err
@@ -417,50 +433,14 @@ func applyAmazonTenants(pool *drivers.Pool, instance *config.Instance, passwords
 	pool.TenantDrivers = make(map[string]drivers.Driver, len(resolved))
 	for i := range resolved {
 		rt := &resolved[i]
-		spec, ok := rt.Spec.(*config.Amazon)
-		if !ok {
-			return fmt.Errorf("tenant %q of pool %q has invalid amazon spec", rt.ID, instance.Name)
-		}
-		driver, derr := buildAmazonDriver(spec, instance, passwords)
+		driver, derr := buildDriver(rt.Spec)
 		if derr != nil {
 			return fmt.Errorf("unable to create tenant %q of pool %q: %v", rt.ID, instance.Name, derr)
 		}
 		pool.TenantDrivers[rt.ID] = driver
 		pool.Tenants = append(pool.Tenants, drivers.TenantPool{
 			ID:           rt.ID,
-			Spec:         spec,
-			MinSize:      rt.Pool,
-			MaxSize:      rt.Limit,
-			PoolVariants: rt.Variants,
-		})
-	}
-	setDefaultTenantDriver(pool)
-	return nil
-}
-
-// applyGoogleTenants resolves the instance's tenants and populates the pool with one Google
-// driver per tenant.
-func applyGoogleTenants(pool *drivers.Pool, instance *config.Instance) error {
-	resolved, accountMap, err := config.ResolveTenants(instance)
-	if err != nil {
-		return err
-	}
-	pool.AccountToTenant = accountMap
-	pool.TenantDrivers = make(map[string]drivers.Driver, len(resolved))
-	for i := range resolved {
-		rt := &resolved[i]
-		spec, ok := rt.Spec.(*config.Google)
-		if !ok {
-			return fmt.Errorf("tenant %q of pool %q has invalid google spec", rt.ID, instance.Name)
-		}
-		driver, derr := buildGoogleDriver(spec, instance)
-		if derr != nil {
-			return fmt.Errorf("unable to create tenant %q of pool %q: %v", rt.ID, instance.Name, derr)
-		}
-		pool.TenantDrivers[rt.ID] = driver
-		pool.Tenants = append(pool.Tenants, drivers.TenantPool{
-			ID:           rt.ID,
-			Spec:         spec,
+			Spec:         rt.Spec,
 			MinSize:      rt.Pool,
 			MaxSize:      rt.Limit,
 			PoolVariants: rt.Variants,

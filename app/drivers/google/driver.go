@@ -147,17 +147,10 @@ func (p *config) resolveNetworkAndZoneWithProxy(reservationZone string, requestZ
 	return zone, network, subnetwork, tags, selected.proxyURL
 }
 
-// applyNetworkProxyURL overrides opts.EgressProxyURL when the selected network
-// provides a non-empty proxy_url. Empty keeps the provisioner-stamped env fallback.
-func applyNetworkProxyURL(opts *types.InstanceCreateOpts, networkProxyURL string) {
-	if networkProxyURL != "" {
-		opts.EgressProxyURL = networkProxyURL
-	}
-}
-
 // resolveEgressProxyURL returns the proxy URL to bake into userdata and persist on
 // the instance. When egress_control is false the result is always empty so non-egress
-// pools never store a proxy_url (even if networks[] or env define one).
+// pools never store a proxy_url (even if networks[] or env define one). When egress is
+// on, a non-empty network proxy_url wins over the provisioner-stamped env fallback.
 func resolveEgressProxyURL(egressControl bool, envFallback, networkProxyURL string) string {
 	if !egressControl {
 		return ""

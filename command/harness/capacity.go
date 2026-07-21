@@ -263,10 +263,10 @@ func handleCapacityReservation(
 	timeoutSeconds := int64(timeout / time.Second)
 
 	provisionParams := &types.ProvisionParams{
-		VMImageConfig:        &r.RequestedVMImageConfig,
-		NestedVirtualization: r.NestedVirtualization,
-		ResourceClass:        r.ResourceClass,
-		AccountID:            GetAccountID(&r.Context, r.Tags),
+		VMImageConfig:             &r.RequestedVMImageConfig,
+		NestedVirtualization:      r.NestedVirtualization,
+		ResourceClass:             r.ResourceClass,
+		AccountID:                 GetAccountID(&r.Context, r.Tags),
 		ReservationPerPoolTimeout: r.ReservationPerPoolTimeout,
 	}
 	if r.Zone != "" {

@@ -4,8 +4,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 const (
@@ -27,23 +25,6 @@ const (
 
 	tagTag1 = "tag-1"
 )
-
-func TestApplyNetworkProxyURL(t *testing.T) {
-	t.Run("non-empty network proxy overrides opts", func(t *testing.T) {
-		opts := &types.InstanceCreateOpts{EgressProxyURL: "http://fallback:3128"}
-		applyNetworkProxyURL(opts, "http://west-proxy:3128")
-		if opts.EgressProxyURL != "http://west-proxy:3128" {
-			t.Errorf("got %q, want west proxy", opts.EgressProxyURL)
-		}
-	})
-	t.Run("empty network proxy keeps env fallback", func(t *testing.T) {
-		opts := &types.InstanceCreateOpts{EgressProxyURL: "http://fallback:3128"}
-		applyNetworkProxyURL(opts, "")
-		if opts.EgressProxyURL != "http://fallback:3128" {
-			t.Errorf("got %q, want fallback", opts.EgressProxyURL)
-		}
-	})
-}
 
 func TestResolveEgressProxyURL(t *testing.T) {
 	t.Run("egress off clears proxy even when network and env are set", func(t *testing.T) {
