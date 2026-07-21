@@ -125,16 +125,43 @@ func (m *Manager) GetPoolSpec(poolName string) (interface{}, error) {
 	return entry.Spec, nil
 }
 
-// IsEgressPool reports whether the named pool has egress_control enabled.
-func (m *Manager) IsEgressPool(poolName string) bool {
+// IsEgressPool reports whether egress_control is enabled for the given pool tenant.
+// Merge happens at pool load: this reads the already-merged tenant Spec. Empty tenantID
+// and unknown tenants fall back to the default tenant / pool Spec.
+func (m *Manager) IsEgressPool(poolName, tenantID string) bool {
 	entry := m.poolMap[poolName]
-	if entry == nil || entry.Spec == nil {
+	if entry == nil {
 		return false
 	}
-	if g, ok := entry.Spec.(*config.Google); ok {
+	spec := egressSpecForTenant(&entry.Pool, tenantID)
+	if g, ok := spec.(*config.Google); ok {
 		return g.EgressControl
 	}
 	return false
+}
+
+// egressSpecForTenant returns the provider Spec used for egress checks after tenant merge.
+func egressSpecForTenant(pool *Pool, tenantID string) interface{} {
+	if pool == nil {
+		return nil
+	}
+	if !pool.IsMultiTenant() {
+		return pool.Spec
+	}
+	if tenantID == "" {
+		tenantID = types.DefaultTenantID
+	}
+	for i := range pool.Tenants {
+		if pool.Tenants[i].ID == tenantID {
+			return pool.Tenants[i].Spec
+		}
+	}
+	for i := range pool.Tenants {
+		if pool.Tenants[i].ID == types.DefaultTenantID {
+			return pool.Tenants[i].Spec
+		}
+	}
+	return pool.Spec
 }
 
 // Inspect returns platform, root directory, and driver name for a pool.

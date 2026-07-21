@@ -31,6 +31,30 @@ type (
 		Spec      interface{}         `json:"spec,omitempty"`
 		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
 		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
+		// Tenants enables multi-tenant configuration for a single pool. Each entry is a
+		// per-account override that is deep-merged over the pool's top-level Spec (which acts
+		// as the default tenant). When empty, the pool is single-tenant and the flat Spec above
+		// is used unchanged (backward compatible).
+		Tenants []Tenant `json:"tenants,omitempty" yaml:"tenants,omitempty"`
+	}
+
+	// Tenant represents a per-account override inside a multi-tenant pool. The pool's top-level
+	// Spec is the base (default) config; each Tenant's (partial) Spec is deep-merged over it and
+	// applied to the customer account IDs listed in IDs. There is no separate default tenant: the
+	// base pool spec is the default.
+	Tenant struct {
+		// IDs is the non-empty list of customer account IDs that resolve to this tenant. The
+		// first entry doubles as the tenant's stable id (stored on instances as tenant_id).
+		IDs []string `json:"ids,omitempty" yaml:"ids,omitempty"`
+		// Pool/Limit optionally override the instance-level warm-pool sizing for this tenant.
+		// They are pointers so that an explicit 0 (e.g. "no warm pool for this tenant") is
+		// distinguishable from an omitted value (which inherits the instance-level sizing).
+		Pool  *int `json:"pool,omitempty" yaml:"pool,omitempty"`
+		Limit *int `json:"limit,omitempty" yaml:"limit,omitempty"`
+		// Spec is the provider-specific override spec: a subset that is deep-merged over the base.
+		Spec interface{} `json:"spec,omitempty" yaml:"spec,omitempty"`
+		// Variants optionally override the instance-level variants for this tenant.
+		Variants []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
 	}
 
 	// Amazon specifies the configuration for an AWS instance.
@@ -643,39 +667,58 @@ func FromEnviron() (EnvConfig, error) {
 	return config, nil
 }
 
-// Populates the Spec field of the Instance struct based on the Type field.
-func (s *Instance) populateSpec() error {
+// newSpec returns a new, empty provider-specific spec pointer based on the instance Type.
+func (s *Instance) newSpec() (interface{}, error) {
 	switch s.Type {
 	case string(types.Amazon), "aws":
-		s.Spec = new(Amazon)
+		return new(Amazon), nil
 	case string(types.Anka):
-		s.Spec = new(Anka)
+		return new(Anka), nil
 	case string(types.AnkaBuild):
-		s.Spec = new(AnkaBuild)
+		return new(AnkaBuild), nil
 	case string(types.Azure):
-		s.Spec = new(Azure)
+		return new(Azure), nil
 	case string(types.DigitalOcean):
-		s.Spec = new(DigitalOcean)
+		return new(DigitalOcean), nil
 	case string(types.Google), "gcp":
-		s.Spec = new(Google)
+		return new(Google), nil
 	case string(types.VMFusion):
-		s.Spec = new(VMFusion)
+		return new(VMFusion), nil
 	case string(types.Noop):
-		s.Spec = new(Noop)
+		return new(Noop), nil
 	case string(types.Nomad):
-		s.Spec = new(Nomad)
+		return new(Nomad), nil
 	default:
-		return fmt.Errorf("unknown instance type %s", s.Type)
+		return nil, fmt.Errorf("unknown instance type %s", s.Type)
 	}
+}
+
+// Populates the Spec field of the Instance struct based on the Type field.
+func (s *Instance) populateSpec() error {
+	spec, err := s.newSpec()
+	if err != nil {
+		return err
+	}
+	s.Spec = spec
 	return nil
 }
 
 // UnmarshalJSON implement the json.Unmarshaler interface.
 func (s *Instance) UnmarshalJSON(data []byte) error {
 	type S Instance
+	// tenantRaw mirrors Tenant but keeps the spec as raw JSON so it can be unmarshalled into
+	// the typed provider spec after the instance Type is known.
+	type tenantRaw struct {
+		IDs      []string            `json:"ids,omitempty"`
+		Pool     *int                `json:"pool,omitempty"`
+		Limit    *int                `json:"limit,omitempty"`
+		Spec     json.RawMessage     `json:"spec,omitempty"`
+		Variants []types.PoolVariant `json:"variants,omitempty"`
+	}
 	type T struct {
 		*S
-		Spec json.RawMessage `json:"spec"`
+		Spec    json.RawMessage `json:"spec"`
+		Tenants []tenantRaw     `json:"tenants,omitempty"`
 	}
 	obj := &T{S: (*S)(s)}
 	if err := json.Unmarshal(data, obj); err != nil {
@@ -686,5 +729,38 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	return json.Unmarshal(obj.Spec, s.Spec)
+	// The top-level spec is the base (default tenant). It is required whenever tenants are
+	// defined, since each tenant is a partial override that is merged over it.
+	if len(obj.Tenants) > 0 && len(obj.Spec) == 0 {
+		return fmt.Errorf("pool %q: multi-tenant config requires a top-level spec (the default tenant)", s.Name)
+	}
+	if err := json.Unmarshal(obj.Spec, s.Spec); err != nil {
+		return err
+	}
+
+	if len(obj.Tenants) > 0 {
+		s.Tenants = make([]Tenant, 0, len(obj.Tenants))
+		for i := range obj.Tenants {
+			tr := &obj.Tenants[i]
+			t := Tenant{
+				IDs:      tr.IDs,
+				Pool:     tr.Pool,
+				Limit:    tr.Limit,
+				Variants: tr.Variants,
+			}
+			if len(tr.Spec) > 0 {
+				spec, err := s.newSpec()
+				if err != nil {
+					return err
+				}
+				if err := json.Unmarshal(tr.Spec, spec); err != nil {
+					return err
+				}
+				t.Spec = spec
+			}
+			s.Tenants = append(s.Tenants, t)
+		}
+	}
+
+	return nil
 }

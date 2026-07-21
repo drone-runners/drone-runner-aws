@@ -160,7 +160,7 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 	pool.Unlock()
 
 	logrus.WithField("instanceID", instanceID).Infoln("Hibernating vm")
-	if err = pool.Driver.Hibernate(ctx, instanceID, poolName, inst.Zone); err != nil {
+	if err = pool.DriverForTenant(inst.TenantID).Hibernate(ctx, instanceID, poolName, inst.Zone); err != nil {
 		if uerr := m.updateInstState(ctx, pool, instanceID, types.StateCreated); uerr != nil {
 			logrus.WithError(err).WithField("instanceID", instanceID).Errorln("failed to update state for failed hibernation")
 		}

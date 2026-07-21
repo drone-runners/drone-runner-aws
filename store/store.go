@@ -62,10 +62,10 @@ type UtilizationHistoryStore interface {
 	Create(ctx context.Context, record *types.UtilizationRecord) error
 	// GetUtilizationHistoryBatch fetches records for multiple time ranges in a single query.
 	// Returns a slice of record slices, where each inner slice corresponds to the time range at the same index.
-	GetUtilizationHistoryBatch(ctx context.Context, pool, variantID, imageName string, ranges []TimeRange) ([][]types.UtilizationRecord, error)
+	GetUtilizationHistoryBatch(ctx context.Context, pool, tenantID, variantID, imageName string, ranges []TimeRange) ([][]types.UtilizationRecord, error)
 	// GetActiveImages returns distinct image names that had non-zero utilization since the given timestamp.
-	GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error)
-	// HasRecentUsage returns true if there is any non-zero utilization for the given pool/variant/image since the given timestamp.
-	HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error)
+	GetActiveImages(ctx context.Context, pool, tenantID, variantID string, since int64) ([]string, error)
+	// HasRecentUsage returns true if there is any non-zero utilization for the given pool/tenant/variant/image since the given timestamp.
+	HasRecentUsage(ctx context.Context, pool, tenantID, variantID, imageName string, since int64) (bool, error)
 	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 }

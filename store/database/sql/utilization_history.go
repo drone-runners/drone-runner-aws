@@ -14,6 +14,11 @@ import (
 
 var _ store.UtilizationHistoryStore = (*UtilizationHistoryStore)(nil)
 
+const (
+	colPoolName  = "pool_name"
+	colImageName = "image_name"
+)
+
 type UtilizationHistoryStore struct {
 	db *sqlx.DB
 }
@@ -23,9 +28,14 @@ func NewUtilizationHistoryStore(db *sqlx.DB) *UtilizationHistoryStore {
 }
 
 func (s *UtilizationHistoryStore) Create(ctx context.Context, record *types.UtilizationRecord) error {
+	tenantID := record.TenantID
+	if tenantID == "" {
+		tenantID = types.DefaultTenantID
+	}
 	query := squirrel.Insert("instance_utilization_history").
 		Columns(
 			"pool_name",
+			"tenant_id",
 			"variant_id",
 			"image_name",
 			"in_use_instances",
@@ -33,6 +43,7 @@ func (s *UtilizationHistoryStore) Create(ctx context.Context, record *types.Util
 		).
 		Values(
 			record.Pool,
+			tenantID,
 			record.VariantID,
 			record.ImageName,
 			record.InUseInstances,
@@ -70,11 +81,14 @@ type utilizationRecordWithRangeIdx struct {
 
 func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	ctx context.Context,
-	pool, variantID, imageName string,
+	pool, tenantID, variantID, imageName string,
 	ranges []store.TimeRange,
 ) ([][]types.UtilizationRecord, error) {
 	if len(ranges) == 0 {
 		return nil, nil
+	}
+	if tenantID == "" {
+		tenantID = types.DefaultTenantID
 	}
 
 	// Build UNION ALL query to fetch all ranges in one round trip
@@ -86,13 +100,13 @@ func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	for i, r := range ranges {
 		//nolint:mnd
 		subQuery := fmt.Sprintf(
-			"SELECT id, pool_name, variant_id, image_name, in_use_instances, recorded_at, %d as range_idx "+
+			"SELECT id, pool_name, tenant_id, variant_id, image_name, in_use_instances, recorded_at, %d as range_idx "+
 				"FROM instance_utilization_history "+
-				"WHERE pool_name = $%d AND variant_id = $%d AND image_name = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
-			i, argIdx, argIdx+1, argIdx+2, argIdx+3, argIdx+4,
+				"WHERE pool_name = $%d AND tenant_id = $%d AND variant_id = $%d AND image_name = $%d AND recorded_at >= $%d AND recorded_at <= $%d",
+			i, argIdx, argIdx+1, argIdx+2, argIdx+3, argIdx+4, argIdx+5,
 		)
-		allArgs = append(allArgs, pool, variantID, imageName, r.StartTime, r.EndTime)
-		argIdx += 5 //nolint:mnd
+		allArgs = append(allArgs, pool, tenantID, variantID, imageName, r.StartTime, r.EndTime)
+		argIdx += 6 //nolint:mnd
 		unionParts = append(unionParts, "("+subQuery+")")
 	}
 
@@ -118,11 +132,15 @@ func (s *UtilizationHistoryStore) GetUtilizationHistoryBatch(
 	return result, nil
 }
 
-func (s *UtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, variantID string, since int64) ([]string, error) {
+func (s *UtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, tenantID, variantID string, since int64) ([]string, error) {
+	if tenantID == "" {
+		tenantID = types.DefaultTenantID
+	}
 	query := squirrel.Select("DISTINCT image_name").
 		From("instance_utilization_history").
-		Where(squirrel.Eq{"pool_name": pool}).
-		Where(squirrel.Eq{"variant_id": variantID}).
+		Where(squirrel.Eq{colPoolName: pool}).
+		Where(squirrel.Eq{colTenantID: tenantID}).
+		Where(squirrel.Eq{colVariantID: variantID}).
 		Where(squirrel.GtOrEq{"recorded_at": since}).
 		Where(squirrel.Gt{"in_use_instances": 0}).
 		RunWith(s.db).
@@ -146,12 +164,16 @@ func (s *UtilizationHistoryStore) GetActiveImages(ctx context.Context, pool, var
 	return images, rows.Err()
 }
 
-func (s *UtilizationHistoryStore) HasRecentUsage(ctx context.Context, pool, variantID, imageName string, since int64) (bool, error) {
+func (s *UtilizationHistoryStore) HasRecentUsage(ctx context.Context, pool, tenantID, variantID, imageName string, since int64) (bool, error) {
+	if tenantID == "" {
+		tenantID = types.DefaultTenantID
+	}
 	query := squirrel.Select("1").
 		From("instance_utilization_history").
-		Where(squirrel.Eq{"pool_name": pool}).
-		Where(squirrel.Eq{"variant_id": variantID}).
-		Where(squirrel.Eq{"image_name": imageName}).
+		Where(squirrel.Eq{colPoolName: pool}).
+		Where(squirrel.Eq{colTenantID: tenantID}).
+		Where(squirrel.Eq{colVariantID: variantID}).
+		Where(squirrel.Eq{colImageName: imageName}).
 		Where(squirrel.GtOrEq{"recorded_at": since}).
 		Where(squirrel.Gt{"in_use_instances": 0}).
 		Limit(1).

@@ -67,6 +67,7 @@ func (j *UtilizationTrackerJob) Execute(ctx context.Context) error {
 	for _, c := range counts {
 		record := &types.UtilizationRecord{
 			Pool:           c.Pool,
+			TenantID:       c.TenantID,
 			VariantID:      c.VariantID,
 			ImageName:      c.ImageName,
 			InUseInstances: c.Count,

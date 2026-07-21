@@ -147,12 +147,18 @@ func (p *config) resolveNetworkAndZoneWithProxy(reservationZone string, requestZ
 	return zone, network, subnetwork, tags, selected.proxyURL
 }
 
-// applyNetworkProxyURL overrides opts.EgressProxyURL when the selected network
-// provides a non-empty proxy_url. Empty keeps the provisioner-stamped env fallback.
-func applyNetworkProxyURL(opts *types.InstanceCreateOpts, networkProxyURL string) {
-	if networkProxyURL != "" {
-		opts.EgressProxyURL = networkProxyURL
+// resolveEgressProxyURL returns the proxy URL to bake into userdata and persist on
+// the instance. When egress_control is false the result is always empty so non-egress
+// pools never store a proxy_url (even if networks[] or env define one). When egress is
+// on, a non-empty network proxy_url wins over the provisioner-stamped env fallback.
+func resolveEgressProxyURL(egressControl bool, envFallback, networkProxyURL string) string {
+	if !egressControl {
+		return ""
 	}
+	if networkProxyURL != "" {
+		return networkProxyURL
+	}
+	return envFallback
 }
 
 // selectNetwork returns the network entry to use for an instance.
@@ -577,7 +583,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	gpu := opts.GPU
 	opts.EnableC4D = p.enableC4D
 	opts.EgressControl = p.egressControl
-	applyNetworkProxyURL(opts, networkProxyURL)
+	opts.EgressProxyURL = resolveEgressProxyURL(p.egressControl, opts.EgressProxyURL, networkProxyURL)
 
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {

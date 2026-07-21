@@ -254,41 +254,8 @@ func (m *Manager) setupInstance(
 	if createOptions.ReservationPerPoolTimeout <= 0 {
 		createOptions.ReservationPerPoolTimeout = defaultReservationPerPoolTimeoutMs
 	}
-	if vmImageConfig != nil && vmImageConfig.ImageName != "" {
-		createOptions.VMImageConfig = types.VMImageConfig{
-			ImageName:    vmImageConfig.ImageName,
-			Username:     vmImageConfig.Username,
-			Password:     vmImageConfig.Password,
-			ImageVersion: vmImageConfig.ImageVersion,
-		}
-
-		if vmImageConfig.Auth != nil {
-			createOptions.VMImageConfig.VMImageAuth = types.VMImageAuth{
-				Registry: vmImageConfig.Auth.Address,
-				Username: vmImageConfig.Auth.Username,
-				Password: vmImageConfig.Auth.Password,
-			}
-		}
-	}
-	if storageConfig != nil {
-		createOptions.StorageOpts = types.StorageOpts{
-			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
-			Identifier:         storageConfig.Identifier,
-			Size:               storageConfig.Size,
-			Type:               storageConfig.Type,
-			BootDiskSize:       storageConfig.BootDiskSize,
-			BootDiskType:       storageConfig.BootDiskType,
-		}
-	}
-	// Set boot disk settings from setupParams if provided and not already set
-	if setupParams != nil {
-		if setupParams.DiskSize != 0 && createOptions.StorageOpts.BootDiskSize == "" {
-			createOptions.StorageOpts.BootDiskSize = fmt.Sprintf("%d", setupParams.DiskSize)
-		}
-		if setupParams.DiskType != "" && createOptions.StorageOpts.BootDiskType == "" {
-			createOptions.StorageOpts.BootDiskType = setupParams.DiskType
-		}
-	}
+	applyVMImageConfig(createOptions, vmImageConfig)
+	applyStorageConfig(createOptions, storageConfig, setupParams)
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	createOptions.AnnotationsBinaryURI = m.annotationsBinaryURI
 	createOptions.AnnotationsBinaryFallbackURI = m.annotationsBinaryFallbackURI
@@ -298,7 +265,8 @@ func (m *Manager) setupInstance(
 	createOptions.TmateBinaryFallbackURI = m.tmateBinaryFallbackURI
 	// Under egress control, all binaries must be fetched from the single
 	// allow-listed Harness download origin through the forward proxy.
-	if m.IsEgressPool(pool.Name) {
+	tenantID := tenantIDForSetup(setupParams)
+	if m.IsEgressPool(pool.Name, tenantID) {
 		pinBinaryDownloadsToHarness(createOptions)
 	}
 	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
@@ -322,7 +290,9 @@ func (m *Manager) setupInstance(
 	if createOptions.IsHosted {
 		createOptions.VMLabels = buildIdentityVMLabels(setupParams, timeout, m.env, pool.Name, source)
 	}
-	createOptions.DriverName = pool.Driver.DriverName()
+	driver := pool.DriverForTenant(tenantID)
+	createOptions.DriverName = driver.DriverName()
+	createOptions.TenantID = tenantID
 	createOptions.Timeout = timeout
 	createOptions.CapacityReservation = reservedCapacity
 	createOptions.CapacityReservationTTL = m.capacityReservationTTL
@@ -341,7 +311,7 @@ func (m *Manager) setupInstance(
 	if isCapacityTask {
 		// create instance
 		var capacity *types.CapacityReservation
-		capacity, err = pool.Driver.ReserveCapacity(ctx, createOptions)
+		capacity, err = driver.ReserveCapacity(ctx, createOptions)
 		if err != nil {
 			logrus.WithError(err).
 				Errorln("manager: failed to reserve capacity")
@@ -351,7 +321,7 @@ func (m *Manager) setupInstance(
 	}
 
 	// create instance
-	inst, err = pool.Driver.Create(ctx, createOptions)
+	inst, err = driver.Create(ctx, createOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to create instance")
@@ -372,6 +342,9 @@ func (m *Manager) setupInstance(
 		inst.VariantID = defaultVariantID
 	}
 
+	// Set TenantID ("default" for single-tenant pools)
+	inst.TenantID = tenantID
+
 	inst.Source = source
 
 	if inst.Labels == nil {
@@ -391,10 +364,55 @@ func (m *Manager) setupInstance(
 			"pool":           pool.Name,
 			"destroy_caller": "setupInstance:store_create_failed",
 		}).Infoln("destroy: destroying instance after store create failure")
-		_, _ = pool.Driver.Destroy(ctx, []*types.Instance{inst})
+		_, _ = driver.Destroy(ctx, []*types.Instance{inst})
 		return nil, nil, err
 	}
 	return inst, nil, nil
+}
+
+// applyVMImageConfig copies the (optional) VM image configuration, including any registry auth,
+// onto the create options.
+func applyVMImageConfig(o *types.InstanceCreateOpts, vmImageConfig *spec.VMImageConfig) {
+	if vmImageConfig == nil || vmImageConfig.ImageName == "" {
+		return
+	}
+	o.VMImageConfig = types.VMImageConfig{
+		ImageName:    vmImageConfig.ImageName,
+		Username:     vmImageConfig.Username,
+		Password:     vmImageConfig.Password,
+		ImageVersion: vmImageConfig.ImageVersion,
+	}
+	if vmImageConfig.Auth != nil {
+		o.VMImageConfig.VMImageAuth = types.VMImageAuth{
+			Registry: vmImageConfig.Auth.Address,
+			Username: vmImageConfig.Auth.Username,
+			Password: vmImageConfig.Auth.Password,
+		}
+	}
+}
+
+// applyStorageConfig copies the (optional) storage configuration onto the create options and
+// backfills boot disk size/type from setupParams when they are not already set.
+func applyStorageConfig(o *types.InstanceCreateOpts, storageConfig *types.StorageConfig, setupParams *types.SetupInstanceParams) {
+	if storageConfig != nil {
+		o.StorageOpts = types.StorageOpts{
+			CephPoolIdentifier: storageConfig.CephPoolIdentifier,
+			Identifier:         storageConfig.Identifier,
+			Size:               storageConfig.Size,
+			Type:               storageConfig.Type,
+			BootDiskSize:       storageConfig.BootDiskSize,
+			BootDiskType:       storageConfig.BootDiskType,
+		}
+	}
+	// Set boot disk settings from setupParams if provided and not already set
+	if setupParams != nil {
+		if setupParams.DiskSize != 0 && o.StorageOpts.BootDiskSize == "" {
+			o.StorageOpts.BootDiskSize = fmt.Sprintf("%d", setupParams.DiskSize)
+		}
+		if setupParams.DiskType != "" && o.StorageOpts.BootDiskType == "" {
+			o.StorageOpts.BootDiskType = setupParams.DiskType
+		}
+	}
 }
 
 // isGitspaceRequest checks if the request is for a GitSpace configuration with ports.
@@ -440,7 +458,7 @@ func (m *Manager) processExistingInstance(
 					"destroy_caller": "processExistingInstance:infra_reset",
 				}).Infoln("destroy: destroying instance for infra reset")
 				storageCleanupType := storage.Detach
-				_, destroyInstanceErr := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
+				_, destroyInstanceErr := pool.DriverForTenant(inst.TenantID).DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
 				if destroyInstanceErr != nil {
 					logrus.Warnf(
 						"failed to destroy instance %s: %v",

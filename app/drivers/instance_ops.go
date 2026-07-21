@@ -131,7 +131,7 @@ func (m *Manager) Destroy(ctx context.Context, poolName, instanceID string, inst
 	}
 	logr.Infoln("destroy: calling driver DestroyInstanceAndStorage")
 
-	failedInstances, err := pool.Driver.DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
+	failedInstances, err := pool.DriverForTenant(instance.TenantID).DestroyInstanceAndStorage(ctx, []*types.Instance{instance}, storageCleanupType)
 	if err != nil {
 		logr.WithError(err).Errorln("destroy: driver DestroyInstanceAndStorage failed")
 		return fmt.Errorf("provision: failed to destroy an instance of %q pool: %w", poolName, err)
@@ -278,7 +278,7 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 	}
 
 	logrus.WithField("instanceID", instanceID).Infoln("Starting vm from hibernate state")
-	ipAddress, err := pool.Driver.Start(ctx, inst, poolName)
+	ipAddress, err := pool.DriverForTenant(inst.TenantID).Start(ctx, inst, poolName)
 	if err != nil {
 		return nil, fmt.Errorf("start_instance: failed to start the instance %s of %q pool: %w", instanceID, poolName, err)
 	}
@@ -330,7 +330,7 @@ func (m *Manager) SetInstanceTags(ctx context.Context, poolName string, instance
 		return nil
 	}
 
-	if err := pool.Driver.SetTags(ctx, instance, tags); err != nil {
+	if err := pool.DriverForTenant(instance.TenantID).SetTags(ctx, instance, tags); err != nil {
 		return fmt.Errorf("provision: failed to label an instance of %q pool: %w", poolName, err)
 	}
 	return nil

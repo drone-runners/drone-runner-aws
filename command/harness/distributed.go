@@ -211,27 +211,52 @@ func buildScalablePools(poolConfig *config.PoolFile) []jobs.ScalablePool {
 			Driver:  instance.Type,
 		}
 
-		// Add variants if any
-		for j := range instance.Variants {
-			variant := &instance.Variants[j]
-			pool.Variants = append(pool.Variants, jobs.ScalableVariant{
-				MinSize: variant.Pool, // Pool field represents min size for variant
-				Params: types.SetupInstanceParams{
-					VariantID:            variant.VariantID,
-					ImageName:            variant.ImageName,
-					MachineType:          variant.MachineType,
-					NestedVirtualization: variant.NestedVirtualization,
-					Hibernate:            variant.Hibernate,
-					Zones:                variant.Zones,
-					DiskSize:             variant.DiskSize,
-					DiskType:             variant.DiskType,
-					GPU:                  variant.GPU,
-				},
-			})
+		if len(instance.Tenants) > 0 {
+			resolved, _, err := config.ResolveTenants(instance)
+			if err != nil {
+				logrus.WithError(err).WithField("pool", instance.Name).
+					Errorln("scaler: failed to resolve tenants, scaling default only")
+				pool.Variants = buildScalableVariants(instance.Variants)
+			} else {
+				for ri := range resolved {
+					rt := &resolved[ri]
+					pool.Tenants = append(pool.Tenants, jobs.ScalableTenant{
+						ID:       rt.ID,
+						MinSize:  rt.Pool,
+						Variants: buildScalableVariants(rt.Variants),
+					})
+				}
+			}
+		} else {
+			// Add variants if any
+			pool.Variants = buildScalableVariants(instance.Variants)
 		}
 
 		scalablePools = append(scalablePools, pool)
 	}
 
 	return scalablePools
+}
+
+// buildScalableVariants converts pool variants to scalable variant definitions.
+func buildScalableVariants(variants []types.PoolVariant) []jobs.ScalableVariant {
+	var out []jobs.ScalableVariant
+	for j := range variants {
+		variant := &variants[j]
+		out = append(out, jobs.ScalableVariant{
+			MinSize: variant.Pool, // Pool field represents min size for variant
+			Params: types.SetupInstanceParams{
+				VariantID:            variant.VariantID,
+				ImageName:            variant.ImageName,
+				MachineType:          variant.MachineType,
+				NestedVirtualization: variant.NestedVirtualization,
+				Hibernate:            variant.Hibernate,
+				Zones:                variant.Zones,
+				DiskSize:             variant.DiskSize,
+				DiskType:             variant.DiskType,
+				GPU:                  variant.GPU,
+			},
+		})
+	}
+	return out
 }

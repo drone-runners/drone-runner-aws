@@ -69,8 +69,9 @@ type PoolManager interface {
 	// GetPoolSpec returns the pool specification.
 	GetPoolSpec(poolName string) (interface{}, error)
 
-	// IsEgressPool returns if egress_control is true or false
-	IsEgressPool(poolName string) bool
+	// IsEgressPool reports whether egress_control is enabled for the pool tenant.
+	// For single-tenant pools tenantID is ignored. Empty tenantID resolves to the default tenant.
+	IsEgressPool(poolName, tenantID string) bool
 }
 
 // InstanceLifecycle handles instance lifecycle operations.

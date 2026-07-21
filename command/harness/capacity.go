@@ -266,6 +266,7 @@ func handleCapacityReservation(
 		VMImageConfig:             &r.RequestedVMImageConfig,
 		NestedVirtualization:      r.NestedVirtualization,
 		ResourceClass:             r.ResourceClass,
+		AccountID:                 GetAccountID(&r.Context, r.Tags),
 		ReservationPerPoolTimeout: r.ReservationPerPoolTimeout,
 	}
 	if r.Zone != "" {

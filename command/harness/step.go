@@ -119,7 +119,7 @@ func HandleStep(ctx context.Context,
 
 	logr.Traceln("running StartStep")
 
-	if poolManager.IsEgressPool(inst.Pool) {
+	if poolManager.IsEgressPool(inst.Pool, inst.TenantID) {
 		proxyURL := inst.ProxyURL
 		if proxyURL == "" {
 			proxyURL = egressProxy.URL

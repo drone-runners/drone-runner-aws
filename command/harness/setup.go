@@ -589,7 +589,7 @@ func handleSetup(
 		r.SetupRequest.MountDockerSocket = &b
 	}
 
-	if poolManager.IsEgressPool(pool) {
+	if poolManager.IsEgressPool(pool, instance.TenantID) {
 		r.Volumes = appendEgressCAVolume(r.Volumes, instance.Platform.OS)
 	}
 
