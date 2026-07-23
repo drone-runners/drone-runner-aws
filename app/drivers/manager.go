@@ -47,6 +47,7 @@ type (
 		capacityReservationTTL       int64 // seconds; GCP auto-deletes reservations after this duration
 		hosted                       bool
 		enableLEDiagnostics          bool
+		metrics                      MetricsRecorder
 	}
 
 	poolEntry struct {
@@ -54,6 +55,13 @@ type (
 		Pool
 	}
 )
+
+// SetMetrics wires a metrics recorder into the manager. It is safe to call with nil, which
+// leaves purger and hot-pool metrics recording disabled (all Record* calls on Manager become
+// no-ops since they always guard on m.metrics being non-nil).
+func (m *Manager) SetMetrics(metrics MetricsRecorder) {
+	m.metrics = metrics
+}
 
 // New creates a new Manager from an EnvConfig.
 // This is a convenience constructor that uses NewManagerFromConfig internally.

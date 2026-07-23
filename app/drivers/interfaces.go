@@ -137,4 +137,9 @@ type ConfigProvider interface {
 type PurgerStarter interface {
 	// StartInstancePurger starts the background instance purger.
 	StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFree, freeCapacityMaxAge, purgerTime time.Duration) error
+
+	// SetMetrics wires a metrics recorder into the manager so the purger, hot-pool claim path,
+	// and other background tasks can report observability metrics. Passing nil disables that
+	// metrics recording.
+	SetMetrics(metrics MetricsRecorder)
 }

@@ -124,6 +124,12 @@ func (s *purgerFakeStore) DeleteAndReturn(_ context.Context, query string, args 
 // newPurgerTestManager wires a DistributedManager around the in-memory store
 // and a driver the test can configure per-scenario.
 func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver) (*DistributedManager, *poolEntry) {
+	return newPurgerTestManagerWithMetrics(store, driver, nil)
+}
+
+// newPurgerTestManagerWithMetrics is like newPurgerTestManager but also wires in a
+// MetricsRecorder, for tests that assert on what was reported.
+func newPurgerTestManagerWithMetrics(store *purgerFakeStore, driver *flexibleMockDriver, metrics MetricsRecorder) (*DistributedManager, *poolEntry) {
 	const poolName = "pool1"
 	pool := &poolEntry{
 		Pool: Pool{
@@ -136,6 +142,7 @@ func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver) (*
 			poolMap:       map[string]*poolEntry{poolName: pool},
 			instanceStore: store,
 			runnerName:    "test-runner",
+			metrics:       metrics,
 		},
 	}
 	return d, pool
@@ -311,4 +318,208 @@ func TestDistributedPurger_StuckTerminatingRowIsRePicked(t *testing.T) {
 	_, err = d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
 	assert.NoError(t, err)
 	assert.NotContains(t, store.snapshot(), "stuck", "stuck row should be cleaned up on the retry tick")
+}
+
+func TestDistributedPurger_ExecuteInstanceCleanup_RecordsDestroyAttemptMetrics(t *testing.T) {
+	// Three rows: inst-1/inst-3 succeed, inst-2 fails. The metrics recorder must see one
+	// destroy-attempt per row, with inst-2 reported as failed_left_for_retry (never destroyed).
+	now := time.Now()
+	maxAge := 5 * time.Minute
+	store := newPurgerFakeStore(
+		&types.Instance{ID: "inst-1", Name: "vm-1", Pool: "pool1", State: types.StateInUse, Zone: "us-east1-a", Started: now.Add(-30 * time.Second).Unix()},
+		&types.Instance{ID: "inst-2", Name: "vm-2", Pool: "pool1", State: types.StateInUse, Zone: "us-east1-b", Started: now.Add(-30 * time.Second).Unix()},
+		&types.Instance{ID: "inst-3", Name: "vm-3", Pool: "pool1", State: types.StateInUse, Zone: "us-east1-a", Started: now.Add(-30 * time.Second).Unix()},
+	)
+
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyFunc: func(_ context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+			for _, i := range instances {
+				if i.ID == "inst-2" {
+					return []*types.Instance{i}, errors.New("simulated cloud API error for inst-2")
+				}
+			}
+			return nil, nil
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, fakeMetrics)
+	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
+
+	_, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
+	assert.NoError(t, err)
+
+	assert.Len(t, fakeMetrics.destroyAttempts, 3)
+	// us-east1-b is unique to inst-2 in this scenario, so the zone label lets us identify which
+	// record belongs to the failed instance without the recorder needing to carry instance IDs.
+	failedCount, destroyedCount := 0, 0
+	for _, rec := range fakeMetrics.destroyAttempts {
+		assert.Equal(t, "pool1", rec.poolID)
+		assert.Equal(t, PurgerReasonBusyMaxAge, rec.reason)
+		if rec.outcome == PurgerOutcomeFailedLeftForRetry {
+			failedCount++
+			assert.Equal(t, "us-east1-b", rec.zone, "only inst-2 should be reported as failed")
+		} else {
+			assert.Equal(t, PurgerOutcomeDestroyed, rec.outcome)
+			destroyedCount++
+		}
+	}
+	assert.Equal(t, 1, failedCount)
+	assert.Equal(t, 2, destroyedCount)
+}
+
+func TestDistributedPurger_ForceDeleteLeakCandidate_RecordsForceDeletedMetric(t *testing.T) {
+	now := time.Now()
+	maxAge := 5 * time.Minute
+	store := newPurgerFakeStore(
+		&types.Instance{ID: "leak-1", Name: "vm-leak-1", Pool: "pool1", State: types.StateTerminating, Started: now.Add(-3 * maxAge).Unix()},
+		&types.Instance{ID: "leak-2", Name: "vm-leak-2", Pool: "pool1", State: types.StateTerminating, Started: now.Add(-4 * maxAge).Unix()},
+	)
+	driver := &flexibleMockDriver{driverName: "mock"}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, fakeMetrics)
+
+	d.forceDeleteLeakedInstances(context.Background(), pool, "busy", maxAge)
+
+	assert.Empty(t, store.snapshot(), "both leak candidates should have been force-deleted")
+	if assert.Len(t, fakeMetrics.forceDeleted, 1) {
+		rec := fakeMetrics.forceDeleted[0]
+		assert.Equal(t, "pool1", rec.poolID)
+		assert.Equal(t, "busy", rec.cleanupType)
+		assert.Equal(t, 2, rec.count, "force-deleted count must equal exactly len(leaked)")
+	}
+}
+
+func TestDistributedPurger_ForceDelete_NoopWhenMaxAgeZero_RecordsNoMetric(t *testing.T) {
+	store := newPurgerFakeStore(
+		&types.Instance{ID: "old", Name: "vm-old", Pool: "pool1", State: types.StateInUse, Started: time.Now().Add(-24 * time.Hour).Unix()},
+	)
+	driver := &flexibleMockDriver{driverName: "mock"}
+	fakeMetrics := &fakePurgerMetrics{}
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, fakeMetrics)
+
+	d.forceDeleteLeakedInstances(context.Background(), pool, "busy", 0)
+
+	assert.Empty(t, fakeMetrics.forceDeleted, "maxAge=0 must not record any force-deleted metric")
+}
+
+// TestDistributedPurger_CleanupCapacities_OrphanedInUseReason exercises cleanupCapacities end to
+// end for a single orphaned in-use capacity reservation: the reservation's instance no longer
+// exists in the DB (GetInstanceByStageID finds nothing), so findOrphanedInUseCapacities should
+// claim it and destroyCapacityFromReservation should destroy it and report
+// reason=orphaned_inuse.
+func TestDistributedPurger_CleanupCapacities_OrphanedInUseReason(t *testing.T) {
+	const stageID = "stage-orphan"
+	orphan := &types.CapacityReservation{
+		StageID:          stageID,
+		PoolName:         "pool1",
+		ReservationID:    "res-orphan",
+		InstanceID:       "", // no instance: this is exactly what makes it orphaned
+		ReservationState: types.CapacityReservationStateInUse,
+	}
+
+	capacityStore := &mockCapacityReservationStore{
+		ListFunc: func(_ context.Context, _ *types.CapacityReservationQueryParams, states []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+			if len(states) == 1 && states[0] == types.CapacityReservationStateInUse {
+				return []*types.CapacityReservation{orphan}, nil
+			}
+			// stale-terminating lookup: nothing stuck in terminating for this test.
+			return nil, nil
+		},
+		FindAndClaimFunc: func(_ context.Context, params *types.CapacityReservationQueryParams, newState types.CapacityReservationState,
+			allowedStates []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+			// findOrphanedInUseCapacities claims the orphan from InUse -> Terminating.
+			if len(allowedStates) == 1 && allowedStates[0] == types.CapacityReservationStateInUse && params.StageID == stageID {
+				claimed := *orphan
+				claimed.ReservationState = newState
+				return []*types.CapacityReservation{&claimed}, nil
+			}
+			// Everything else (free-capacity claim, claimCapacityForTermination inside
+			// DestroyCapacity) finds no matching rows in this scenario.
+			return nil, nil
+		},
+	}
+
+	instanceStore := &mockInstanceStore{
+		ListFunc: func(_ context.Context, _ string, query *types.QueryParams) ([]*types.Instance, error) {
+			// GetInstanceByStageID looks up by Stage; returning empty means "instance not found",
+			// which is what makes this capacity reservation an orphan.
+			assert.Equal(t, stageID, query.Stage)
+			return nil, nil
+		},
+	}
+
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyCapacityFunc: func(_ context.Context, _ *types.CapacityReservation) error {
+			return nil
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	store := newPurgerFakeStore()
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, fakeMetrics)
+	d.instanceStore = instanceStore
+	d.capacityReservationStore = capacityStore
+	pool.Pool.Driver = driver
+
+	d.cleanupCapacities(context.Background(), pool, time.Hour)
+
+	if assert.Len(t, fakeMetrics.capacityAttempts, 1) {
+		rec := fakeMetrics.capacityAttempts[0]
+		assert.Equal(t, "pool1", rec.poolID)
+		assert.Equal(t, PurgerCapacityReasonOrphanedInUse, rec.reason)
+		assert.Equal(t, PurgerOutcomeDestroyed, rec.outcome)
+	}
+}
+
+// TestDistributedPurger_CleanupCapacities_StuckTerminatingReason covers the simpler,
+// non-orphan path: a capacity reservation already stuck in the Terminating state past the
+// cutoff must be reported with reason=stuck_terminating.
+func TestDistributedPurger_CleanupCapacities_StuckTerminatingReason(t *testing.T) {
+	stuck := &types.CapacityReservation{
+		StageID:          "stage-stuck",
+		PoolName:         "pool1",
+		ReservationID:    "res-stuck",
+		ReservationState: types.CapacityReservationStateTerminating,
+	}
+
+	capacityStore := &mockCapacityReservationStore{
+		ListFunc: func(_ context.Context, _ *types.CapacityReservationQueryParams, states []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+			if len(states) == 1 && states[0] == types.CapacityReservationStateTerminating {
+				return []*types.CapacityReservation{stuck}, nil
+			}
+			return nil, nil // no InUse orphans, no Created free-capacities in this scenario
+		},
+		FindAndClaimFunc: func(_ context.Context, _ *types.CapacityReservationQueryParams, _ types.CapacityReservationState,
+			_ []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+			return nil, nil
+		},
+	}
+	instanceStore := &mockInstanceStore{
+		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {
+			return nil, nil
+		},
+	}
+	driver := &flexibleMockDriver{
+		driverName:          "mock",
+		DestroyCapacityFunc: func(_ context.Context, _ *types.CapacityReservation) error { return nil },
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	store := newPurgerFakeStore()
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, fakeMetrics)
+	d.instanceStore = instanceStore
+	d.capacityReservationStore = capacityStore
+	pool.Pool.Driver = driver
+
+	d.cleanupCapacities(context.Background(), pool, time.Hour)
+
+	if assert.Len(t, fakeMetrics.capacityAttempts, 1) {
+		rec := fakeMetrics.capacityAttempts[0]
+		assert.Equal(t, PurgerCapacityReasonStuckTerminating, rec.reason)
+		assert.Equal(t, PurgerOutcomeDestroyed, rec.outcome)
+	}
 }
