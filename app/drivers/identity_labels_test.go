@@ -5,6 +5,8 @@
 package drivers
 
 import (
+	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -213,3 +215,67 @@ func TestBuildClaimIdentityLabels(t *testing.T) {
 	}
 }
 
+func TestRefreshClaimIdentityLabels(t *testing.T) {
+	setupParams := &types.SetupInstanceParams{
+		AccountID:           "Acc-AbC123",
+		StageRuntimeID:      "StAgE-1",
+		PipelineExecutionID: "PiPe-1_XYZ",
+	}
+	inst := &types.Instance{ID: "inst-1"}
+
+	t.Run("calls SetLabels with the built overlay", func(t *testing.T) {
+		var gotInst *types.Instance
+		var gotLabels map[string]string
+		var called bool
+		mock := &flexibleMockDriver{
+			SetLabelsFunc: func(_ context.Context, i *types.Instance, labels map[string]string) error {
+				called = true
+				gotInst = i
+				gotLabels = labels
+				return nil
+			},
+		}
+		pool := &poolEntry{Pool: Pool{Driver: mock}}
+
+		refreshClaimIdentityLabels(context.Background(), pool, inst, setupParams, int64(3600))
+
+		if !called {
+			t.Fatal("expected SetLabels to be called")
+		}
+		if gotInst != inst {
+			t.Errorf("SetLabels got instance %v, want %v", gotInst, inst)
+		}
+		wantIdentity := map[string]string{
+			LabelAccountID:           "acc-abc123",
+			LabelStageExecutionID:    "stage-1",
+			LabelPipelineExecutionID: "pipe-1_xyz",
+		}
+		for k, v := range wantIdentity {
+			if gotLabels[k] != v {
+				t.Errorf("label %q: got %q, want %q", k, gotLabels[k], v)
+			}
+		}
+		if _, ok := gotLabels[LabelCreatedAt]; !ok {
+			t.Errorf("missing %q label", LabelCreatedAt)
+		}
+		if _, ok := gotLabels[LabelLongRunning]; !ok {
+			t.Errorf("missing %q label", LabelLongRunning)
+		}
+	})
+
+	t.Run("swallows SetLabels error (log-and-continue)", func(t *testing.T) {
+		mock := &flexibleMockDriver{
+			SetLabelsFunc: func(_ context.Context, _ *types.Instance, _ map[string]string) error {
+				return errors.New("boom")
+			},
+		}
+		pool := &poolEntry{Pool: Pool{Driver: mock}}
+
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("helper panicked on SetLabels error: %v", r)
+			}
+		}()
+		refreshClaimIdentityLabels(context.Background(), pool, inst, setupParams, int64(3600))
+	})
+}

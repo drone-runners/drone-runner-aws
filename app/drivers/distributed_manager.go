@@ -278,6 +278,7 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 	if reservedCapacity.InstanceID != "" {
 		inst, err := d.Find(ctx, reservedCapacity.InstanceID)
 		if err == nil {
+			refreshClaimIdentityLabels(ctx, pool, inst, setupParams, timeout)
 			return inst, true, nil
 		}
 		logger.FromContext(ctx).
@@ -433,6 +434,9 @@ func (d *DistributedManager) provisionFromPool(
 					WithField("source", string(inst.Source)).
 					Infoln("provision: skipping replenishment for non-pool instance")
 			}
+
+			refreshClaimIdentityLabels(ctx, pool, inst, setupParams, timeout)
+
 			capacity = &types.CapacityReservation{
 				InstanceID: inst.ID,
 				PoolName:   poolName,

@@ -175,18 +175,6 @@ func (m *Manager) provisionFromPool(
 	}
 	pool.Unlock()
 
-	// Refresh GCP identity labels on the warmed instance. Pool-fill created
-	// the VM with only constant labels (no stage/pipeline). Log-and-continue:
-	// the build should not fail when a best-effort label write fails.
-	// Non-GCP drivers return nil.
-	overlay := buildClaimIdentityLabels(setupParams, timeout)
-	if len(overlay) > 0 {
-		if labelErr := pool.Driver.SetLabels(ctx, inst, overlay); labelErr != nil {
-			logger.FromContext(ctx).WithError(labelErr).
-				WithField("instance_id", inst.ID).
-				Warnln("provision: failed to set identity labels on warm instance; continuing")
-		}
-	}
 	return inst, nil, true, "", nil
 }
 
@@ -603,6 +591,23 @@ func buildClaimIdentityLabels(setupParams *types.SetupInstanceParams, timeout in
 		}
 	}
 	return labels
+}
+
+// refreshClaimIdentityLabels overlays per-stage GCP identity labels onto a
+// warm-pool VM at claim time. Pool-fill created the VM with only constant
+// labels (no stage/pipeline). Log-and-continue: the build must not fail when
+// a best-effort label write fails. Non-GCP drivers return nil overlays and
+// this is a no-op for them.
+func refreshClaimIdentityLabels(ctx context.Context, pool *poolEntry, inst *types.Instance, setupParams *types.SetupInstanceParams, timeout int64) {
+	overlay := buildClaimIdentityLabels(setupParams, timeout)
+	if len(overlay) == 0 {
+		return
+	}
+	if labelErr := pool.Driver.SetLabels(ctx, inst, overlay); labelErr != nil {
+		logger.FromContext(ctx).WithError(labelErr).
+			WithField("instance_id", inst.ID).
+			Warnln("provision: failed to set identity labels on warm instance; continuing")
+	}
 }
 
 // pinBinaryDownloadsToHarness rewrites every binary download URL to the canonical
