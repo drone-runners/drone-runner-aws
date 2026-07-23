@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/sirupsen/logrus"
@@ -267,6 +268,14 @@ type NetworkConfigInput struct {
 	Tags       []string
 	Zones      []string
 	ProxyURL   string
+}
+
+// WithMetrics returns an option to set the metrics recorder used to
+// instrument GCP API interactions. Nil is safe and disables instrumentation.
+func WithMetrics(m *metric.Metrics) Option {
+	return func(p *config) {
+		p.metrics = m
+	}
 }
 
 // WithNetworkConfigs returns an option to set multiple network configurations.
