@@ -124,6 +124,12 @@ func (s *purgerFakeStore) DeleteAndReturn(_ context.Context, query string, args 
 // newPurgerTestManager wires a DistributedManager around the in-memory store
 // and a driver the test can configure per-scenario.
 func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver) (*DistributedManager, *poolEntry) {
+	return newPurgerTestManagerWithMetrics(store, driver, nil)
+}
+
+// newPurgerTestManagerWithMetrics is like newPurgerTestManager but also wires in a
+// MetricsRecorder, for tests that assert on what was reported.
+func newPurgerTestManagerWithMetrics(store *purgerFakeStore, driver *flexibleMockDriver, metrics MetricsRecorder) (*DistributedManager, *poolEntry) {
 	const poolName = "pool1"
 	pool := &poolEntry{
 		Pool: Pool{
@@ -136,6 +142,7 @@ func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver) (*
 			poolMap:       map[string]*poolEntry{poolName: pool},
 			instanceStore: store,
 			runnerName:    "test-runner",
+			metrics:       metrics,
 		},
 	}
 	return d, pool
