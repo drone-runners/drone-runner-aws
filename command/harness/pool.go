@@ -9,6 +9,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/poolfile"
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
@@ -26,8 +27,9 @@ func SetupPool(
 	purgerTime int64,
 	reusePool bool,
 	freeCapacityMaxAge int64,
+	metrics *metric.Metrics,
 ) (*config.PoolFile, error) {
-	pools, err := poolfile.ProcessPool(configPool, runnerName, passwords)
+	pools, err := poolfile.ProcessPool(configPool, runnerName, passwords, metrics)
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
 		return configPool, err
@@ -90,6 +92,7 @@ func SetupPoolWithFile(
 	purgerTime int64,
 	reusePool bool,
 	freeCapacityMaxAge int64,
+	metrics *metric.Metrics,
 ) (*config.PoolFile, error) {
 	configPool, err := config.ParseFile(poolFilePath)
 	if err != nil {
@@ -99,10 +102,10 @@ func SetupPoolWithFile(
 		return nil, err
 	}
 
-	return SetupPool(ctx, configPool, runnerName, passwords, poolManager, busyAge, freeAge, purgerTime, reusePool, freeCapacityMaxAge)
+	return SetupPool(ctx, configPool, runnerName, passwords, poolManager, busyAge, freeAge, purgerTime, reusePool, freeCapacityMaxAge, metrics)
 }
 
-func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string) (*config.PoolFile, error) {
+func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager drivers.IManager, poolFile string, metrics *metric.Metrics) (*config.PoolFile, error) {
 	configPool, confErr := poolfile.ConfigPoolFile(poolFile, env)
 	if confErr != nil {
 		logrus.WithError(confErr).Fatalln("Unable to load pool file, or use an in memory pool")
@@ -117,7 +120,8 @@ func SetupPoolWithEnv(ctx context.Context, env *config.EnvConfig, poolManager dr
 		env.Settings.FreeMaxAge,
 		env.Settings.PurgerTime,
 		env.Settings.ReusePool,
-		env.Settings.FreeCapacityMaxAgeMinutes)
+		env.Settings.FreeCapacityMaxAgeMinutes,
+		metrics)
 }
 
 func Cleanup(reusePool bool, poolManager drivers.IManager, destroyBusy, destroyFree bool) error {

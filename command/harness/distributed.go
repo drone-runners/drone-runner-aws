@@ -105,7 +105,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	}
 
 	// Setup the pool
-	poolConfig, err := SetupPoolWithEnv(cfg.Ctx, cfg.Env, poolManager, cfg.PoolFile)
+	poolConfig, err := SetupPoolWithEnv(cfg.Ctx, cfg.Env, poolManager, cfg.PoolFile, cfg.Metrics)
 	if err != nil {
 		logrus.WithError(err).Error("could not setup distributed pool")
 		return nil, err
