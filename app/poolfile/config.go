@@ -22,6 +22,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/command/config"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
@@ -31,7 +32,9 @@ const (
 
 // ProcessPool processes the pool file and returns a list of pools.
 // Passwords are not present in the pool file and passed separately for security reasons.
-func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.Passwords) ([]drivers.Pool, error) { //nolint
+// metrics is nil-safe: pass nil when metric instrumentation isn't available (e.g. standalone
+// commands that don't register the shared *metric.Metrics).
+func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.Passwords, metrics *metric.Metrics) ([]drivers.Pool, error) { //nolint
 	var pools = []drivers.Pool{}
 
 	for i := range poolFile.Instances {
@@ -156,12 +159,12 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 					if !ok {
 						return nil, fmt.Errorf("invalid google spec")
 					}
-					return buildGoogleDriver(gSpec, &instance)
+					return buildGoogleDriver(gSpec, &instance, metrics)
 				}); err != nil {
 					return nil, err
 				}
 			} else {
-				driver, err := buildGoogleDriver(g, &instance)
+				driver, err := buildGoogleDriver(g, &instance, metrics)
 				if err != nil {
 					return nil, err
 				}
@@ -374,7 +377,7 @@ func buildAmazonDriver(a *config.Amazon, instance *config.Instance, passwords *t
 }
 
 // buildGoogleDriver constructs a Google driver from a (fully-resolved) Google spec.
-func buildGoogleDriver(g *config.Google, instance *config.Instance) (drivers.Driver, error) {
+func buildGoogleDriver(g *config.Google, instance *config.Instance, metrics *metric.Metrics) (drivers.Driver, error) {
 	var googleOpts = []google.Option{
 		google.WithRootDirectory(&instance.Platform),
 		google.WithDiskSize(g.Disk.Size),
@@ -401,6 +404,7 @@ func buildGoogleDriver(g *config.Google, instance *config.Instance) (drivers.Dri
 		google.WithEnableC4D(g.EnableC4D),
 		google.WithGPU(g.GPU),
 		google.WithEgressControl(g.EgressControl),
+		google.WithMetrics(metrics),
 	}
 	if len(g.Networks) > 0 {
 		var netInputs []google.NetworkConfigInput

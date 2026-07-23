@@ -21,6 +21,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	itypes "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/dchest/uniuri"
@@ -112,6 +113,9 @@ type config struct {
 	networkConfigIndex         uint64
 
 	stockoutCache *expirable.LRU[string, struct{}]
+
+	// metrics is nil-safe: when unset, all instrumentation calls become no-ops.
+	metrics *metric.Metrics
 }
 
 // resolveNetworkAndZone determines the final zone, network, subnetwork, and tags for an instance.
@@ -319,7 +323,9 @@ func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 		return "", err
 	}
 
-	output, err := p.service.Instances.GetSerialPortOutput(p.projectID, zone, instance).Context(ctx).Do()
+	output, err := apiCall(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationSerialPortOutput, zone, classifyOpts{}, func() (*compute.SerialPortOutput, error) {
+		return p.service.Instances.GetSerialPortOutput(p.projectID, zone, instance).Context(ctx).Do()
+	})
 	if err != nil {
 		return "", err
 	}
@@ -333,7 +339,9 @@ func (p *config) Logs(ctx context.Context, instance string) (string, error) {
 
 func (p *config) Ping(ctx context.Context) error {
 	client := p.service
-	response, err := client.Regions.List(p.projectID).Context(ctx).Do()
+	response, err := apiCall(ctx, p.metrics, metric.GCPResourceRegion, metric.GCPOperationList, "", classifyOpts{}, func() (*compute.RegionList, error) {
+		return client.Regions.List(p.projectID).Context(ctx).Do()
+	})
 	if err != nil {
 		return err
 	}
@@ -405,14 +413,23 @@ func (p *config) ReserveCapacity(ctx context.Context, opts *types.InstanceCreate
 	opCtx, cancel := context.WithTimeout(ctx, time.Duration(opts.ReservationPerPoolTimeout)*time.Millisecond)
 	defer cancel()
 
-	op, err := p.service.Reservations.Insert(p.projectID, zone, reservation).Context(opCtx).Do()
-	if err != nil {
-		zoneLogr.WithError(err).Warnln("google: failed to create capacity reservation")
-		return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
-	}
-
-	if err := p.waitZoneOperation(opCtx, op.Name, zone); err != nil {
-		zoneLogr.WithError(err).Warnln("google: capacity reservation creation operation failed")
+	var reservationOp *compute.Operation
+	opErr := trackOperation(opCtx, p.metrics, metric.GCPResourceReservation, metric.GCPOperationInsert, zone, machineType, classifyOpts{}, func() error {
+		var insertErr error
+		reservationOp, insertErr = apiCall(opCtx, p.metrics, metric.GCPResourceReservation, metric.GCPOperationInsert, zone, classifyOpts{}, func() (*compute.Operation, error) {
+			return p.service.Reservations.Insert(p.projectID, zone, reservation).Context(opCtx).Do()
+		})
+		if insertErr != nil {
+			return insertErr
+		}
+		return p.waitZoneOperation(opCtx, reservationOp.Name, zone)
+	})
+	if opErr != nil {
+		if reservationOp == nil {
+			zoneLogr.WithError(opErr).Warnln("google: failed to create capacity reservation")
+		} else {
+			zoneLogr.WithError(opErr).Warnln("google: capacity reservation creation operation failed")
+		}
 		return nil, &itypes.ErrCapacityUnavailable{Driver: string(types.Google)}
 	}
 
@@ -432,7 +449,9 @@ func (p *config) findReservationZone(ctx context.Context, reservationID string) 
 	logr := logger.FromContext(ctx)
 
 	for _, z := range p.allZones() {
-		_, err := p.service.Reservations.Get(p.projectID, z, reservationID).Context(ctx).Do()
+		_, err := apiCall(ctx, p.metrics, metric.GCPResourceReservation, metric.GCPOperationGet, z, classifyOpts{isZoneScan: true}, func() (*compute.Reservation, error) {
+			return p.service.Reservations.Get(p.projectID, z, reservationID).Context(ctx).Do()
+		})
 		if err == nil {
 			return z, nil
 		}
@@ -474,21 +493,28 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	logr.WithField("zone", zone).Debugln("google: deleting capacity reservation in zone")
 
 	// Delete the reservation
-	op, err := p.service.Reservations.Delete(p.projectID, zone, capacity.ReservationID).Context(ctx).Do()
-	if err != nil {
-		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
+	var deleteOp *compute.Operation
+	opErr := trackOperation(ctx, p.metrics, metric.GCPResourceReservation, metric.GCPOperationDelete, zone, "", classifyOpts{isDelete: true}, func() error {
+		var deleteErr error
+		deleteOp, deleteErr = apiCall(ctx, p.metrics, metric.GCPResourceReservation, metric.GCPOperationDelete, zone, classifyOpts{isDelete: true}, func() (*compute.Operation, error) {
+			return p.service.Reservations.Delete(p.projectID, zone, capacity.ReservationID).Context(ctx).Do()
+		})
+		if deleteErr != nil {
+			return deleteErr
+		}
+		return p.waitZoneOperation(ctx, deleteOp.Name, zone)
+	})
+	if opErr != nil {
+		if gerr, ok := opErr.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
 			logr.Warnln("google: capacity reservation already deleted")
 			return nil
 		}
-		logr.WithError(err).Errorln("google: failed to delete capacity reservation")
-		return fmt.Errorf("failed to delete capacity reservation: %w", err)
-	}
-
-	// Wait for the deletion to complete
-	err = p.waitZoneOperation(ctx, op.Name, zone)
-	if err != nil {
-		logr.WithError(err).Errorln("google: capacity reservation deletion operation failed")
-		return fmt.Errorf("capacity reservation deletion operation failed: %w", err)
+		if deleteOp == nil {
+			logr.WithError(opErr).Errorln("google: failed to delete capacity reservation")
+			return fmt.Errorf("failed to delete capacity reservation: %w", opErr)
+		}
+		logr.WithError(opErr).Errorln("google: capacity reservation deletion operation failed")
+		return fmt.Errorf("capacity reservation deletion operation failed: %w", opErr)
 	}
 
 	logr.Debugln("google: capacity reservation deleted successfully")
@@ -758,8 +784,12 @@ func (p *config) insertWithStockoutRetry(
 			}
 			for _, operation := range operations {
 				if operation != nil {
+					diskOp := operation
 					// Disk not present, wait for creation
-					if diskErr := p.waitZoneOperation(ctx, operation.Name, zone); diskErr != nil {
+					diskErr := trackOperation(ctx, p.metrics, metric.GCPResourceDisk, metric.GCPOperationInsert, zone, "", classifyOpts{}, func() error {
+						return p.waitZoneOperation(ctx, diskOp.Name, zone)
+					})
+					if diskErr != nil {
 						attemptLogr.WithError(diskErr).Errorln("google: persistent disk creation operation failed")
 						return nil, cand, diskErr
 					}
@@ -767,10 +797,15 @@ func (p *config) insertWithStockoutRetry(
 			}
 		}
 
-		op, attemptErr := p.insertInstance(ctx, p.projectID, zone, uuid.New().String(), in)
-		if attemptErr == nil {
-			attemptErr = p.waitZoneOperation(ctx, op.Name, zone)
-		}
+		var op *compute.Operation
+		attemptErr := trackOperation(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationInsert, zone, machineType, classifyOpts{}, func() error {
+			var insertErr error
+			op, insertErr = p.insertInstance(ctx, p.projectID, zone, uuid.New().String(), in)
+			if insertErr != nil {
+				return insertErr
+			}
+			return p.waitZoneOperation(ctx, op.Name, zone)
+		})
 		if attemptErr == nil {
 			return op, cand, nil
 		}
@@ -798,18 +833,27 @@ func (p *config) insertWithStockoutRetry(
 }
 
 func (p *config) cleanupFailedInstance(ctx context.Context, zone, name string, logr logger.Logger) {
-	op, err := p.deleteInstance(ctx, p.projectID, zone, name, uuid.New().String())
+	var op *compute.Operation
+	err := trackOperation(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationDelete, zone, "", classifyOpts{isDelete: true}, func() error {
+		var deleteErr error
+		op, deleteErr = p.deleteInstance(ctx, p.projectID, zone, name, uuid.New().String())
+		if deleteErr != nil {
+			return deleteErr
+		}
+		if op != nil {
+			return p.waitZoneOperation(ctx, op.Name, zone)
+		}
+		return nil
+	})
 	if err != nil {
 		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == http.StatusNotFound {
 			return
 		}
-		logr.WithError(err).Warnln("google: failed to delete stocked-out instance before retry")
-		return
-	}
-	if op != nil {
-		if werr := p.waitZoneOperation(ctx, op.Name, zone); werr != nil {
-			logr.WithError(werr).Warnln("google: delete of stocked-out instance did not complete before retry")
+		if op == nil {
+			logr.WithError(err).Warnln("google: failed to delete stocked-out instance before retry")
+			return
 		}
+		logr.WithError(err).Warnln("google: delete of stocked-out instance did not complete before retry")
 	}
 }
 
@@ -861,23 +905,27 @@ func (p *config) SetTags(ctx context.Context, instance *types.Instance, tags map
 	logr := logger.FromContext(ctx).
 		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
-	var err error
-	for i := 0; i < tagRetries; i++ {
-		err = p.setTags(ctx, instance, tags, logr)
-		if err == nil {
-			return nil
-		}
+	return trackOperation(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationSetMetadata, instance.Zone, "", classifyOpts{}, func() error {
+		var err error
+		for i := 0; i < tagRetries; i++ {
+			err = p.setTags(ctx, instance, tags, logr)
+			if err == nil {
+				return nil
+			}
+			recordRetry(p.metrics, metric.GCPResourceInstance, metric.GCPOperationSetMetadata, instance.Zone, err)
 
-		logr.WithError(err).Warnln("failed to set tags to the instance. retrying")
-		time.Sleep(tagRetrySleepMs * time.Millisecond)
-	}
-	return err
+			logr.WithError(err).Warnln("failed to set tags to the instance. retrying")
+			time.Sleep(tagRetrySleepMs * time.Millisecond)
+		}
+		return err
+	})
 }
 
 func (p *config) setTags(ctx context.Context, instance *types.Instance,
 	tags map[string]string, logr logger.Logger) error {
-	vm, err := p.service.Instances.Get(p.projectID, instance.Zone,
-		instance.ID).Context(ctx).Do()
+	vm, err := apiCall(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationGet, instance.Zone, classifyOpts{}, func() (*compute.Instance, error) {
+		return p.service.Instances.Get(p.projectID, instance.Zone, instance.ID).Context(ctx).Do()
+	})
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
 		return err
@@ -893,8 +941,9 @@ func (p *config) setTags(ctx context.Context, instance *types.Instance,
 			Value: googleapi.String(val),
 		})
 	}
-	_, err = p.service.Instances.SetMetadata(p.projectID, instance.Zone,
-		instance.ID, metadata).Context(ctx).Do()
+	_, err = apiCall(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationSetMetadata, instance.Zone, classifyOpts{}, func() (*compute.Operation, error) {
+		return p.service.Instances.SetMetadata(p.projectID, instance.Zone, instance.ID, metadata).Context(ctx).Do()
+	})
 	return err
 }
 
@@ -909,21 +958,26 @@ func (p *config) SetLabels(ctx context.Context, instance *types.Instance, labels
 	logr := logger.FromContext(ctx).
 		WithField("id", instance.ID).
 		WithField("cloud", types.Google)
-	var err error
-	for i := 0; i < tagRetries; i++ {
-		err = p.setLabels(ctx, instance, labels, logr)
-		if err == nil {
-			return nil
+	return trackOperation(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationSetLabels, instance.Zone, "", classifyOpts{}, func() error {
+		var err error
+		for i := 0; i < tagRetries; i++ {
+			err = p.setLabels(ctx, instance, labels, logr)
+			if err == nil {
+				return nil
+			}
+			recordRetry(p.metrics, metric.GCPResourceInstance, metric.GCPOperationSetLabels, instance.Zone, err)
+			logr.WithError(err).Warnln("failed to set labels on the instance. retrying")
+			time.Sleep(tagRetrySleepMs * time.Millisecond)
 		}
-		logr.WithError(err).Warnln("failed to set labels on the instance. retrying")
-		time.Sleep(tagRetrySleepMs * time.Millisecond)
-	}
-	return err
+		return err
+	})
 }
 
 func (p *config) setLabels(ctx context.Context, instance *types.Instance,
 	labels map[string]string, logr logger.Logger) error {
-	vm, err := p.service.Instances.Get(p.projectID, instance.Zone, instance.ID).Context(ctx).Do()
+	vm, err := apiCall(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationGet, instance.Zone, classifyOpts{}, func() (*compute.Instance, error) {
+		return p.service.Instances.Get(p.projectID, instance.Zone, instance.ID).Context(ctx).Do()
+	})
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
 		return err
@@ -939,7 +993,9 @@ func (p *config) setLabels(ctx context.Context, instance *types.Instance,
 		LabelFingerprint: vm.LabelFingerprint,
 		Labels:           merged,
 	}
-	_, err = p.service.Instances.SetLabels(p.projectID, instance.Zone, instance.ID, req).Context(ctx).Do()
+	_, err = apiCall(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationSetLabels, instance.Zone, classifyOpts{}, func() (*compute.Operation, error) {
+		return p.service.Instances.SetLabels(p.projectID, instance.Zone, instance.ID, req).Context(ctx).Do()
+	})
 	return err
 }
 
@@ -960,10 +1016,6 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			WithField("id", instance.ID).
 			WithField("cloud", types.Google)
 
-		// Track per-instance failure
-		var instanceFailed bool
-		var instanceErr error
-
 		zone, getZoneErr := p.getZone(ctx, instance)
 		if getZoneErr != nil {
 			// Instance not found is OK - it's already deleted, safe to skip
@@ -978,74 +1030,7 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 			continue
 		}
 
-		var instanceDeleteOperation *compute.Operation
-		if zone != "" {
-			var deleteInstanceErr error
-			instanceDeleteOperation, deleteInstanceErr = p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
-			if deleteInstanceErr != nil {
-				// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
-				if gerr, ok := deleteInstanceErr.(*googleapi.Error); ok &&
-					gerr.Code == http.StatusNotFound {
-					logr.WithError(deleteInstanceErr).Warnln("google: VM not found")
-				} else {
-					logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
-					instanceFailed = true
-					instanceErr = deleteInstanceErr
-				}
-			}
-			logr.Info("google: sent delete instance request")
-		}
-
-		if storageCleanupType != nil && *storageCleanupType != "" {
-			if instanceDeleteOperation != nil {
-				logr.Info("google: waiting for instance deletion")
-				waitErr := p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
-				if waitErr != nil {
-					logr.WithError(waitErr).Errorln("google: could not delete instance. skipping disk deletion")
-					instanceFailed = true
-					instanceErr = waitErr
-				}
-			}
-
-			// Only attempt disk deletion if instance deletion succeeded
-			if !instanceFailed && *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
-				logr.Info("google: deleting persistent disk")
-				storageIdentifiers := strings.Split(instance.StorageIdentifier, ",")
-				for _, storageIdentifier := range storageIdentifiers {
-					diskDeleteOperation, diskDeletionErr := p.deletePersistentDisk(
-						ctx,
-						p.projectID,
-						zone,
-						storageIdentifier,
-						uuid.New().String(),
-					)
-					if diskDeletionErr != nil {
-						var googleErr *googleapi.Error
-						if errors.As(diskDeletionErr, &googleErr) &&
-							googleErr.Code == http.StatusNotFound {
-							logr.WithError(diskDeletionErr).
-								Warnln("google: persistent disk %s not found", storageIdentifier)
-						} else {
-							logr.WithError(diskDeletionErr).
-								Errorln("google: error deleting persistent disk %s", storageIdentifier)
-							instanceFailed = true
-							instanceErr = diskDeletionErr
-							break
-						}
-					} else {
-						waitErr := p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
-						if waitErr != nil {
-							logr.WithError(waitErr).Errorln("google: could not delete persistent disk %s", storageIdentifier)
-							instanceFailed = true
-							instanceErr = waitErr
-							break
-						}
-					}
-				}
-			}
-		}
-
-		// Track failed instance, but continue processing other instances
+		instanceFailed, instanceErr := p.destroySingleInstance(ctx, logr, instance, zone, storageCleanupType)
 		if instanceFailed {
 			failedInstances = append(failedInstances, instance)
 			lastErr = instanceErr
@@ -1065,6 +1050,91 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 	return nil, nil
 }
 
+// destroySingleInstance deletes a single instance (and, if requested, its
+// persistent disks) and reports whether cleanup failed along with the
+// underlying error.
+func (p *config) destroySingleInstance(ctx context.Context, logr logger.Logger, instance *types.Instance, zone string, storageCleanupType *storage.CleanupType) (failed bool, instanceErr error) {
+	waitForInstanceDelete := storageCleanupType != nil && *storageCleanupType != ""
+	if zone != "" {
+		failed, instanceErr = p.deleteInstanceForCleanup(ctx, logr, instance, zone, waitForInstanceDelete)
+	}
+
+	if !failed && storageCleanupType != nil && *storageCleanupType == storage.Delete && instance.StorageIdentifier != "" {
+		logr.Info("google: deleting persistent disk")
+		failed, instanceErr = p.deletePersistentDisksForCleanup(ctx, logr, instance.StorageIdentifier, zone)
+	}
+
+	return failed, instanceErr
+}
+
+// deleteInstanceForCleanup issues the instance delete request (optionally
+// waiting for the zone operation to complete) and classifies the result.
+func (p *config) deleteInstanceForCleanup(ctx context.Context, logr logger.Logger, instance *types.Instance, zone string, waitForDelete bool) (failed bool, instanceErr error) {
+	var instanceDeleteOperation *compute.Operation
+	var deleteInstanceErr, instanceWaitErr error
+	_ = trackOperation(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationDelete, zone, "", classifyOpts{isDelete: true}, func() error {
+		instanceDeleteOperation, deleteInstanceErr = p.deleteInstance(ctx, p.projectID, zone, instance.ID, uuid.New().String())
+		if deleteInstanceErr != nil {
+			return deleteInstanceErr
+		}
+		if waitForDelete && instanceDeleteOperation != nil {
+			logr.Info("google: waiting for instance deletion")
+			instanceWaitErr = p.waitZoneOperation(ctx, instanceDeleteOperation.Name, zone)
+			return instanceWaitErr
+		}
+		return nil
+	})
+	if deleteInstanceErr != nil {
+		// https://github.com/googleapis/google-api-go-client/blob/master/googleapi/googleapi.go#L135
+		if gerr, ok := deleteInstanceErr.(*googleapi.Error); ok &&
+			gerr.Code == http.StatusNotFound {
+			logr.WithError(deleteInstanceErr).Warnln("google: VM not found")
+		} else {
+			logr.WithError(deleteInstanceErr).Errorln("google: failed to delete the VM")
+			failed = true
+			instanceErr = deleteInstanceErr
+		}
+	} else if instanceWaitErr != nil {
+		logr.WithError(instanceWaitErr).Errorln("google: could not delete instance. skipping disk deletion")
+		failed = true
+		instanceErr = instanceWaitErr
+	}
+	logr.Info("google: sent delete instance request")
+	return failed, instanceErr
+}
+
+// deletePersistentDisksForCleanup deletes every disk referenced by the
+// comma-separated storageIdentifier, stopping at the first failure.
+func (p *config) deletePersistentDisksForCleanup(ctx context.Context, logr logger.Logger, storageIdentifier, zone string) (failed bool, instanceErr error) {
+	storageIdentifiers := strings.Split(storageIdentifier, ",")
+	for _, id := range storageIdentifiers {
+		var diskDeleteOperation *compute.Operation
+		var diskDeletionErr, diskWaitErr error
+		_ = trackOperation(ctx, p.metrics, metric.GCPResourceDisk, metric.GCPOperationDelete, zone, "", classifyOpts{isDelete: true}, func() error {
+			diskDeleteOperation, diskDeletionErr = p.deletePersistentDisk(ctx, p.projectID, zone, id, uuid.New().String())
+			if diskDeletionErr != nil {
+				return diskDeletionErr
+			}
+			diskWaitErr = p.waitZoneOperation(ctx, diskDeleteOperation.Name, zone)
+			return diskWaitErr
+		})
+		if diskDeletionErr != nil {
+			var googleErr *googleapi.Error
+			if errors.As(diskDeletionErr, &googleErr) && googleErr.Code == http.StatusNotFound {
+				logr.WithError(diskDeletionErr).Warnln("google: persistent disk %s not found", id)
+				continue
+			}
+			logr.WithError(diskDeletionErr).Errorln("google: error deleting persistent disk %s", id)
+			return true, diskDeletionErr
+		}
+		if diskWaitErr != nil {
+			logr.WithError(diskWaitErr).Errorln("google: could not delete persistent disk %s", id)
+			return true, diskWaitErr
+		}
+	}
+	return false, nil
+}
+
 func (p *config) Hibernate(ctx context.Context, instanceID, _, zone string) error {
 	logr := logger.FromContext(ctx).
 		WithField("id", instanceID).
@@ -1078,15 +1148,21 @@ func (p *config) Hibernate(ctx context.Context, instanceID, _, zone string) erro
 		}
 	}
 
-	op, err := p.suspendInstance(ctx, p.projectID, zone, instanceID)
+	var suspendOp *compute.Operation
+	err = trackOperation(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationSuspend, zone, "", classifyOpts{}, func() error {
+		var suspendErr error
+		suspendOp, suspendErr = p.suspendInstance(ctx, p.projectID, zone, instanceID)
+		if suspendErr != nil {
+			return suspendErr
+		}
+		return p.waitZoneOperation(ctx, suspendOp.Name, zone)
+	})
 	if err != nil {
-		logr.WithError(err).Errorln("google: failed to suspend VM")
-		return err
-	}
-
-	err = p.waitZoneOperation(ctx, op.Name, zone)
-	if err != nil {
-		logr.WithError(err).Errorln("instance suspend operation failed")
+		if suspendOp == nil {
+			logr.WithError(err).Errorln("google: failed to suspend VM")
+		} else {
+			logr.WithError(err).Errorln("instance suspend operation failed")
+		}
 		return err
 	}
 	return nil
@@ -1114,15 +1190,21 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, _ string) 
 		return p.getInstanceIP(vm), nil
 	}
 
-	op, err := p.resumeInstance(ctx, p.projectID, zone, instance.ID)
+	var resumeOp *compute.Operation
+	err = trackOperation(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationResume, zone, "", classifyOpts{}, func() error {
+		var resumeErr error
+		resumeOp, resumeErr = p.resumeInstance(ctx, p.projectID, zone, instance.ID)
+		if resumeErr != nil {
+			return resumeErr
+		}
+		return p.waitZoneOperation(ctx, resumeOp.Name, zone)
+	})
 	if err != nil {
-		logr.WithError(err).Errorln("google: failed to suspend VM")
-		return "", err
-	}
-
-	err = p.waitZoneOperation(ctx, op.Name, zone)
-	if err != nil {
-		logr.WithError(err).Errorln("google: instance suspend operation failed")
+		if resumeOp == nil {
+			logr.WithError(err).Errorln("google: failed to suspend VM")
+		} else {
+			logr.WithError(err).Errorln("google: instance suspend operation failed")
+		}
 		return "", err
 	}
 
@@ -1135,7 +1217,14 @@ func (p *config) Start(ctx context.Context, instance *types.Instance, _ string) 
 }
 
 func (p *config) getInstance(ctx context.Context, projectID, zone, name string) (*compute.Instance, error) {
-	return retry(ctx, getRetries, secSleep, func() (*compute.Instance, error) {
+	return p.getInstanceWithOpts(ctx, projectID, zone, name, classifyOpts{})
+}
+
+// getInstanceWithOpts is getInstance with explicit error-classification
+// options, for call sites where a 404 has a special meaning (e.g. scanning
+// every zone for an instance).
+func (p *config) getInstanceWithOpts(ctx context.Context, projectID, zone, name string, opts classifyOpts) (*compute.Instance, error) {
+	return retry(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationGet, zone, opts, getRetries, secSleep, func() (*compute.Instance, error) {
 		return p.service.Instances.Get(projectID, zone, name).Context(ctx).Do()
 	})
 }
@@ -1152,39 +1241,39 @@ func (p *config) getInstanceIP(i *compute.Instance) string {
 }
 
 func (p *config) suspendInstance(ctx context.Context, projectID, zone, name string) (*compute.Operation, error) {
-	return retry(ctx, getRetries, secSleep, func() (*compute.Operation, error) {
+	return retry(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationSuspend, zone, classifyOpts{}, getRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Instances.Suspend(projectID, zone, name).Context(ctx).Do()
 	})
 }
 
 func (p *config) resumeInstance(ctx context.Context, projectID, zone, name string) (*compute.Operation, error) {
-	return retry(ctx, getRetries, secSleep, func() (*compute.Operation, error) {
+	return retry(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationResume, zone, classifyOpts{}, getRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Instances.Resume(projectID, zone, name).Context(ctx).Do()
 	})
 }
 
 func (p *config) insertInstance(ctx context.Context, projectID, zone, requestID string, in *compute.Instance) (*compute.Operation, error) {
-	return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
+	return retry(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationInsert, zone, classifyOpts{}, insertRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Instances.Insert(projectID, zone, in).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
 func (p *config) deleteInstance(ctx context.Context, projectID, zone, instanceID, requestID string) (*compute.Operation, error) {
-	return retry(ctx, deleteRetries, secSleep, func() (*compute.Operation, error) {
+	return retry(ctx, p.metrics, metric.GCPResourceInstance, metric.GCPOperationDelete, zone, classifyOpts{isDelete: true}, deleteRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Instances.Delete(projectID, zone, instanceID).RequestId(requestID).Context(ctx).Do()
 	})
 }
 
 func (p *config) createPersistentDiskIfNotExists(ctx context.Context, projectID, zone, requestID string, disk *compute.Disk) (*compute.Operation, error) {
 	// Check if the disk already exists
-	_, err := retry(ctx, getRetries, secSleep, func() (*compute.Disk, error) {
+	_, err := retry(ctx, p.metrics, metric.GCPResourceDisk, metric.GCPOperationGet, zone, classifyOpts{}, getRetries, secSleep, func() (*compute.Disk, error) {
 		return p.service.Disks.Get(projectID, zone, disk.Name).Context(ctx).Do()
 	})
 
 	var getErr *googleapi.Error
 	if errors.As(err, &getErr) && getErr.Code == 404 {
 		// Disk doesn't exist, create it
-		return retry(ctx, insertRetries, secSleep, func() (*compute.Operation, error) {
+		return retry(ctx, p.metrics, metric.GCPResourceDisk, metric.GCPOperationInsert, zone, classifyOpts{}, insertRetries, secSleep, func() (*compute.Operation, error) {
 			return p.service.Disks.Insert(projectID, zone, disk).RequestId(requestID).Context(ctx).Do()
 		})
 	} else if err != nil {
@@ -1196,7 +1285,7 @@ func (p *config) createPersistentDiskIfNotExists(ctx context.Context, projectID,
 }
 
 func (p *config) deletePersistentDisk(ctx context.Context, projectID, zone, diskName, requestID string) (*compute.Operation, error) {
-	return retry(ctx, deleteRetries, secSleep, func() (*compute.Operation, error) {
+	return retry(ctx, p.metrics, metric.GCPResourceDisk, metric.GCPOperationDelete, zone, classifyOpts{isDelete: true}, deleteRetries, secSleep, func() (*compute.Operation, error) {
 		return p.service.Disks.Delete(projectID, zone, diskName).RequestId(requestID).Context(ctx).Do()
 	})
 }
@@ -1258,7 +1347,7 @@ func (p *config) findInstanceZone(ctx context.Context, instanceID string) (
 	allNotFound := true
 
 	for _, zone := range p.allZones() {
-		_, err := p.getInstance(ctx, p.projectID, zone, instanceID)
+		_, err := p.getInstanceWithOpts(ctx, p.projectID, zone, instanceID, classifyOpts{isZoneScan: true})
 		if err == nil {
 			return zone, nil
 		}
@@ -1296,7 +1385,9 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 		}
 		ctxGcp, cancel := context.WithTimeout(ctx, operationGetTimeout*time.Second)
 		client := p.service
-		op, err := client.ZoneOperations.Get(p.projectID, zone, name).Context(ctxGcp).Do()
+		op, err := apiCall(ctxGcp, p.metrics, metric.GCPResourceZoneOperation, metric.GCPOperationGet, zone, classifyOpts{}, func() (*compute.Operation, error) {
+			return client.ZoneOperations.Get(p.projectID, zone, name).Context(ctxGcp).Do()
+		})
 		cancel()
 		if err != nil {
 			if gerr, ok := err.(*googleapi.Error); ok &&
@@ -1304,6 +1395,7 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 				return errors.New("not Found")
 			}
 			if shouldRetry(err) {
+				recordRetry(p.metrics, metric.GCPResourceZoneOperation, metric.GCPOperationGet, zone, err)
 				logger.FromContext(ctx).
 					WithField("name", name).
 					WithField("zone", zone).
@@ -1335,7 +1427,9 @@ func (p *config) setupFirewall(ctx context.Context) error {
 
 	logr.Debugln("finding default firewall rules")
 
-	_, err := p.service.Firewalls.Get(p.projectID, "default-allow-docker").Context(ctx).Do()
+	_, err := apiCall(ctx, p.metrics, metric.GCPResourceFirewall, metric.GCPOperationGet, "", classifyOpts{}, func() (*compute.Firewall, error) {
+		return p.service.Firewalls.Get(p.projectID, "default-allow-docker").Context(ctx).Do()
+	})
 	if err == nil {
 		logr.Debugln("found default firewall rule")
 		return nil
@@ -1356,14 +1450,15 @@ func (p *config) setupFirewall(ctx context.Context) error {
 		TargetTags:   []string{"allow-docker"},
 	}
 
-	op, err := p.service.Firewalls.Insert(p.projectID, rule).Context(ctx).Do()
-	if err != nil {
-		logr.WithError(err).
-			Errorln("cannot create firewall operation")
-		return err
-	}
-
-	err = p.waitGlobalOperation(ctx, op.Name)
+	err = trackOperation(ctx, p.metrics, metric.GCPResourceFirewall, metric.GCPOperationInsert, "", "", classifyOpts{}, func() error {
+		op, insertErr := apiCall(ctx, p.metrics, metric.GCPResourceFirewall, metric.GCPOperationInsert, "", classifyOpts{}, func() (*compute.Operation, error) {
+			return p.service.Firewalls.Insert(p.projectID, rule).Context(ctx).Do()
+		})
+		if insertErr != nil {
+			return insertErr
+		}
+		return p.waitGlobalOperation(ctx, op.Name)
+	})
 	if err != nil {
 		logr.WithError(err).
 			Errorln("cannot create firewall rule")
@@ -1374,9 +1469,12 @@ func (p *config) setupFirewall(ctx context.Context) error {
 
 func (p *config) waitGlobalOperation(ctx context.Context, name string) error {
 	for {
-		op, err := p.service.GlobalOperations.Get(p.projectID, name).Context(ctx).Do()
+		op, err := apiCall(ctx, p.metrics, metric.GCPResourceGlobalOperation, metric.GCPOperationGet, "", classifyOpts{}, func() (*compute.Operation, error) {
+			return p.service.GlobalOperations.Get(p.projectID, name).Context(ctx).Do()
+		})
 		if err != nil {
 			if shouldRetry(err) {
+				recordRetry(p.metrics, metric.GCPResourceGlobalOperation, metric.GCPOperationGet, "", err)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -1622,13 +1720,19 @@ func shouldRetry(err error) bool {
 	}
 }
 
-func retry[T any](ctx context.Context, attempts, sleepSecs int, f func() (T, error)) (result T, err error) {
+// retry wraps a single GCP SDK call with bounded retries on transient errors.
+// Every attempt (including retries) goes through apiCall for raw-request
+// instrumentation, and each retry increments the operation-retries counter
+// so retry storms are visible without inflating the logical operation's
+// success/failure count.
+func retry[T any](ctx context.Context, m *metric.Metrics, resource, operation, zone string, opts classifyOpts, attempts, sleepSecs int, f func() (T, error)) (result T, err error) {
 	for i := 0; i < attempts; i++ {
 		if i > 0 {
+			recordRetry(m, resource, operation, zone, err)
 			logger.FromContext(ctx).Warnf("retrying after error: %s\n", err)
 			time.Sleep(time.Duration(sleepSecs) * time.Second)
 		}
-		result, err = f()
+		result, err = apiCall(ctx, m, resource, operation, zone, opts, f)
 		if err == nil {
 			return result, nil
 		}

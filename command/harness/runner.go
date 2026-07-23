@@ -199,7 +199,7 @@ func (r *Runner) setupStandardPools() error {
 	r.CapacityReservationStore = stores.CapacityReservationStore
 	r.PoolManager = drivers.New(r.ctx, stores.InstanceStore, r.Config)
 
-	poolConfig, err := SetupPoolWithEnv(r.ctx, r.Config, r.PoolManager, r.poolFile)
+	poolConfig, err := SetupPoolWithEnv(r.ctx, r.Config, r.PoolManager, r.poolFile, r.Metrics)
 	if err != nil {
 		return fmt.Errorf("setting up pool: %w", err)
 	}
