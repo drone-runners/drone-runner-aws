@@ -49,6 +49,17 @@ type Metrics struct {
 	GCPOperationRetriesCount *prometheus.CounterVec
 	GCPOperationsInflight    *prometheus.GaugeVec
 
+	// Background instance/capacity purger metrics
+	PurgerLastRunTimestamp             *prometheus.GaugeVec
+	PurgerInstanceDestroyAttemptsCount *prometheus.CounterVec
+	PurgerInstancesForceDeletedCount   *prometheus.CounterVec
+	PurgerCapacityDestroyAttemptsCount *prometheus.CounterVec
+
+	// Hot-pool level and usage metrics
+	HotpoolInstancesCurrent   *prometheus.GaugeVec
+	HotpoolClaimAttemptsCount *prometheus.CounterVec
+	HotpoolStateDuration      *prometheus.HistogramVec
+
 	stores []*Store
 }
 
@@ -186,13 +197,15 @@ func (m *Metrics) UpdateWarmPoolCount(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				// Reset the metrics before setting new values so a pool/state that no longer has
+				// any instances doesn't leave a stale series behind.
+				m.WarmPoolCount.Reset()
+				m.HotpoolInstancesCurrent.Reset()
 				wg := &sync.WaitGroup{}
 				for _, ms := range m.stores {
 					go m.updateWarmPoolCount(ctx, ms, wg)
 				}
 				wg.Wait()
-				// Reset the metric before setting new values
-				m.WarmPoolCount.Reset()
 			}
 		}
 	}()
@@ -326,6 +339,46 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				"provisioning",
 			).Set(float64(len(provisioning)))
 		}
+
+		// runner_hotpool_instances_current: additive to WarmPoolCount above, with zone/vm_type
+		// granularity read off each instance instead of a bare per-pool/state count.
+		m.updateHotpoolInstancesCurrent(poolName, busy, free, hibernating, provisioning)
+	}
+}
+
+// hotpoolKey groups instances for the runner_hotpool_instances_current gauge by the dimensions
+// that gauge is keyed on, beyond pool (which the caller already iterates by).
+type hotpoolKey struct {
+	zone, vmType, state string
+}
+
+// updateHotpoolInstancesCurrent sets runner_hotpool_instances_current for one pool's busy, free
+// (split into ready/hibernated), hibernating, and provisioning instances, reading zone/vm_type
+// off each instance so the gauge has finer granularity than the pool-level WarmPoolCount.
+func (m *Metrics) updateHotpoolInstancesCurrent(poolName string, busy, free, hibernating, provisioning []*types.Instance) {
+	counts := map[hotpoolKey]int{}
+	bucket := func(instances []*types.Instance, state string) {
+		for _, inst := range instances {
+			counts[hotpoolKey{zone: inst.Zone, vmType: inst.Size, state: state}]++
+		}
+	}
+
+	bucket(busy, drivers.HotpoolStateBusy)
+	bucket(hibernating, drivers.HotpoolStateHibernating)
+	bucket(provisioning, drivers.HotpoolStateProvisioning)
+
+	// free splits into ready vs hibernated depending on each instance's IsHibernated flag, same
+	// split WarmPoolCount does above.
+	for _, inst := range free {
+		state := drivers.HotpoolStateReady
+		if inst.IsHibernated {
+			state = drivers.HotpoolStateHibernated
+		}
+		counts[hotpoolKey{zone: inst.Zone, vmType: inst.Size, state: state}]++
+	}
+
+	for k, count := range counts {
+		m.HotpoolInstancesCurrent.WithLabelValues(poolName, k.zone, k.vmType, k.state).Set(float64(count))
 	}
 }
 
@@ -501,6 +554,17 @@ func RegisterMetrics() *Metrics {
 	gcpOperationRetriesCount := GCPOperationRetriesCount()
 	gcpOperationsInflight := GCPOperationsInflight()
 
+	// Background purger metrics
+	purgerLastRunTimestamp := PurgerLastRunTimestamp()
+	purgerInstanceDestroyAttemptsCount := PurgerInstanceDestroyAttemptsCount()
+	purgerInstancesForceDeletedCount := PurgerInstancesForceDeletedCount()
+	purgerCapacityDestroyAttemptsCount := PurgerCapacityDestroyAttemptsCount()
+
+	// Hot-pool level and usage metrics
+	hotpoolInstancesCurrent := HotpoolInstancesCurrent()
+	hotpoolClaimAttemptsCount := HotpoolClaimAttemptsCount()
+	hotpoolStateDuration := HotpoolStateDuration()
+
 	prometheus.MustRegister(
 		buildCount, failedBuildCount, runningCount, runningPerAccountCount,
 		poolFallbackCount, waitDurationCount, totalVMInitDurationCount,
@@ -512,6 +576,9 @@ func RegisterMetrics() *Metrics {
 		instanceIdleAge,
 		gcpAPIRequestsCount, gcpAPIRequestDuration,
 		gcpOperationsCount, gcpOperationDuration, gcpOperationRetriesCount, gcpOperationsInflight,
+		purgerLastRunTimestamp, purgerInstanceDestroyAttemptsCount,
+		purgerInstancesForceDeletedCount, purgerCapacityDestroyAttemptsCount,
+		hotpoolInstancesCurrent, hotpoolClaimAttemptsCount, hotpoolStateDuration,
 	)
 
 	return &Metrics{
@@ -539,5 +606,12 @@ func RegisterMetrics() *Metrics {
 		GCPOperationDuration:                    gcpOperationDuration,
 		GCPOperationRetriesCount:                gcpOperationRetriesCount,
 		GCPOperationsInflight:                   gcpOperationsInflight,
+		PurgerLastRunTimestamp:                  purgerLastRunTimestamp,
+		PurgerInstanceDestroyAttemptsCount:      purgerInstanceDestroyAttemptsCount,
+		PurgerInstancesForceDeletedCount:        purgerInstancesForceDeletedCount,
+		PurgerCapacityDestroyAttemptsCount:      purgerCapacityDestroyAttemptsCount,
+		HotpoolInstancesCurrent:                 hotpoolInstancesCurrent,
+		HotpoolClaimAttemptsCount:               hotpoolClaimAttemptsCount,
+		HotpoolStateDuration:                    hotpoolStateDuration,
 	}
 }

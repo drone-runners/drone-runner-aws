@@ -29,6 +29,10 @@ func SetupPool(
 	freeCapacityMaxAge int64,
 	metrics *metric.Metrics,
 ) (*config.PoolFile, error) {
+	if metrics != nil {
+		poolManager.SetMetrics(metrics)
+	}
+
 	pools, err := poolfile.ProcessPool(configPool, runnerName, passwords, metrics)
 	if err != nil {
 		logrus.WithError(err).Errorln("unable to process pool file")
