@@ -5,6 +5,8 @@
 package drivers
 
 import (
+	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -213,63 +215,67 @@ func TestBuildClaimIdentityLabels(t *testing.T) {
 	}
 }
 
-func TestBuildClaimIdentityMetadata(t *testing.T) {
-	tests := []struct {
-		name        string
-		setupParams *types.SetupInstanceParams
-		want        map[string]string
-	}{
-		{
-			name: "raw case is preserved for all three ids",
-			setupParams: &types.SetupInstanceParams{
-				AccountID:           "Acc-AbC123",
-				StageRuntimeID:      "StAgE-1",
-				PipelineExecutionID: "PiPe-1_XYZ",
-			},
-			want: map[string]string{
-				MetadataAccountID:           "Acc-AbC123",
-				MetadataStageExecutionID:    "StAgE-1",
-				MetadataPipelineExecutionID: "PiPe-1_XYZ",
-			},
-		},
-		{
-			name:        "nil setupParams returns nil",
-			setupParams: nil,
-			want:        nil,
-		},
-		{
-			name:        "empty setupParams returns nil (no keys)",
-			setupParams: &types.SetupInstanceParams{},
-			want:        nil,
-		},
-		{
-			name: "only the populated ids are included",
-			setupParams: &types.SetupInstanceParams{
-				StageRuntimeID: "stage-only",
-			},
-			want: map[string]string{
-				MetadataStageExecutionID: "stage-only",
-			},
-		},
+func TestRefreshClaimIdentityLabels(t *testing.T) {
+	setupParams := &types.SetupInstanceParams{
+		AccountID:           "Acc-AbC123",
+		StageRuntimeID:      "StAgE-1",
+		PipelineExecutionID: "PiPe-1_XYZ",
 	}
+	inst := &types.Instance{ID: "inst-1"}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := buildClaimIdentityMetadata(tc.setupParams)
-			if tc.want == nil {
-				if got != nil {
-					t.Errorf("want nil, got %v", got)
-				}
-				return
+	t.Run("calls SetLabels with the built overlay", func(t *testing.T) {
+		var gotInst *types.Instance
+		var gotLabels map[string]string
+		var called bool
+		mock := &flexibleMockDriver{
+			SetLabelsFunc: func(_ context.Context, i *types.Instance, labels map[string]string) error {
+				called = true
+				gotInst = i
+				gotLabels = labels
+				return nil
+			},
+		}
+		pool := &poolEntry{Pool: Pool{Driver: mock}}
+
+		refreshClaimIdentityLabels(context.Background(), pool, inst, setupParams, int64(3600))
+
+		if !called {
+			t.Fatal("expected SetLabels to be called")
+		}
+		if gotInst != inst {
+			t.Errorf("SetLabels got instance %v, want %v", gotInst, inst)
+		}
+		wantIdentity := map[string]string{
+			LabelAccountID:           "acc-abc123",
+			LabelStageExecutionID:    "stage-1",
+			LabelPipelineExecutionID: "pipe-1_xyz",
+		}
+		for k, v := range wantIdentity {
+			if gotLabels[k] != v {
+				t.Errorf("label %q: got %q, want %q", k, gotLabels[k], v)
 			}
-			if len(got) != len(tc.want) {
-				t.Errorf("len mismatch: got %d (%v), want %d (%v)", len(got), got, len(tc.want), tc.want)
+		}
+		if _, ok := gotLabels[LabelCreatedAt]; !ok {
+			t.Errorf("missing %q label", LabelCreatedAt)
+		}
+		if _, ok := gotLabels[LabelLongRunning]; !ok {
+			t.Errorf("missing %q label", LabelLongRunning)
+		}
+	})
+
+	t.Run("swallows SetLabels error (log-and-continue)", func(t *testing.T) {
+		mock := &flexibleMockDriver{
+			SetLabelsFunc: func(_ context.Context, _ *types.Instance, _ map[string]string) error {
+				return errors.New("boom")
+			},
+		}
+		pool := &poolEntry{Pool: Pool{Driver: mock}}
+
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("helper panicked on SetLabels error: %v", r)
 			}
-			for k, v := range tc.want {
-				if got[k] != v {
-					t.Errorf("metadata %q: got %q, want %q", k, got[k], v)
-				}
-			}
-		})
-	}
+		}()
+		refreshClaimIdentityLabels(context.Background(), pool, inst, setupParams, int64(3600))
+	})
 }

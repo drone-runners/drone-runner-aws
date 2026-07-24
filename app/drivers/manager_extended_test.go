@@ -174,6 +174,7 @@ type flexibleMockDriver struct {
 	HibernateFunc                 func(ctx context.Context, instanceID, poolName, zone string) error
 	StartFunc                     func(ctx context.Context, instance *types.Instance, poolName string) (string, error)
 	SetTagsFunc                   func(ctx context.Context, instance *types.Instance, tags map[string]string) error
+	SetLabelsFunc                 func(ctx context.Context, instance *types.Instance, labels map[string]string) error
 	PingFunc                      func(ctx context.Context) error
 	LogsFunc                      func(ctx context.Context, instanceID string) (string, error)
 	GetFullyQualifiedImageFunc    func(ctx context.Context, config *types.VMImageConfig) (string, error)
@@ -238,7 +239,10 @@ func (m *flexibleMockDriver) SetTags(ctx context.Context, instance *types.Instan
 	return nil
 }
 
-func (m *flexibleMockDriver) SetLabels(_ context.Context, _ *types.Instance, _ map[string]string) error {
+func (m *flexibleMockDriver) SetLabels(ctx context.Context, instance *types.Instance, labels map[string]string) error {
+	if m.SetLabelsFunc != nil {
+		return m.SetLabelsFunc(ctx, instance, labels)
+	}
 	return nil
 }
 
