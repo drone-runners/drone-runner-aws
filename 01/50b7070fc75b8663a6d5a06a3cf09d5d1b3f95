@@ -1,0 +1,72 @@
+app/drivers/hibernator.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 105
+app/drivers/distributed_manager_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 376,746,779-833,910-923
+app/poolfile/tenant_config_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 364-435
+command/config/tenant_merge_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 445-634
+app/drivers/tenant_lifecycle_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 1-93
+app/drivers/tenant_hibernate_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 1-138
+command/harness/scalable_pools_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 1-93
+app/drivers/distributed_manager.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 338-339,341-343,491-492,499-501,506-509,591-593,711,715,760
+app/scheduler/jobs/scaler_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 1721-1776
+  s_af36246feace18::t_6c46fe47b047c4 1777
+command/config/tenant_merge.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 32-35,89,181-217,219-220,222
+app/drivers/pool.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 105-127
+command/config/config.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 56-59
+command/config/tenant_parse_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 210-281
+  886920ea-806b-48b6-abf5-0096aeacdc3c 282
+app/drivers/pool_test.go
+  886920ea-806b-48b6-abf5-0096aeacdc3c 4,81-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "0150b7070fc75b8663a6d5a06a3cf09d5d1b3f95",
+  "prompts": {
+    "a172e34cf66fe45a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "58b96b94-3dfb-4b23-aa0a-e8368dc7f8fb",
+        "model": "grok-4.5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "af36246feace18c6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "886920ea-806b-48b6-abf5-0096aeacdc3c",
+        "model": "grok-4.5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 1703,
+      "total_deletions": 213,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_af36246feace18": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "886920ea-806b-48b6-abf5-0096aeacdc3c",
+        "model": "grok-4.5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
