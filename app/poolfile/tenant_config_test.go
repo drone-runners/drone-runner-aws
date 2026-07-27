@@ -361,3 +361,75 @@ func networkProxyURLFromDriver(t *testing.T, d drivers.Driver) string {
 	}
 	return ncs.Index(0).FieldByName("proxyURL").String()
 }
+
+// TestProcessPool_TenantVariantReplaceByID verifies tenant variants replace matching
+// base entries by variant_id through ProcessPool / VariantsForTenant.
+func TestProcessPool_TenantVariantReplaceByID(t *testing.T) {
+	yaml := `
+version: "1"
+instances:
+  - name: linux-amd64-gcp
+    type: google
+    pool: 1
+    limit: 10
+    platform:
+      os: linux
+      arch: amd64
+    spec:
+      account:
+        project_id: proj-base
+      image: img-base
+      machine_type: e2-standard-4
+    variants:
+      - variant_id: variant_large
+        resource_class: large
+        machine_type: c4d-standard-8-lssd
+        disk_type: hyperdisk-balanced
+        disk_size: 100
+        pool: 1
+      - variant_id: variant_xlarge
+        resource_class: xlarge
+        machine_type: c4d-standard-16-lssd
+        disk_type: hyperdisk-balanced
+        disk_size: 100
+        pool: 1
+    tenants:
+      - ids: [acctA]
+        spec:
+          machine_type: c4d-standard-8
+          hibernate: true
+        variants:
+          - variant_id: variant_large
+            resource_class: large
+            machine_type: c4d-standard-8
+            disk_type: hyperdisk-balanced
+            disk_size: 100
+            pool: 1
+`
+	pf, err := config.Parse(strings.NewReader(yaml))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	if err != nil {
+		t.Fatalf("ProcessPool: %v", err)
+	}
+	p := pools[0]
+
+	tenantVars := p.VariantsForTenant("acctA")
+	if len(tenantVars) != 2 {
+		t.Fatalf("expected 2 variants after replace-by-id, got %d", len(tenantVars))
+	}
+	wantEqual(t, "variant_large machine_type", tenantVars[0].MachineType, "c4d-standard-8")
+	wantEqual(t, "variant_large disk_type", tenantVars[0].DiskType, "hyperdisk-balanced")
+	wantEqual(t, "variant_large resource_class", tenantVars[0].ResourceClass, "large")
+	wantEqual(t, "variant_xlarge machine_type", tenantVars[1].MachineType, "c4d-standard-16-lssd")
+
+	defVars := p.VariantsForTenant(types.DefaultTenantID)
+	wantEqual(t, "default variant_large machine_type", defVars[0].MachineType, "c4d-standard-8-lssd")
+
+	// Spec-level hibernate merge is baked into per-tenant drivers.
+	if p.DriverForTenant("acctA") == p.DriverForTenant(types.DefaultTenantID) {
+		t.Error("expected distinct drivers after tenant spec merge")
+	}
+}

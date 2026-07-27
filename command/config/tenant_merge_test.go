@@ -442,3 +442,193 @@ func mustMerge(t *testing.T, base, override interface{}) interface{} {
 	}
 	return merged
 }
+
+func TestMergeVariants_EmptyOverrideInheritsBase(t *testing.T) {
+	base := []types.PoolVariant{{
+		Pool: 1,
+		SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_large", MachineType: "n2-standard-8", ResourceClass: "large",
+		},
+	}}
+	got := mergeVariants(base, nil)
+	if len(got) != 1 || got[0].MachineType != "n2-standard-8" {
+		t.Fatalf("expected base inherited, got %+v", got)
+	}
+	got = mergeVariants(base, []types.PoolVariant{})
+	if len(got) != 1 || got[0].MachineType != "n2-standard-8" {
+		t.Fatalf("empty slice override should inherit base, got %+v", got)
+	}
+}
+
+func TestMergeVariants_EmptyBaseReturnsOverride(t *testing.T) {
+	override := []types.PoolVariant{{
+		SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_flex", MachineType: "n1-standard-1", ResourceClass: "flex"},
+	}}
+	got := mergeVariants(nil, override)
+	if len(got) != 1 || got[0].VariantID != "variant_flex" {
+		t.Fatalf("expected override as-is, got %+v", got)
+	}
+}
+
+func TestMergeVariants_AppendOnlyNewVariantID(t *testing.T) {
+	base := []types.PoolVariant{{
+		SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large", MachineType: "n2-standard-8", ResourceClass: "large"},
+	}}
+	override := []types.PoolVariant{{
+		SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_flex", MachineType: "n1-standard-1", ResourceClass: "flex", NestedVirtualization: true},
+	}}
+	got := mergeVariants(base, override)
+	if len(got) != 2 {
+		t.Fatalf("expected base + appended, got %d", len(got))
+	}
+	if got[0].VariantID != "variant_large" || got[1].VariantID != "variant_flex" {
+		t.Errorf("order: got %q then %q", got[0].VariantID, got[1].VariantID)
+	}
+}
+
+func TestMergeVariants_DuplicateOverrideIDsLastWins(t *testing.T) {
+	base := []types.PoolVariant{{
+		SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large", MachineType: "n2-standard-8", ResourceClass: "large"},
+	}}
+	override := []types.PoolVariant{
+		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large", MachineType: "c4d-standard-4", ResourceClass: "large"}},
+		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large", MachineType: "c4d-standard-8", ResourceClass: "large"}},
+	}
+	got := mergeVariants(base, override)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 variant, got %d", len(got))
+	}
+	if got[0].MachineType != "c4d-standard-8" {
+		t.Errorf("last duplicate should win: got %q", got[0].MachineType)
+	}
+}
+
+func TestMergeVariants_ReplaceByVariantID(t *testing.T) {
+	base := []types.PoolVariant{
+		{
+			Pool: 1, Limit: 5,
+			SetupInstanceParams: types.SetupInstanceParams{
+				VariantID: "variant_large", MachineType: "c4d-standard-8-lssd",
+				DiskType: "hyperdisk-balanced", DiskSize: 100, ResourceClass: "large",
+			},
+		},
+		{
+			Pool: 1, Limit: 5,
+			SetupInstanceParams: types.SetupInstanceParams{
+				VariantID: "variant_xlarge", MachineType: "c4d-standard-8-lssd",
+				DiskType: "hyperdisk-balanced", DiskSize: 100, ResourceClass: "xlarge",
+			},
+		},
+		{
+			Pool: 0, Limit: 0,
+			SetupInstanceParams: types.SetupInstanceParams{
+				VariantID: "variant_xxxlarge", MachineType: "g2-standard-16",
+				GPU: true, ResourceClass: "xxxlarge",
+			},
+		},
+	}
+	// Matching variant_id fully replaces the base entry (not a field merge).
+	override := []types.PoolVariant{{
+		Pool: 2, Limit: 10,
+		SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_large", MachineType: "c4d-standard-8",
+			DiskType: "hyperdisk-balanced", DiskSize: 100, ResourceClass: "large",
+		},
+	}}
+
+	got := mergeVariants(base, override)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 variants (base length preserved), got %d", len(got))
+	}
+
+	large := got[0]
+	if large.VariantID != "variant_large" {
+		t.Fatalf("order: expected variant_large first, got %q", large.VariantID)
+	}
+	if large.MachineType != "c4d-standard-8" || large.Pool != 2 || large.Limit != 10 {
+		t.Errorf("variant_large should be fully replaced: %+v", large)
+	}
+	if got[1].MachineType != "c4d-standard-8-lssd" || got[1].VariantID != "variant_xlarge" {
+		t.Errorf("unmentioned variant_xlarge must stay unchanged: %+v", got[1])
+	}
+	if !got[2].GPU || got[2].MachineType != "g2-standard-16" {
+		t.Errorf("unmentioned variant_xxxlarge must stay unchanged: %+v", got[2])
+	}
+}
+
+func TestMergeVariants_FullOverrideAndAppend(t *testing.T) {
+	base := []types.PoolVariant{
+		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large", MachineType: "n2-standard-8", ResourceClass: "large"}},
+		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_xlarge", MachineType: "n2-standard-16", ResourceClass: "xlarge"}},
+	}
+	override := []types.PoolVariant{
+		{Pool: 2, SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_large", MachineType: "c2-standard-30", ResourceClass: "large", DiskSize: 200}},
+		{SetupInstanceParams: types.SetupInstanceParams{VariantID: "variant_flex", MachineType: "n1-standard-1", ResourceClass: "flex", NestedVirtualization: true}},
+	}
+
+	got := mergeVariants(base, override)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 (2 base + 1 new), got %d %+v", len(got), got)
+	}
+	if got[0].MachineType != "c2-standard-30" || got[0].Pool != 2 || got[0].ResourceClass != "large" {
+		t.Errorf("variant_large replace: %+v", got[0])
+	}
+	if got[0].DiskSize != 200 {
+		t.Errorf("disk_size: got %d", got[0].DiskSize)
+	}
+	if got[1].VariantID != "variant_xlarge" || got[1].MachineType != "n2-standard-16" {
+		t.Errorf("variant_xlarge should remain: %+v", got[1])
+	}
+	if got[2].VariantID != "variant_flex" || !got[2].NestedVirtualization {
+		t.Errorf("new variant_flex should append: %+v", got[2])
+	}
+}
+
+func TestResolveTenants_ReplaceVariantByID(t *testing.T) {
+	inst := &Instance{
+		Name: "linux-amd64-gcp",
+		Type: "google",
+		Spec: &Google{MachineType: "e2-standard-4", Image: "img-base"},
+		Variants: []types.PoolVariant{
+			{Pool: 1, SetupInstanceParams: types.SetupInstanceParams{
+				VariantID: "variant_large", ResourceClass: "large", MachineType: "c4d-standard-8-lssd", DiskType: "hyperdisk-balanced",
+			}},
+			{Pool: 1, SetupInstanceParams: types.SetupInstanceParams{
+				VariantID: "variant_xlarge", ResourceClass: "xlarge", MachineType: "c4d-standard-16-lssd",
+			}},
+		},
+		Tenants: []Tenant{{
+			IDs:  []string{"acctA"},
+			Spec: &Google{MachineType: "c4d-standard-8"},
+			Variants: []types.PoolVariant{{
+				Pool: 1,
+				SetupInstanceParams: types.SetupInstanceParams{
+					VariantID: "variant_large", ResourceClass: "large", MachineType: "c4d-standard-8", DiskType: "hyperdisk-balanced",
+				},
+			}},
+		}},
+	}
+
+	tenants, _, err := ResolveTenants(inst)
+	if err != nil {
+		t.Fatalf("ResolveTenants: %v", err)
+	}
+	byID := map[string]ResolvedTenant{}
+	for _, tn := range tenants {
+		byID[tn.ID] = tn
+	}
+
+	ta := byID["acctA"]
+	if len(ta.Variants) != 2 {
+		t.Fatalf("acctA should keep both variants after replace-by-id, got %d", len(ta.Variants))
+	}
+	if ta.Variants[0].MachineType != "c4d-standard-8" || ta.Variants[0].ResourceClass != "large" {
+		t.Errorf("variant_large should be replaced: %+v", ta.Variants[0])
+	}
+	if ta.Variants[1].MachineType != "c4d-standard-16-lssd" {
+		t.Errorf("variant_xlarge should be untouched: %+v", ta.Variants[1])
+	}
+	if ta.Spec.(*Google).MachineType != "c4d-standard-8" {
+		t.Errorf("spec machine_type: got %q", ta.Spec.(*Google).MachineType)
+	}
+}

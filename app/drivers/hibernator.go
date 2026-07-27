@@ -102,7 +102,7 @@ func (m *Manager) hibernateOrStopWithRetries(
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
 	}
 
-	if !pool.Driver.CanHibernate() && !fallbackStop {
+	if !pool.DriverForTenant(instance.TenantID).CanHibernate() && !fallbackStop {
 		return nil
 	}
 

@@ -29,8 +29,10 @@ type ResolvedTenant struct {
 // The instance-level Spec is the base (default) tenant: it is always returned first with ID
 // "default" and the instance-level Pool/Limit/Variants. Each entry in inst.Tenants is a
 // per-account override whose (partial) Spec is deep-merged over the base; its tenant ID is the
-// first entry of its IDs list, and every account in IDs is routed to that tenant. Accounts not
-// listed in any override resolve to the default tenant.
+// first entry of its IDs list, and every account in IDs is routed to that tenant. Tenant
+// Variants replace matching instance-level variants by variant_id (full entry replace; new
+// variant_ids are appended). Accounts not listed in any override resolve
+// to the default tenant.
 //
 // Backward compatibility: an instance with no `tenants` block resolves to the single default
 // tenant and an empty account map (so every request resolves to the default tenant).
@@ -84,7 +86,7 @@ func ResolveTenants(inst *Instance) (tenants []ResolvedTenant, accountToTenant m
 			Spec:     spec,
 			Pool:     intOrDefault(t.Pool, inst.Pool),
 			Limit:    intOrDefault(t.Limit, inst.Limit),
-			Variants: firstNonEmptyVariants(t.Variants, inst.Variants),
+			Variants: mergeVariants(inst.Variants, t.Variants),
 		})
 
 		for _, accountID := range t.IDs {
@@ -176,11 +178,46 @@ func intOrDefault(p *int, def int) int {
 	return def
 }
 
-func firstNonEmptyVariants(vals ...[]types.PoolVariant) []types.PoolVariant {
-	for _, v := range vals {
-		if len(v) > 0 {
-			return v
-		}
+// mergeVariants merges tenant variant overrides over the instance-level variants by variant_id.
+//
+//   - Empty override → return base unchanged (inherit all).
+//   - Empty base → return override as-is.
+//   - Matching variant_id → the tenant entry fully replaces the base entry.
+//   - New variant_id in override → appended after base variants (in override order).
+//   - Base variants with no matching override → kept as-is.
+func mergeVariants(base, override []types.PoolVariant) []types.PoolVariant {
+	if len(override) == 0 {
+		return base
 	}
-	return nil
+	if len(base) == 0 {
+		return override
+	}
+
+	overrideByID := make(map[string]types.PoolVariant, len(override))
+	overrideOrder := make([]string, 0, len(override))
+	for i := range override {
+		id := override[i].VariantID
+		overrideByID[id] = override[i]
+		overrideOrder = append(overrideOrder, id)
+	}
+
+	seen := make(map[string]bool, len(override))
+	out := make([]types.PoolVariant, 0, len(base)+len(override))
+	for i := range base {
+		id := base[i].VariantID
+		if ov, ok := overrideByID[id]; ok {
+			out = append(out, ov)
+			seen[id] = true
+			continue
+		}
+		out = append(out, base[i])
+	}
+	for _, id := range overrideOrder {
+		if seen[id] {
+			continue
+		}
+		out = append(out, overrideByID[id])
+		seen[id] = true
+	}
+	return out
 }

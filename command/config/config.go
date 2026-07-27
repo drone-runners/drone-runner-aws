@@ -53,7 +53,10 @@ type (
 		Limit *int `json:"limit,omitempty" yaml:"limit,omitempty"`
 		// Spec is the provider-specific override spec: a subset that is deep-merged over the base.
 		Spec interface{} `json:"spec,omitempty" yaml:"spec,omitempty"`
-		// Variants optionally override the instance-level variants for this tenant.
+		// Variants optionally override the instance-level variants for this tenant. Entries are
+		// matched by variant_id: a matching id fully replaces that base variant, new ids are
+		// appended, and base variants with no override are kept. Omit the list to inherit all
+		// instance-level variants unchanged.
 		Variants []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
 	}
 

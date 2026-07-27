@@ -335,10 +335,12 @@ func (d *DistributedManager) provisionFromPool(
 	}
 	setupParams.TenantID = tenantID
 
-	// Variant filtering: select all matching variants in priority order based on provisionParams
+	// Variant filtering: select matching variants from the tenant-resolved list so per-tenant
+	// variant_id overrides (machine_type, disk, etc.) are honored on provision.
 	var matchedVariants []*types.PoolVariant
-	if len(pool.PoolVariants) > 0 {
-		matchedVariants = d.filterVariants(ctx, pool, provisionParams)
+	tenantVariants := pool.VariantsForTenant(tenantID)
+	if len(tenantVariants) > 0 {
+		matchedVariants = d.filterVariants(ctx, pool, provisionParams, tenantVariants)
 		if len(matchedVariants) > 0 {
 			// Apply the first (highest priority) variant config for new instance creation
 			applyVariantToSetupParams(setupParams, matchedVariants[0])
@@ -486,21 +488,25 @@ func shouldReplenishInstance(inst *types.Instance) bool {
 }
 
 // filterVariants returns all matching variants in priority order based on provisionParams criteria.
+// variants is the candidate list (typically pool.VariantsForTenant); callers must pass the
+// tenant-resolved slice so per-tenant machine_type/disk/image overrides are honored.
 // Step 1: Filter by ResourceClass AND NestedVirtualization (both required). Returns nil if no matches.
 // Step 2: When the provision request has a non-empty fully qualified image name, refine by image:
 // variants with a matching image name are preferred; otherwise variants with no image name are used.
 // If nothing qualifies in step 2, returns nil (no fallback to all step-1 candidates).
 // When the provision image is empty, step 2 is skipped and step 1 candidates are returned.
 // The order preserves the original pool configuration order.
-func (d *DistributedManager) filterVariants(ctx context.Context, pool *poolEntry, provisionParams *types.ProvisionParams) []*types.PoolVariant {
+func (d *DistributedManager) filterVariants(
+	ctx context.Context, pool *poolEntry, provisionParams *types.ProvisionParams, variants []types.PoolVariant,
+) []*types.PoolVariant {
 	logr := logger.FromContext(ctx).WithField("pool", pool.Name)
 
 	// Step 1: Filter by ResourceClass AND NestedVirtualization (both required)
 	var candidates []*types.PoolVariant
-	for i := range pool.PoolVariants {
-		if pool.PoolVariants[i].ResourceClass == provisionParams.ResourceClass &&
-			pool.PoolVariants[i].NestedVirtualization == provisionParams.NestedVirtualization {
-			candidates = append(candidates, &pool.PoolVariants[i])
+	for i := range variants {
+		if variants[i].ResourceClass == provisionParams.ResourceClass &&
+			variants[i].NestedVirtualization == provisionParams.NestedVirtualization {
+			candidates = append(candidates, &variants[i])
 		}
 	}
 
@@ -581,6 +587,9 @@ func applyVariantToSetupParams(setupParams *types.SetupInstanceParams, variant *
 	}
 	if variant.GPU {
 		setupParams.GPU = true
+	}
+	if variant.Hibernate {
+		setupParams.Hibernate = true
 	}
 	// Set VariantID for tracking
 	setupParams.VariantID = variant.VariantID
@@ -699,10 +708,11 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 
 		// Step 3: Attempt to hibernate the instance
 		shouldHibernate := false
+		tenantDriver := pool.DriverForTenant(inst.TenantID)
 		if setupParams != nil && setupParams.VariantID != "" && setupParams.VariantID != defaultVariantID {
 			shouldHibernate = setupParams.Hibernate
 		} else {
-			shouldHibernate = pool.Driver.CanHibernate()
+			shouldHibernate = tenantDriver.CanHibernate()
 		}
 		err = d.hibernate(ctx, pool.Name, inst, shouldHibernate)
 		if err != nil {
@@ -747,7 +757,7 @@ func (d *DistributedManager) hibernate(
 
 	var hibernateErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		hibernateErr = pool.Driver.Hibernate(ctx, claimedInstance.ID, poolName, claimedInstance.Zone)
+		hibernateErr = pool.DriverForTenant(claimedInstance.TenantID).Hibernate(ctx, claimedInstance.ID, poolName, claimedInstance.Zone)
 		if hibernateErr == nil {
 			break // Success, exit retry loop
 		}
