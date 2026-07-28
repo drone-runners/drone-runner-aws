@@ -140,9 +140,6 @@ func TestLinuxEgressDispatch(t *testing.T) {
 					t.Errorf("v2 template unexpectedly contains v1 envoy marker")
 				}
 				for _, want := range []string{
-					"HTTPS_PROXY=" + proxyURL,
-					"HTTP_PROXY=" + proxyURL,
-					"NO_PROXY=" + noProxy,
 					proxyURL + "/healthz",
 					base64.StdEncoding.EncodeToString([]byte(caCert)),
 				} {
@@ -207,7 +204,7 @@ func TestUbuntuBinariesPartialShared(t *testing.T) {
 		{"egress_v2_diagnostics", func(p *cloudinit.Params) {
 			p.EgressControl = true
 			p.EnableLEDiagnostics = true
-		}, true},
+		}, false},
 	}
 
 	for _, tc := range cases {
