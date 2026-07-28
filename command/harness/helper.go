@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"hash/fnv"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -41,4 +42,41 @@ func fileID(filename string) string {
 	h := fnv.New32a()
 	h.Write([]byte(filename))
 	return strings.Replace(filepath.Base(filename), ".", "-", -1) + strconv.Itoa(int(h.Sum32()))
+}
+
+// mergeEgressPolicy combines ci-manager-provided credentials with the runner-known proxy URL
+// and noProxy list. Fields are passed through raw — credential embedding into the URL happens
+// at the consumer (lite-engine for docker setup, configureEgressStep for step env vars).
+func mergeEgressPolicy(existing *leapi.EgressPolicy, proxyURL, noProxy string) *leapi.EgressPolicy {
+	if proxyURL == "" {
+		return existing
+	}
+	if existing == nil {
+		return &leapi.EgressPolicy{ProxyURL: proxyURL, NoProxy: noProxy}
+	}
+	return &leapi.EgressPolicy{
+		Username: existing.Username,
+		Password: existing.Password,
+		ProxyURL: proxyURL,
+		NoProxy:  noProxy,
+	}
+}
+
+// buildProxyURL embeds credentials into the proxy URL using net/url so that
+// special characters (@ : % $ etc.) in credentials are percent-encoded correctly.
+// Bare URLs without a scheme are treated as http://.
+func buildProxyURL(username, password, proxyURL string) string {
+	if username == "" || password == "" {
+		return proxyURL
+	}
+	raw := proxyURL
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return proxyURL
+	}
+	u.User = url.UserPassword(username, password)
+	return u.String()
 }

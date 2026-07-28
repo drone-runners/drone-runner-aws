@@ -319,7 +319,7 @@ type (
 // NoProxy and CACert stay global (same for all regions/networks).
 type EgressProxy struct {
 	URL     string `json:"url" yaml:"url" envconfig:"DRONE_EGRESS_PROXY_URL" default:"http://127.0.0.1:3128"`
-	NoProxy string `json:"no_proxy" yaml:"no_proxy" envconfig:"DRONE_EGRESS_NO_PROXY" default:"localhost,127.0.0.1,169.254.169.254,172.16.0.0/12,10.0.0.0/8,.svc.cluster.local"`
+	NoProxy string `json:"no_proxy" yaml:"no_proxy" envconfig:"DRONE_EGRESS_NO_PROXY" default:"localhost,127.0.0.1,169.254.169.254,172.16.0.0/12,10.0.0.0/8,.svc.cluster.local,.harness.io,harness.io"`
 	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
 	// fleet proxy presents. Baked into the build VM so TLS interception is trusted.
 	CACert string `json:"ca_cert" yaml:"ca_cert" envconfig:"DRONE_EGRESS_PROXY_CA_CERT"`
@@ -511,8 +511,8 @@ type EnvConfig struct {
 	}
 
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.184/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.184/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.185/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.185/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
