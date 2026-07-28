@@ -87,36 +87,9 @@ try {
     echo "[egress] git --system config write failed: $($_.Exception.Message)"
 }
 
-echo "[egress] Setting machine-wide proxy env vars"
-# Only proxy vars are set machine-wide. Tools that honour the Windows Cert
-# Store (Schannel-based: curl.exe, git with sslBackend=schannel, .NET, IE,
-# Edge) trust the Harness CA automatically once it's imported above. Tools
-# that read their own bundle (Node certifi, Python certifi, custom git
-# builds via libcurl) need NODE_EXTRA_CA_CERTS / REQUESTS_CA_BUNDLE /
-# GIT_SSL_CAINFO / SSL_CERT_FILE -- left to the user to set per-step
-# since the right value depends on whether the step runs in a container
-# (own rootfs, own bundle) vs on the host.
-[Environment]::SetEnvironmentVariable("HTTPS_PROXY", $EgressProxy,   "Machine")
-[Environment]::SetEnvironmentVariable("HTTP_PROXY",  $EgressProxy,   "Machine")
-[Environment]::SetEnvironmentVariable("NO_PROXY",    $EgressNoProxy, "Machine")
-# Mirror into the current process so the rest of this script (and the
-# lite-engine started below) sees them without a logoff/refresh.
-$env:HTTPS_PROXY = $EgressProxy
-$env:HTTP_PROXY  = $EgressProxy
-$env:NO_PROXY    = $EgressNoProxy
-
-echo "[egress] Restarting Docker so dockerd picks up the new HTTPS_PROXY machine env"
-# Docker on Windows reads HTTPS_PROXY/HTTP_PROXY/NO_PROXY from the service
-# environment on start. We've already set those at Machine scope above; a
-# restart makes the running daemon honour them for registry pulls.
-# (We do NOT write daemon.json -- "proxies" is a Docker CLI config key,
-# the daemon rejects it as an unknown directive and refuses to start.)
-try {
-    Restart-Service docker -Force -ErrorAction Stop
-    echo "[egress] docker restarted"
-} catch {
-    echo "[egress] docker service not running yet; will pick up env on next start"
-}
+# Proxy env vars and docker restart are applied by lite-engine at setup time
+# (lite-engine handler/setup.go applyDockerProxy) so that per-account
+# credentials can be embedded into the proxy URL. See EgressPolicy.ProxyURL.
 
 echo "[egress] Proxy /healthz reachability check"
 # Direct_response 200 from Envoy -- short-circuits before TPA, so it works

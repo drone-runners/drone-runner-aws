@@ -111,6 +111,7 @@ func (s *VMService) Setup(ctx context.Context, req *SetupVMRequest) (*SetupVMRes
 		s.poolManager,
 		s.metrics,
 		s.fallbackPoolIDs,
+		s.egressProxy.NoProxy,
 	)
 }
 

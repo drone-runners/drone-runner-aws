@@ -79,6 +79,7 @@ func HandleSetup(
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
 	envFallbackPoolIDs []string,
+	noProxy string,
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
 	stageRuntimeID := r.ID
@@ -224,7 +225,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, noProxy)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -429,6 +430,7 @@ func handleSetup(
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
+	noProxy string,
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -591,6 +593,7 @@ func handleSetup(
 
 	if poolManager.IsEgressPool(pool, instance.TenantID) {
 		r.Volumes = appendEgressCAVolume(r.Volumes, instance.Platform.OS)
+		r.SetupRequest.EgressPolicy = mergeEgressPolicy(r.SetupRequest.EgressPolicy, instance.ProxyURL, noProxy)
 	}
 
 	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())

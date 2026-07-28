@@ -124,7 +124,13 @@ func HandleStep(ctx context.Context,
 		if proxyURL == "" {
 			proxyURL = egressProxy.URL
 		}
-		configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy)
+		merged := mergeEgressPolicy(r.StartStepRequest.EgressPolicy, proxyURL, egressProxy.NoProxy)
+		if merged != nil {
+			r.StartStepRequest.EgressPolicy = merged
+			configureEgressStep(r, inst.Platform.OS, buildProxyURL(merged.Username, merged.Password, merged.ProxyURL), merged.NoProxy)
+		} else {
+			configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy)
+		}
 	}
 
 	// Currently the OSX m1 architecture does not enable nested virtualization, so we disable docker.
