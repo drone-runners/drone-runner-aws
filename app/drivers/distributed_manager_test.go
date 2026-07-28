@@ -373,7 +373,7 @@ func TestFilterVariant(t *testing.T) {
 			}
 
 			dm := &DistributedManager{}
-			results := dm.filterVariants(ctx, pool, tt.provisionParams)
+			results := dm.filterVariants(ctx, pool, tt.provisionParams, tt.variants)
 
 			if tt.expectedIDs == nil {
 				if results != nil {
@@ -743,7 +743,7 @@ func TestFilterVariants_Prod_LinuxAmd64(t *testing.T) {
 			}
 
 			dm := &DistributedManager{}
-			results := dm.filterVariants(ctx, pool, tt.provisionParams)
+			results := dm.filterVariants(ctx, pool, tt.provisionParams, prodVariants)
 
 			if tt.expectedIDs == nil {
 				if results != nil {
@@ -774,6 +774,61 @@ func variantIDList(variants []*types.PoolVariant) []string {
 		ids[i] = v.VariantID
 	}
 	return ids
+}
+
+// TestFilterVariants_TenantPartialMachineTypeOverride simulates provision: resolve tenant
+// variants (already merged by variant_id) and apply the matched variant's machine_type.
+func TestFilterVariants_TenantPartialMachineTypeOverride(t *testing.T) {
+	ctx := context.Background()
+	baseVariants := []types.PoolVariant{
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_large", ResourceClass: "large", MachineType: "c4d-standard-8-lssd", DiskType: "hyperdisk-balanced",
+		}},
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_xlarge", ResourceClass: "xlarge", MachineType: "c4d-standard-16-lssd",
+		}},
+	}
+	// Already-merged tenant variants (as ResolveTenants/mergeVariants would produce).
+	tenantVariants := []types.PoolVariant{
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_large", ResourceClass: "large", MachineType: "c4d-standard-8", DiskType: "hyperdisk-balanced",
+		}},
+		{SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "variant_xlarge", ResourceClass: "xlarge", MachineType: "c4d-standard-16-lssd",
+		}},
+	}
+
+	pool := &poolEntry{
+		Pool: Pool{
+			Name:            "gcp-mt",
+			PoolVariants:    baseVariants,
+			AccountToTenant: map[string]string{"acctA": "acctA"},
+			TenantDrivers: map[string]Driver{
+				types.DefaultTenantID: &mockDriver{},
+				"acctA":               &mockDriver{},
+			},
+			Tenants: []TenantPool{
+				{ID: types.DefaultTenantID, PoolVariants: baseVariants},
+				{ID: "acctA", PoolVariants: tenantVariants},
+			},
+			Driver: &mockDriver{},
+		},
+	}
+
+	dm := &DistributedManager{}
+	params := &types.ProvisionParams{ResourceClass: "large"}
+	matched := dm.filterVariants(ctx, pool, params, pool.VariantsForTenant(pool.ResolveTenant("acctA")))
+	if len(matched) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(matched))
+	}
+	setup := &types.SetupInstanceParams{}
+	applyVariantToSetupParams(setup, matched[0])
+	if setup.MachineType != "c4d-standard-8" {
+		t.Errorf("machine_type: got %q want c4d-standard-8", setup.MachineType)
+	}
+	if setup.DiskType != "hyperdisk-balanced" {
+		t.Errorf("disk_type should inherit: got %q", setup.DiskType)
+	}
 }
 
 func TestApplyVariantToSetupParams(t *testing.T) {
@@ -850,6 +905,20 @@ func TestApplyVariantToSetupParams(t *testing.T) {
 				DiskSize:    200,
 				DiskType:    "pd-balanced",
 				VariantID:   "v4",
+			},
+		},
+		{
+			name:          "apply hibernate from variant",
+			initialParams: &types.SetupInstanceParams{},
+			variant: &types.PoolVariant{
+				SetupInstanceParams: types.SetupInstanceParams{
+					VariantID: "v-hib",
+					Hibernate: true,
+				},
+			},
+			expectedParams: &types.SetupInstanceParams{
+				VariantID: "v-hib",
+				Hibernate: true,
 			},
 		},
 		{

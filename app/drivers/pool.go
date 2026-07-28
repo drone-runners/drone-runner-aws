@@ -102,6 +102,29 @@ func (p *Pool) DriverForTenant(tenantID string) Driver {
 	return p.Driver
 }
 
+// VariantsForTenant returns the resolved variants for the given tenant. Multi-tenant pools
+// store per-tenant variants on TenantPool (base variants merged with tenant overrides by
+// variant_id). Single-tenant pools use Pool.PoolVariants.
+func (p *Pool) VariantsForTenant(tenantID string) []types.PoolVariant {
+	if !p.IsMultiTenant() {
+		return p.PoolVariants
+	}
+	if tenantID == "" {
+		tenantID = types.DefaultTenantID
+	}
+	for i := range p.Tenants {
+		if p.Tenants[i].ID == tenantID {
+			return p.Tenants[i].PoolVariants
+		}
+	}
+	for i := range p.Tenants {
+		if p.Tenants[i].ID == types.DefaultTenantID {
+			return p.Tenants[i].PoolVariants
+		}
+	}
+	return p.PoolVariants
+}
+
 type Driver interface {
 	ReserveCapacity(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.CapacityReservation, err error)
 	DestroyCapacity(ctx context.Context, capacity *types.CapacityReservation) (err error)

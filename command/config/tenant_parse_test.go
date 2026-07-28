@@ -207,6 +207,79 @@ instances:
 	}
 }
 
+func TestParse_TenantVariantsYAML(t *testing.T) {
+	yaml := `
+version: "1"
+instances:
+  - name: linux-amd64-gcp
+    type: google
+    pool: 1
+    limit: 10
+    spec:
+      account:
+        project_id: proj-base
+      image: img-base
+      machine_type: e2-standard-4
+    variants:
+      - variant_id: variant_large
+        resource_class: large
+        machine_type: c4d-standard-8-lssd
+        disk_type: hyperdisk-balanced
+      - variant_id: variant_xlarge
+        resource_class: xlarge
+        machine_type: c4d-standard-16-lssd
+    tenants:
+      - ids: [acctA]
+        pool: 0
+        spec:
+          machine_type: c4d-standard-8
+        variants:
+          - variant_id: variant_large
+            resource_class: large
+            machine_type: c4d-standard-8
+            disk_type: hyperdisk-balanced
+`
+	pf, err := Parse(strings.NewReader(yaml))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	inst := pf.Instances[0]
+	if len(inst.Variants) != 2 {
+		t.Fatalf("base variants: got %d", len(inst.Variants))
+	}
+	if len(inst.Tenants) != 1 || len(inst.Tenants[0].Variants) != 1 {
+		t.Fatalf("tenant variants: got %+v", inst.Tenants)
+	}
+
+	resolved, accountMap, err := ResolveTenants(&inst)
+	if err != nil {
+		t.Fatalf("ResolveTenants: %v", err)
+	}
+	if accountMap["acctA"] != "acctA" {
+		t.Errorf("account map: %v", accountMap)
+	}
+	byID := map[string]ResolvedTenant{}
+	for _, tn := range resolved {
+		byID[tn.ID] = tn
+	}
+	ta := byID["acctA"]
+	if ta.Pool != 0 {
+		t.Errorf("pool:0 opt-out: got %d", ta.Pool)
+	}
+	if len(ta.Variants) != 2 {
+		t.Fatalf("resolved variants: got %d", len(ta.Variants))
+	}
+	if ta.Variants[0].MachineType != "c4d-standard-8" {
+		t.Errorf("replaced variant_large: got %q", ta.Variants[0].MachineType)
+	}
+	if ta.Variants[1].MachineType != "c4d-standard-16-lssd" {
+		t.Errorf("inherited variant_xlarge: got %q", ta.Variants[1].MachineType)
+	}
+	if ta.Spec.(*Google).MachineType != "c4d-standard-8" {
+		t.Errorf("spec machine_type: got %q", ta.Spec.(*Google).MachineType)
+	}
+}
+
 func TestParse_NoTenantsBackwardCompatible(t *testing.T) {
 	yaml := `
 version: "1"

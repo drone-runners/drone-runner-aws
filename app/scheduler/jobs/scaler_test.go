@@ -1718,6 +1718,63 @@ func TestScaler_MultiTenantVariantsScaleUpIndependently(t *testing.T) {
 	}
 }
 
+// TestScaler_MultiTenantVariantMachineTypeOnJobs verifies setup jobs for a tenant variant
+// carry that tenant's MachineType (not another tenant's).
+func TestScaler_MultiTenantVariantMachineTypeOnJobs(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+	const image = "ubuntu-2204"
+
+	mockPredictor.SetPredictionForTenant("pool-1", "default", "large", image, 0)
+	mockPredictor.SetPredictionForTenant("pool-1", "acctA", "large", image, 0)
+	for _, tenant := range []string{"default", "acctA"} {
+		historyStore.records = append(historyStore.records, types.UtilizationRecord{
+			Pool: "pool-1", TenantID: tenant, VariantID: "large", ImageName: image,
+			RecordedAt: time.Now().Unix(), InUseInstances: 1,
+		})
+	}
+
+	pools := []ScalablePool{{
+		Name: "pool-1",
+		Tenants: []ScalableTenant{
+			{ID: "default", MinSize: 0, Variants: []ScalableVariant{{
+				MinSize: 1,
+				Params:  types.SetupInstanceParams{VariantID: "large", MachineType: "c4d-standard-8-lssd"},
+			}}},
+			{ID: "acctA", MinSize: 0, Variants: []ScalableVariant{{
+				MinSize: 1,
+				Params:  types.SetupInstanceParams{VariantID: "large", MachineType: "c4d-standard-8"},
+			}}},
+		},
+	}}
+
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, types.ScalerConfig{
+		WindowDuration: 30 * time.Minute, LeadTime: 5 * time.Minute, Enabled: true, ActiveImageLookbackDays: 7,
+	}, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("ScalePool: %v", err)
+	}
+
+	got := map[string]string{}
+	for _, job := range outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance) {
+		var p types.SetupInstanceParams
+		if err := json.Unmarshal(*job.JobParams, &p); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		got[p.TenantID] = p.MachineType
+	}
+	if got["default"] != "c4d-standard-8-lssd" {
+		t.Errorf("default machine_type: got %q", got["default"])
+	}
+	if got["acctA"] != "c4d-standard-8" {
+		t.Errorf("acctA machine_type: got %q", got["acctA"])
+	}
+}
+
 // TestScaler_FreeInstanceCounts_BucketedByTenantAndVariant verifies free-instance counting keeps
 // separate buckets per (tenant, variant, image) so one tenant's or variant's inventory is never
 // counted against another's.
