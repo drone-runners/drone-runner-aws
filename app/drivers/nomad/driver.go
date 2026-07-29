@@ -481,6 +481,9 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 	if accountID != "" {
 		constraintList = constraints(accountID)
 	}
+	if !isSequoiaImage(vmImageConfig.ImageName) {
+		constraintList = append(constraintList, sequoiaExclusionConstraint())
+	}
 	// This job stays alive to keep resources on nomad busy until the VM is destroyed
 	// It sleeps until the max VM creation timeout, after which it periodically checks whether the VM is alive or not
 	job = &api.Job{
@@ -983,6 +986,22 @@ func constraints(accountID string) []*api.Constraint {
 
 	constraintList = append(constraintList, constraint)
 	return constraintList
+}
+
+// isSequoiaImage reports whether the given image name refers to a Sequoia image.
+// Empty image names (pool default, which is Sonoma) return false.
+func isSequoiaImage(imageName string) bool {
+	return strings.Contains(strings.ToLower(imageName), "sequoia")
+}
+
+// sequoiaExclusionConstraint returns a Nomad constraint that excludes nodes
+// tagged with meta.sequoia_only=true.
+func sequoiaExclusionConstraint() *api.Constraint {
+	return &api.Constraint{
+		LTarget: "${meta.sequoia_only}",
+		RTarget: "true",
+		Operand: "!=",
+	}
 }
 
 // Request Nomad to assign available ports dynamically.
