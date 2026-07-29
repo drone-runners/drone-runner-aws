@@ -91,12 +91,19 @@ func (m *Manager) setupInstanceWithHibernate(
 }
 
 // hibernateOrStopWithRetries attempts to hibernate an instance with retries.
+//
+// runner_vm_hibernate_attempts_total/runner_vm_hibernate_duration_seconds are recorded once per
+// call here (not once per inner retry): there is no raw-attempt-vs-logical-operation split
+// requested for this metric area (unlike the two-layer GCP API metrics), so the whole retry loop
+// - including backoff sleeps - counts as a single logical hibernate operation. The "pool not
+// found" and no-op-for-non-hibernatable-driver early returns above are deliberately excluded:
+// neither represents an actual hibernate attempt.
 func (m *Manager) hibernateOrStopWithRetries(
 	ctx context.Context,
 	poolName string,
 	instance *types.Instance,
 	fallbackStop bool,
-) error {
+) (err error) {
 	pool := m.poolMap[poolName]
 	if pool == nil {
 		return fmt.Errorf("hibernate: pool name %q not found", poolName)
@@ -106,10 +113,20 @@ func (m *Manager) hibernateOrStopWithRetries(
 		return nil
 	}
 
+	start := time.Now()
+	defer func() {
+		if m.metrics == nil {
+			return
+		}
+		outcome, reason := classifyLifecycleError(ctx, err)
+		m.metrics.RecordVMHibernateAttempt(poolName, instance.Zone, instance.Size, outcome, reason)
+		m.metrics.RecordVMHibernateDuration(poolName, instance.Zone, instance.Size, outcome, time.Since(start))
+	}()
+
 	retryCount := 1
 	const maxRetries = 3
 	for {
-		err := m.hibernate(ctx, instance.ID, poolName, pool)
+		err = m.hibernate(ctx, instance.ID, poolName, pool)
 		if err == nil {
 			logrus.WithFields(logrus.Fields{
 				"instanceID": instance.ID,
@@ -140,12 +157,16 @@ func (m *Manager) hibernateOrStopWithRetries(
 }
 
 // hibernate hibernates an instance.
+//
+// Errors are wrapped in a *lifecycleStageError so hibernateOrStopWithRetries's deferred metric
+// recording can classify a state (DB) failure separately from a cloud (driver) failure without
+// string-matching these error messages.
 func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, pool *poolEntry) error {
 	pool.Lock()
 	inst, err := m.Find(ctx, instanceID)
 	if err != nil {
 		pool.Unlock()
-		return fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
+		return &lifecycleStageError{stage: lifecycleStageState, err: fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)}
 	}
 
 	if inst.State == types.StateInUse {
@@ -155,7 +176,7 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 	inst.State = types.StateHibernating
 	if err = m.instanceStore.Update(ctx, inst); err != nil {
 		pool.Unlock()
-		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
+		return &lifecycleStageError{stage: lifecycleStageState, err: fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)}
 	}
 	pool.Unlock()
 
@@ -164,20 +185,20 @@ func (m *Manager) hibernate(ctx context.Context, instanceID, poolName string, po
 		if uerr := m.updateInstState(ctx, pool, instanceID, types.StateCreated); uerr != nil {
 			logrus.WithError(err).WithField("instanceID", instanceID).Errorln("failed to update state for failed hibernation")
 		}
-		return fmt.Errorf("hibernate: failed to hibernated an instance %s of %q pool: %w", instanceID, poolName, err)
+		return &lifecycleStageError{stage: lifecycleStageCloud, err: fmt.Errorf("hibernate: failed to hibernated an instance %s of %q pool: %w", instanceID, poolName, err)}
 	}
 
 	pool.Lock()
 	if inst, err = m.Find(ctx, instanceID); err != nil {
 		pool.Unlock()
-		return fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)
+		return &lifecycleStageError{stage: lifecycleStageState, err: fmt.Errorf("hibernate: failed to find the instance in db %s of %q pool: %w", instanceID, poolName, err)}
 	}
 
 	inst.IsHibernated = true
 	inst.State = types.StateCreated
 	if err = m.instanceStore.Update(ctx, inst); err != nil {
 		pool.Unlock()
-		return fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)
+		return &lifecycleStageError{stage: lifecycleStageState, err: fmt.Errorf("hibernate: failed to update instance in db %s of %q pool: %w", instanceID, poolName, err)}
 	}
 	pool.Unlock()
 	return nil

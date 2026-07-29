@@ -102,6 +102,80 @@ func TestManager_PurgeStaleInstancesForPool_DestroyFailureRecordsFailedOutcome(t
 	}
 }
 
+func TestManager_PurgeStaleInstancesForPool_BusyDestroy_RecordsVMUsageDuration(t *testing.T) {
+	now := time.Now()
+	usageStart := now.Add(-90 * time.Minute)
+	staleBusy := &types.Instance{
+		ID: "busy-stale", Pool: "pool1", State: types.StateInUse, Zone: "us-east1-a",
+		Size: "n1-standard-2", Source: types.InstanceSourcePool,
+		Started: now.Add(-2 * time.Hour).Unix(), Updated: usageStart.Unix(),
+	}
+
+	instanceStore := &mockInstanceStore{
+		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {
+			return []*types.Instance{staleBusy}, nil
+		},
+		DeleteFunc: func(_ context.Context, _ string) error { return nil },
+	}
+
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyFunc: func(_ context.Context, _ []*types.Instance) ([]*types.Instance, error) {
+			return nil, nil // every instance destroyed successfully
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	m := &Manager{instanceStore: instanceStore, metrics: fakeMetrics}
+	pool := newManagerPurgerTestPool(driver)
+
+	err := m.purgeStaleInstancesForPool(context.Background(), pool, "server", time.Hour, time.Hour)
+	assert.NoError(t, err)
+
+	if assert.Len(t, fakeMetrics.vmUsageDurs, 1) {
+		rec := fakeMetrics.vmUsageDurs[0]
+		assert.Equal(t, "pool1", rec.poolID)
+		assert.Equal(t, "us-east1-a", rec.zone)
+		assert.Equal(t, "n1-standard-2", rec.vmType)
+		assert.Equal(t, string(types.InstanceSourcePool), rec.source)
+		assert.Equal(t, VMTerminationReasonPurgerStale, rec.terminationReason)
+		// dwell should be ~90 minutes (usageStart to now), with generous slack for test runtime.
+		assert.InDelta(t, 90*time.Minute.Seconds(), rec.dwell.Seconds(), 30)
+	}
+}
+
+func TestManager_PurgeStaleInstancesForPool_FreeDestroy_DoesNotRecordVMUsageDuration(t *testing.T) {
+	// Free (never-claimed) instances were never "in use", so no usage duration should be
+	// recorded when the purger destroys a stale free instance.
+	now := time.Now()
+	staleFree := &types.Instance{
+		ID: "free-stale", Pool: "pool1", State: types.StateCreated, Zone: "us-east1-a",
+		Started: now.Add(-2 * time.Hour).Unix(), Updated: now.Add(-2 * time.Hour).Unix(),
+	}
+
+	instanceStore := &mockInstanceStore{
+		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {
+			return []*types.Instance{staleFree}, nil
+		},
+		DeleteFunc: func(_ context.Context, _ string) error { return nil },
+	}
+
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyFunc: func(_ context.Context, _ []*types.Instance) ([]*types.Instance, error) {
+			return nil, nil
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	m := &Manager{instanceStore: instanceStore, metrics: fakeMetrics}
+	pool := newManagerPurgerTestPool(driver)
+
+	err := m.purgeStaleInstancesForPool(context.Background(), pool, "server", time.Hour, time.Hour)
+	assert.NoError(t, err)
+	assert.Empty(t, fakeMetrics.vmUsageDurs)
+}
+
 func TestManager_PurgeStaleInstancesForPool_NilMetricsSafe(t *testing.T) {
 	instanceStore := &mockInstanceStore{
 		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {

@@ -97,11 +97,22 @@ func (m *Manager) purgeStaleInstancesForPool(
 	// from, so the destroy-attempts metric can carry an accurate reason label even after the
 	// three buckets are merged into a single destroy batch below.
 	reasonByID := make(map[string]string)
+	// usageStartByID captures each busy instance's pre-destroy inst.Updated as a best-effort
+	// proxy for "became inuse at" (there's no dedicated column for that), read here before
+	// destroyByTenant/Delete below can touch the instance further. Only populated for busy
+	// instances, since free/stuck-provisioning instances were never actually in use.
+	// Known limitation: the non-distributed Manager's warm-pool claim path (provisionFromPool)
+	// does not refresh inst.Updated at claim time, so for an instance that was claimed from the
+	// warm pool this proxy is actually "last touched at" (e.g. when it was created or last
+	// hibernated/resumed), not "became inuse at" - usage duration can be inflated by however
+	// long the instance sat idle in the pool before being claimed.
+	usageStartByID := make(map[string]int64)
 	for _, inst := range busy {
 		startedAt := time.Unix(inst.Started, 0)
 		if time.Since(startedAt) > maxAgeBusy {
 			instances = append(instances, inst)
 			reasonByID[inst.ID] = PurgerReasonBusyMaxAge
+			usageStartByID[inst.ID] = inst.Updated
 		}
 	}
 	for _, inst := range free {
@@ -153,6 +164,14 @@ func (m *Manager) purgeStaleInstancesForPool(
 		}
 		if m.metrics != nil {
 			m.metrics.RecordInstanceDestroyAttempt(pool.Name, instance.Zone, reasonByID[instance.ID], outcome)
+			if outcome == PurgerOutcomeDestroyed && reasonByID[instance.ID] == PurgerReasonBusyMaxAge {
+				if usageStart, ok := usageStartByID[instance.ID]; ok && usageStart > 0 {
+					m.metrics.RecordVMUsageDuration(
+						pool.Name, instance.Zone, instance.Size, string(instance.Source),
+						VMTerminationReasonPurgerStale, time.Since(time.Unix(usageStart, 0)),
+					)
+				}
+			}
 		}
 
 		if failedIDs[instance.ID] {

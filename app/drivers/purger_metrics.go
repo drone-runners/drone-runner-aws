@@ -62,4 +62,31 @@ type MetricsRecorder interface {
 	// RecordHotpoolStateDuration observes how long an instance dwelled in a hot-pool lifecycle
 	// state before transitioning out of it.
 	RecordHotpoolStateDuration(poolID, zone, vmType, state string, dwell time.Duration)
+	// RecordVMCreationAttempt records the outcome of one driver.Create() call (see vm_metrics.go
+	// for the bounded outcome/reason values).
+	RecordVMCreationAttempt(poolID, zone, vmType, source, outcome, reason string)
+	// RecordVMCreationDuration observes how long one driver.Create() call took, from immediately
+	// before invocation to immediately after it returns (success or error), before any
+	// subsequent health/setup work.
+	RecordVMCreationDuration(poolID, zone, vmType, source, outcome string, duration time.Duration)
+	// RecordVMUsageDuration observes how long a VM was in the inuse state before being
+	// terminated (see vm_metrics.go for the bounded termination_reason values).
+	RecordVMUsageDuration(poolID, zone, vmType, source, terminationReason string, dwell time.Duration)
+	// RecordVMHibernateAttempt records the outcome of one logical hibernate operation (the whole
+	// hibernateOrStopWithRetries call, including any internal retries - see
+	// vm_lifecycle_metrics.go for the bounded outcome/reason values).
+	RecordVMHibernateAttempt(poolID, zone, vmType, outcome, reason string)
+	// RecordVMHibernateDuration observes how long one logical hibernate operation took, including
+	// any internal retry backoff sleeps.
+	RecordVMHibernateDuration(poolID, zone, vmType, outcome string, duration time.Duration)
+	// RecordVMResumeAttempt records the outcome of one logical resume operation (the cloud-level
+	// start/resume call plus the subsequent state write that clears IsHibernated).
+	RecordVMResumeAttempt(poolID, zone, vmType, outcome, reason string)
+	// RecordVMResumeDuration observes how long just the cloud-level start/resume call took,
+	// narrower than RecordVMResumeAttempt's scope - see vm_lifecycle_metrics.go.
+	RecordVMResumeDuration(poolID, zone, vmType, outcome string, duration time.Duration)
+	// RecordVMResumeToReadyDuration observes the customer-relevant latency from resume start to
+	// the resumed VM being confirmed healthy and set up for a stage (includes the health-check
+	// and setup phases, unlike RecordVMResumeDuration).
+	RecordVMResumeToReadyDuration(poolID, zone, vmType, outcome string, duration time.Duration)
 }
