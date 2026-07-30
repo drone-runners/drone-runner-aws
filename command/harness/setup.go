@@ -430,7 +430,7 @@ func handleSetup(
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
-	noProxy string,
+	noProxy string, //nolint:unparam // retained for signature stability; egress no-proxy is now applied via cloud-init, not here
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -593,7 +593,9 @@ func handleSetup(
 
 	if poolManager.IsEgressPool(pool, instance.TenantID) {
 		r.Volumes = appendEgressCAVolume(r.Volumes, instance.Platform.OS)
-		r.SetupRequest.EgressPolicy = mergeEgressPolicy(r.SetupRequest.EgressPolicy, instance.ProxyURL, noProxy)
+		// lite-engine no longer applies an egress proxy from EgressPolicy (ProxyURL/NoProxy were
+		// removed); the VM-level proxy is configured via cloud-init. Any ci-manager-provided proxy
+		// credentials already on r.SetupRequest.EgressPolicy are left as-is.
 	}
 
 	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
