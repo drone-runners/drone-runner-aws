@@ -225,7 +225,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, noProxy)
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -430,7 +430,6 @@ func handleSetup(
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
-	noProxy string, //nolint:unparam // retained for signature stability; egress no-proxy is now applied via cloud-init, not here
 ) (
 	instance *types.Instance,
 	warmed bool,
