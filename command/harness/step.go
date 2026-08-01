@@ -124,13 +124,15 @@ func HandleStep(ctx context.Context,
 		if proxyURL == "" {
 			proxyURL = egressProxy.URL
 		}
-		merged := mergeEgressPolicy(r.StartStepRequest.EgressPolicy, proxyURL, egressProxy.NoProxy)
-		if merged != nil {
-			r.StartStepRequest.EgressPolicy = merged
-			configureEgressStep(r, inst.Platform.OS, buildProxyURL(merged.Username, merged.Password, merged.ProxyURL), merged.NoProxy)
-		} else {
-			configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy)
+		// Egress credentials (if any) are supplied by ci-manager on EgressPolicy; the proxy URL and
+		// no-proxy list are runner-side values. lite-engine no longer carries ProxyURL/NoProxy on
+		// EgressPolicy, so apply them to the step directly here.
+		var egressUser, egressPass string
+		if r.StartStepRequest.EgressPolicy != nil {
+			egressUser = r.StartStepRequest.EgressPolicy.Username
+			egressPass = r.StartStepRequest.EgressPolicy.Password
 		}
+		configureEgressStep(r, inst.Platform.OS, buildProxyURL(egressUser, egressPass, proxyURL), egressProxy.NoProxy)
 	}
 
 	// Currently the OSX m1 architecture does not enable nested virtualization, so we disable docker.

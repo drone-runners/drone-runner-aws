@@ -225,7 +225,7 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, noProxy)
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -430,7 +430,6 @@ func handleSetup(
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
-	noProxy string,
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -593,7 +592,9 @@ func handleSetup(
 
 	if poolManager.IsEgressPool(pool, instance.TenantID) {
 		r.Volumes = appendEgressCAVolume(r.Volumes, instance.Platform.OS)
-		r.SetupRequest.EgressPolicy = mergeEgressPolicy(r.SetupRequest.EgressPolicy, instance.ProxyURL, noProxy)
+		// lite-engine no longer applies an egress proxy from EgressPolicy (ProxyURL/NoProxy were
+		// removed); the VM-level proxy is configured via cloud-init. Any ci-manager-provided proxy
+		// credentials already on r.SetupRequest.EgressPolicy are left as-is.
 	}
 
 	_, err = client.RetrySetup(ctx, &r.SetupRequest, poolManager.GetSetupTimeout())
