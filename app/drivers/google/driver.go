@@ -44,6 +44,7 @@ const (
 	tagRetrySleepMs     = 1000
 	operationGetTimeout = 30
 	maxStockoutAttempts = 3
+	retryBackoffSec     = 2
 
 	stockoutCacheTTL = 900 * time.Second
 	// stockoutCacheSize bounds the number of remembered (zone, machineType) keys.
@@ -1308,7 +1309,7 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 					WithField("name", name).
 					WithField("zone", zone).
 					Warnf("google: wait operation failed with retryable error: %s. retrying\n", err)
-				time.Sleep(2 * time.Second)
+				time.Sleep(retryBackoffSec * time.Second)
 				continue
 			}
 			return err
@@ -1319,7 +1320,7 @@ func (p *config) waitZoneOperation(ctx context.Context, name, zone string) error
 		if op.Status == "DONE" {
 			return nil
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(retryBackoffSec * time.Second)
 	}
 }
 
