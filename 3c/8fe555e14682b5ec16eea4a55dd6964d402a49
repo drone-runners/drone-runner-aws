@@ -1,0 +1,45 @@
+command/config/egress_proxy_test.go
+  d328593e-5a00-40ae-a326-4c6a8537d33f 23-38,45,60-63
+command/config/config.go
+  d328593e-5a00-40ae-a326-4c6a8537d33f 326-330
+command/harness/step.go
+  d328593e-5a00-40ae-a326-4c6a8537d33f 130,132,221-223,240,250,257-270
+command/harness/step_test.go
+  d328593e-5a00-40ae-a326-4c6a8537d33f 12-14,21-29,32,62,79,91-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "3c8fe555e14682b5ec16eea4a55dd6964d402a49",
+  "prompts": {
+    "0500cbad877fdbe3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d328593e-5a00-40ae-a326-4c6a8537d33f",
+        "model": "kimi-k3"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 122,
+      "total_deletions": 13,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "63a7894d40b23707": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bfb68b03-9b37-4b9a-998f-796cfc9005fe",
+        "model": "auto-smart"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 1019,
+      "total_deletions": 60,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_73ea4b83252c23": {
+      "author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
