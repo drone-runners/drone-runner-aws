@@ -127,9 +127,9 @@ func HandleStep(ctx context.Context,
 		merged := mergeEgressPolicy(r.StartStepRequest.EgressPolicy, proxyURL, egressProxy.NoProxy)
 		if merged != nil {
 			r.StartStepRequest.EgressPolicy = merged
-			configureEgressStep(r, inst.Platform.OS, buildProxyURL(merged.Username, merged.Password, merged.ProxyURL), merged.NoProxy)
+			configureEgressStep(r, inst.Platform.OS, buildProxyURL(merged.Username, merged.Password, merged.ProxyURL), merged.NoProxy, egressProxy.CAEnvVars)
 		} else {
-			configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy)
+			configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy, egressProxy.CAEnvVars)
 		}
 	}
 
@@ -218,7 +218,9 @@ func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 // configureEgressStep applies the egress-control proxy settings and bind-mounts
 // the Harness egress CA for a step running in an egress pool. It pairs with
 // appendEgressCAVolume (setup side), which registers the host-path volume.
-func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string) {
+// caEnvVars lists env vars that get pointed at the mounted CA so common
+// runtimes and tools trust TLS interception (see config.EgressProxy.CAEnvVars).
+func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string, caEnvVars []string) {
 	if r.Envs == nil {
 		r.Envs = make(map[string]string)
 	}
@@ -235,6 +237,7 @@ func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string) {
 	switch os {
 	case oshelp.OSLinux:
 		r.Envs["HARNESS_CA_PATH"] = egressCAHostPath
+		injectEgressCAEnvVars(r, egressCAHostPath, caEnvVars)
 		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
 			Name: fileID("ca.crt"),
 			Path: egressCAHostPath,
@@ -244,9 +247,24 @@ func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string) {
 		// errors "Only directories can be mapped on this platform"). Mount the
 		// parent directory; the CA remains at C:\harness-certs\ca.crt inside.
 		r.Envs["HARNESS_CA_PATH"] = egressCAWindowsHostPath
+		injectEgressCAEnvVars(r, egressCAWindowsHostPath, caEnvVars)
 		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
 			Name: fileID("ca.crt"),
 			Path: "C:\\harness-certs",
 		})
+	}
+}
+
+// injectEgressCAEnvVars points each configured env var at the mounted egress
+// CA. Vars the step already defines are left untouched so users keep control
+// of their toolchain's trust configuration.
+func injectEgressCAEnvVars(r *ExecuteVMRequest, caPath string, caEnvVars []string) {
+	for _, env := range caEnvVars {
+		if env == "" {
+			continue
+		}
+		if _, ok := r.Envs[env]; !ok {
+			r.Envs[env] = caPath
+		}
 	}
 }

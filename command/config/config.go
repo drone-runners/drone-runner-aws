@@ -323,6 +323,11 @@ type EgressProxy struct {
 	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
 	// fleet proxy presents. Baked into the build VM so TLS interception is trusted.
 	CACert string `json:"ca_cert" yaml:"ca_cert" envconfig:"DRONE_EGRESS_PROXY_CA_CERT"`
+	// CAEnvVars lists environment variables that steps in egress pools get
+	// pointed at the mounted egress CA, so common runtimes and tools
+	// (Go/OpenSSL, Node, Python requests, curl, git) trust TLS interception.
+	// A step-provided value always wins over an injected one.
+	CAEnvVars []string `json:"ca_env_vars" yaml:"ca_env_vars" envconfig:"DRONE_EGRESS_CA_ENV_VARS" default:"SSL_CERT_FILE,NODE_EXTRA_CA_CERTS,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO"`
 }
 
 type EnvConfig struct {
