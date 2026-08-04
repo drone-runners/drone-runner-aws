@@ -1,0 +1,12 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "bddd8aa7491697928092debfbb172fe309a4635c",
+  "prompts": {},
+  "humans": {
+    "h_73ea4b83252c23": {
+      "author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
