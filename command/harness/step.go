@@ -160,9 +160,6 @@ func HandleStep(ctx context.Context,
 			}
 		}
 	}
-	if r.StartStepRequest.StageRuntimeID == "" {
-		r.StartStepRequest.StageRuntimeID = r.StageRuntimeID
-	}
 	startStepResponse, err := client.RetryStartStep(ctx, &r.StartStepRequest, poolManager.GetStartStepTimeout())
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LE.RetryStartStep: %w", err)
