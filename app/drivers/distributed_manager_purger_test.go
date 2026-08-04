@@ -39,6 +39,16 @@ func newPurgerFakeStore(seed ...*types.Instance) *purgerFakeStore {
 	return s
 }
 
+// Create re-inserts a row into the in-memory map. The purger uses this to
+// re-track leak-candidates whose cloud destroy failed.
+func (s *purgerFakeStore) Create(_ context.Context, instance *types.Instance) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	copied := *instance
+	s.instances[instance.ID] = &copied
+	return nil
+}
+
 func (s *purgerFakeStore) snapshot() map[string]*types.Instance {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,7 +226,7 @@ func TestDistributedPurger_ExecuteInstanceCleanup_DestroyFailureKeepsRow(t *test
 
 func TestDistributedPurger_ForceDeleteLeakCandidateAt2xMaxAge(t *testing.T) {
 	// Dummy data:
-	//   leak: older than 2 * maxAge  -> force-deleted regardless of state
+	//   leak: older than 2 * maxAge  -> claimed & destroyed by the leak path
 	//   fresh: within maxAge         -> claimed & destroyed on this tick
 	//   borderline: older than maxAge but younger than 2x -> also claimed this tick
 	now := time.Now()
@@ -246,14 +256,41 @@ func TestDistributedPurger_ForceDeleteLeakCandidateAt2xMaxAge(t *testing.T) {
 	assert.NoError(t, err)
 
 	snap := store.snapshot()
-	assert.NotContains(t, snap, "leak", "row older than 2 * maxAge must be force-deleted before claim")
+	assert.NotContains(t, snap, "leak", "leak-candidate row must be dropped once its VM is destroyed")
 	assert.NotContains(t, snap, "fresh", "successful row should be deleted")
 	assert.NotContains(t, snap, "borderline", "successful row should be deleted")
 
-	// The leak-candidate row must be removed BEFORE the claim so the driver
-	// never sees it on this tick. (It will eventually be reconciled out-of-band.)
-	assert.NotContains(t, sawInDestroy, "leak", "leak-candidate should be force-deleted before driver.Destroy is called")
-	assert.ElementsMatch(t, []string{"fresh", "borderline"}, sawInDestroy, "driver.Destroy should see only in-window rows")
+	// The leak-candidate VM must be handed to driver.Destroy before its row is
+	// dropped, so we never orphan a running instance that nothing will reap.
+	assert.Contains(t, sawInDestroy, "leak", "leak-candidate must be destroyed cloud-side before its row is dropped")
+	assert.ElementsMatch(t, []string{"leak", "fresh", "borderline"}, sawInDestroy, "driver.Destroy should see leak-candidate and in-window rows")
+}
+
+func TestDistributedPurger_LeakCandidateReinsertedWhenDestroyFails(t *testing.T) {
+	// If the cloud destroy of a leak-candidate fails (e.g. quota exhaustion),
+	// its row must be re-inserted so it stays tracked and gets retried, instead
+	// of being silently dropped while the VM keeps running.
+	now := time.Now()
+	maxAge := 5 * time.Minute
+
+	leak := &types.Instance{ID: "leak", Name: "vm-leak", Pool: "pool1", State: types.StateTerminating, Started: now.Add(-3 * maxAge).Unix()}
+	store := newPurgerFakeStore(leak)
+
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyFunc: func(_ context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+			// Report every instance as failed to destroy.
+			return instances, errors.New("quota exceeded")
+		},
+	}
+
+	d, pool := newPurgerTestManager(store, driver)
+	d.forceDeleteLeakedInstances(context.Background(), pool, "busy", maxAge)
+
+	snap := store.snapshot()
+	if assert.Contains(t, snap, "leak", "undestroyed leak-candidate must be re-inserted so it is not orphaned") {
+		assert.Equal(t, "vm-leak", snap["leak"].Name)
+	}
 }
 
 func TestDistributedPurger_ForceDelete_NoopWhenMaxAgeZero(t *testing.T) {
