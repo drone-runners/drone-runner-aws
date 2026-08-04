@@ -350,6 +350,10 @@ func TestBuildCreateCandidates_StockoutKeyedByMachineType(t *testing.T) {
 // from stockoutMarkers so isStockoutError classifies it as a stockout.
 const stockoutMsg = "The zone 'projects/proj/zones/us-central1-a' does not have enough resources available to fulfill the request."
 
+// quotaMsg is GCP's project/region quota-exhaustion phrasing; must contain a
+// marker from quotaMarkers so isQuotaError classifies it as a quota error.
+const quotaMsg = "Quota 'CPUS' exceeded. Limit: 100.0 in region us-central1."
+
 // fakeCompute emulates just enough of the Compute API to drive
 // insertWithStockoutRetry: instance insert/delete and zone-operation polling.
 // It models GLOBAL_DEFAULT DNS by tracking instance-name existence
@@ -362,6 +366,7 @@ type fakeCompute struct {
 	insertCount  int32
 	deleteCount  int32
 	stockoutZone string // inserts here "succeed" then the op fails with stockout
+	quotaZone    string // inserts here "succeed" then the op fails with quota error
 }
 
 func zoneFromPath(path string) string {
@@ -421,6 +426,16 @@ func (f *fakeCompute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"name":   op,
 				"status": "DONE",
 				"error":  map[string]any{"errors": []map[string]any{{"message": stockoutMsg}}},
+			})
+			return
+		}
+		if strings.HasPrefix(op, "opinsert-") && strings.TrimPrefix(op, "opinsert-") == f.quotaZone {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   op,
+				"status": "DONE",
+				"error": map[string]any{"errors": []map[string]any{
+					{"code": "QUOTA_EXCEEDED", "message": quotaMsg},
+				}},
 			})
 			return
 		}
@@ -524,6 +539,179 @@ func TestInsertWithStockoutRetry_NoRetryWhenDisabled(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&f.deleteCount); got != 0 {
 		t.Errorf("expected no cleanup delete when retry disabled, got %d", got)
+	}
+}
+
+// --- isQuotaError / regionOf ---
+
+func TestIsQuotaError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{
+			name: "plain string QUOTA_EXCEEDED",
+			err:  errors.New("Operation failed: QUOTA_EXCEEDED"),
+			want: true,
+		},
+		{
+			name: "GCP cpus quota exceeded message",
+			err:  errors.New("Quota 'CPUS' exceeded. Limit: 100 in region us-central1"),
+			want: true,
+		},
+		{
+			name: "GCP cpus_per_vm_family quota exceeded (real hosted-vm phrasing)",
+			err:  errors.New("could not provision a VM from the pool: failed to provision instance: provision: failed to create instance: Quota 'CPUS_PER_VM_FAMILY' exceeded.  Limit: 1000.0 in region us-west4."),
+			want: true,
+		},
+		{
+			name: "googleapi error reason quotaExceeded",
+			err:  &googleapi.Error{Code: 403, Errors: []googleapi.ErrorItem{{Reason: "quotaExceeded", Message: "limit"}}},
+			want: true,
+		},
+		{
+			name: "googleapi error IP_SPACE_EXHAUSTED",
+			err:  &googleapi.Error{Code: 400, Errors: []googleapi.ErrorItem{{Reason: "IP_SPACE_EXHAUSTED", Message: "no addrs"}}},
+			want: true,
+		},
+		{
+			name: "stockout is not quota",
+			err:  errors.New("ZONE_RESOURCE_POOL_EXHAUSTED"),
+			want: false,
+		},
+		{
+			name: "unrelated error",
+			err:  errors.New("permission denied"),
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isQuotaError(tt.err); got != tt.want {
+				t.Errorf("isQuotaError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsQuotaError_WrappedGoogleAPIError(t *testing.T) {
+	base := &googleapi.Error{Code: 403, Errors: []googleapi.ErrorItem{{Reason: "quotaExceeded"}}}
+	wrapped := errors.Join(errors.New("provision failed"), base)
+	if !isQuotaError(wrapped) {
+		t.Errorf("expected wrapped googleapi quota error to be detected")
+	}
+}
+
+func TestRegionOf(t *testing.T) {
+	cases := map[string]string{
+		"us-central1-a":  "us-central1",
+		"us-east1-b":     "us-east1",
+		"europe-west4-c": "europe-west4",
+		"us-central1":    "us-central1",
+		"":               "",
+	}
+	for in, want := range cases {
+		if got := regionOf(in); got != want {
+			t.Errorf("regionOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// --- quota retry (regional skip) ---
+
+func threeZoneCandidates() []createCandidate {
+	nw := "projects/proj/global/networks/vpc"
+	return []createCandidate{
+		{zone: "us-central1-a", network: nw, subnetwork: "s-uc1", tags: []string{"t"}},
+		{zone: "us-central1-b", network: nw, subnetwork: "s-uc1", tags: []string{"t"}},
+		{zone: "us-east1-a", network: nw, subnetwork: "s-ue1", tags: []string{"t"}},
+	}
+}
+
+// TestInsertWithStockoutRetry_QuotaSkipsSameRegion: quota on us-central1-a
+// should skip us-central1-b (same region) without an insert attempt and try
+// us-east1-a. The orphan from the quota attempt must still be cleaned up.
+func TestInsertWithStockoutRetry_QuotaSkipsSameRegion(t *testing.T) {
+	f := &fakeCompute{quotaZone: "us-central1-a"}
+	p, cleanup := newFakeComputeConfig(t, f)
+	defer cleanup()
+
+	op, succeeded, err := p.insertWithStockoutRetry(
+		context.Background(), newTestInstance(), threeZoneCandidates(),
+		&types.InstanceCreateOpts{}, "c4d-standard-4", "pd-balanced",
+		true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
+	)
+	if err != nil {
+		t.Fatalf("expected success in us-east1-a, got: %v", err)
+	}
+	if op == nil {
+		t.Fatal("expected non-nil operation on success")
+	}
+	if succeeded.zone != "us-east1-a" {
+		t.Fatalf("expected success in us-east1-a, got %s", succeeded.zone)
+	}
+	if got := atomic.LoadInt32(&f.insertCount); got != 2 {
+		t.Errorf("expected 2 inserts (us-central1-a then us-east1-a), got %d", got)
+	}
+	if got := atomic.LoadInt32(&f.deleteCount); got != 1 {
+		t.Errorf("expected 1 cleanup delete for the quota-failed instance, got %d", got)
+	}
+	want := []string{"insert:us-central1-a", "delete:us-central1-a", "insert:us-east1-a"}
+	f.mu.Lock()
+	got := append([]string(nil), f.events...)
+	f.mu.Unlock()
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("call order: want %v, got %v", want, got)
+	}
+}
+
+// TestInsertWithStockoutRetry_QuotaAllRegionsExhausted: quota on both a
+// us-central1 zone and the us-east1 zone should surface the last error rather
+// than an unreachable-code panic. Skipped same-region candidates must not
+// swallow the failure.
+func TestInsertWithStockoutRetry_QuotaAllRegionsExhausted(t *testing.T) {
+	// Serve quota for every insert operation.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/instances"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "opinsert-" + zoneFromPath(r.URL.Path)})
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/instances/"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "opdelete-" + zoneFromPath(r.URL.Path)})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/operations/"):
+			op := r.URL.Path[strings.Index(r.URL.Path, "/operations/")+len("/operations/"):]
+			if strings.HasPrefix(op, "opinsert-") {
+				writeJSON(w, http.StatusOK, map[string]any{
+					"name":   op,
+					"status": "DONE",
+					"error":  map[string]any{"errors": []map[string]any{{"code": "QUOTA_EXCEEDED", "message": quotaMsg}}},
+				})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"name": op, "status": "DONE"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	svc, err := compute.NewService(context.Background(), option.WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatalf("compute.NewService: %v", err)
+	}
+	svc.BasePath = srv.URL + "/"
+	p := &config{projectID: "proj", service: svc}
+
+	_, _, err = p.insertWithStockoutRetry(
+		context.Background(), newTestInstance(), threeZoneCandidates(),
+		&types.InstanceCreateOpts{}, "c4d-standard-4", "pd-balanced",
+		true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
+	)
+	if err == nil {
+		t.Fatal("expected quota error when all regions exhausted")
+	}
+	if !isQuotaError(err) {
+		t.Fatalf("expected a quota error, got: %v", err)
 	}
 }
 
