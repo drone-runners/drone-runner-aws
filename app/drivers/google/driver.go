@@ -502,18 +502,22 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	})
 
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
-	inst, err := p.create(ctx, opts, name)
+	inst, zone, err := p.create(ctx, opts, name)
 	if err != nil {
-		defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}) //nolint:errcheck
+		logr := logger.FromContext(ctx).WithField("cloud", types.Google).WithField("name", name)
+		if zone != "" {
+			defer p.cleanupFailedInstance(context.Background(), zone, name, logr)
+		} else {
+			defer p.Destroy(context.Background(), []*types.Instance{{ID: name}}) //nolint:errcheck
+		}
 		return nil, err
 	}
 	return inst, nil
 }
 
 //nolint:gocyclo
-func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, err error) {
+func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, name string) (instance *types.Instance, zone string, err error) {
 	// Step 1: Resolve capacity reservation zone (if any)
-	var zone string
 	if opts.CapacityReservation != nil && opts.CapacityReservation.ReservationID != "" {
 		if opts.CapacityReservation.GetZone() != "" {
 			// Use stored zone directly
@@ -544,7 +548,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	// getImage returns the image to use for this instance creation
 	image, err := p.GetFullyQualifiedImage(ctx, &opts.VMImageConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get image: %w", err)
+		return nil, zone, fmt.Errorf("failed to get image: %w", err)
 	}
 
 	logr := logger.FromContext(ctx).
@@ -590,7 +594,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	if err != nil {
 		logr.WithError(err).
 			Errorln("google: failed to generate user data")
-		return nil, err
+		return nil, zone, err
 	}
 
 	bootDiskSize := p.diskSize
@@ -599,7 +603,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		if diskSizeErr != nil {
 			logr.WithError(err).
 				Errorln("google: failed to convert boot disk size string to int64")
-			return nil, err
+			return nil, zone, err
 		}
 		bootDiskSize = diskSize
 	}
@@ -689,7 +693,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 
 	op, succeeded, err := p.insertWithStockoutRetry(ctx, in, candidates, opts, machineType, bootDiskType, stockoutRetryEnabled, usesReservation, logr)
 	if err != nil {
-		return nil, err
+		return nil, succeeded.zone, err
 	}
 	zone = succeeded.zone
 	resolvedNetwork = succeeded.network
@@ -707,20 +711,20 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	vm, err := p.getInstance(ctx, p.projectID, zone, name)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
-		return nil, err
+		return nil, zone, err
 	}
 
 	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, gpu, image, machineType, resolvedNetwork)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to map VM to instance")
-		return nil, err
+		return nil, zone, err
 	}
 	logr.
 		WithField("ip", instanceMap.Address).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("google: [provision] complete")
 
-	return &instanceMap, nil
+	return &instanceMap, zone, nil
 }
 
 // insertWithStockoutRetry creates the instance by walking the ordered candidates,
