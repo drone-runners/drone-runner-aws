@@ -39,6 +39,16 @@ type Metrics struct {
 	// Instance idle age metric
 	InstanceIdleAge *prometheus.HistogramVec
 
+	// GCP API interaction metrics: raw per-request layer
+	GCPAPIRequestsCount   *prometheus.CounterVec
+	GCPAPIRequestDuration *prometheus.HistogramVec
+
+	// GCP API interaction metrics: logical per-operation layer
+	GCPOperationsCount       *prometheus.CounterVec
+	GCPOperationDuration     *prometheus.HistogramVec
+	GCPOperationRetriesCount *prometheus.CounterVec
+	GCPOperationsInflight    *prometheus.GaugeVec
+
 	stores []*Store
 }
 
@@ -483,6 +493,14 @@ func RegisterMetrics() *Metrics {
 	// Instance idle age metric
 	instanceIdleAge := InstanceIdleAge()
 
+	// GCP API interaction metrics
+	gcpAPIRequestsCount := GCPAPIRequestsCount()
+	gcpAPIRequestDuration := GCPAPIRequestDuration()
+	gcpOperationsCount := GCPOperationsCount()
+	gcpOperationDuration := GCPOperationDuration()
+	gcpOperationRetriesCount := GCPOperationRetriesCount()
+	gcpOperationsInflight := GCPOperationsInflight()
+
 	prometheus.MustRegister(
 		buildCount, failedBuildCount, runningCount, runningPerAccountCount,
 		poolFallbackCount, waitDurationCount, totalVMInitDurationCount,
@@ -492,6 +510,8 @@ func RegisterMetrics() *Metrics {
 		capacityReservationFailedCount,
 		scalerPredictedInstances,
 		instanceIdleAge,
+		gcpAPIRequestsCount, gcpAPIRequestDuration,
+		gcpOperationsCount, gcpOperationDuration, gcpOperationRetriesCount, gcpOperationsInflight,
 	)
 
 	return &Metrics{
@@ -513,5 +533,11 @@ func RegisterMetrics() *Metrics {
 		CapacityReservationFailedCount:          capacityReservationFailedCount,
 		ScalerPredictedInstances:                scalerPredictedInstances,
 		InstanceIdleAge:                         instanceIdleAge,
+		GCPAPIRequestsCount:                     gcpAPIRequestsCount,
+		GCPAPIRequestDuration:                   gcpAPIRequestDuration,
+		GCPOperationsCount:                      gcpOperationsCount,
+		GCPOperationDuration:                    gcpOperationDuration,
+		GCPOperationRetriesCount:                gcpOperationRetriesCount,
+		GCPOperationsInflight:                   gcpOperationsInflight,
 	}
 }
