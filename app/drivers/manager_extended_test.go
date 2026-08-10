@@ -1661,6 +1661,106 @@ func TestManager_getStrategy(t *testing.T) {
 	}
 }
 
+// TestGetHealthCheckTimeout_WindowsHibernated tests that Windows + hibernated
+// instances use the larger of HealthCheckWindowsTimeout and HealthCheckHibernatedTimeout
+func TestGetHealthCheckTimeout_WindowsHibernated(t *testing.T) {
+	tests := []struct {
+		name               string
+		os                 string
+		provider           types.DriverType
+		warmed             bool
+		hibernated         bool
+		windowsTimeout     time.Duration
+		hibernatedTimeout  time.Duration
+		hotpoolTimeout     time.Duration
+		coldstartTimeout   time.Duration
+		expectedTimeout    time.Duration
+	}{
+		{
+			name:              "windows not hibernated - uses windows timeout",
+			os:                "windows",
+			provider:          types.Amazon,
+			warmed:            false,
+			hibernated:        false,
+			windowsTimeout:    5 * time.Minute,
+			hibernatedTimeout: 2 * time.Minute,
+			expectedTimeout:   5 * time.Minute,
+		},
+		{
+			name:              "windows hibernated - hibernated timeout larger",
+			os:                "windows",
+			provider:          types.Amazon,
+			warmed:            false,
+			hibernated:        true,
+			windowsTimeout:    5 * time.Minute,
+			hibernatedTimeout: 8 * time.Minute,
+			expectedTimeout:   8 * time.Minute,
+		},
+		{
+			name:              "windows hibernated - windows timeout larger",
+			os:                "windows",
+			provider:          types.Amazon,
+			warmed:            false,
+			hibernated:        true,
+			windowsTimeout:    10 * time.Minute,
+			hibernatedTimeout: 2 * time.Minute,
+			expectedTimeout:   10 * time.Minute,
+		},
+		{
+			name:              "linux hibernated - uses hibernated timeout",
+			os:                "linux",
+			provider:          types.Amazon,
+			warmed:            false,
+			hibernated:        true,
+			hibernatedTimeout: 2 * time.Minute,
+			coldstartTimeout:  3 * time.Minute,
+			expectedTimeout:   2 * time.Minute,
+		},
+		{
+			name:             "linux cold start - uses coldstart timeout",
+			os:               "linux",
+			provider:         types.Amazon,
+			warmed:           false,
+			hibernated:       false,
+			coldstartTimeout: 3 * time.Minute,
+			expectedTimeout:  3 * time.Minute,
+		},
+		{
+			name:           "linux warmed - uses hotpool timeout",
+			os:             "linux",
+			provider:       types.Amazon,
+			warmed:         true,
+			hibernated:     false,
+			hotpoolTimeout: 10 * time.Second,
+			expectedTimeout: 10 * time.Second,
+		},
+		{
+			name:           "nomad - uses hotpool timeout",
+			os:             "linux",
+			provider:       types.Nomad,
+			warmed:         false,
+			hibernated:     false,
+			hotpoolTimeout: 10 * time.Second,
+			expectedTimeout: 10 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &Manager{
+				runnerConfig: types.RunnerConfig{
+					HealthCheckWindowsTimeout:    tt.windowsTimeout,
+					HealthCheckHibernatedTimeout: tt.hibernatedTimeout,
+					HealthCheckHotpoolTimeout:    tt.hotpoolTimeout,
+					HealthCheckColdstartTimeout:  tt.coldstartTimeout,
+				},
+			}
+			got := m.GetHealthCheckTimeout(tt.os, tt.provider, tt.warmed, tt.hibernated)
+			assert.Equal(t, tt.expectedTimeout, got, "timeout mismatch for %s", tt.name)
+		})
+	}
+}
+
 // Mock strategy for testing
 type mockStrategy struct{}
 
