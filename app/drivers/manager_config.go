@@ -28,10 +28,9 @@ type ManagerConfig struct {
 	LiteEnginePath         string
 	LiteEngineFallbackPath string
 
-	// Egress forward-proxy settings (URL is env fallback; per-network proxy_url overrides).
-	EgressProxyURL string
-	EgressNoProxy  string
-	EgressCACert   string
+	// Egress forward-proxy settings (proxy URL comes from per-network proxy_url).
+	EgressNoProxy string
+	EgressCACert  string
 
 	// Binary URIs
 	HarnessTestBinaryURI         string
@@ -62,7 +61,6 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		env:                          cfg.Env,
 		liteEnginePath:               cfg.LiteEnginePath,
 		liteEngineFallbackPath:       cfg.LiteEngineFallbackPath,
-		egressProxyURL:               cfg.EgressProxyURL,
 		egressNoProxy:                cfg.EgressNoProxy,
 		egressCACert:                 cfg.EgressCACert,
 		harnessTestBinaryURI:         cfg.HarnessTestBinaryURI,
@@ -93,7 +91,6 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		Env:                          envConfig.Settings.Env,
 		LiteEnginePath:               envConfig.LiteEngine.Path,
 		LiteEngineFallbackPath:       envConfig.LiteEngine.FallbackPath,
-		EgressProxyURL:               envConfig.Egress.Proxy.URL,
 		EgressNoProxy:                envConfig.Egress.Proxy.NoProxy,
 		EgressCACert:                 envConfig.Egress.Proxy.CACert,
 		HarnessTestBinaryURI:         envConfig.Settings.HarnessTestBinaryURI,

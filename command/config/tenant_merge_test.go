@@ -281,6 +281,118 @@ func TestResolveTenants_AccountCollision(t *testing.T) {
 	}
 }
 
+// TestResolveTenants_GroupIDUsedAsTenantID verifies that when a tenant sets group_id, it becomes
+// the stable tenant identity (returned as ResolvedTenant.ID) and every member account routes to
+// it — decoupling identity from the mutable ids list.
+func TestResolveTenants_GroupIDUsedAsTenantID(t *testing.T) {
+	inst := &Instance{
+		Name: "p",
+		Type: "amazon",
+		Spec: &Amazon{},
+		Tenants: []Tenant{
+			{GroupID: "group-egress", IDs: []string{"acctA", "acctB"}, Spec: &Amazon{Network: AmazonNetwork{SubnetID: "subnet-egress"}}},
+			{IDs: []string{"acctC"}, Spec: &Amazon{Network: AmazonNetwork{SubnetID: "subnet-c"}}},
+		},
+	}
+	tenants, accountToTenant, err := ResolveTenants(inst)
+	if err != nil {
+		t.Fatalf("ResolveTenants: %v", err)
+	}
+	if len(tenants) != 3 {
+		t.Fatalf("expected 3 tenants (default + 2), got %d", len(tenants))
+	}
+	if tenants[1].ID != "group-egress" {
+		t.Errorf("expected group_id as tenant id, got %q", tenants[1].ID)
+	}
+	if tenants[2].ID != "acctC" {
+		t.Errorf("expected ids[0] fallback for tenant without group_id, got %q", tenants[2].ID)
+	}
+	for _, acct := range []string{"acctA", "acctB"} {
+		if got := accountToTenant[acct]; got != "group-egress" {
+			t.Errorf("accountToTenant[%q]: got %q, want group-egress", acct, got)
+		}
+	}
+	if got := accountToTenant["acctC"]; got != "acctC" {
+		t.Errorf("accountToTenant[acctC]: got %q, want acctC", got)
+	}
+	// The override spec merge must still happen under the group id.
+	if got := tenants[1].Spec.(*Amazon).Network.SubnetID; got != "subnet-egress" {
+		t.Errorf("group tenant subnet: got %q", got)
+	}
+}
+
+// TestResolveTenants_GroupIDMayEqualOwnMemberID covers the zero-migration cutover: group_id set
+// to the current ids[0] (e.g. CbUXX...) while that account remains a member of its own group.
+func TestResolveTenants_GroupIDMayEqualOwnMemberID(t *testing.T) {
+	inst := &Instance{
+		Name: "p",
+		Type: "amazon",
+		Spec: &Amazon{},
+		Tenants: []Tenant{
+			{GroupID: "acctA", IDs: []string{"acctA", "acctB"}, Spec: &Amazon{}},
+		},
+	}
+	tenants, accountToTenant, err := ResolveTenants(inst)
+	if err != nil {
+		t.Fatalf("ResolveTenants: %v", err)
+	}
+	if tenants[1].ID != "acctA" {
+		t.Errorf("tenant id: got %q, want acctA", tenants[1].ID)
+	}
+	if got := accountToTenant["acctA"]; got != "acctA" {
+		t.Errorf("accountToTenant[acctA]: got %q, want acctA", got)
+	}
+	if got := accountToTenant["acctB"]; got != "acctA" {
+		t.Errorf("accountToTenant[acctB]: got %q, want acctA", got)
+	}
+}
+
+func TestResolveTenants_GroupIDReservedDefault(t *testing.T) {
+	inst := &Instance{
+		Name: "p",
+		Type: "amazon",
+		Spec: &Amazon{},
+		Tenants: []Tenant{
+			{GroupID: DefaultTenantID, IDs: []string{"acctA"}, Spec: &Amazon{}},
+		},
+	}
+	if _, _, err := ResolveTenants(inst); err == nil {
+		t.Fatalf("expected error for group_id colliding with reserved default tenant id")
+	}
+}
+
+func TestResolveTenants_DuplicateGroupID(t *testing.T) {
+	inst := &Instance{
+		Name: "p",
+		Type: "amazon",
+		Spec: &Amazon{},
+		Tenants: []Tenant{
+			{GroupID: "grp", IDs: []string{"acctA"}, Spec: &Amazon{}},
+			{GroupID: "grp", IDs: []string{"acctB"}, Spec: &Amazon{}},
+		},
+	}
+	if _, _, err := ResolveTenants(inst); err == nil {
+		t.Fatalf("expected error for duplicate group_id")
+	}
+}
+
+// TestResolveTenants_GroupIDConflictsWithOtherMemberID: a group_id that is another tenant's
+// member account id is rejected — otherwise account routing and group identity would disagree.
+func TestResolveTenants_GroupIDConflictsWithOtherMemberID(t *testing.T) {
+	inst := &Instance{
+		Name: "p",
+		Type: "amazon",
+		Spec: &Amazon{},
+		Tenants: []Tenant{
+			{GroupID: "acctB", IDs: []string{"acctA"}, Spec: &Amazon{}},
+			{IDs: []string{"acctC", "acctB"}, Spec: &Amazon{}},
+		},
+	}
+	if _, _, err := ResolveTenants(inst); err == nil {
+		t.Fatalf("expected error for group_id equal to another tenant's member id")
+	}
+}
+
 // TestMergeSpec_AmazonChartShape mirrors the AWS pool spec produced by the Harness runner helm
 // chart (account + ami + size + disk + network{private_ip, security_groups, zone_details}). It
 // verifies a per-tenant PrivateLink network override deep-merges correctly over the base:
