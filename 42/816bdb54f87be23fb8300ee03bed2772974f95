@@ -1,0 +1,50 @@
+command/config/config.go
+  s_53fa028b46a8bb::t_12624d50461c14 252-253
+  579a3558-34d3-4221-8764-df2f923d4ff3 46-53,324-326,726,761
+app/drivers/pool.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 90-93,99-103
+app/drivers/google/driver_test.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 25-28,350-378,392-394,424-425,440,497-508,551-650
+app/drivers/google/network_test.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 30-31,36-37,42-45
+app/drivers/pool_test.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 178-326
+  579a3558-34d3-4221-8764-df2f923d4ff3 177
+app/poolfile/tenant_config_test.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 348-453
+  579a3558-34d3-4221-8764-df2f923d4ff3 454
+app/drivers/manager_config.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 31
+  s_53fa028b46a8bb::t_12624d50461c14 32-33
+app/drivers/google/driver.go
+  s_53fa028b46a8bb::t_8d032c62c791db 1575
+  s_53fa028b46a8bb::t_e33c3f73cf2da5 613,758,760,808,810-822,1518-1521,1600
+  579a3558-34d3-4221-8764-df2f923d4ff3 153-155,159,584-587,621-622,721-726,750-757,759,809,1576
+command/config/tenant_merge.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 32-33,67-74,111-120
+  579a3558-34d3-4221-8764-df2f923d4ff3 121-122
+command/config/tenant_merge_test.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 284-394
+  579a3558-34d3-4221-8764-df2f923d4ff3 395
+command/harness/step.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 123-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "42816bdb54f87be23fb8300ee03bed2772974f95",
+  "prompts": {
+    "53fa028b46a8bb19": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "579a3558-34d3-4221-8764-df2f923d4ff3",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 1034,
+      "total_deletions": 465,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
