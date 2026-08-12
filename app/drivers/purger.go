@@ -76,10 +76,20 @@ func (m *Manager) purgeStaleInstancesForPool(
 	pool *poolEntry,
 	serverName string,
 	maxAgeBusy, maxAgeFree time.Duration,
-) error {
+) (err error) {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
+
+	// runner_purger_last_run_timestamp_seconds documents itself as "last completed" sweep, so it
+	// must only advance once this function is about to return successfully - not merely because
+	// a sweep started - so a pool where destroyByTenant/Delete/buildPool keep failing shows up as
+	// stale here instead of looking recently-serviced.
+	defer func() {
+		if err == nil && m.metrics != nil {
+			m.metrics.RecordPurgerLastRun(pool.Name)
+		}
+	}()
 
 	pool.Lock()
 	defer pool.Unlock()
@@ -117,10 +127,6 @@ func (m *Manager) purgeStaleInstancesForPool(
 			instances = append(instances, inst)
 			reasonByID[inst.ID] = PurgerReasonStuckProvisioning
 		}
-	}
-
-	if m.metrics != nil {
-		m.metrics.RecordPurgerLastRun(pool.Name)
 	}
 
 	if len(instances) == 0 {
