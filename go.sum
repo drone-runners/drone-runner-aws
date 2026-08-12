@@ -243,6 +243,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 h1:HWRh5R2+9EifMyIHV7ZV+MIZqgz
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0/go.mod h1:JfhWUomR1baixubs02l85lZYYOm7LV6om4ceouMv45c=
 github.com/harness/godotenv/v3 v3.0.1 h1:7QPEOkpx6SLLrYRRzPBp50d6c0XIxq721iqoFxbz1Bs=
 github.com/harness/godotenv/v3 v3.0.1/go.mod h1:UIXXJtTM7NkSYMYknHYOO2d8BfDlAWMYZRuRsXcDDR0=
+github.com/harness/lite-engine v0.5.185-debug-7 h1:7l/jUqXwq3nNC/2SZNb37RrwBhJuRLeQ5Maz6bYp9qo=
+github.com/harness/lite-engine v0.5.185-debug-7/go.mod h1:krHDq6oSVEkRNuN4GSiJmmjSit3kI7VArUqDDBy56GE=
 github.com/harness/lite-engine v0.5.188-debug h1:AuUlYEg3lD8dDRcMZlPq8OTEM5ZhKIPwfv3X1FERSBs=
 github.com/harness/lite-engine v0.5.188-debug/go.mod h1:krHDq6oSVEkRNuN4GSiJmmjSit3kI7VArUqDDBy56GE=
 github.com/harness/lite-engine v0.5.189-debug h1:TGCjDuCidxQKvEv9vg92JhKiH/XWXFR91oseYgfHKjo=
