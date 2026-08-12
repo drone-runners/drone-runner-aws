@@ -1,0 +1,25 @@
+app/drivers/distributed_manager_purger_test.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 316-380
+  579a3558-34d3-4221-8764-df2f923d4ff3 315
+app/drivers/distributed_manager.go
+  579a3558-34d3-4221-8764-df2f923d4ff3 1183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "604a527ef3454b5275d4079eccdc93383663a208",
+  "prompts": {
+    "53fa028b46a8bb19": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "579a3558-34d3-4221-8764-df2f923d4ff3",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 66,
+      "total_deletions": 1,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
