@@ -312,3 +312,69 @@ func TestDistributedPurger_StuckTerminatingRowIsRePicked(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotContains(t, store.snapshot(), "stuck", "stuck row should be cleaned up on the retry tick")
 }
+
+// TestDistributedPurger_ExecuteInstanceCleanup_RoutesByTenant is the regression test for the
+// live incident: this purger (the one actually running in the dlite-distributed deployment,
+// per "distributed dlite: purger" logs) destroyed instances via pool.Driver directly, ignoring
+// per-tenant drivers entirely. For a multi-tenant pool, a tenant's VM lives in the tenant's cloud
+// project; destroying it through the default tenant's driver hits a different project, GCP
+// returns 404, the driver logs "instance not found, skipping deletion" and reports success, and
+// the purger deletes the DB row -- leaking the VM forever. Instances must be routed to their
+// own tenant's driver, exactly like the app/drivers/purger.go path already does via
+// destroyByTenant.
+func TestDistributedPurger_ExecuteInstanceCleanup_RoutesByTenant(t *testing.T) {
+	now := time.Now()
+	maxAge := 5 * time.Minute
+	store := newPurgerFakeStore(
+		&types.Instance{ID: "def-1", Name: "vm-default", Pool: "pool1", State: types.StateInUse, Started: now.Add(-30 * time.Second).Unix(), TenantID: types.DefaultTenantID},
+		&types.Instance{ID: "grp-1", Name: "vm-tenant", Pool: "pool1", State: types.StateInUse, Started: now.Add(-30 * time.Second).Unix(), TenantID: "group-egress"},
+	)
+
+	var destroyedByDefault, destroyedByGroup []string
+	defaultDriver := &flexibleMockDriver{
+		driverName: "mock-default",
+		DestroyFunc: func(_ context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+			for _, i := range instances {
+				destroyedByDefault = append(destroyedByDefault, i.ID)
+			}
+			return nil, nil
+		},
+	}
+	groupDriver := &flexibleMockDriver{
+		driverName: "mock-group",
+		DestroyFunc: func(_ context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+			for _, i := range instances {
+				destroyedByGroup = append(destroyedByGroup, i.ID)
+			}
+			return nil, nil
+		},
+	}
+
+	const poolName = "pool1"
+	pool := &poolEntry{
+		Pool: Pool{
+			Name:   poolName,
+			Driver: defaultDriver,
+			TenantDrivers: map[string]Driver{
+				types.DefaultTenantID: defaultDriver,
+				"group-egress":        groupDriver,
+			},
+		},
+	}
+	d := &DistributedManager{
+		Manager: Manager{
+			poolMap:       map[string]*poolEntry{poolName: pool},
+			instanceStore: store,
+			runnerName:    "test-runner",
+		},
+	}
+
+	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
+	successful, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
+
+	assert.NoError(t, err)
+	assert.Len(t, successful, 2)
+	assert.ElementsMatch(t, []string{"def-1"}, destroyedByDefault, "default-tenant instance must be destroyed by the default driver")
+	assert.ElementsMatch(t, []string{"grp-1"}, destroyedByGroup, "tenant instance must be destroyed by its own tenant driver, not the default one")
+	assert.Empty(t, store.snapshot(), "both rows should have been destroyed and deleted")
+}
