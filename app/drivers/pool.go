@@ -87,13 +87,19 @@ func destroyByTenant(ctx context.Context, pool *Pool, instances []*types.Instanc
 	return failed, firstErr
 }
 
-// DriverForTenant returns the driver responsible for the given tenant ID. It falls back to the
-// pool's default Driver when the tenant is unknown or the pool is single-tenant, so existing
-// call sites keep working unchanged.
+// DriverForTenant returns the driver responsible for the given tenant ID. Instance rows stamped
+// before a tenant adopted an explicit group_id carry a member account id; those resolve to the
+// group driver via the AccountToTenant shim. It falls back to the pool's default Driver when the
+// tenant is unknown or the pool is single-tenant, so existing call sites keep working unchanged.
 func (p *Pool) DriverForTenant(tenantID string) Driver {
 	if len(p.TenantDrivers) > 0 {
 		if d, ok := p.TenantDrivers[tenantID]; ok && d != nil {
 			return d
+		}
+		if tenant, ok := p.AccountToTenant[tenantID]; ok {
+			if d, ok := p.TenantDrivers[tenant]; ok && d != nil {
+				return d
+			}
 		}
 		if d, ok := p.TenantDrivers[types.DefaultTenantID]; ok && d != nil {
 			return d

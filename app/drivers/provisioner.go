@@ -204,7 +204,6 @@ func (m *Manager) setupInstance(
 	createOptions.EnableLEDiagnostics = m.enableLEDiagnostics
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
-	createOptions.EgressProxyURL = m.egressProxyURL
 	createOptions.EgressNoProxy = m.egressNoProxy
 	createOptions.EgressCACert = m.egressCACert
 	createOptions.PoolName = pool.Name

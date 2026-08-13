@@ -22,7 +22,10 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
-const testMachineType = "c4d-standard-8"
+const (
+	testMachineType = "c4d-standard-8"
+	testUserDataKey = "user-data"
+)
 
 // --- isStockoutError ---
 
@@ -344,6 +347,35 @@ func TestBuildCreateCandidates_StockoutKeyedByMachineType(t *testing.T) {
 	}
 }
 
+// TestBuildCreateCandidates_CarriesNetworkProxyURL locks the invariant the
+// stockout retry path relies on: every candidate carries the proxy_url of the
+// network config its zone belongs to. Without it, a cross-region stockout retry
+// cannot re-render userdata with the right proxy (the first network's proxy
+// leaked into VMs retried into another region).
+func TestBuildCreateCandidates_CarriesNetworkProxyURL(t *testing.T) {
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{network: "vpc-west", subnetwork: "sub-west", zones: []string{zoneUSWest1A}, proxyURL: "http://west:3128"},
+			{network: "vpc-central", subnetwork: "sub-central", zones: []string{zoneUSCentral1A}, proxyURL: "http://central:3128"},
+		},
+	}
+	first := createCandidate{zone: zoneUSCentral1A, network: networkVPCCentral, subnetwork: subnetworkCentral, proxyURL: "http://central:3128"}
+
+	got := p.buildCreateCandidates(first, testMachineType)
+
+	proxyByZone := map[string]string{}
+	for _, c := range got {
+		proxyByZone[c.zone] = c.proxyURL
+	}
+	if proxyByZone[zoneUSCentral1A] != "http://central:3128" {
+		t.Errorf("central zone proxy: want http://central:3128, got %q", proxyByZone[zoneUSCentral1A])
+	}
+	if proxyByZone[zoneUSWest1A] != "http://west:3128" {
+		t.Errorf("west zone proxy: want http://west:3128, got %q", proxyByZone[zoneUSWest1A])
+	}
+}
+
 // --- insertWithStockoutRetry / cleanupFailedInstance (HTTP-level) ---
 
 // stockoutMsg is GCP's resource-exhaustion phrasing; it must contain a marker
@@ -357,8 +389,9 @@ const stockoutMsg = "The zone 'projects/proj/zones/us-central1-a' does not have 
 // the previous instance was deleted first.
 type fakeCompute struct {
 	mu           sync.Mutex
-	exists       bool     // is the (project-wide) instance name currently taken
-	events       []string // ordered insert:/delete: calls, for ordering asserts
+	exists       bool                // is the (project-wide) instance name currently taken
+	events       []string            // ordered insert:/delete: calls, for ordering asserts
+	inserts      []*compute.Instance // decoded request body of each accepted insert
 	insertCount  int32
 	deleteCount  int32
 	stockoutZone string // inserts here "succeed" then the op fails with stockout
@@ -388,6 +421,8 @@ func (f *fakeCompute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/instances"):
 		zone := zoneFromPath(path)
 		atomic.AddInt32(&f.insertCount, 1)
+		var inst compute.Instance
+		_ = json.NewDecoder(r.Body).Decode(&inst)
 		f.mu.Lock()
 		f.events = append(f.events, "insert:"+zone)
 		if f.exists {
@@ -402,6 +437,7 @@ func (f *fakeCompute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Insert is accepted: the name is reserved even though the async op may
 		// later fail with a stockout.
 		f.exists = true
+		f.inserts = append(f.inserts, &inst)
 		f.mu.Unlock()
 		writeJSON(w, http.StatusOK, map[string]any{"name": "opinsert-" + zone})
 
@@ -458,6 +494,18 @@ func newTestInstance() *compute.Instance {
 	}
 }
 
+func userdataOf(in *compute.Instance, key string) string {
+	if in.Metadata == nil {
+		return ""
+	}
+	for _, item := range in.Metadata.Items {
+		if item.Key == key && item.Value != nil {
+			return *item.Value
+		}
+	}
+	return ""
+}
+
 // TestInsertWithStockoutRetry_DeletesOrphanBeforeRetry is the regression guard
 // for the GLOBAL_DEFAULT-DNS 409 bug: a stocked-out insert leaves the instance
 // name reserved, so the retry in another zone must delete it first or the
@@ -497,6 +545,106 @@ func TestInsertWithStockoutRetry_DeletesOrphanBeforeRetry(t *testing.T) {
 	f.mu.Unlock()
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("call order: want %v, got %v", want, got)
+	}
+}
+
+// TestInsertWithStockoutRetry_CrossNetworkRetryRerendersProxy is the regression
+// test for the cross-region proxy leak seen in prod: userdata must be rendered
+// with the proxy of the network the attempt actually lands on, so when a
+// stockout retry crosses into a zone owned by a different network config, the
+// retried insert carries that network's proxy — and opts must end with the
+// winning proxy so mapToInstance persists it. Reproduces: selected us-central1
+// (proxy 10.165.8.20:3128), stocked out, VM created in us-west1-a with
+// central's proxy.
+func TestInsertWithStockoutRetry_CrossNetworkRetryRerendersProxy(t *testing.T) {
+	f := &fakeCompute{stockoutZone: zoneUSCentral1A}
+	p, cleanup := newFakeComputeConfig(t, f)
+	defer cleanup()
+	p.egressControl = true
+	p.userDataKey = testUserDataKey
+	p.userData = "proxy={{ .EgressProxyURL }}"
+
+	candidates := []createCandidate{
+		{zone: zoneUSCentral1A, network: networkVPCCentral, subnetwork: subnetworkCentral, tags: []string{"t"}, proxyURL: "http://central:3128"},
+		{zone: zoneUSWest1A, network: "projects/proj/global/networks/vpc-west", subnetwork: "projects/proj/regions/us-west1/subnetworks/sub-west", tags: []string{"t"}, proxyURL: "http://west:3128"},
+	}
+
+	// Mimic create(): no runner-global proxy exists; userdata is rendered per
+	// attempt inside the retry loop from the candidate's network proxy.
+	opts := &types.InstanceCreateOpts{}
+
+	op, succeeded, err := p.insertWithStockoutRetry(
+		context.Background(), newTestInstance(), candidates, opts,
+		testMachineType, "pd-balanced",
+		true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
+	)
+	if err != nil {
+		t.Fatalf("expected retry to succeed in alternate zone, got error: %v", err)
+	}
+	if op == nil {
+		t.Fatal("expected a non-nil operation on success")
+	}
+	if succeeded.zone != zoneUSWest1A {
+		t.Fatalf("expected success in %s, got %s", zoneUSWest1A, succeeded.zone)
+	}
+
+	// opts must carry the winning candidate's proxy so it is persisted on the
+	// instance row.
+	if opts.EgressProxyURL != "http://west:3128" {
+		t.Errorf("opts.EgressProxyURL: want http://west:3128, got %q", opts.EgressProxyURL)
+	}
+
+	// Each insert must ship userdata rendered with its own network's proxy.
+	if len(f.inserts) != 2 {
+		t.Fatalf("want 2 accepted inserts, got %d", len(f.inserts))
+	}
+	if got := userdataOf(f.inserts[0], p.userDataKey); got != "proxy=http://central:3128" {
+		t.Errorf("first insert userdata: want central proxy, got %q", got)
+	}
+	if got := userdataOf(f.inserts[1], p.userDataKey); got != "proxy=http://west:3128" {
+		t.Errorf("retry insert userdata: want west proxy, got %q", got)
+	}
+}
+
+// TestInsertWithStockoutRetry_ProxylessRetryClearsProxy verifies that a retry
+// landing on a network config without proxy_url renders userdata with no proxy:
+// the previous attempt's network proxy must not leak into the retried VM.
+func TestInsertWithStockoutRetry_ProxylessRetryClearsProxy(t *testing.T) {
+	f := &fakeCompute{stockoutZone: zoneUSCentral1A}
+	p, cleanup := newFakeComputeConfig(t, f)
+	defer cleanup()
+	p.egressControl = true
+	p.userDataKey = testUserDataKey
+	p.userData = "proxy={{ .EgressProxyURL }}"
+
+	candidates := []createCandidate{
+		{zone: zoneUSCentral1A, network: networkVPCCentral, subnetwork: subnetworkCentral, tags: []string{"t"}, proxyURL: "http://central:3128"},
+		{zone: zoneUSWest1A, network: "projects/proj/global/networks/vpc-west", subnetwork: "projects/proj/regions/us-west1/subnetworks/sub-west", tags: []string{"t"}}, // no proxy_url
+	}
+	opts := &types.InstanceCreateOpts{}
+
+	_, succeeded, err := p.insertWithStockoutRetry(
+		context.Background(), newTestInstance(), candidates, opts,
+		testMachineType, "pd-balanced",
+		true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
+	)
+	if err != nil {
+		t.Fatalf("expected retry to succeed in alternate zone, got error: %v", err)
+	}
+	if succeeded.zone != zoneUSWest1A {
+		t.Fatalf("expected success in %s, got %s", zoneUSWest1A, succeeded.zone)
+	}
+	if opts.EgressProxyURL != "" {
+		t.Errorf("opts.EgressProxyURL: want empty (no proxy on retried network), got %q", opts.EgressProxyURL)
+	}
+	if len(f.inserts) != 2 {
+		t.Fatalf("want 2 accepted inserts, got %d", len(f.inserts))
+	}
+	if got := userdataOf(f.inserts[0], p.userDataKey); got != "proxy=http://central:3128" {
+		t.Errorf("first insert userdata: want central proxy, got %q", got)
+	}
+	if got := userdataOf(f.inserts[1], p.userDataKey); got != "proxy=" {
+		t.Errorf("retry insert userdata: want empty proxy, got %q", got)
 	}
 }
 

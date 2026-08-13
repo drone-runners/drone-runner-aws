@@ -24,7 +24,6 @@ type (
 		cleanupTimer                 *time.Ticker
 		runnerName                   string
 		liteEnginePath               string
-		egressProxyURL               string
 		egressNoProxy                string
 		egressCACert                 string
 		instanceStore                store.InstanceStore

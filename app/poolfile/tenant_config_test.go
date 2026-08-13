@@ -345,6 +345,113 @@ instances:
 	}
 }
 
+func TestProcessPool_GoogleTenants_GroupID(t *testing.T) {
+	yaml := `
+version: "1"
+instances:
+  - name: linux-amd64-gcp
+    type: google
+    pool: 1
+    limit: 20
+    spec:
+      account:
+        project_id: proj-base
+      image: img-base
+      networks:
+        - network: net-base
+          subnetwork: subnet-base
+          zones: [us-central1-a]
+    tenants:
+      - group_id: group-egress
+        ids: [acctA, acctB]
+        spec:
+          egress_control: true
+          networks:
+            - network: net-a
+              subnetwork: subnet-a
+              zones: [us-central1-b]
+              proxy_url: http://tenant-proxy:3128
+`
+	pf, err := config.Parse(strings.NewReader(yaml))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	if err != nil {
+		t.Fatalf("ProcessPool: %v", err)
+	}
+	p := pools[0]
+	if !p.IsMultiTenant() {
+		t.Fatalf("expected multi-tenant google pool")
+	}
+	// Tenant drivers are keyed by group_id, not ids[0].
+	if len(p.TenantDrivers) != 2 {
+		t.Errorf("expected 2 tenant drivers, got %d", len(p.TenantDrivers))
+	}
+	if _, ok := p.TenantDrivers["group-egress"]; !ok {
+		t.Errorf("missing tenant driver keyed by group_id; keys: %v", reflect.ValueOf(p.TenantDrivers).MapKeys())
+	}
+	if _, ok := p.TenantDrivers["acctA"]; ok {
+		t.Errorf("driver must not be keyed by member account id when group_id is set")
+	}
+	// Members route to the group.
+	for _, acct := range []string{"acctA", "acctB"} {
+		if got := p.ResolveTenant(acct); got != "group-egress" {
+			t.Errorf("ResolveTenant(%q): got %q, want group-egress", acct, got)
+		}
+	}
+	// Rows stamped with a member id (pre group_id) still resolve to the group driver via the shim.
+	if p.DriverForTenant("acctA") != p.DriverForTenant("group-egress") {
+		t.Errorf("expected member-id shim to resolve to the group driver")
+	}
+	// The group driver carries the tenant's merged spec (egress proxy from tenant networks).
+	if got := networkProxyURLFromDriver(t, p.DriverForTenant("group-egress")); got != "http://tenant-proxy:3128" {
+		t.Errorf("group driver proxyURL: got %q", got)
+	}
+}
+
+// TestProcessPool_GoogleTenants_GroupIDCutover mirrors the prod cutover: group_id initially set
+// to the current ids[0] account id, so existing instances keep resolving to the same tenant id.
+func TestProcessPool_GoogleTenants_GroupIDCutover(t *testing.T) {
+	yaml := `
+version: "1"
+instances:
+  - name: linux-amd64-gcp
+    type: google
+    pool: 1
+    limit: 20
+    spec:
+      account:
+        project_id: proj-base
+      image: img-base
+      networks:
+        - network: net-base
+          subnetwork: subnet-base
+          zones: [us-central1-a]
+    tenants:
+      - group_id: acctA
+        ids: [acctA, acctB]
+        spec:
+          account:
+            project_id: proj-tenant
+`
+	pf, err := config.Parse(strings.NewReader(yaml))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	if err != nil {
+		t.Fatalf("ProcessPool: %v", err)
+	}
+	p := pools[0]
+	if _, ok := p.TenantDrivers["acctA"]; !ok {
+		t.Fatalf("expected tenant driver keyed by group_id acctA; keys: %v", reflect.ValueOf(p.TenantDrivers).MapKeys())
+	}
+	if got := p.ResolveTenant("acctB"); got != "acctA" {
+		t.Errorf("ResolveTenant(acctB): got %q, want acctA", got)
+	}
+}
+
 // networkProxyURLFromDriver reads the first networkConfigs[].proxyURL from a Google driver via reflect.
 func networkProxyURLFromDriver(t *testing.T, d drivers.Driver) string {
 	t.Helper()

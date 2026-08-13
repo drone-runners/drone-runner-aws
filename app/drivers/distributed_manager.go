@@ -1180,7 +1180,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		WithField("destroy_caller", "distributed_purger:"+cleanupType).
 		Infof("distributed dlite: purger: Terminating %d stale %s instances", len(instances), cleanupType)
 
-	failedInstances, err := pool.Driver.Destroy(ctx, instances)
+	failedInstances, err := destroyByTenant(ctx, &pool.Pool, instances)
 	if err != nil {
 		logr.WithError(err).Errorf("distributed dlite: failed to delete %s instances of pool=%q", cleanupType, pool.Name)
 	}

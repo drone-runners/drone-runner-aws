@@ -43,8 +43,14 @@ type (
 	// applied to the customer account IDs listed in IDs. There is no separate default tenant: the
 	// base pool spec is the default.
 	Tenant struct {
-		// IDs is the non-empty list of customer account IDs that resolve to this tenant. The
-		// first entry doubles as the tenant's stable id (stored on instances as tenant_id).
+		// GroupID optionally names this tenant group. When set, it is the tenant's stable
+		// identity (stored on instances as tenant_id) instead of IDs[0]. Decoupling identity
+		// from membership means accounts can be added/removed or the ids list reordered
+		// without invalidating live instances' tenant_id. To adopt group_id without a DB
+		// migration, set it to the current ids[0] and rename it later.
+		GroupID string `json:"group_id,omitempty" yaml:"group_id,omitempty"`
+		// IDs is the non-empty list of customer account IDs that resolve to this tenant. When
+		// GroupID is unset, the first entry doubles as the tenant's id (legacy behavior).
 		IDs []string `json:"ids,omitempty" yaml:"ids,omitempty"`
 		// Pool/Limit optionally override the instance-level warm-pool sizing for this tenant.
 		// They are pointers so that an explicit 0 (e.g. "no warm pool for this tenant") is
@@ -243,8 +249,8 @@ type (
 		Subnetwork string   `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
 		Tags       []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 		Zones      []string `json:"zones,omitempty" yaml:"zones,omitempty"`
-		// ProxyURL is the forward-proxy for this network when egress_control is enabled.
-		// Empty falls back to DRONE_EGRESS_PROXY_URL.
+		// ProxyURL is the forward-proxy for this network when egress_control is
+		// enabled. It is the only proxy source — there is no runner-global fallback.
 		ProxyURL string `json:"proxy_url,omitempty" yaml:"proxy_url,omitempty"`
 	}
 
@@ -315,10 +321,10 @@ type (
 )
 
 // EgressProxy holds runner-global forward-proxy settings. Enablement comes from
-// pool egress_control; per-network proxy_url overrides URL when set.
-// NoProxy and CACert stay global (same for all regions/networks).
+// pool egress_control, and the proxy URL itself comes from the pool's
+// per-network proxy_url. NoProxy and CACert stay global (same for all
+// regions/networks).
 type EgressProxy struct {
-	URL     string `json:"url" yaml:"url" envconfig:"DRONE_EGRESS_PROXY_URL" default:"http://127.0.0.1:3128"`
 	NoProxy string `json:"no_proxy" yaml:"no_proxy" envconfig:"DRONE_EGRESS_NO_PROXY" default:"localhost,127.0.0.1,169.254.169.254,172.16.0.0/12,10.0.0.0/8,.svc.cluster.local,.harness.io,harness.io"`
 	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
 	// fleet proxy presents. Baked into the build VM so TLS interception is trusted.
@@ -717,6 +723,7 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	// tenantRaw mirrors Tenant but keeps the spec as raw JSON so it can be unmarshalled into
 	// the typed provider spec after the instance Type is known.
 	type tenantRaw struct {
+		GroupID  string              `json:"group_id,omitempty"`
 		IDs      []string            `json:"ids,omitempty"`
 		Pool     *int                `json:"pool,omitempty"`
 		Limit    *int                `json:"limit,omitempty"`
@@ -751,6 +758,7 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		for i := range obj.Tenants {
 			tr := &obj.Tenants[i]
 			t := Tenant{
+				GroupID:  tr.GroupID,
 				IDs:      tr.IDs,
 				Pool:     tr.Pool,
 				Limit:    tr.Limit,
