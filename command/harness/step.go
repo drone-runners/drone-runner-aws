@@ -120,10 +120,9 @@ func HandleStep(ctx context.Context,
 	logr.Traceln("running StartStep")
 
 	if poolManager.IsEgressPool(inst.Pool, inst.TenantID) {
+		// The proxy comes solely from the instance record (resolved at create
+		// time from the pool's per-network proxy_url); there is no env fallback.
 		proxyURL := inst.ProxyURL
-		if proxyURL == "" {
-			proxyURL = egressProxy.URL
-		}
 		merged := mergeEgressPolicy(r.StartStepRequest.EgressPolicy, proxyURL, egressProxy.NoProxy)
 		if merged != nil {
 			r.StartStepRequest.EgressPolicy = merged

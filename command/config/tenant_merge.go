@@ -29,7 +29,8 @@ type ResolvedTenant struct {
 // The instance-level Spec is the base (default) tenant: it is always returned first with ID
 // "default" and the instance-level Pool/Limit/Variants. Each entry in inst.Tenants is a
 // per-account override whose (partial) Spec is deep-merged over the base; its tenant ID is the
-// first entry of its IDs list, and every account in IDs is routed to that tenant. Tenant
+// entry's GroupID when set, otherwise the first entry of its IDs list (legacy behavior). Every
+// account in IDs is routed to that tenant. Tenant
 // Variants replace matching instance-level variants by variant_id (full entry replace; new
 // variant_ids are appended). Accounts not listed in any override resolve
 // to the default tenant.
@@ -63,7 +64,14 @@ func ResolveTenants(inst *Instance) (tenants []ResolvedTenant, accountToTenant m
 		if len(t.IDs) == 0 {
 			return nil, nil, fmt.Errorf("pool %q: tenant override must define a non-empty ids list", inst.Name)
 		}
-		tenantID := t.IDs[0]
+		// GroupID, when set, is the tenant's stable identity; otherwise fall back to ids[0]
+		// (legacy behavior). GroupID may equal a member of the tenant's own ids list (the
+		// zero-migration cutover), but must not collide with another tenant's identity or
+		// member accounts.
+		tenantID := t.GroupID
+		if tenantID == "" {
+			tenantID = t.IDs[0]
+		}
 		if tenantID == "" {
 			return nil, nil, fmt.Errorf("pool %q: tenant override has an empty account id", inst.Name)
 		}
@@ -97,6 +105,18 @@ func ResolveTenants(inst *Instance) (tenants []ResolvedTenant, accountToTenant m
 				return nil, nil, fmt.Errorf("pool %q: account id %q mapped to multiple tenants (%q and %q)", inst.Name, accountID, existing, tenantID)
 			}
 			accountToTenant[accountID] = tenantID
+		}
+	}
+
+	// Post-pass: an explicit group_id must not shadow another tenant's member account id,
+	// regardless of tenant order. (Its own members map to the group id itself, which is fine.)
+	for i := range inst.Tenants {
+		t := &inst.Tenants[i]
+		if t.GroupID == "" {
+			continue
+		}
+		if existing, ok := accountToTenant[t.GroupID]; ok && existing != t.GroupID {
+			return nil, nil, fmt.Errorf("pool %q: group_id %q collides with a member account of tenant %q", inst.Name, t.GroupID, existing)
 		}
 	}
 

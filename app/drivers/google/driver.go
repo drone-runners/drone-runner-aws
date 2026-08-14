@@ -150,16 +150,13 @@ func (p *config) resolveNetworkAndZoneWithProxy(reservationZone string, requestZ
 
 // resolveEgressProxyURL returns the proxy URL to bake into userdata and persist on
 // the instance. When egress_control is false the result is always empty so non-egress
-// pools never store a proxy_url (even if networks[] or env define one). When egress is
-// on, a non-empty network proxy_url wins over the provisioner-stamped env fallback.
-func resolveEgressProxyURL(egressControl bool, envFallback, networkProxyURL string) string {
+// pools never store a proxy_url (even if networks[] defines one). When egress is on,
+// the proxy comes solely from the selected network config's proxy_url.
+func resolveEgressProxyURL(egressControl bool, networkProxyURL string) string {
 	if !egressControl {
 		return ""
 	}
-	if networkProxyURL != "" {
-		return networkProxyURL
-	}
-	return envFallback
+	return networkProxyURL
 }
 
 // selectNetwork returns the network entry to use for an instance.
@@ -588,14 +585,10 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	gpu := opts.GPU
 	opts.EnableC4D = p.enableC4D
 	opts.EgressControl = p.egressControl
-	opts.EgressProxyURL = resolveEgressProxyURL(p.egressControl, opts.EgressProxyURL, networkProxyURL)
-
-	userData, err := lehelper.GenerateUserdata(p.userData, opts)
-	if err != nil {
-		logr.WithError(err).
-			Errorln("google: failed to generate user data")
-		return nil, zone, err
-	}
+	// Note: opts.EgressProxyURL is deliberately left empty here. Each create
+	// attempt resolves the proxy for its own candidate's network and renders
+	// userdata with it (insertWithStockoutRetry), so a stockout retry into
+	// another network config never boots with a stale proxy.
 
 	bootDiskSize := p.diskSize
 	if opts.StorageOpts.BootDiskSize != "" {
@@ -621,6 +614,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		network:    resolvedNetwork,
 		subnetwork: resolvedSubnetwork,
 		tags:       resolvedTags,
+		proxyURL:   networkProxyURL,
 	}}
 	if stockoutRetryEnabled {
 		candidates = p.buildCreateCandidates(candidates[0], machineType)
@@ -628,13 +622,13 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	}
 
 	// Build the zone-independent instance spec once. Per-attempt fields (zone,
-	// machine type, disk type, network, tags) are set inside the retry loop.
+	// machine type, disk type, network, tags, userdata) are set inside the retry
+	// loop.
 	in := &compute.Instance{
 		Name:           name,
 		MinCpuPlatform: "Automatic",
 		Metadata: &compute.Metadata{
 			Items: []*compute.MetadataItems{
-				{Key: p.userDataKey, Value: googleapi.String(userData)},
 				{Key: "harness-account-id", Value: googleapi.String(opts.AccountID)},
 				{Key: "harness-stage-execution-id", Value: googleapi.String(opts.StageRuntimeID)},
 				{Key: "harness-pipeline-execution-id", Value: googleapi.String(opts.PipelineExecutionID)},
@@ -728,10 +722,12 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 }
 
 // insertWithStockoutRetry creates the instance by walking the ordered candidates,
-// applying each candidate's zone/network onto the shared spec. On a stockout it
-// records the zone (unless a reservation was used) and, when retries are enabled,
-// advances to the next candidate. It returns the successful operation and the
-// candidate that provisioned the VM.
+// applying each candidate's zone/network onto the shared spec and rendering
+// userdata with that candidate's egress proxy; on success opts.EgressProxyURL
+// holds the proxy the VM actually booted with, so callers persist the right
+// value. On a stockout it records the zone (unless a reservation was used) and,
+// when retries are enabled, advances to the next candidate. It returns the
+// successful operation and the candidate that provisioned the VM.
 func (p *config) insertWithStockoutRetry(
 	ctx context.Context,
 	in *compute.Instance,
@@ -754,6 +750,17 @@ func (p *config) insertWithStockoutRetry(
 		in.NetworkInterfaces[0].Subnetwork = cand.subnetwork
 		// Copy tags so appending name does not mutate the network config's backing slice.
 		in.Tags = &compute.Tags{Items: append(append([]string{}, cand.tags...), in.Name)}
+
+		// Resolve the egress proxy for this candidate's network and render userdata
+		// with it, so a cross-network stockout retry never boots the VM with
+		// another region's proxy.
+		opts.EgressProxyURL = resolveEgressProxyURL(p.egressControl, cand.proxyURL)
+		userData, renderErr := lehelper.GenerateUserdata(p.userData, opts)
+		if renderErr != nil {
+			attemptLogr.WithError(renderErr).Errorln("google: failed to generate user data")
+			return nil, cand, renderErr
+		}
+		setUserdataMetadata(in, p.userDataKey, userData)
 
 		if opts.StorageOpts.Identifier != "" {
 			operations, attachDiskErr := p.attachPersistentDisk(ctx, opts, in, zone)
@@ -800,6 +807,21 @@ func (p *config) insertWithStockoutRetry(
 	}
 	// Unreachable in practice: candidates always holds at least the first selection.
 	return nil, createCandidate{}, errors.New("google: no create candidates available")
+}
+
+// setUserdataMetadata replaces the userdata item on the shared instance spec,
+// appending it when absent (the retry loop sets it once per attempt).
+func setUserdataMetadata(in *compute.Instance, key, userData string) {
+	if in.Metadata == nil {
+		in.Metadata = &compute.Metadata{}
+	}
+	for _, item := range in.Metadata.Items {
+		if item.Key == key {
+			item.Value = googleapi.String(userData)
+			return
+		}
+	}
+	in.Metadata.Items = append(in.Metadata.Items, &compute.MetadataItems{Key: key, Value: googleapi.String(userData)})
 }
 
 func (p *config) cleanupFailedInstance(ctx context.Context, zone, name string, logr logger.Logger) {
@@ -1497,6 +1519,10 @@ type createCandidate struct {
 	network    string
 	subnetwork string
 	tags       []string
+	// proxyURL is the egress proxy of the network config this candidate's zone
+	// belongs to, so a cross-network stockout retry can re-render userdata with
+	// the proxy of the network the VM actually lands on.
+	proxyURL string
 }
 
 // stockoutKey is the cache key for a recently-exhausted (project, zone, machineType).
@@ -1550,6 +1576,8 @@ func (p *config) logStockoutDeprioritization(logr logger.Logger, candidates []cr
 // network configs in declared order, zones shuffled within each, recently
 // stocked-out (zone, machineType) deprioritized to the back, then capped at
 // maxStockoutAttempts.
+//
+//nolint:gocritic // hugeParam: one value copy per VM create is fine, keeps candidate construction simple
 func (p *config) buildCreateCandidates(first createCandidate, machineType string) []createCandidate {
 	candidates := []createCandidate{first}
 	seen := map[string]bool{}
@@ -1573,7 +1601,7 @@ func (p *config) buildCreateCandidates(first createCandidate, machineType string
 		rand.Shuffle(len(zones), func(i, j int) { zones[i], zones[j] = zones[j], zones[i] }) //nolint:gosec
 		for _, z := range zones {
 			network, subnetwork, zone, tags := nc.resolve(p.projectID, z, p.GetRegion)
-			add(createCandidate{zone: zone, network: network, subnetwork: subnetwork, tags: tags})
+			add(createCandidate{zone: zone, network: network, subnetwork: subnetwork, tags: tags, proxyURL: nc.proxyURL})
 		}
 	}
 
