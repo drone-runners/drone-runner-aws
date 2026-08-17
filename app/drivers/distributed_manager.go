@@ -396,9 +396,6 @@ func (d *DistributedManager) provisionFromPool(
 		// Try to find and claim a free instance atomically
 		inst, err = d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
 		if err != nil && err != sql.ErrNoRows {
-			if d.metrics != nil {
-				d.metrics.RecordHotpoolClaimAttempt(poolName, "", setupParams.MachineType, HotpoolClaimOutcomeClaimFailed, HotpoolClaimReasonStoreError)
-			}
 			return nil, nil, false, candidateVariantID, fmt.Errorf("provision: failed to find and claim instance in %q pool for variant %q: %w", poolName, candidateVariantID, err)
 		}
 
@@ -406,13 +403,7 @@ func (d *DistributedManager) provisionFromPool(
 		if inst != nil {
 			inst.OwnerID = ownerID
 			if err = d.instanceStore.Update(ctx, inst); err != nil {
-				if d.metrics != nil {
-					d.metrics.RecordHotpoolClaimAttempt(poolName, inst.Zone, inst.Size, HotpoolClaimOutcomeClaimFailed, HotpoolClaimReasonStoreError)
-				}
 				return nil, nil, false, candidateVariantID, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
-			}
-			if d.metrics != nil {
-				d.metrics.RecordHotpoolClaimAttempt(poolName, inst.Zone, inst.Size, HotpoolClaimOutcomeClaimed, HotpoolClaimReasonNone)
 			}
 			logger.FromContext(ctx).
 				WithField("pool", poolName).
@@ -461,10 +452,6 @@ func (d *DistributedManager) provisionFromPool(
 	variantID = variantsToTry[0]
 	setupParams.VariantID = variantID
 	setupParams.Source = types.InstanceSourceOnDemand
-
-	if d.metrics != nil {
-		d.metrics.RecordHotpoolClaimAttempt(poolName, "", setupParams.MachineType, HotpoolClaimOutcomeNoReadyCapacity, HotpoolClaimReasonNone)
-	}
 
 	// Case 3: No available hotpool instance across any variant → create new (using first variant's config)
 	logger.FromContext(ctx).
@@ -711,15 +698,6 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 			logrus.WithError(updateErr).WithField("instanceID", inst.ID).Errorln("failed to update instance state to created")
 			return
 		}
-		// runner_hotpool_state_duration_seconds{state="provisioning"}: best-effort dwell time
-		// approximated from the VM's creation timestamp (inst.Started, set by the driver at
-		// Create() time, see google/driver.go) to the moment connectivity was confirmed here.
-		// This is the one hot-pool dwell transition that's cleanly measurable without touching
-		// the FindAndClaim hot path - see hotpool_metrics.go for why ready/busy/hibernated dwell
-		// are not currently instrumented.
-		if d.metrics != nil && inst.Started > 0 {
-			d.metrics.RecordHotpoolStateDuration(pool.Name, inst.Zone, inst.Size, HotpoolStateProvisioning, time.Since(time.Unix(inst.Started, 0)))
-		}
 		logrus.WithFields(logrus.Fields{
 			"instanceID": inst.ID,
 			"name":       inst.Name,
@@ -774,11 +752,6 @@ func (d *DistributedManager) hibernate(
 	if err != nil {
 		return fmt.Errorf("hibernate: failed to claim instance for hibernation for %q pool: %w", poolName, err)
 	}
-	// runner_hotpool_state_duration_seconds{state="hibernating"}: unlike the ready/busy/
-	// hibernated transitions (see hotpool_metrics.go), this one is fully bracketed within this
-	// function call - the instance only exists in StateHibernating between the claim above and
-	// the state flip below - so this is an exact measurement, not an approximation.
-	hibernatingStart := time.Now()
 
 	// Perform the actual hibernation using the driver with retries
 	logrus.WithField("instanceID", claimedInstance.ID).Infoln("Hibernating vm")
@@ -814,9 +787,6 @@ func (d *DistributedManager) hibernate(
 		if updateErr := d.instanceStore.Update(ctx, claimedInstance); updateErr != nil {
 			return fmt.Errorf("hibernate: update state: failed to update instance in db %s of %q pool: %w", claimedInstance.ID, poolName, updateErr)
 		}
-		if d.metrics != nil {
-			d.metrics.RecordHotpoolStateDuration(poolName, claimedInstance.Zone, claimedInstance.Size, HotpoolStateHibernating, time.Since(hibernatingStart))
-		}
 		return fmt.Errorf("hibernate: failed to hibernate instance %s of %q pool after %d attempts: %w", claimedInstance.ID, poolName, maxRetries, hibernateErr)
 	}
 
@@ -825,9 +795,6 @@ func (d *DistributedManager) hibernate(
 	claimedInstance.State = types.StateCreated
 	if err = d.instanceStore.Update(ctx, claimedInstance); err != nil {
 		return fmt.Errorf("hibernate: failed to update hibernated instance %s of %q pool: %w", claimedInstance.ID, poolName, err)
-	}
-	if d.metrics != nil {
-		d.metrics.RecordHotpoolStateDuration(poolName, claimedInstance.Zone, claimedInstance.Size, HotpoolStateHibernating, time.Since(hibernatingStart))
 	}
 
 	logrus.WithFields(logrus.Fields{

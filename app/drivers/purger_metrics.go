@@ -1,7 +1,5 @@
 package drivers
 
-import "time"
-
 // Purger instance destroy reasons. Bounded set - do not add per-instance identifiers here.
 // These live in package drivers (rather than package metric) because metric already imports
 // drivers; drivers importing metric back would create an import cycle. metric.Metrics's
@@ -40,13 +38,12 @@ const (
 	PurgerCleanupTypeFree = "free"
 )
 
-// MetricsRecorder records observability metrics for background/lifecycle concerns in the
-// Manager/DistributedManager (the instance/capacity purger, and hot-pool claim/dwell metrics -
-// see hotpool_metrics.go). This interface is defined here (rather than the
+// MetricsRecorder records observability metrics for the background instance/capacity purger in
+// the Manager/DistributedManager. This interface is defined here (rather than the
 // Manager/DistributedManager simply holding a *metric.Metrics) because package metric already
 // imports package drivers (for drivers.IManager); having drivers depend on metric directly would
 // create an import cycle. *metric.Metrics implements this interface via the wrapper methods in
-// metric/purger.go and metric/hotpool.go.
+// metric/purger.go.
 type MetricsRecorder interface {
 	// RecordPurgerLastRun sets the last-run-timestamp gauge for a pool to the current time.
 	RecordPurgerLastRun(poolID string)
@@ -56,10 +53,4 @@ type MetricsRecorder interface {
 	RecordInstancesForceDeleted(poolID, cleanupType string, count int)
 	// RecordCapacityDestroyAttempt records the outcome of one capacity reservation destroy attempt.
 	RecordCapacityDestroyAttempt(poolID, reason, outcome string)
-	// RecordHotpoolClaimAttempt records the outcome of one attempt to claim a warm instance from
-	// a hot pool.
-	RecordHotpoolClaimAttempt(poolID, zone, vmType, outcome, reason string)
-	// RecordHotpoolStateDuration observes how long an instance dwelled in a hot-pool lifecycle
-	// state before transitioning out of it.
-	RecordHotpoolStateDuration(poolID, zone, vmType, state string, dwell time.Duration)
 }

@@ -6,7 +6,6 @@ package drivers
 
 import (
 	"sync"
-	"time"
 )
 
 // destroyAttemptRecord captures one call to fakePurgerMetrics.RecordInstanceDestroyAttempt.
@@ -25,20 +24,9 @@ type forceDeletedRecord struct {
 	count               int
 }
 
-// hotpoolClaimAttemptRecord captures one call to fakePurgerMetrics.RecordHotpoolClaimAttempt.
-type hotpoolClaimAttemptRecord struct {
-	poolID, zone, vmType, outcome, reason string
-}
-
-// hotpoolStateDurationRecord captures one call to fakePurgerMetrics.RecordHotpoolStateDuration.
-type hotpoolStateDurationRecord struct {
-	poolID, zone, vmType, state string
-	dwell                       time.Duration
-}
-
-// fakePurgerMetrics is an in-memory MetricsRecorder test double (covering both the purger and
-// hot-pool claim/dwell metrics) that records every call so tests can assert on exactly what was
-// reported, instead of exercising real Prometheus collectors.
+// fakePurgerMetrics is an in-memory MetricsRecorder test double that records every call so
+// tests can assert on exactly what was reported, instead of exercising real Prometheus
+// collectors.
 type fakePurgerMetrics struct {
 	mu sync.Mutex
 
@@ -46,8 +34,6 @@ type fakePurgerMetrics struct {
 	destroyAttempts  []destroyAttemptRecord
 	forceDeleted     []forceDeletedRecord
 	capacityAttempts []capacityAttemptRecord
-	hotpoolClaims    []hotpoolClaimAttemptRecord
-	hotpoolStateDurs []hotpoolStateDurationRecord
 }
 
 func (f *fakePurgerMetrics) RecordPurgerLastRun(poolID string) {
@@ -72,16 +58,4 @@ func (f *fakePurgerMetrics) RecordCapacityDestroyAttempt(poolID, reason, outcome
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.capacityAttempts = append(f.capacityAttempts, capacityAttemptRecord{poolID, reason, outcome})
-}
-
-func (f *fakePurgerMetrics) RecordHotpoolClaimAttempt(poolID, zone, vmType, outcome, reason string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.hotpoolClaims = append(f.hotpoolClaims, hotpoolClaimAttemptRecord{poolID, zone, vmType, outcome, reason})
-}
-
-func (f *fakePurgerMetrics) RecordHotpoolStateDuration(poolID, zone, vmType, state string, dwell time.Duration) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.hotpoolStateDurs = append(f.hotpoolStateDurs, hotpoolStateDurationRecord{poolID, zone, vmType, state, dwell})
 }
