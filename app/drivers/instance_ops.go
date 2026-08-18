@@ -278,17 +278,51 @@ func (m *Manager) StartInstance(ctx context.Context, poolName, instanceID string
 	}
 
 	logrus.WithField("instanceID", instanceID).Infoln("Starting vm from hibernate state")
-	ipAddress, err := pool.DriverForTenant(inst.TenantID).Start(ctx, inst, poolName)
-	if err != nil {
-		return nil, fmt.Errorf("start_instance: failed to start the instance %s of %q pool: %w", instanceID, poolName, err)
+	ipAddress, startErr := m.startInstanceWithMetrics(ctx, pool.DriverForTenant(inst.TenantID), poolName, inst)
+	if startErr != nil {
+		m.recordResumeAttempt(ctx, poolName, inst, startErr)
+		return nil, fmt.Errorf("start_instance: failed to start the instance %s of %q pool: %w", instanceID, poolName, startErr)
 	}
 
 	inst.IsHibernated = false
 	inst.Address = ipAddress
 	if err := m.instanceStore.Update(ctx, inst); err != nil {
+		stateErr := &lifecycleStageError{stage: lifecycleStageState, err: err}
+		m.recordResumeAttempt(ctx, poolName, inst, stateErr)
 		return nil, fmt.Errorf("start_instance: failed to update instance store %s of %q pool: %w", instanceID, poolName, err)
 	}
+
+	m.recordResumeAttempt(ctx, poolName, inst, nil)
 	return inst, nil
+}
+
+// startInstanceWithMetrics calls the driver's Start() method - the cloud-level resume/wake call
+// for a hibernated instance - timing narrowly around just that call so
+// runner_vm_resume_duration_seconds isolates "cloud couldn't wake the VM" from the state write
+// that follows. Overall resume outcome/reason for runner_vm_resume_attempts_total is recorded by
+// the caller once the full operation (cloud call + state write) concludes.
+func (m *Manager) startInstanceWithMetrics(ctx context.Context, driver Driver, poolName string, inst *types.Instance) (string, error) {
+	start := time.Now()
+	ip, err := driver.Start(ctx, inst, poolName)
+	duration := time.Since(start)
+	if m.metrics != nil {
+		outcome, _ := classifyLifecycleError(ctx, err)
+		m.metrics.RecordVMResumeDuration(poolName, inst.Zone, inst.Size, outcome, duration)
+	}
+	if err != nil {
+		return "", &lifecycleStageError{stage: lifecycleStageCloud, err: err}
+	}
+	return ip, nil
+}
+
+// recordResumeAttempt records runner_vm_resume_attempts_total for the overall StartInstance
+// operation (cloud call + state write). Safe to call on a nil m.metrics.
+func (m *Manager) recordResumeAttempt(ctx context.Context, poolName string, inst *types.Instance, err error) {
+	if m.metrics == nil {
+		return
+	}
+	outcome, reason := classifyLifecycleError(ctx, err)
+	m.metrics.RecordVMResumeAttempt(poolName, inst.Zone, inst.Size, outcome, reason)
 }
 
 // Suspend suspends an instance.
