@@ -102,6 +102,57 @@ func TestManager_PurgeStaleInstancesForPool_DestroyFailureRecordsFailedOutcome(t
 	}
 }
 
+// TestManager_PurgeStaleInstancesForPool_ListFailureDoesNotRecordLastRun guards against
+// runner_purger_last_run_timestamp_seconds advancing when the sweep never got off the ground:
+// it documents itself as "last completed" sweep, so a pool whose listing keeps failing must show
+// up as stale here rather than looking recently-serviced.
+func TestManager_PurgeStaleInstancesForPool_ListFailureDoesNotRecordLastRun(t *testing.T) {
+	instanceStore := &mockInstanceStore{
+		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {
+			return nil, assert.AnError
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	m := &Manager{instanceStore: instanceStore, metrics: fakeMetrics}
+	pool := newManagerPurgerTestPool(&flexibleMockDriver{driverName: "mock"})
+
+	err := m.purgeStaleInstancesForPool(context.Background(), pool, "server", time.Hour, time.Hour)
+	assert.Error(t, err)
+	assert.Empty(t, fakeMetrics.lastRunPools, "last-run gauge must not advance when the sweep fails before completing")
+}
+
+// TestManager_PurgeStaleInstancesForPool_DBDeleteFailureDoesNotRecordLastRun covers the other
+// structural failure mode: the destroy call itself succeeds, but the instance store delete that
+// follows it fails, which purgeStaleInstancesForPool treats as a hard sweep error (unlike a
+// per-instance destroy failure, which is left for retry and does not fail the sweep - see
+// TestManager_PurgeStaleInstancesForPool_DestroyFailureRecordsFailedOutcome).
+func TestManager_PurgeStaleInstancesForPool_DBDeleteFailureDoesNotRecordLastRun(t *testing.T) {
+	now := time.Now()
+	staleBusy := &types.Instance{ID: "busy-stale", Pool: "pool1", State: types.StateInUse, Zone: "us-east1-a", Started: now.Add(-2 * time.Hour).Unix()}
+
+	instanceStore := &mockInstanceStore{
+		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {
+			return []*types.Instance{staleBusy}, nil
+		},
+		DeleteFunc: func(_ context.Context, _ string) error { return assert.AnError },
+	}
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyFunc: func(_ context.Context, _ []*types.Instance) ([]*types.Instance, error) {
+			return nil, nil // destroy succeeds, so the loop proceeds to the failing DB delete
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	m := &Manager{instanceStore: instanceStore, metrics: fakeMetrics}
+	pool := newManagerPurgerTestPool(driver)
+
+	err := m.purgeStaleInstancesForPool(context.Background(), pool, "server", time.Hour, time.Hour)
+	assert.Error(t, err)
+	assert.Empty(t, fakeMetrics.lastRunPools, "last-run gauge must not advance when the sweep fails before completing")
+}
+
 func TestManager_PurgeStaleInstancesForPool_NilMetricsSafe(t *testing.T) {
 	instanceStore := &mockInstanceStore{
 		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {
