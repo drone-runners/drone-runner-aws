@@ -69,7 +69,7 @@ instances:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	pools, err := ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
 	}
@@ -162,7 +162,7 @@ instances:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	pools, err := ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
 	}
@@ -245,7 +245,7 @@ instances:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	pools, err := ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
 	}
@@ -297,7 +297,7 @@ instances:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	pools, err := ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
 	}
@@ -376,7 +376,7 @@ instances:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	pools, err := ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
 	}
@@ -439,7 +439,7 @@ instances:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	pools, err := ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
 	}
@@ -517,7 +517,7 @@ instances:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	pools, err := ProcessPool(pf, "runner", types.Passwords{})
+	pools, err := ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
 	}

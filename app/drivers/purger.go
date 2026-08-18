@@ -54,81 +54,7 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 						m.GetTLSServerName(),
 						nil,
 						func(ctx context.Context, pool *poolEntry, serverName string, query *types.QueryParams) error {
-							logr := logger.FromContext(ctx).
-								WithField("driver", pool.Driver.DriverName()).
-								WithField("pool", pool.Name)
-
-							pool.Lock()
-							defer pool.Unlock()
-
-							queryParams := &types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
-							busy, free, hibernating, provisioning, terminating, err := m.list(ctx, pool, queryParams)
-							if err != nil {
-								return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
-							}
-							free = append(free, hibernating...)
-							busy = append(busy, terminating...)
-
-							var instances []*types.Instance
-							for _, inst := range busy {
-								startedAt := time.Unix(inst.Started, 0)
-								if time.Since(startedAt) > maxAgeBusy {
-									instances = append(instances, inst)
-								}
-							}
-							for _, inst := range free {
-								startedAt := time.Unix(inst.Started, 0)
-								if time.Since(startedAt) > maxAgeFree {
-									instances = append(instances, inst)
-								}
-							}
-							for _, inst := range provisioning {
-								startedAt := time.Unix(inst.Started, 0)
-								if time.Since(startedAt) > stuckProvisioningMaxAge {
-									instances = append(instances, inst)
-								}
-							}
-
-							if len(instances) == 0 {
-								return nil
-							}
-
-							instanceIDs := make([]string, len(instances))
-							for i, inst := range instances {
-								instanceIDs[i] = inst.ID
-							}
-							logr.WithField("instance_ids", instanceIDs).
-								Infof("purger: Terminating %d stale instances", len(instances))
-
-							failedInstances, err := destroyByTenant(ctx, &pool.Pool, instances)
-							if err != nil {
-								logr.WithError(err).Warnf("purger: failed to delete some instances of pool=%q", pool.Name)
-							}
-
-							// Build a set of failed instance IDs for quick lookup
-							failedIDs := make(map[string]bool)
-							for _, inst := range failedInstances {
-								failedIDs[inst.ID] = true
-							}
-
-							// Only delete successfully destroyed instances from database
-							for _, instance := range instances {
-								if failedIDs[instance.ID] {
-									logr.Warnf("purger: skipping db delete for failed instance %s", instance.ID)
-									continue
-								}
-								derr := m.Delete(ctx, instance.ID)
-								if derr != nil {
-									return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
-								}
-							}
-
-							err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate, nil)
-							if err != nil {
-								return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
-							}
-
-							return nil
+							return m.purgeStaleInstancesForPool(ctx, pool, serverName, maxAgeBusy, maxAgeFree)
 						})
 					if err != nil {
 						logger.FromContext(ctx).WithError(err).
@@ -138,6 +64,136 @@ func (m *Manager) StartInstancePurger(ctx context.Context, maxAgeBusy, maxAgeFre
 			}()
 		}
 	}()
+
+	return nil
+}
+
+// purgeStaleInstancesForPool sweeps a single pool for stale busy/free/stuck-provisioning
+// instances and destroys them. It is factored out of the StartInstancePurger ticker loop so it
+// can be exercised directly in tests without spinning up the background goroutine.
+func (m *Manager) purgeStaleInstancesForPool(
+	ctx context.Context,
+	pool *poolEntry,
+	serverName string,
+	maxAgeBusy, maxAgeFree time.Duration,
+) (err error) {
+	logr := logger.FromContext(ctx).
+		WithField("driver", pool.Driver.DriverName()).
+		WithField("pool", pool.Name)
+
+	// runner_purger_last_run_timestamp_seconds documents itself as "last completed" sweep, so it
+	// must only advance once this function is about to return successfully - not merely because
+	// a sweep started - so a pool where destroyByTenant/Delete/buildPool keep failing shows up as
+	// stale here instead of looking recently-serviced.
+	defer func() {
+		if err == nil && m.metrics != nil {
+			m.metrics.RecordPurgerLastRun(pool.Name)
+		}
+	}()
+
+	pool.Lock()
+	defer pool.Unlock()
+
+	queryParams := &types.QueryParams{MatchLabels: map[string]string{"retain": "false"}}
+	busy, free, hibernating, provisioning, terminating, err := m.list(ctx, pool, queryParams)
+	if err != nil {
+		return fmt.Errorf("failed to list instances of pool=%q error: %w", pool.Name, err)
+	}
+	free = append(free, hibernating...)
+	busy = append(busy, terminating...)
+
+	var instances []*types.Instance
+	// reasonByID tracks which sweep bucket (busy/free/stuck-provisioning) each instance came
+	// from, so the destroy-attempts metric can carry an accurate reason label even after the
+	// three buckets are merged into a single destroy batch below.
+	reasonByID := make(map[string]string)
+	// usageStartByID captures each busy instance's pre-destroy inst.Updated as a best-effort
+	// proxy for "became inuse at" (there's no dedicated column for that), read here before
+	// destroyByTenant/Delete below can touch the instance further. Only populated for busy
+	// instances, since free/stuck-provisioning instances were never actually in use.
+	// Known limitation: the non-distributed Manager's warm-pool claim path (provisionFromPool)
+	// does not refresh inst.Updated at claim time, so for an instance that was claimed from the
+	// warm pool this proxy is actually "last touched at" (e.g. when it was created or last
+	// hibernated/resumed), not "became inuse at" - usage duration can be inflated by however
+	// long the instance sat idle in the pool before being claimed.
+	usageStartByID := make(map[string]int64)
+	for _, inst := range busy {
+		startedAt := time.Unix(inst.Started, 0)
+		if time.Since(startedAt) > maxAgeBusy {
+			instances = append(instances, inst)
+			reasonByID[inst.ID] = PurgerReasonBusyMaxAge
+			usageStartByID[inst.ID] = inst.Updated
+		}
+	}
+	for _, inst := range free {
+		startedAt := time.Unix(inst.Started, 0)
+		if time.Since(startedAt) > maxAgeFree {
+			instances = append(instances, inst)
+			reasonByID[inst.ID] = PurgerReasonFreeMaxAge
+		}
+	}
+	for _, inst := range provisioning {
+		startedAt := time.Unix(inst.Started, 0)
+		if time.Since(startedAt) > stuckProvisioningMaxAge {
+			instances = append(instances, inst)
+			reasonByID[inst.ID] = PurgerReasonStuckProvisioning
+		}
+	}
+
+	if len(instances) == 0 {
+		return nil
+	}
+
+	instanceIDs := make([]string, len(instances))
+	for i, inst := range instances {
+		instanceIDs[i] = inst.ID
+	}
+	logr.WithField("instance_ids", instanceIDs).
+		Infof("purger: Terminating %d stale instances", len(instances))
+
+	failedInstances, err := destroyByTenant(ctx, &pool.Pool, instances)
+	if err != nil {
+		logr.WithError(err).Warnf("purger: failed to delete some instances of pool=%q", pool.Name)
+	}
+
+	// Build a set of failed instance IDs for quick lookup
+	failedIDs := make(map[string]bool)
+	for _, inst := range failedInstances {
+		failedIDs[inst.ID] = true
+	}
+
+	// Only delete successfully destroyed instances from database
+	for _, instance := range instances {
+		outcome := PurgerOutcomeDestroyed
+		if failedIDs[instance.ID] {
+			outcome = PurgerOutcomeFailedLeftForRetry
+		}
+		if m.metrics != nil {
+			m.metrics.RecordInstanceDestroyAttempt(pool.Name, instance.Zone, reasonByID[instance.ID], outcome)
+			if outcome == PurgerOutcomeDestroyed && reasonByID[instance.ID] == PurgerReasonBusyMaxAge {
+				if usageStart, ok := usageStartByID[instance.ID]; ok && usageStart > 0 {
+					m.metrics.RecordVMUsageDuration(
+						pool.Name, instance.Zone, instance.Size, string(instance.Source),
+						VMTerminationReasonPurgerStale, time.Since(time.Unix(usageStart, 0)),
+					)
+				}
+			}
+		}
+
+		if failedIDs[instance.ID] {
+			logr.Warnf("purger: skipping db delete for failed instance %s", instance.ID)
+			continue
+		}
+		derr := m.Delete(ctx, instance.ID)
+		if derr != nil {
+			return fmt.Errorf("failed to delete %s from instance store with err: %s", instance.ID, derr)
+		}
+	}
+
+	err = m.buildPool(ctx, pool, serverName, nil, m.setupInstanceWithHibernate, nil)
+	if err != nil {
+		return fmt.Errorf("failed to rebuld pool=%q error: %w", pool.Name, err)
+	}
 
 	return nil
 }

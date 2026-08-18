@@ -39,6 +39,47 @@ type Metrics struct {
 	// Instance idle age metric
 	InstanceIdleAge *prometheus.HistogramVec
 
+	// GCP API interaction metrics: raw per-request layer
+	GCPAPIRequestsCount   *prometheus.CounterVec
+	GCPAPIRequestDuration *prometheus.HistogramVec
+
+	// GCP API interaction metrics: logical per-operation layer
+	GCPOperationsCount       *prometheus.CounterVec
+	GCPOperationDuration     *prometheus.HistogramVec
+	GCPOperationRetriesCount *prometheus.CounterVec
+	GCPOperationsInflight    *prometheus.GaugeVec
+
+	// Background instance/capacity purger metrics
+	PurgerLastRunTimestamp             *prometheus.GaugeVec
+	PurgerInstanceDestroyAttemptsCount *prometheus.CounterVec
+	PurgerInstancesForceDeletedCount   *prometheus.CounterVec
+	PurgerCapacityDestroyAttemptsCount *prometheus.CounterVec
+
+	// VM creation and usage metrics
+	VMCreationAttemptsCount *prometheus.CounterVec
+	VMCreationDurationCount *prometheus.HistogramVec
+	VMUsageDurationCount    *prometheus.HistogramVec
+	VMsCurrent              *prometheus.GaugeVec
+
+	// Hibernation and resume metrics
+	VMHibernateAttemptsCount     *prometheus.CounterVec
+	VMHibernateDurationCount     *prometheus.HistogramVec
+	VMResumeAttemptsCount        *prometheus.CounterVec
+	VMResumeDurationCount        *prometheus.HistogramVec
+	VMResumeToReadyDurationCount *prometheus.HistogramVec
+
+	// Overall health and initialization metrics
+	VMHealthCheckAttemptsCount *prometheus.CounterVec
+	VMHealthCheckDurationCount *prometheus.HistogramVec
+	VMSetupAttemptsCount       *prometheus.CounterVec
+	VMSetupDurationCount       *prometheus.HistogramVec
+	VMInitAttemptsCount        *prometheus.CounterVec
+	VMInitDurationCount        *prometheus.HistogramVec
+
+	// Cleanup and resource leakage metrics (on-demand destroy path)
+	CleanupAttemptsCount *prometheus.CounterVec
+	CleanupDurationCount *prometheus.HistogramVec
+
 	stores []*Store
 }
 
@@ -155,6 +196,7 @@ func (m *Metrics) UpdateRunningCount(ctx context.Context) {
 			m.RunningPerAccountCount.Reset()
 			m.RunningCount.Reset()
 			m.InstanceIdleAge.Reset()
+			m.VMsCurrent.Reset()
 			wg := &sync.WaitGroup{}
 			for _, ms := range m.stores {
 				go m.updateRunningCount(ctx, ms, wg)
@@ -176,13 +218,14 @@ func (m *Metrics) UpdateWarmPoolCount(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				// Reset the metric before setting new values so a pool/state that no longer has
+				// any instances doesn't leave a stale series behind.
+				m.WarmPoolCount.Reset()
 				wg := &sync.WaitGroup{}
 				for _, ms := range m.stores {
 					go m.updateWarmPoolCount(ctx, ms, wg)
 				}
 				wg.Wait()
-				// Reset the metric before setting new values
-				m.WarmPoolCount.Reset()
 			}
 		}
 	}()
@@ -215,6 +258,11 @@ func (m *Metrics) updateRunningCount(ctx context.Context, metricStore *Store, wg
 			m.InstanceIdleAge.WithLabelValues(i.Pool, i.OS, i.Arch, string(i.State), i.VariantID, string(i.Source), strconv.FormatBool(i.IsHibernated)).Observe(age)
 		}
 	}
+
+	// runner_vms_current: additive to RunningCount above, with zone/vm_type granularity (in
+	// place of os/arch/driver/owner_id/hibernate) read off each instance.
+	m.updateVMsCurrent(instances)
+
 	for k, v := range d {
 		m.RunningCount.WithLabelValues(
 			k.poolID, k.os, k.arch, k.driver, k.state, strconv.FormatBool(metricStore.Distributed),
@@ -316,6 +364,25 @@ func (m *Metrics) updateWarmPoolCount(ctx context.Context, metricStore *Store, w
 				"provisioning",
 			).Set(float64(len(provisioning)))
 		}
+	}
+}
+
+// vmKey groups instances for the runner_vms_current gauge, computed in updateRunningCount from
+// the same per-instance loop used to build RunningCount. state uses the raw types.InstanceState
+// values (created, inuse, hibernating, terminating, provisioning).
+type vmKey struct {
+	poolID, zone, vmType, source, state string
+}
+
+// updateVMsCurrent sets runner_vms_current from the same instance list updateRunningCount
+// already fetched for RunningCount, so no extra store call is needed.
+func (m *Metrics) updateVMsCurrent(instances []*types.Instance) {
+	counts := map[vmKey]int{}
+	for _, i := range instances {
+		counts[vmKey{poolID: i.Pool, zone: i.Zone, vmType: i.Size, source: string(i.Source), state: string(i.State)}]++
+	}
+	for k, count := range counts {
+		m.VMsCurrent.WithLabelValues(k.poolID, k.zone, k.vmType, k.source, k.state).Set(float64(count))
 	}
 }
 
@@ -483,6 +550,45 @@ func RegisterMetrics() *Metrics {
 	// Instance idle age metric
 	instanceIdleAge := InstanceIdleAge()
 
+	// GCP API interaction metrics
+	gcpAPIRequestsCount := GCPAPIRequestsCount()
+	gcpAPIRequestDuration := GCPAPIRequestDuration()
+	gcpOperationsCount := GCPOperationsCount()
+	gcpOperationDuration := GCPOperationDuration()
+	gcpOperationRetriesCount := GCPOperationRetriesCount()
+	gcpOperationsInflight := GCPOperationsInflight()
+
+	// Background purger metrics
+	purgerLastRunTimestamp := PurgerLastRunTimestamp()
+	purgerInstanceDestroyAttemptsCount := PurgerInstanceDestroyAttemptsCount()
+	purgerInstancesForceDeletedCount := PurgerInstancesForceDeletedCount()
+	purgerCapacityDestroyAttemptsCount := PurgerCapacityDestroyAttemptsCount()
+
+	// VM creation and usage metrics
+	vmCreationAttemptsCount := VMCreationAttemptsCount()
+	vmCreationDurationCount := VMCreationDurationCount()
+	vmUsageDurationCount := VMUsageDurationCount()
+	vmsCurrent := VMsCurrent()
+
+	// Hibernation and resume metrics
+	vmHibernateAttemptsCount := VMHibernateAttemptsCount()
+	vmHibernateDurationCount := VMHibernateDurationCount()
+	vmResumeAttemptsCount := VMResumeAttemptsCount()
+	vmResumeDurationCount := VMResumeDurationCount()
+	vmResumeToReadyDurationCount := VMResumeToReadyDurationCount()
+
+	// Overall health and initialization metrics
+	vmHealthCheckAttemptsCount := VMHealthCheckAttemptsCount()
+	vmHealthCheckDurationCount := VMHealthCheckDurationCount()
+	vmSetupAttemptsCount := VMSetupAttemptsCount()
+	vmSetupDurationCount := VMSetupDurationCount()
+	vmInitAttemptsCount := VMInitAttemptsCount()
+	vmInitDurationCount := VMInitDurationCount()
+
+	// Cleanup and resource leakage metrics (on-demand destroy path)
+	cleanupAttemptsCount := CleanupAttemptsCount()
+	cleanupDurationCount := CleanupDurationCount()
+
 	prometheus.MustRegister(
 		buildCount, failedBuildCount, runningCount, runningPerAccountCount,
 		poolFallbackCount, waitDurationCount, totalVMInitDurationCount,
@@ -492,6 +598,16 @@ func RegisterMetrics() *Metrics {
 		capacityReservationFailedCount,
 		scalerPredictedInstances,
 		instanceIdleAge,
+		gcpAPIRequestsCount, gcpAPIRequestDuration,
+		gcpOperationsCount, gcpOperationDuration, gcpOperationRetriesCount, gcpOperationsInflight,
+		purgerLastRunTimestamp, purgerInstanceDestroyAttemptsCount,
+		purgerInstancesForceDeletedCount, purgerCapacityDestroyAttemptsCount,
+		vmCreationAttemptsCount, vmCreationDurationCount, vmUsageDurationCount, vmsCurrent,
+		vmHibernateAttemptsCount, vmHibernateDurationCount, vmResumeAttemptsCount,
+		vmResumeDurationCount, vmResumeToReadyDurationCount,
+		vmHealthCheckAttemptsCount, vmHealthCheckDurationCount, vmSetupAttemptsCount,
+		vmSetupDurationCount, vmInitAttemptsCount, vmInitDurationCount,
+		cleanupAttemptsCount, cleanupDurationCount,
 	)
 
 	return &Metrics{
@@ -513,5 +629,32 @@ func RegisterMetrics() *Metrics {
 		CapacityReservationFailedCount:          capacityReservationFailedCount,
 		ScalerPredictedInstances:                scalerPredictedInstances,
 		InstanceIdleAge:                         instanceIdleAge,
+		GCPAPIRequestsCount:                     gcpAPIRequestsCount,
+		GCPAPIRequestDuration:                   gcpAPIRequestDuration,
+		GCPOperationsCount:                      gcpOperationsCount,
+		GCPOperationDuration:                    gcpOperationDuration,
+		GCPOperationRetriesCount:                gcpOperationRetriesCount,
+		GCPOperationsInflight:                   gcpOperationsInflight,
+		PurgerLastRunTimestamp:                  purgerLastRunTimestamp,
+		PurgerInstanceDestroyAttemptsCount:      purgerInstanceDestroyAttemptsCount,
+		PurgerInstancesForceDeletedCount:        purgerInstancesForceDeletedCount,
+		PurgerCapacityDestroyAttemptsCount:      purgerCapacityDestroyAttemptsCount,
+		VMCreationAttemptsCount:                 vmCreationAttemptsCount,
+		VMCreationDurationCount:                 vmCreationDurationCount,
+		VMUsageDurationCount:                    vmUsageDurationCount,
+		VMsCurrent:                              vmsCurrent,
+		VMHibernateAttemptsCount:                vmHibernateAttemptsCount,
+		VMHibernateDurationCount:                vmHibernateDurationCount,
+		VMResumeAttemptsCount:                   vmResumeAttemptsCount,
+		VMResumeDurationCount:                   vmResumeDurationCount,
+		VMResumeToReadyDurationCount:            vmResumeToReadyDurationCount,
+		VMHealthCheckAttemptsCount:              vmHealthCheckAttemptsCount,
+		VMHealthCheckDurationCount:              vmHealthCheckDurationCount,
+		VMSetupAttemptsCount:                    vmSetupAttemptsCount,
+		VMSetupDurationCount:                    vmSetupDurationCount,
+		VMInitAttemptsCount:                     vmInitAttemptsCount,
+		VMInitDurationCount:                     vmInitDurationCount,
+		CleanupAttemptsCount:                    cleanupAttemptsCount,
+		CleanupDurationCount:                    cleanupDurationCount,
 	}
 }

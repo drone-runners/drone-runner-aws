@@ -102,7 +102,7 @@ func (c *delegateCommand) setupStandardMode(runner *harness.Runner) error {
 	runner.CapacityReservationStore = capacityReservationStore
 	runner.PoolManager = drivers.New(runner.Context(), instanceStore, runner.Config)
 
-	poolConfig, err := harness.SetupPoolWithEnv(runner.Context(), runner.Config, runner.PoolManager, c.poolFile)
+	poolConfig, err := harness.SetupPoolWithEnv(runner.Context(), runner.Config, runner.PoolManager, c.poolFile, runner.Metrics)
 	if err != nil {
 		return err
 	}
