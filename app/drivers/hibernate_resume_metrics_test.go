@@ -18,7 +18,7 @@ import (
 
 // newHibernateResumeTestManager wires a plain (non-distributed) Manager around a
 // mockInstanceStore and a flexibleMockDriver for hibernate/resume metric tests.
-func newHibernateResumeTestManager(store *mockInstanceStore, driver *flexibleMockDriver, metrics *fakePurgerMetrics) (*Manager, *poolEntry) {
+func newHibernateResumeTestManager(store *mockInstanceStore, driver *flexibleMockDriver, metrics *fakePurgerMetrics) *Manager {
 	const poolName = "pool1"
 	pool := &poolEntry{
 		Pool: Pool{
@@ -30,13 +30,12 @@ func newHibernateResumeTestManager(store *mockInstanceStore, driver *flexibleMoc
 	if metrics != nil {
 		recorder = metrics
 	}
-	m := &Manager{
+	return &Manager{
 		poolMap:       map[string]*poolEntry{poolName: pool},
 		instanceStore: store,
 		runnerName:    "test-runner",
 		metrics:       recorder,
 	}
-	return m, pool
 }
 
 // TestHibernateOrStopWithRetries_Success_RecordsSuccessOutcome covers the happy path: the
@@ -59,7 +58,7 @@ func TestHibernateOrStopWithRetries_Success_RecordsSuccessOutcome(t *testing.T) 
 		},
 	}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	err := m.hibernateOrStopWithRetries(context.Background(), "pool1", inst, false)
 
@@ -98,7 +97,7 @@ func TestHibernateOrStopWithRetries_CloudCallFails_RecordsCloudCallFailedReason(
 		},
 	}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	err := m.hibernateOrStopWithRetries(context.Background(), "pool1", inst, false)
 
@@ -126,7 +125,7 @@ func TestHibernateOrStopWithRetries_StateWriteFails_RecordsStateFailedReason(t *
 	}
 	driver := &flexibleMockDriver{canHibernate: true}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	err := m.hibernateOrStopWithRetries(context.Background(), "pool1", inst, false)
 
@@ -149,7 +148,7 @@ func TestHibernateOrStopWithRetries_NoOpSkipsMetrics(t *testing.T) {
 	}
 	driver := &flexibleMockDriver{canHibernate: false}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	err := m.hibernateOrStopWithRetries(context.Background(), "pool1", inst, false)
 
@@ -171,7 +170,7 @@ func TestHibernateOrStopWithRetries_NilMetricsSafe(t *testing.T) {
 		},
 	}
 	driver := &flexibleMockDriver{canHibernate: true}
-	m, _ := newHibernateResumeTestManager(store, driver, nil)
+	m := newHibernateResumeTestManager(store, driver, nil)
 
 	assert.NotPanics(t, func() {
 		err := m.hibernateOrStopWithRetries(context.Background(), "pool1", inst, false)
@@ -198,7 +197,7 @@ func TestStartInstance_Success_RecordsSuccessOutcome(t *testing.T) {
 		},
 	}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	out, err := m.StartInstance(context.Background(), "pool1", "inst-1", &common.InstanceInfo{})
 
@@ -234,7 +233,7 @@ func TestStartInstance_CloudStartFails_RecordsCloudCallFailedReason(t *testing.T
 		},
 	}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	out, err := m.StartInstance(context.Background(), "pool1", "inst-1", &common.InstanceInfo{})
 
@@ -266,7 +265,7 @@ func TestStartInstance_StateWriteFails_RecordsStateFailedReason(t *testing.T) {
 		},
 	}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	out, err := m.StartInstance(context.Background(), "pool1", "inst-1", &common.InstanceInfo{})
 
@@ -298,7 +297,7 @@ func TestStartInstance_NotHibernated_NoResumeMetrics(t *testing.T) {
 		},
 	}
 	metrics := &fakePurgerMetrics{}
-	m, _ := newHibernateResumeTestManager(store, driver, metrics)
+	m := newHibernateResumeTestManager(store, driver, metrics)
 
 	out, err := m.StartInstance(context.Background(), "pool1", "inst-1", &common.InstanceInfo{})
 
@@ -325,7 +324,7 @@ func TestStartInstance_NilMetricsSafe(t *testing.T) {
 			return "10.0.0.5", nil
 		},
 	}
-	m, _ := newHibernateResumeTestManager(store, driver, nil)
+	m := newHibernateResumeTestManager(store, driver, nil)
 
 	assert.NotPanics(t, func() {
 		_, err := m.StartInstance(context.Background(), "pool1", "inst-1", &common.InstanceInfo{})

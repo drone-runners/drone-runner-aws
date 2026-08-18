@@ -44,7 +44,7 @@ func TestResumeToReadyOutcome_SetupFailedAfterSuccessfulResume(t *testing.T) {
 	assert.Equal(t, drivers.VMLifecycleOutcomeError, outcome)
 }
 
-// TestResumeToReadyOutcome_ContextCancelled covers a caller-cancelled request, which should be
+// TestResumeToReadyOutcome_ContextCancelled covers a caller-canceled request, which should be
 // reported distinctly from a genuine failure.
 func TestResumeToReadyOutcome_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

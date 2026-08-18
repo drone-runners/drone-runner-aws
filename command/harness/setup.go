@@ -421,7 +421,7 @@ func HandleSetup(
 // the health-check and setup phases below it) into the bounded outcome set for
 // runner_vm_resume_to_ready_duration_seconds. There is no `reason` label on this metric (see
 // metric/hibernate_resume.go), so a cloud-level resume failure, a health-check timeout, and a
-// setup failure are all reported as a plain "error" outcome - only success/error/cancelled are
+// setup failure are all reported as a plain "error" outcome - only success/error/canceled are
 // distinguishable at this metric's granularity.
 func resumeToReadyOutcome(ctx context.Context, err error) string {
 	if err == nil {
