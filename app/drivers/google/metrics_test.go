@@ -226,6 +226,42 @@ func TestAPICall_NilMetricsIsNoOp(t *testing.T) {
 	}
 }
 
+// TestTrackOperation_NilMetricsIsNoOp covers drone-runner-aws's standalone/
+// independent mode (command/setup, command/exec, command/daemon,
+// command/compile), where poolfile.ProcessPool is always called with a nil
+// *metric.Metrics (no runner injecting a real one). trackOperation must still
+// run the wrapped operation and must not panic when m is nil.
+func TestTrackOperation_NilMetricsIsNoOp(t *testing.T) {
+	called := false
+	err := trackOperation(context.Background(), nil, metric.GCPResourceInstance, metric.GCPOperationInsert, "zone", testMachineType, classifyOpts{}, func() error {
+		called = true
+		return nil
+	})
+	if err != nil || !called {
+		t.Fatalf("trackOperation with nil metrics should still invoke f(): called=%v err=%v", called, err)
+	}
+}
+
+// TestTrackOperation_NilMetricsPropagatesError mirrors the non-nil-metrics
+// error path to make sure nil metrics doesn't swallow or alter the wrapped
+// operation's error.
+func TestTrackOperation_NilMetricsPropagatesError(t *testing.T) {
+	wantErr := errors.New("boom")
+	err := trackOperation(context.Background(), nil, metric.GCPResourceInstance, metric.GCPOperationInsert, "zone", testMachineType, classifyOpts{}, func() error {
+		return wantErr
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("trackOperation with nil metrics returned err=%v, want %v", err, wantErr)
+	}
+}
+
+// TestRecordRetry_NilMetricsIsNoOp ensures the retry-count wrapper used by
+// google/driver.go's retry() helper never panics when running without a
+// runner-injected *metric.Metrics.
+func TestRecordRetry_NilMetricsIsNoOp(t *testing.T) {
+	recordRetry(nil, metric.GCPResourceInstance, metric.GCPOperationInsert, "zone", errors.New("transient"))
+}
+
 // TestTrackOperation_InflightDecrementedOnError asserts that the inflight
 // gauge is decremented (via defer) even when the wrapped operation errors,
 // so a failing operation never leaves the gauge permanently elevated.
