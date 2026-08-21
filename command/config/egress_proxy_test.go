@@ -17,28 +17,32 @@ func TestEgressProxyConfig(t *testing.T) {
 		if !strings.Contains(cfg.Egress.Proxy.NoProxy, "169.254.169.254") {
 			t.Errorf("NoProxy default missing metadata endpoint: %q", cfg.Egress.Proxy.NoProxy)
 		}
-		wantCAEnvVars := []string{
+		wantBundleEnvVars := []string{
 			"SSL_CERT_FILE",
-			"NODE_EXTRA_CA_CERTS",
 			"REQUESTS_CA_BUNDLE",
 			"CURL_CA_BUNDLE",
 			"GIT_SSL_CAINFO",
 		}
-		got := cfg.Egress.Proxy.CAEnvVars
-		if len(got) != len(wantCAEnvVars) {
-			t.Fatalf("CAEnvVars default = %v, want %v", got, wantCAEnvVars)
+		got := cfg.Egress.Proxy.CABundleEnvVars
+		if len(got) != len(wantBundleEnvVars) {
+			t.Fatalf("CABundleEnvVars default = %v, want %v", got, wantBundleEnvVars)
 		}
-		for i, v := range wantCAEnvVars {
+		for i, v := range wantBundleEnvVars {
 			if got[i] != v {
-				t.Errorf("CAEnvVars[%d] = %q, want %q", i, got[i], v)
+				t.Errorf("CABundleEnvVars[%d] = %q, want %q", i, got[i], v)
 			}
+		}
+		gotExtra := cfg.Egress.Proxy.CAExtraEnvVars
+		if len(gotExtra) != 1 || gotExtra[0] != "NODE_EXTRA_CA_CERTS" {
+			t.Errorf("CAExtraEnvVars default = %v, want [NODE_EXTRA_CA_CERTS]", gotExtra)
 		}
 	})
 
 	t.Run("overrides from env", func(t *testing.T) {
 		t.Setenv("DRONE_EGRESS_NO_PROXY", "localhost,foo.local")
 		t.Setenv("DRONE_EGRESS_PROXY_CA_CERT", "MY-CA")
-		t.Setenv("DRONE_EGRESS_CA_ENV_VARS", "SSL_CERT_FILE,MY_CUSTOM_CA_VAR")
+		t.Setenv("DRONE_EGRESS_CA_BUNDLE_ENV_VARS", "SSL_CERT_FILE,MY_CUSTOM_CA_VAR")
+		t.Setenv("DRONE_EGRESS_CA_EXTRA_ENV_VARS", "NODE_EXTRA_CA_CERTS,MY_EXTRA_VAR")
 
 		cfg, err := FromEnviron()
 		if err != nil {
@@ -50,9 +54,13 @@ func TestEgressProxyConfig(t *testing.T) {
 		if cfg.Egress.Proxy.CACert != "MY-CA" {
 			t.Errorf("CACert = %q", cfg.Egress.Proxy.CACert)
 		}
-		got := cfg.Egress.Proxy.CAEnvVars
+		got := cfg.Egress.Proxy.CABundleEnvVars
 		if len(got) != 2 || got[0] != "SSL_CERT_FILE" || got[1] != "MY_CUSTOM_CA_VAR" {
-			t.Errorf("CAEnvVars = %v, want [SSL_CERT_FILE MY_CUSTOM_CA_VAR]", got)
+			t.Errorf("CABundleEnvVars = %v, want [SSL_CERT_FILE MY_CUSTOM_CA_VAR]", got)
+		}
+		gotExtra := cfg.Egress.Proxy.CAExtraEnvVars
+		if len(gotExtra) != 2 || gotExtra[0] != "NODE_EXTRA_CA_CERTS" || gotExtra[1] != "MY_EXTRA_VAR" {
+			t.Errorf("CAExtraEnvVars = %v, want [NODE_EXTRA_CA_CERTS MY_EXTRA_VAR]", gotExtra)
 		}
 	})
 }

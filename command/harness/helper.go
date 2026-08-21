@@ -18,9 +18,13 @@ import (
 )
 
 // egressCAHostPath is where cloud-init writes the mitm CA on egress-control VMs.
+// egressCABundleHostPath is the merged trust bundle (system roots + mitm CA)
+// for tools whose CA env vars replace the default trust store.
 const (
-	egressCAHostPath        = "/etc/harness-certs/ca.crt"
-	egressCAWindowsHostPath = "C:\\harness-certs\\ca.crt"
+	egressCAHostPath              = "/etc/harness-certs/ca.crt"
+	egressCABundleHostPath        = "/etc/harness-certs/ca-bundle.crt"
+	egressCAWindowsHostPath       = "C:\\harness-certs\\ca.crt"
+	egressCABundleWindowsHostPath = "C:\\harness-certs\\ca-bundle.crt"
 )
 
 func getStreamLogger(cfg *leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, correlationID string) *lelivelog.Writer {

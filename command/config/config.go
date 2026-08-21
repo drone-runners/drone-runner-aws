@@ -329,11 +329,15 @@ type EgressProxy struct {
 	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
 	// fleet proxy presents. Baked into the build VM so TLS interception is trusted.
 	CACert string `json:"ca_cert" yaml:"ca_cert" envconfig:"DRONE_EGRESS_PROXY_CA_CERT"`
-	// CAEnvVars lists environment variables that steps in egress pools get
-	// pointed at the mounted egress CA, so common runtimes and tools
-	// (Go/OpenSSL, Node, Python requests, curl, git) trust TLS interception.
-	// A step-provided value always wins over an injected one.
-	CAEnvVars []string `json:"ca_env_vars" yaml:"ca_env_vars" envconfig:"DRONE_EGRESS_CA_ENV_VARS" default:"SSL_CERT_FILE,NODE_EXTRA_CA_CERTS,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO"`
+	// CABundleEnvVars lists env vars that replace a tool's default trust store
+	// (Go/OpenSSL, Python requests, curl, git). Steps in egress pools get these
+	// pointed at the merged CA bundle so public roots keep working alongside
+	// the Harness egress CA. A step-provided value always wins.
+	CABundleEnvVars []string `json:"ca_bundle_env_vars" yaml:"ca_bundle_env_vars" envconfig:"DRONE_EGRESS_CA_BUNDLE_ENV_VARS" default:"SSL_CERT_FILE,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO"`
+	// CAExtraEnvVars lists env vars that add to a tool's built-in trust store
+	// (Node's NODE_EXTRA_CA_CERTS). These get the Harness-only CA, since the
+	// tool already carries public roots. A step-provided value always wins.
+	CAExtraEnvVars []string `json:"ca_extra_env_vars" yaml:"ca_extra_env_vars" envconfig:"DRONE_EGRESS_CA_EXTRA_ENV_VARS" default:"NODE_EXTRA_CA_CERTS"`
 }
 
 type EnvConfig struct {

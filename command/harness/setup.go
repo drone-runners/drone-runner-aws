@@ -654,17 +654,29 @@ func handleSetup(
 	return instance, warmed, hibernated, variantID, nil
 }
 
-// appendEgressCAVolume registers the host-path Volume so step containers can bind-mount it.
+// appendEgressCAVolume registers the host-path Volumes so step containers can
+// bind-mount them: the Harness-only CA and the merged bundle (system roots +
+// Harness CA) for tools whose CA env vars replace the default trust store.
 func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Volume {
 	if osName == oshelp.OSLinux {
-		return append(volumes, &lespec.Volume{
-			HostPath: &lespec.VolumeHostPath{
-				ID:       fileID("ca.crt"),
-				Name:     fileID("ca.crt"),
-				Path:     egressCAHostPath,
-				ReadOnly: true,
+		return append(volumes,
+			&lespec.Volume{
+				HostPath: &lespec.VolumeHostPath{
+					ID:       fileID("ca.crt"),
+					Name:     fileID("ca.crt"),
+					Path:     egressCAHostPath,
+					ReadOnly: true,
+				},
 			},
-		})
+			&lespec.Volume{
+				HostPath: &lespec.VolumeHostPath{
+					ID:       fileID("ca-bundle.crt"),
+					Name:     fileID("ca-bundle.crt"),
+					Path:     egressCABundleHostPath,
+					ReadOnly: true,
+				},
+			},
+		)
 	} else if osName == oshelp.OSWindows {
 		return append(volumes, &lespec.Volume{
 			HostPath: &lespec.VolumeHostPath{
