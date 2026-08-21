@@ -49,7 +49,7 @@ func HandleStep(ctx context.Context,
 	mockTimeoutSecs int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-	egressProxy config.EgressProxy,
+	egressProxy *config.EgressProxy,
 	async bool) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
 		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
@@ -216,7 +216,7 @@ func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 // with appendEgressCAVolume (setup side), which registers the host-path volumes.
 // Replacement-style env vars (cfg.CABundleEnvVars) are pointed at the merged
 // bundle; additive env vars (cfg.CAExtraEnvVars) at the Harness-only CA.
-func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string, cfg config.EgressProxy) {
+func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string, cfg *config.EgressProxy) {
 	if r.Envs == nil {
 		r.Envs = make(map[string]string)
 	}
@@ -255,7 +255,7 @@ func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string, cfg 
 		injectEgressCAEnvVars(r, egressCAWindowsHostPath, egressCABundleWindowsHostPath, cfg)
 		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
 			Name: fileID("ca.crt"),
-			Path: "C:\\harness-certs",
+			Path: egressCAWindowsDir,
 		})
 	}
 }
@@ -264,7 +264,7 @@ func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string, cfg 
 // material: bundle vars at the merged bundle, extra vars at the Harness-only
 // CA. Vars the step already defines are left untouched so users keep control
 // of their toolchain's trust configuration.
-func injectEgressCAEnvVars(r *ExecuteVMRequest, caPath, caBundlePath string, cfg config.EgressProxy) {
+func injectEgressCAEnvVars(r *ExecuteVMRequest, caPath, caBundlePath string, cfg *config.EgressProxy) {
 	inject := func(env, path string) {
 		if env == "" {
 			return

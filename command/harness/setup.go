@@ -682,7 +682,7 @@ func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Vol
 			HostPath: &lespec.VolumeHostPath{
 				ID:       fileID("ca.crt"),
 				Name:     fileID("ca.crt"),
-				Path:     "C:\\harness-certs",
+				Path:     egressCAWindowsDir,
 				ReadOnly: true,
 			},
 		})

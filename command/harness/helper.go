@@ -23,8 +23,9 @@ import (
 const (
 	egressCAHostPath              = "/etc/harness-certs/ca.crt"
 	egressCABundleHostPath        = "/etc/harness-certs/ca-bundle.crt"
-	egressCAWindowsHostPath       = "C:\\harness-certs\\ca.crt"
-	egressCABundleWindowsHostPath = "C:\\harness-certs\\ca-bundle.crt"
+	egressCAWindowsDir            = "C:\\harness-certs"
+	egressCAWindowsHostPath       = egressCAWindowsDir + "\\ca.crt"
+	egressCABundleWindowsHostPath = egressCAWindowsDir + "\\ca-bundle.crt"
 )
 
 func getStreamLogger(cfg *leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, correlationID string) *lelivelog.Writer {

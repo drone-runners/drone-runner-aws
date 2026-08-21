@@ -139,11 +139,11 @@ func TestLinuxEgressDispatch(t *testing.T) {
 				if strings.Contains(s, envoyMarker) {
 					t.Errorf("v2 template unexpectedly contains v1 envoy marker")
 				}
-			for _, want := range []string{
-				proxyURL + "/healthz",
-				base64.StdEncoding.EncodeToString([]byte(caCert)),
-				"cp /etc/ssl/certs/ca-certificates.crt /etc/harness-certs/ca-bundle.crt",
-			} {
+				for _, want := range []string{
+					proxyURL + "/healthz",
+					base64.StdEncoding.EncodeToString([]byte(caCert)),
+					"cp /etc/ssl/certs/ca-certificates.crt /etc/harness-certs/ca-bundle.crt",
+				} {
 					if !strings.Contains(s, want) {
 						t.Errorf("v2 egress output missing %q", want)
 					}
