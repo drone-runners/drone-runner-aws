@@ -70,7 +70,7 @@ echo "[egress] Configuring Git for Windows to trust Harness CA"
 $gitCaBundle = 'C:\Program Files\Git\mingw64\etc\ssl\certs\ca-bundle.crt'
 if (Test-Path $gitCaBundle) {
     # Idempotent: only append if our CA isn't already there.
-    if (-not (Select-String -Path $gitCaBundle -Pattern 'Harness Build VM CA' -Quiet)) {
+    if (-not (Select-String -Path $gitCaBundle -Pattern 'Harness Egress CA' -Quiet)) {
         Add-Content -Path $gitCaBundle -Value "`n# Harness Egress CA"
         Get-Content $EgressCaPath | Add-Content -Path $gitCaBundle
         echo "[egress] appended Harness CA to $gitCaBundle"
@@ -85,6 +85,19 @@ try {
     echo "[egress] git --system http.sslBackend=schannel set"
 } catch {
     echo "[egress] git --system config write failed: $($_.Exception.Message)"
+}
+
+echo "[egress] Writing merged CA bundle for replacement-style CA env vars"
+# SSL_CERT_FILE / REQUESTS_CA_BUNDLE / CURL_CA_BUNDLE / GIT_SSL_CAINFO replace
+# the tool's default trust store, so they need public roots + the Harness CA.
+# Git's ca-bundle.crt already had the Harness CA appended above, so a plain
+# copy is the merged bundle; fall back to the Harness CA alone if missing.
+$EgressCaBundlePath = "C:\harness-certs\ca-bundle.crt"
+if (Test-Path $gitCaBundle) {
+    Copy-Item $gitCaBundle $EgressCaBundlePath -Force
+} else {
+    echo "[egress] WARNING: public CA bundle not found; ca-bundle.crt will contain only the Harness CA"
+    Copy-Item $EgressCaPath $EgressCaBundlePath -Force
 }
 
 # Proxy env vars and docker restart are applied by lite-engine at setup time
