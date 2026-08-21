@@ -142,6 +142,7 @@ func TestLinuxEgressDispatch(t *testing.T) {
 				for _, want := range []string{
 					proxyURL + "/healthz",
 					base64.StdEncoding.EncodeToString([]byte(caCert)),
+					"cp /etc/ssl/certs/ca-certificates.crt /etc/harness-certs/ca-bundle.crt",
 				} {
 					if !strings.Contains(s, want) {
 						t.Errorf("v2 egress output missing %q", want)
@@ -336,6 +337,7 @@ func TestWindowsEgressProxyDispatch(t *testing.T) {
 			`$EgressProxy   = "` + proxyURL + `"`,
 			`$EgressNoProxy = "` + noProxy + `"`,
 			base64.StdEncoding.EncodeToString([]byte(caCert)),
+			`C:\harness-certs\ca-bundle.crt`,
 		} {
 			if !strings.Contains(s, want) {
 				t.Errorf("windows_egress output missing %q", want)

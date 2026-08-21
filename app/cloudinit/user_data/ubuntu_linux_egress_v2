@@ -26,10 +26,12 @@ write_files:
 # Harness Egress CA (signs the on-demand leaf certs the fleet presents).
 # Single source: dropped under /usr/local/share/ca-certificates so
 # update-ca-certificates folds it into /etc/ssl/certs/ca-certificates.crt.
-# That's what curl/pip/git/openssl-using tools trust by default, AND what
-# REQUESTS_CA_BUNDLE/GIT_SSL_CAINFO/SSL_CERT_FILE point at below.
-# Node is the one consumer that doesn't merge with the system bundle --
-# NODE_EXTRA_CA_CERTS in /etc/environment points directly at this same file.
+# That's what curl/pip/git/openssl-using tools trust by default.
+# /etc/harness-certs/ca.crt is the Harness-only CA for additive consumers
+# (NODE_EXTRA_CA_CERTS, HARNESS_CA_PATH). runcmd below derives
+# /etc/harness-certs/ca-bundle.crt (system roots + Harness CA) for
+# replacement-style consumers (SSL_CERT_FILE, REQUESTS_CA_BUNDLE,
+# CURL_CA_BUNDLE, GIT_SSL_CAINFO) that would otherwise lose public roots.
 - path: /usr/local/share/ca-certificates/harness-ca.crt
   permissions: '0644'
   encoding: b64
@@ -62,6 +64,11 @@ runcmd:
   # can be embedded. See lite-engine handler/setup.go applyDockerProxy.
   # ────────────────────────────────────────────────────────────────────
   - update-ca-certificates
+
+  # Merged trust bundle for replacement-style CA env vars (SSL_CERT_FILE,
+  # REQUESTS_CA_BUNDLE, CURL_CA_BUNDLE, GIT_SSL_CAINFO). Mounted into step
+  # containers alongside ca.crt; see command/harness/step.go.
+  - cp /etc/ssl/certs/ca-certificates.crt /etc/harness-certs/ca-bundle.crt
 
   # Egress proxy reachability check. Fails the build VM bootstrap if the
   # fleet ILB is not reachable on the proxy port. /healthz on :3128 is a
