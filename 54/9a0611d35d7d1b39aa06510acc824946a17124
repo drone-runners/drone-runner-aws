@@ -1,0 +1,52 @@
+command/harness/step_test.go
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 7,12-16,23-26,28,50-51,59-64,79-83,94-96,105,109-111,114-116,119,123-125,128-130,141-143,146-148,155-156
+  s_5f5403eced5299::t_3a654353f46a30 32,69,89,107,121,136,153,167,169
+  s_5f5403eced5299::t_8e1665b6d875cc 35-42
+app/cloudinit/user_data/ubuntu_linux_egress_v2
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 29-34,68-72
+command/harness/setup.go
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 657-659,662-677,679
+app/cloudinit/cloudinit_test.go
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 142-146,340
+command/config/config.go
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 332-340
+command/config/egress_proxy_test.go
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 20,26-28,30,32,35-38,44-45,57,59-63
+command/harness/helper.go
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 21-22,24-27
+command/harness/step.go
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 215-219,236-247,251-252,254-255,263-264,267-268,270,273,276-281
+  s_b4b8da71953b05::t_32368c5fd79982 129,131
+app/cloudinit/user_data/windows_egress
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 73,90-101
+  3a81d6b1-67e0-4ed4-a318-52f903e8c38f 102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "549a0611d35d7d1b39aa06510acc824946a17124",
+  "prompts": {
+    "5f5403eced5299d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3a81d6b1-67e0-4ed4-a318-52f903e8c38f",
+        "model": "kimi-k3"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 240,
+      "total_deletions": 156,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_b4b8da71953b05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16971e68-96e4-4cf9-95d0-004888c18298",
+        "model": "unknown"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
