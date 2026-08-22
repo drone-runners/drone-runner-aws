@@ -851,15 +851,8 @@ func logSerialConsoleOutputWithTimeout(
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), serialConsoleLogTimeout)
 	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		logSerialConsoleOutputContext(ctx, poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
-	}()
-
-	select {
-	case <-done:
-	case <-ctx.Done():
+	logSerialConsoleOutputContext(ctx, poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+	if ctx.Err() != nil {
 		logrus.WithField("id", instanceID).Warnln("timed out fetching serial console output before cleanup")
 	}
 }
