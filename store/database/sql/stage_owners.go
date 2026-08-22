@@ -53,6 +53,7 @@ const stageOnwerBase = `
 SELECT
  stage_id
 ,pool_name
+,instance_id
 FROM stage_owner
 `
 
@@ -64,9 +65,11 @@ const stageOwnerInsert = `
 INSERT INTO stage_owner (
  stage_id
 ,pool_name
+,instance_id
 ) values (
  :stage_id
 ,:pool_name
+,:instance_id
 ) RETURNING stage_id
 `
 
