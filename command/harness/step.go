@@ -49,7 +49,7 @@ func HandleStep(ctx context.Context,
 	mockTimeoutSecs int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-	egressProxy config.EgressProxy,
+	egressProxy *config.EgressProxy,
 	async bool) (*api.PollStepResponse, error) {
 	if r.ID == "" && r.IPAddress == "" {
 		return nil, ierrors.NewBadRequestError("either parameter 'id' or 'ip_address' must be provided")
@@ -120,16 +120,15 @@ func HandleStep(ctx context.Context,
 	logr.Traceln("running StartStep")
 
 	if poolManager.IsEgressPool(inst.Pool, inst.TenantID) {
+		// The proxy comes solely from the instance record (resolved at create
+		// time from the pool's per-network proxy_url); there is no env fallback.
 		proxyURL := inst.ProxyURL
-		if proxyURL == "" {
-			proxyURL = egressProxy.URL
-		}
 		merged := mergeEgressPolicy(r.StartStepRequest.EgressPolicy, proxyURL, egressProxy.NoProxy)
 		if merged != nil {
 			r.StartStepRequest.EgressPolicy = merged
-			configureEgressStep(r, inst.Platform.OS, buildProxyURL(merged.Username, merged.Password, merged.ProxyURL), merged.NoProxy)
+			configureEgressStep(r, inst.Platform.OS, buildProxyURL(merged.Username, merged.Password, merged.ProxyURL), merged.NoProxy, egressProxy)
 		} else {
-			configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy)
+			configureEgressStep(r, inst.Platform.OS, proxyURL, egressProxy.NoProxy, egressProxy)
 		}
 	}
 
@@ -213,9 +212,11 @@ func setPrevStepExportEnvs(r *ExecuteVMRequest) {
 }
 
 // configureEgressStep applies the egress-control proxy settings and bind-mounts
-// the Harness egress CA for a step running in an egress pool. It pairs with
-// appendEgressCAVolume (setup side), which registers the host-path volume.
-func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string) {
+// the Harness egress CA material for a step running in an egress pool. It pairs
+// with appendEgressCAVolume (setup side), which registers the host-path volumes.
+// Replacement-style env vars (cfg.CABundleEnvVars) are pointed at the merged
+// bundle; additive env vars (cfg.CAExtraEnvVars) at the Harness-only CA.
+func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string, cfg *config.EgressProxy) {
 	if r.Envs == nil {
 		r.Envs = make(map[string]string)
 	}
@@ -232,18 +233,50 @@ func configureEgressStep(r *ExecuteVMRequest, os, proxyURL, noProxy string) {
 	switch os {
 	case oshelp.OSLinux:
 		r.Envs["HARNESS_CA_PATH"] = egressCAHostPath
-		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
-			Name: fileID("ca.crt"),
-			Path: egressCAHostPath,
-		})
+		r.Envs["HARNESS_CA_BUNDLE"] = egressCABundleHostPath
+		injectEgressCAEnvVars(r, egressCAHostPath, egressCABundleHostPath, cfg)
+		r.Volumes = append(r.Volumes,
+			&lespec.VolumeMount{
+				Name: fileID("ca.crt"),
+				Path: egressCAHostPath,
+			},
+			&lespec.VolumeMount{
+				Name: fileID("ca-bundle.crt"),
+				Path: egressCABundleHostPath,
+			},
+		)
 	case oshelp.OSWindows:
 		// Windows containers cannot bind-mount individual files (the daemon
 		// errors "Only directories can be mapped on this platform"). Mount the
-		// parent directory; the CA remains at C:\harness-certs\ca.crt inside.
+		// parent directory; the CA and merged bundle remain at
+		// C:\harness-certs\ca.crt and C:\harness-certs\ca-bundle.crt inside.
 		r.Envs["HARNESS_CA_PATH"] = egressCAWindowsHostPath
+		r.Envs["HARNESS_CA_BUNDLE"] = egressCABundleWindowsHostPath
+		injectEgressCAEnvVars(r, egressCAWindowsHostPath, egressCABundleWindowsHostPath, cfg)
 		r.Volumes = append(r.Volumes, &lespec.VolumeMount{
 			Name: fileID("ca.crt"),
-			Path: "C:\\harness-certs",
+			Path: egressCAWindowsDir,
 		})
+	}
+}
+
+// injectEgressCAEnvVars points the configured env vars at the mounted egress CA
+// material: bundle vars at the merged bundle, extra vars at the Harness-only
+// CA. Vars the step already defines are left untouched so users keep control
+// of their toolchain's trust configuration.
+func injectEgressCAEnvVars(r *ExecuteVMRequest, caPath, caBundlePath string, cfg *config.EgressProxy) {
+	inject := func(env, path string) {
+		if env == "" {
+			return
+		}
+		if _, ok := r.Envs[env]; !ok {
+			r.Envs[env] = path
+		}
+	}
+	for _, env := range cfg.CABundleEnvVars {
+		inject(env, caBundlePath)
+	}
+	for _, env := range cfg.CAExtraEnvVars {
+		inject(env, caPath)
 	}
 }

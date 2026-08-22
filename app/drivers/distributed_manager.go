@@ -866,15 +866,25 @@ func (d *DistributedManager) StartInstancePurger(ctx context.Context, maxAgeBusy
 	return nil
 }
 
+// startInstancePurger runs one purger sweep for a single pool: busy-instance cleanup,
+// free-instance cleanup, and capacity-reservation cleanup, each independently best-effort (a
+// failure in one doesn't stop the others from running - see cleanupBusyInstances/
+// cleanupFreeInstances/cleanupCapacities). runner_purger_last_run_timestamp_seconds documents
+// itself as "last completed" sweep, so it is only recorded once all three attempted steps (any
+// with a zero max-age are skipped and don't count against success) finished without error -
+// a pool where cleanup keeps failing shows up as stale here instead of looking recently-serviced.
 func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *poolEntry, maxAgeBusy, maxAgeFree, freeCapacityMaxAge time.Duration, queryParams *types.QueryParams) {
 	logr := logger.FromContext(ctx).
 		WithField("driver", pool.Driver.DriverName()).
 		WithField("pool", pool.Name)
 
+	sweepFailed := false
+
 	// Handle busy instance cleanup
 	if maxAgeBusy != 0 {
 		if err := d.cleanupBusyInstances(ctx, pool, maxAgeBusy, queryParams); err != nil {
 			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup busy instances")
+			sweepFailed = true
 		}
 	}
 
@@ -882,11 +892,19 @@ func (d *DistributedManager) startInstancePurger(ctx context.Context, pool *pool
 	if maxAgeFree != 0 {
 		if err := d.cleanupFreeInstances(ctx, pool, maxAgeFree, queryParams); err != nil {
 			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup free instances")
+			sweepFailed = true
 		}
 	}
 
 	if freeCapacityMaxAge != 0 {
-		d.cleanupCapacities(ctx, pool, freeCapacityMaxAge)
+		if err := d.cleanupCapacities(ctx, pool, freeCapacityMaxAge); err != nil {
+			logr.WithError(err).Error("distributed dlite: purger: failed to cleanup capacity reservations")
+			sweepFailed = true
+		}
+	}
+
+	if !sweepFailed && d.metrics != nil {
+		d.metrics.RecordPurgerLastRun(pool.Name)
 	}
 }
 
@@ -983,11 +1001,17 @@ func (d *DistributedManager) cleanupFreeInstances(ctx context.Context, pool *poo
 	return err
 }
 
-func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) {
+// cleanupCapacities sweeps a pool for stale/orphaned capacity reservations and destroys them.
+// It is best-effort across its three sub-lookups (a failure in one doesn't stop the others from
+// running), but still returns a non-nil error if any of them failed, so callers that gate a
+// "sweep succeeded" signal on it (see startInstancePurger) see an accurate result instead of
+// treating every invocation as successful regardless of what actually happened.
+func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEntry, freeCapacityMaxAge time.Duration) error {
 	// Calculate the cutoff time for stale capacity reservations
 	createdAtBefore := time.Now().Add(-freeCapacityMaxAge).Unix()
 
 	var capacitiesToDelete []*types.CapacityReservation
+	var lookupErrs []error
 
 	// List capacity reservations stuck in "terminating" state
 	// Always clean stale terminating capacity reservations first to duplicate detection
@@ -1000,13 +1024,22 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 		[]types.CapacityReservationState{types.CapacityReservationStateTerminating},
 	)
 
+	// reasonByStageID tracks which source (stale-terminating/free-claimed/orphaned-in-use) each
+	// capacity reservation came from, so the destroy-attempts metric can carry an accurate
+	// reason label once the three lists are merged into a single destroy call below.
+	reasonByStageID := make(map[string]string)
+
 	if err != nil {
 		logger.FromContext(ctx).
 			WithField("pool", pool.Name).
 			WithError(err).
 			Error("distributed dlite: purger: failed to list stale terminating capacity reservations")
+		lookupErrs = append(lookupErrs, fmt.Errorf("list stale terminating capacities: %w", err))
 	} else {
 		capacitiesToDelete = append(capacitiesToDelete, staleCapacities...)
+		for _, c := range staleCapacities {
+			reasonByStageID[c.StageID] = PurgerCapacityReasonStuckTerminating
+		}
 	}
 
 	// Use FindAndClaim to atomically find and claim stale capacity reservations
@@ -1025,8 +1058,12 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 			WithField("pool", pool.Name).
 			WithError(err).
 			Error("distributed dlite: purger: failed to find and claim stale capacity reservations")
+		lookupErrs = append(lookupErrs, fmt.Errorf("find and claim stale capacities: %w", err))
 	} else {
 		capacitiesToDelete = append(capacitiesToDelete, freeCapacities...)
+		for _, c := range freeCapacities {
+			reasonByStageID[c.StageID] = PurgerCapacityReasonStuckCreated
+		}
 	}
 
 	// Reclaim orphaned InUse capacities: capacity records whose associated instance
@@ -1035,9 +1072,12 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 	// racing with in-flight setups that haven't yet written the instance row.
 	orphanedCapacities := d.findOrphanedInUseCapacities(ctx, pool, createdAtBefore)
 	capacitiesToDelete = append(capacitiesToDelete, orphanedCapacities...)
+	for _, c := range orphanedCapacities {
+		reasonByStageID[c.StageID] = PurgerCapacityReasonOrphanedInUse
+	}
 
 	if len(capacitiesToDelete) == 0 {
-		return
+		return errors.Join(lookupErrs...)
 	}
 
 	stageIDs := make([]string, len(capacitiesToDelete))
@@ -1060,7 +1100,8 @@ func (d *DistributedManager) cleanupCapacities(ctx context.Context, pool *poolEn
 		WithField("destroy_caller", "distributed_purger:capacity_cleanup").
 		Infof("distributed dlite: purger: cleaning up %d stale capacity reservations", len(capacitiesToDelete))
 
-	d.destroyCapacityFromReservation(ctx, capacitiesToDelete)
+	d.destroyCapacityFromReservation(ctx, capacitiesToDelete, reasonByStageID)
+	return errors.Join(lookupErrs...)
 }
 
 // findOrphanedInUseCapacities lists InUse capacity reservations older than createdAtBefore
@@ -1156,7 +1197,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		Set("instance_state", types.StateTerminating).
 		Set("instance_updated", squirrel.Expr("extract(epoch FROM now())")).
 		Where(conditions).
-		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id").
+		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id, instance_zone").
 		ToSql()
 	if err != nil {
 		return nil, err
@@ -1180,7 +1221,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		WithField("destroy_caller", "distributed_purger:"+cleanupType).
 		Infof("distributed dlite: purger: Terminating %d stale %s instances", len(instances), cleanupType)
 
-	failedInstances, err := pool.Driver.Destroy(ctx, instances)
+	failedInstances, err := destroyByTenant(ctx, &pool.Pool, instances)
 	if err != nil {
 		logr.WithError(err).Errorf("distributed dlite: failed to delete %s instances of pool=%q", cleanupType, pool.Name)
 	}
@@ -1189,6 +1230,17 @@ func (d *DistributedManager) executeInstanceCleanup(
 	failedIDs := make(map[string]bool)
 	for _, inst := range failedInstances {
 		failedIDs[inst.ID] = true
+	}
+
+	if d.metrics != nil {
+		reason := purgerReasonForCleanupType(cleanupType)
+		for _, inst := range instances {
+			outcome := PurgerOutcomeDestroyed
+			if failedIDs[inst.ID] {
+				outcome = PurgerOutcomeFailedLeftForRetry
+			}
+			d.metrics.RecordInstanceDestroyAttempt(pool.Name, inst.Zone, reason, outcome)
+		}
 	}
 
 	var successfulInstances []*types.Instance
@@ -1215,7 +1267,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		deleteSQL, deleteArgs, buildErr := builder.
 			Delete("instances").
 			Where(squirrel.Eq{"instance_id": successfulIDs}).
-			Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id").
+			Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id, instance_zone").
 			ToSql()
 		if buildErr != nil {
 			return successfulInstances, fmt.Errorf("failed to build delete query for destroyed instances: %w", buildErr)
@@ -1255,7 +1307,7 @@ func (d *DistributedManager) forceDeleteLeakedInstances(
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Lt{"instance_started": leakCutoff},
 		}).
-		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id").
+		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id, instance_zone").
 		ToSql()
 	if err != nil {
 		logr.WithError(err).Error("distributed dlite: purger: failed to build leak-candidate delete query")
@@ -1283,7 +1335,25 @@ func (d *DistributedManager) forceDeleteLeakedInstances(
 		WithField("destroy_caller", "distributed_purger:leak_candidate").
 		Warnf("distributed dlite: purger: force-deleting %d instance_leak_candidate row(s) older than 2x maxAge; verify cloud-side cleanup", len(leaked))
 
+	if d.metrics != nil {
+		d.metrics.RecordInstancesForceDeleted(pool.Name, cleanupType, len(leaked))
+	}
+
 	d.destroyCapacity(ctx, leaked)
+}
+
+// purgerReasonForCleanupType maps executeInstanceCleanup's cleanupType ("busy"/"free") to a
+// metric reason label. cleanupBusyInstances/cleanupFreeInstances each OR several sub-conditions
+// (plain max-age, ttl-extended, stuck-terminating/stuck-provisioning) into a single claim query,
+// so the specific sub-condition that matched a given row isn't known here; every row in a
+// cleanupType batch is reported under that cleanupType's plain reason for now. See the
+// PurgerReasonBusyMaxAgeTTLExtended/PurgerReasonStuckTerminating doc comments in
+// purger_metrics.go for what a finer-grained breakdown would require.
+func purgerReasonForCleanupType(cleanupType string) string {
+	if cleanupType == "free" {
+		return PurgerReasonFreeMaxAge
+	}
+	return PurgerReasonBusyMaxAge
 }
 
 func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*types.Instance) {
@@ -1309,7 +1379,12 @@ func (d *DistributedManager) destroyCapacity(ctx context.Context, instances []*t
 	}
 }
 
-func (d *DistributedManager) destroyCapacityFromReservation(ctx context.Context, capacities []*types.CapacityReservation) {
+// destroyCapacityFromReservation destroys stale capacity reservations found directly by
+// cleanupCapacities (as opposed to destroyCapacity, which cleans up capacity records tied to
+// instances already destroyed elsewhere). reasonByStageID carries the purger reason each
+// capacity was selected for, keyed by StageID, so the destroy-attempts metric can be recorded
+// with an accurate reason label.
+func (d *DistributedManager) destroyCapacityFromReservation(ctx context.Context, capacities []*types.CapacityReservation, reasonByStageID map[string]string) {
 	if d.capacityReservationStore != nil {
 		// traverse the instances and destroy the capacity reservation
 		for _, capacity := range capacities {
@@ -1323,6 +1398,15 @@ func (d *DistributedManager) destroyCapacityFromReservation(ctx context.Context,
 				err := d.DestroyCapacity(ctx, capacity)
 				if err != nil {
 					logrus.WithError(err).Errorf("failed to delete capacity of stage %s from reservation store", capacity.StageID)
+				}
+				if d.metrics != nil {
+					if reason, ok := reasonByStageID[capacity.StageID]; ok {
+						outcome := PurgerOutcomeDestroyed
+						if err != nil {
+							outcome = PurgerOutcomeFailedLeftForRetry
+						}
+						d.metrics.RecordCapacityDestroyAttempt(capacity.PoolName, reason, outcome)
+					}
 				}
 			}
 		}

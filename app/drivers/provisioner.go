@@ -3,6 +3,7 @@ package drivers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -204,7 +205,6 @@ func (m *Manager) setupInstance(
 	createOptions.EnableLEDiagnostics = m.enableLEDiagnostics
 	createOptions.LiteEnginePath = m.liteEnginePath
 	createOptions.LiteEngineFallbackPath = m.liteEngineFallbackPath
-	createOptions.EgressProxyURL = m.egressProxyURL
 	createOptions.EgressNoProxy = m.egressNoProxy
 	createOptions.EgressCACert = m.egressCACert
 	createOptions.PoolName = pool.Name
@@ -297,7 +297,7 @@ func (m *Manager) setupInstance(
 	}
 
 	// create instance
-	inst, err = driver.Create(ctx, createOptions)
+	inst, err = m.createInstanceWithMetrics(ctx, driver, pool.Name, string(source), createOptions)
 	if err != nil {
 		logrus.WithError(err).
 			Errorln("manager: failed to create instance")
@@ -344,6 +344,28 @@ func (m *Manager) setupInstance(
 		return nil, nil, err
 	}
 	return inst, nil, nil
+}
+
+// createInstanceWithMetrics calls the driver's Create() method, timing the call narrowly around
+// the driver invocation itself (not the surrounding certs/label/create-options setup in
+// setupInstance, nor any later health/setup work) so runner_vm_creation_duration_seconds
+// isolates "cloud couldn't create the VM" from "VM created but unhealthy".
+func (m *Manager) createInstanceWithMetrics(ctx context.Context, driver Driver, poolName, source string, createOptions *types.InstanceCreateOpts) (*types.Instance, error) {
+	createStart := time.Now()
+	inst, err := driver.Create(ctx, createOptions)
+	createDuration := time.Since(createStart)
+	if m.metrics != nil {
+		zone := ""
+		if inst != nil {
+			zone = inst.Zone
+		} else if len(createOptions.Zones) > 0 {
+			zone = createOptions.Zones[0]
+		}
+		outcome, reason := classifyVMCreationError(ctx, err)
+		m.metrics.RecordVMCreationAttempt(poolName, zone, createOptions.MachineType, source, outcome, reason)
+		m.metrics.RecordVMCreationDuration(poolName, zone, createOptions.MachineType, source, outcome, createDuration)
+	}
+	return inst, err
 }
 
 // applyVMImageConfig copies the (optional) VM image configuration, including any registry auth,
@@ -514,6 +536,35 @@ func resolveInstanceSource(params *types.SetupInstanceParams) types.InstanceSour
 		return params.Source
 	}
 	return types.InstanceSourcePool
+}
+
+// classifyVMCreationError maps a driver.Create() error into the bounded outcome/reason set for
+// runner_vm_creation_attempts_total / runner_vm_creation_duration_seconds. driver.Create() is
+// shared across every driver (GCP, AWS, Azure, Nomad, Anka, ...), so this is intentionally a
+// small, driver-agnostic classifier rather than the richer GCP-specific taxonomy used by
+// runner_gcp_operations_total (see metric/gcp.go) - stockout/quota_exceeded are detected on a
+// best-effort basis from the error text since most non-GCP drivers don't expose a structured
+// error type to inspect. Never puts the raw error text into a label - only used here to pick a
+// value from the bounded set below.
+func classifyVMCreationError(ctx context.Context, err error) (outcome, reason string) {
+	if err == nil {
+		return VMCreationOutcomeSuccess, VMCreationReasonNone
+	}
+	if ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
+		return VMCreationOutcomeCancelled, VMCreationReasonNone
+	}
+	if (ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) || errors.Is(err, context.DeadlineExceeded) {
+		return VMCreationOutcomeError, VMCreationReasonTimeout
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "resource_pool_exhausted") || strings.Contains(msg, "stockout"):
+		return VMCreationOutcomeError, VMCreationReasonStockout
+	case strings.Contains(msg, "quota"):
+		return VMCreationOutcomeError, VMCreationReasonQuotaExceeded
+	default:
+		return VMCreationOutcomeError, VMCreationReasonDriverError
+	}
 }
 
 // Identity label keys written to the GCP VM's `labels` field at provision

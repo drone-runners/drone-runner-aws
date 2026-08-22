@@ -43,8 +43,14 @@ type (
 	// applied to the customer account IDs listed in IDs. There is no separate default tenant: the
 	// base pool spec is the default.
 	Tenant struct {
-		// IDs is the non-empty list of customer account IDs that resolve to this tenant. The
-		// first entry doubles as the tenant's stable id (stored on instances as tenant_id).
+		// GroupID optionally names this tenant group. When set, it is the tenant's stable
+		// identity (stored on instances as tenant_id) instead of IDs[0]. Decoupling identity
+		// from membership means accounts can be added/removed or the ids list reordered
+		// without invalidating live instances' tenant_id. To adopt group_id without a DB
+		// migration, set it to the current ids[0] and rename it later.
+		GroupID string `json:"group_id,omitempty" yaml:"group_id,omitempty"`
+		// IDs is the non-empty list of customer account IDs that resolve to this tenant. When
+		// GroupID is unset, the first entry doubles as the tenant's id (legacy behavior).
 		IDs []string `json:"ids,omitempty" yaml:"ids,omitempty"`
 		// Pool/Limit optionally override the instance-level warm-pool sizing for this tenant.
 		// They are pointers so that an explicit 0 (e.g. "no warm pool for this tenant") is
@@ -243,8 +249,8 @@ type (
 		Subnetwork string   `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"`
 		Tags       []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 		Zones      []string `json:"zones,omitempty" yaml:"zones,omitempty"`
-		// ProxyURL is the forward-proxy for this network when egress_control is enabled.
-		// Empty falls back to DRONE_EGRESS_PROXY_URL.
+		// ProxyURL is the forward-proxy for this network when egress_control is
+		// enabled. It is the only proxy source — there is no runner-global fallback.
 		ProxyURL string `json:"proxy_url,omitempty" yaml:"proxy_url,omitempty"`
 	}
 
@@ -315,19 +321,23 @@ type (
 )
 
 // EgressProxy holds runner-global forward-proxy settings. Enablement comes from
-// pool egress_control; per-network proxy_url overrides URL when set.
-// NoProxy and CACert stay global (same for all regions/networks).
+// pool egress_control, and the proxy URL itself comes from the pool's
+// per-network proxy_url. NoProxy and CACert stay global (same for all
+// regions/networks).
 type EgressProxy struct {
-	URL     string `json:"url" yaml:"url" envconfig:"DRONE_EGRESS_PROXY_URL" default:"http://127.0.0.1:3128"`
 	NoProxy string `json:"no_proxy" yaml:"no_proxy" envconfig:"DRONE_EGRESS_NO_PROXY" default:"localhost,127.0.0.1,169.254.169.254,172.16.0.0/12,10.0.0.0/8,.svc.cluster.local,.harness.io,harness.io"`
 	// CACert is the PEM-encoded Harness Egress CA that signs the leaf certs the
 	// fleet proxy presents. Baked into the build VM so TLS interception is trusted.
 	CACert string `json:"ca_cert" yaml:"ca_cert" envconfig:"DRONE_EGRESS_PROXY_CA_CERT"`
-	// CAEnvVars lists environment variables that steps in egress pools get
-	// pointed at the mounted egress CA, so common runtimes and tools
-	// (Go/OpenSSL, Node, Python requests, curl, git) trust TLS interception.
-	// A step-provided value always wins over an injected one.
-	CAEnvVars []string `json:"ca_env_vars" yaml:"ca_env_vars" envconfig:"DRONE_EGRESS_CA_ENV_VARS" default:"SSL_CERT_FILE,NODE_EXTRA_CA_CERTS,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO"`
+	// CABundleEnvVars lists env vars that replace a tool's default trust store
+	// (Go/OpenSSL, Python requests, curl, git). Steps in egress pools get these
+	// pointed at the merged CA bundle so public roots keep working alongside
+	// the Harness egress CA. A step-provided value always wins.
+	CABundleEnvVars []string `json:"ca_bundle_env_vars" yaml:"ca_bundle_env_vars" envconfig:"DRONE_EGRESS_CA_BUNDLE_ENV_VARS" default:"SSL_CERT_FILE,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO"`
+	// CAExtraEnvVars lists env vars that add to a tool's built-in trust store
+	// (Node's NODE_EXTRA_CA_CERTS). These get the Harness-only CA, since the
+	// tool already carries public roots. A step-provided value always wins.
+	CAExtraEnvVars []string `json:"ca_extra_env_vars" yaml:"ca_extra_env_vars" envconfig:"DRONE_EGRESS_CA_EXTRA_ENV_VARS" default:"NODE_EXTRA_CA_CERTS"`
 }
 
 type EnvConfig struct {
@@ -502,8 +512,8 @@ type EnvConfig struct {
 		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.7"`
 		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"15"`
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.19"`
-		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.21/"`
-		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.21/"`
+		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.23/"`
+		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.23/"`
 		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/v2.5.6/"`
 		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/v2.5.6/"`
 		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
@@ -717,6 +727,7 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	// tenantRaw mirrors Tenant but keeps the spec as raw JSON so it can be unmarshalled into
 	// the typed provider spec after the instance Type is known.
 	type tenantRaw struct {
+		GroupID  string              `json:"group_id,omitempty"`
 		IDs      []string            `json:"ids,omitempty"`
 		Pool     *int                `json:"pool,omitempty"`
 		Limit    *int                `json:"limit,omitempty"`
@@ -751,6 +762,7 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 		for i := range obj.Tenants {
 			tr := &obj.Tenants[i]
 			t := Tenant{
+				GroupID:  tr.GroupID,
 				IDs:      tr.IDs,
 				Pool:     tr.Pool,
 				Limit:    tr.Limit,

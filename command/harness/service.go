@@ -126,7 +126,7 @@ func (s *VMService) Step(ctx context.Context, req *ExecuteVMRequest, async bool)
 		s.mockTimeoutSecs,
 		s.poolManager,
 		s.metrics,
-		s.egressProxy,
+		&s.egressProxy,
 		async,
 	)
 }

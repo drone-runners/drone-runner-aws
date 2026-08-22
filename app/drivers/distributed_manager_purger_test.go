@@ -124,6 +124,12 @@ func (s *purgerFakeStore) DeleteAndReturn(_ context.Context, query string, args 
 // newPurgerTestManager wires a DistributedManager around the in-memory store
 // and a driver the test can configure per-scenario.
 func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver) (*DistributedManager, *poolEntry) {
+	return newPurgerTestManagerWithMetrics(store, driver, nil)
+}
+
+// newPurgerTestManagerWithMetrics is like newPurgerTestManager but also wires in a
+// MetricsRecorder, for tests that assert on what was reported.
+func newPurgerTestManagerWithMetrics(store *purgerFakeStore, driver *flexibleMockDriver, metrics MetricsRecorder) (*DistributedManager, *poolEntry) {
 	const poolName = "pool1"
 	pool := &poolEntry{
 		Pool: Pool{
@@ -136,6 +142,7 @@ func newPurgerTestManager(store *purgerFakeStore, driver *flexibleMockDriver) (*
 			poolMap:       map[string]*poolEntry{poolName: pool},
 			instanceStore: store,
 			runnerName:    "test-runner",
+			metrics:       metrics,
 		},
 	}
 	return d, pool
@@ -311,4 +318,171 @@ func TestDistributedPurger_StuckTerminatingRowIsRePicked(t *testing.T) {
 	_, err = d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
 	assert.NoError(t, err)
 	assert.NotContains(t, store.snapshot(), "stuck", "stuck row should be cleaned up on the retry tick")
+}
+
+// TestDistributedPurger_ExecuteInstanceCleanup_RoutesByTenant is the regression test for the
+// live incident: this purger (the one actually running in the dlite-distributed deployment,
+// per "distributed dlite: purger" logs) destroyed instances via pool.Driver directly, ignoring
+// per-tenant drivers entirely. For a multi-tenant pool, a tenant's VM lives in the tenant's cloud
+// project; destroying it through the default tenant's driver hits a different project, GCP
+// returns 404, the driver logs "instance not found, skipping deletion" and reports success, and
+// the purger deletes the DB row -- leaking the VM forever. Instances must be routed to their
+// own tenant's driver, exactly like the app/drivers/purger.go path already does via
+// destroyByTenant.
+func TestDistributedPurger_ExecuteInstanceCleanup_RoutesByTenant(t *testing.T) {
+	now := time.Now()
+	maxAge := 5 * time.Minute
+	store := newPurgerFakeStore(
+		&types.Instance{ID: "def-1", Name: "vm-default", Pool: "pool1", State: types.StateInUse, Started: now.Add(-30 * time.Second).Unix(), TenantID: types.DefaultTenantID},
+		&types.Instance{ID: "grp-1", Name: "vm-tenant", Pool: "pool1", State: types.StateInUse, Started: now.Add(-30 * time.Second).Unix(), TenantID: "group-egress"},
+	)
+
+	var destroyedByDefault, destroyedByGroup []string
+	defaultDriver := &flexibleMockDriver{
+		driverName: "mock-default",
+		DestroyFunc: func(_ context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+			for _, i := range instances {
+				destroyedByDefault = append(destroyedByDefault, i.ID)
+			}
+			return nil, nil
+		},
+	}
+	groupDriver := &flexibleMockDriver{
+		driverName: "mock-group",
+		DestroyFunc: func(_ context.Context, instances []*types.Instance) ([]*types.Instance, error) {
+			for _, i := range instances {
+				destroyedByGroup = append(destroyedByGroup, i.ID)
+			}
+			return nil, nil
+		},
+	}
+
+	const poolName = "pool1"
+	pool := &poolEntry{
+		Pool: Pool{
+			Name:   poolName,
+			Driver: defaultDriver,
+			TenantDrivers: map[string]Driver{
+				types.DefaultTenantID: defaultDriver,
+				"group-egress":        groupDriver,
+			},
+		},
+	}
+	d := &DistributedManager{
+		Manager: Manager{
+			poolMap:       map[string]*poolEntry{poolName: pool},
+			instanceStore: store,
+			runnerName:    "test-runner",
+		},
+	}
+
+	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
+	successful, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
+
+	assert.NoError(t, err)
+	assert.Len(t, successful, 2)
+	assert.ElementsMatch(t, []string{"def-1"}, destroyedByDefault, "default-tenant instance must be destroyed by the default driver")
+	assert.ElementsMatch(t, []string{"grp-1"}, destroyedByGroup, "tenant instance must be destroyed by its own tenant driver, not the default one")
+	assert.Empty(t, store.snapshot(), "both rows should have been destroyed and deleted")
+}
+
+// TestDistributedPurger_CleanupCapacities_ListFailureReturnsError guards against
+// cleanupCapacities silently reporting success (nil error) when one of its underlying lookups
+// fails: callers (see startInstancePurger) gate runner_purger_last_run_timestamp_seconds on this
+// return value, so swallowing the error here would let a broken capacity sweep still look
+// recently-serviced.
+func TestDistributedPurger_CleanupCapacities_ListFailureReturnsError(t *testing.T) {
+	capacityStore := &mockCapacityReservationStore{
+		ListFunc: func(_ context.Context, _ *types.CapacityReservationQueryParams, _ []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+			return nil, errors.New("simulated list failure")
+		},
+		FindAndClaimFunc: func(_ context.Context, _ *types.CapacityReservationQueryParams, _ types.CapacityReservationState,
+			_ []types.CapacityReservationState) ([]*types.CapacityReservation, error) {
+			return nil, nil
+		},
+	}
+	instanceStore := &mockInstanceStore{
+		ListFunc: func(_ context.Context, _ string, _ *types.QueryParams) ([]*types.Instance, error) {
+			return nil, nil
+		},
+	}
+	driver := &flexibleMockDriver{driverName: "mock"}
+
+	store := newPurgerFakeStore()
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, &fakePurgerMetrics{})
+	d.instanceStore = instanceStore
+	d.capacityReservationStore = capacityStore
+	pool.Pool.Driver = driver
+
+	err := d.cleanupCapacities(context.Background(), pool, time.Hour)
+	assert.Error(t, err, "a failed lookup must surface as an error even though the sweep otherwise ran to completion")
+}
+
+// claimFailingStore wraps purgerFakeStore and forces the claim (UPDATE ... RETURNING) query to
+// fail, while delegating every other query (force-delete, delete-by-id) to the embedded fake, so
+// tests can exercise a structural cleanup failure without reimplementing the whole store.
+type claimFailingStore struct {
+	*purgerFakeStore
+}
+
+func (s *claimFailingStore) DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error) {
+	if strings.HasPrefix(query, "UPDATE instances SET instance_state = ") {
+		return nil, errors.New("simulated claim failure")
+	}
+	return s.purgerFakeStore.DeleteAndReturn(ctx, query, args...)
+}
+
+// TestDistributedPurger_StartInstancePurger_BusyCleanupFailureDoesNotRecordLastRun guards against
+// runner_purger_last_run_timestamp_seconds advancing when a sweep step genuinely fails.
+// runner_purger_last_run_timestamp_seconds documents itself as "last completed" sweep, so a pool
+// whose busy-instance cleanup keeps failing must show up as stale here instead of looking
+// recently-serviced.
+func TestDistributedPurger_StartInstancePurger_BusyCleanupFailureDoesNotRecordLastRun(t *testing.T) {
+	now := time.Now()
+	store := &claimFailingStore{purgerFakeStore: newPurgerFakeStore(
+		&types.Instance{ID: "inst-1", Name: "vm-1", Pool: "pool1", State: types.StateInUse, Started: now.Add(-time.Hour).Unix()},
+	)}
+	driver := &flexibleMockDriver{driverName: "mock"}
+	fakeMetrics := &fakePurgerMetrics{}
+	pool := &poolEntry{Pool: Pool{Name: "pool1", Driver: driver}}
+	d := &DistributedManager{
+		Manager: Manager{
+			poolMap:       map[string]*poolEntry{"pool1": pool},
+			instanceStore: store,
+			runnerName:    "test-runner",
+			metrics:       fakeMetrics,
+		},
+	}
+
+	queryParams := types.QueryParams{}
+	// Only exercise busy cleanup (maxAgeFree=0, freeCapacityMaxAge=0 skip the other two steps).
+	d.startInstancePurger(context.Background(), pool, time.Hour, 0, 0, &queryParams)
+
+	assert.Empty(t, fakeMetrics.lastRunPools,
+		"last-run gauge must not advance when busy-instance cleanup fails")
+}
+
+// TestDistributedPurger_StartInstancePurger_AllStepsSucceedRecordsLastRun is the success-path
+// counterpart: when every attempted step completes without error, the last-run gauge must
+// advance so the pool doesn't falsely show up as stale.
+func TestDistributedPurger_StartInstancePurger_AllStepsSucceedRecordsLastRun(t *testing.T) {
+	store := newPurgerFakeStore()
+	driver := &flexibleMockDriver{driverName: "mock"}
+	fakeMetrics := &fakePurgerMetrics{}
+	pool := &poolEntry{Pool: Pool{Name: "pool1", Driver: driver}}
+	d := &DistributedManager{
+		Manager: Manager{
+			poolMap:       map[string]*poolEntry{"pool1": pool},
+			instanceStore: store,
+			runnerName:    "test-runner",
+			metrics:       fakeMetrics,
+		},
+	}
+
+	queryParams := types.QueryParams{}
+	// maxAgeFree=0, freeCapacityMaxAge=0: only busy cleanup is attempted, and it finds nothing
+	// to do against the empty store, which is still a successful sweep completion.
+	d.startInstancePurger(context.Background(), pool, time.Hour, 0, 0, &queryParams)
+
+	assert.Contains(t, fakeMetrics.lastRunPools, "pool1")
 }

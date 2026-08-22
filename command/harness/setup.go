@@ -18,7 +18,6 @@ import (
 	lespec "github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
-	"github.com/drone-runners/drone-runner-aws/app/lehelper"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
 	"github.com/drone-runners/drone-runner-aws/engine/resource"
 	"github.com/drone-runners/drone-runner-aws/store"
@@ -251,7 +250,7 @@ func HandleSetup(
 		_, _, poolDriver := poolManager.Inspect(p)
 		instance, warmed, hibernated, variantID, poolErr = handleSetup(
 			ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager,
-			s, pool, owner, capacity, noProxy,
+			s, pool, owner, capacity, noProxy, metrics,
 		)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
@@ -448,12 +447,25 @@ func HandleSetup(
 	return resp, selectedPoolDriver, nil
 }
 
-// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
-// run a health check on the lite engine. It returns information about the setup
-// VM and an error if setup failed.
-// Ordinary LE setup retains its existing retry behavior. PC setup is sent once because joining
-// with its short-lived workload identity makes a lost response outcome-indeterminate; every failure
-// after provisioning still destroys the intermediate VM and capacity.
+// resumeToReadyOutcome classifies the result of the resume-to-ready span (StartInstance through
+// the health-check and setup phases below it) into the bounded outcome set for
+// runner_vm_resume_to_ready_duration_seconds. There is no `reason` label on this metric (see
+// metric/hibernate_resume.go), so a cloud-level resume failure, a health-check timeout, and a
+// setup failure are all reported as a plain "error" outcome - only success/error/canceled are
+// distinguishable at this metric's granularity.
+func resumeToReadyOutcome(ctx context.Context, err error) string {
+	if err == nil {
+		return drivers.VMLifecycleOutcomeSuccess
+	}
+	if ctx.Err() == context.Canceled {
+		return drivers.VMLifecycleOutcomeCancelled
+	}
+	return drivers.VMLifecycleOutcomeError
+}
+
+// handleSetup provisions an instance, verifies Lite Engine health, and prepares the VM for the stage.
+// Ordinary setup remains retryable. Private Connectivity setup is sent once because its workload
+// identity cannot be replayed safely when the response outcome is unknown.
 func handleSetup(
 	ctx context.Context,
 	buildLog *logrus.Entry,
@@ -468,6 +480,7 @@ func handleSetup(
 	owner string,
 	reservedCapacity *types.CapacityReservation,
 	noProxy string,
+	metrics *metric.Metrics,
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -475,8 +488,28 @@ func handleSetup(
 	variantID string,
 	err error,
 ) {
+	// runner_vm_init_attempts_total/_duration_seconds is the canonical "did an init attempt
+	// succeed" signal: recorded once per handleSetup call (i.e. once per pool-fallback attempt,
+	// same scope as the pre-existing WaitDurationCount) via this defer, so every exit path below
+	// - including early returns - is covered. initZone/initVMType/initSource start empty/best-guess
+	// and are refined as more information becomes available (see below); initFailureReason is set
+	// explicitly just before each failing return.
+	initStart := time.Now()
+	initSource := computeInitSource(reservedCapacity, false, false)
+	var initZone, initVMType, initFailureReason string
+	defer func() {
+		fallback := initFailureReason
+		if fallback == "" {
+			fallback = InitReasonUnknown
+		}
+		outcome, reason := classifyPhaseOutcome(ctx, err, fallback)
+		metrics.RecordVMInitAttempt(pool, initZone, initVMType, initSource, outcome, reason)
+		metrics.RecordVMInitDuration(pool, initZone, initVMType, initSource, outcome, time.Since(initStart))
+	}()
+
 	// check if the pool exists in the pool manager.
 	if !poolManager.Exists(pool) {
+		initFailureReason = InitReasonUnknown
 		return nil, false, false, "", fmt.Errorf("could not find pool: %s", pool)
 	}
 
@@ -525,19 +558,15 @@ func handleSetup(
 		false,
 	)
 	if err != nil {
+		initFailureReason = classifyProvisionReason(err)
 		return nil, false, false, variantID, fmt.Errorf("failed to provision instance: %w", err)
 	}
-	if needsPrivateConnectivity && poolManager.IsEgressPool(pool, instance.TenantID) {
-		go func() {
-			if dErr := poolManager.Destroy(context.Background(), pool, instance.ID, instance, nil); dErr != nil {
-				internalLogr.WithError(dErr).Errorln("failed to cleanup PC instance selected from an egress pool")
-			}
-			if dErr := poolManager.DestroyCapacity(context.Background(), reservedCapacity); dErr != nil {
-				internalLogr.WithError(dErr).Errorln("failed to cleanup capacity reservation after PC egress conflict")
-			}
-		}()
-		return nil, false, false, variantID,
-			fmt.Errorf("private connectivity cannot be used with an egress-controlled pool")
+	initZone, initVMType = instance.Zone, instance.Size
+	initSource = computeInitSource(reservedCapacity, warmed, false)
+
+	if compatibilityErr := ensurePrivateConnectivityPoolCompatible(needsPrivateConnectivity, poolManager,
+		pool, instance, reservedCapacity, internalLogr); compatibilityErr != nil {
+		return nil, false, false, variantID, compatibilityErr
 	}
 
 	ilog := internalLogr.WithField("pool_id", pool).
@@ -587,34 +616,40 @@ func handleSetup(
 
 	if instance.IsHibernated {
 		ilog.Tracef("instance %s is hibernated", instance.ID)
+		// hibernated takes priority over reserved/hotpool in the overall init source label - see
+		// computeInitSource's doc comment.
+		initSource = InitSourceHibernated
+		// resumeZone/resumeVMType are captured now (before StartInstance can return a nil
+		// instance on failure) so the deferred metric below always has valid label values.
+		resumeZone, resumeVMType := instance.Zone, instance.Size
+		resumeToReadyStart := time.Now()
+		// runner_vm_resume_to_ready_duration_seconds spans from here to handleSetup's final
+		// success return below, so it covers StartInstance plus the health-check and setup
+		// phases (RetryHealth/RetrySetup) - see the metric's doc comment in
+		// metric/hibernate_resume.go for why it carries no `reason` label.
+		defer func() {
+			if metrics == nil {
+				return
+			}
+			outcome := resumeToReadyOutcome(ctx, err)
+			metrics.RecordVMResumeToReadyDuration(pool, resumeZone, resumeVMType, outcome, time.Since(resumeToReadyStart))
+		}()
+
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
 			go cleanUpInstanceFn(false)
+			initFailureReason = InitReasonResumeFailed
 			return nil, false, false, variantID, fmt.Errorf("failed to start the instance up: %w", err)
 		}
 		ilog.Tracef("instance %s is started", instance.ID)
 		hibernated = true
 	}
 
-	instance.Stage = stageRuntimeID
-	instance.Updated = time.Now().Unix()
-	err = poolManager.Update(ctx, instance)
+	client, err := tagAndConnectInstance(ctx, poolManager, instance, pool, stageRuntimeID, r.Tags, enableMock, mockTimeout)
 	if err != nil {
 		go cleanUpInstanceFn(false)
-		return nil, false, false, variantID, fmt.Errorf("failed to tag: %w", err)
-	}
-
-	err = poolManager.SetInstanceTags(ctx, pool, instance, r.Tags)
-	if err != nil {
-		go cleanUpInstanceFn(false)
-		return nil, false, false, variantID, fmt.Errorf("failed to add tags to the instance: %w", err)
-	}
-
-	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port,
-		enableMock, mockTimeout)
-	if err != nil {
-		go cleanUpInstanceFn(false)
-		return nil, false, false, variantID, fmt.Errorf("failed to create LE client: %w", err)
+		initFailureReason = InitReasonStateFailed
+		return nil, false, false, variantID, err
 	}
 	// try the healthcheck api on the lite-engine until it responds ok
 	ilog.Traceln("running healthcheck and waiting for an ok response")
@@ -623,15 +658,16 @@ func handleSetup(
 	// Get the health check timeout based on the instance OS, provider, warmed status, and hibernated status
 	healthCheckTimeout := poolManager.GetHealthCheckTimeout(instance.Platform.OS, instance.Provider, warmed, hibernated)
 
-	healthErr := retrySetupHealth(ctx, client, &api.HealthRequest{
+	healthErr := runHealthCheckPhase(ctx, client, &api.HealthRequest{
 		PerformDNSLookup:                performDNSLookup,
 		Timeout:                         healthCheckTimeout,
 		HealthCheckConnectivityDuration: poolManager.GetHealthCheckConnectivityDuration(),
 		PrivateConnectivityRequested:    needsPrivateConnectivity,
-	}, needsPrivateConnectivity)
+	}, metrics, pool, initZone, initVMType, initSource)
 	if healthErr != nil {
 		printError(buildLog, "Machine health check failed")
 		go cleanUpInstanceFn(true)
+		initFailureReason = InitReasonHealthFailed
 		return nil, false, false, variantID, healthErr
 	}
 
@@ -648,38 +684,60 @@ func handleSetup(
 		r.Volumes = appendEgressCAVolume(r.Volumes, instance.Platform.OS)
 		r.SetupRequest.EgressPolicy = mergeEgressPolicy(r.SetupRequest.EgressPolicy, instance.ProxyURL, noProxy)
 	}
-	err = runLiteEngineSetup(ctx, client, &r.SetupRequest, stageOwnerStore,
-		stageRuntimeID, pool, instance.ID, poolManager.GetSetupTimeout(), needsPrivateConnectivity)
-	if err != nil {
+	var setupErr error
+	if needsPrivateConnectivity {
+		setupErr = runInstrumentedSetupPhase(ctx, func() error {
+			return runLiteEngineSetup(ctx, client, &r.SetupRequest, stageOwnerStore,
+				stageRuntimeID, pool, instance.ID, poolManager.GetSetupTimeout(), true)
+		}, metrics, pool, initZone, initVMType, initSource)
+	} else {
+		setupErr = runSetupPhase(ctx, client, &r.SetupRequest, poolManager.GetSetupTimeout(),
+			metrics, pool, initZone, initVMType, initSource)
+	}
+	if setupErr != nil {
 		printError(buildLog, "Machine setup failed")
 		if needsPrivateConnectivity {
-			go cleanUpInstanceFn(!stderrors.Is(err, errPrivateConnectivitySetupClaimFailed))
-			return nil, false, false, variantID, err
+			go cleanUpInstanceFn(!stderrors.Is(setupErr, errPrivateConnectivitySetupClaimFailed))
+			initFailureReason = InitReasonSetupFailed
+			return nil, false, false, variantID, setupErr
 		}
 		go cleanUpInstanceFn(true)
-		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", err)
+		initFailureReason = InitReasonSetupFailed
+		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", setupErr)
 	}
 
 	return instance, warmed, hibernated, variantID, nil
 }
 
-// appendEgressCAVolume registers the host-path Volume so step containers can bind-mount it.
+// appendEgressCAVolume registers the host-path Volumes so step containers can
+// bind-mount them: the Harness-only CA and the merged bundle (system roots +
+// Harness CA) for tools whose CA env vars replace the default trust store.
 func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Volume {
 	if osName == oshelp.OSLinux {
-		return append(volumes, &lespec.Volume{
-			HostPath: &lespec.VolumeHostPath{
-				ID:       fileID("ca.crt"),
-				Name:     fileID("ca.crt"),
-				Path:     egressCAHostPath,
-				ReadOnly: true,
+		return append(volumes,
+			&lespec.Volume{
+				HostPath: &lespec.VolumeHostPath{
+					ID:       fileID("ca.crt"),
+					Name:     fileID("ca.crt"),
+					Path:     egressCAHostPath,
+					ReadOnly: true,
+				},
 			},
-		})
+			&lespec.Volume{
+				HostPath: &lespec.VolumeHostPath{
+					ID:       fileID("ca-bundle.crt"),
+					Name:     fileID("ca-bundle.crt"),
+					Path:     egressCABundleHostPath,
+					ReadOnly: true,
+				},
+			},
+		)
 	} else if osName == oshelp.OSWindows {
 		return append(volumes, &lespec.Volume{
 			HostPath: &lespec.VolumeHostPath{
 				ID:       fileID("ca.crt"),
 				Name:     fileID("ca.crt"),
-				Path:     "C:\\harness-certs",
+				Path:     egressCAWindowsDir,
 				ReadOnly: true,
 			},
 		})
@@ -697,6 +755,28 @@ func setupRequestNeedsPrivateConnectivity(envs map[string]string) bool {
 		}
 	}
 	return false
+}
+
+func ensurePrivateConnectivityPoolCompatible(
+	privateConnectivityRequested bool,
+	poolManager drivers.IManager,
+	pool string,
+	instance *types.Instance,
+	reservedCapacity *types.CapacityReservation,
+	logr *logrus.Entry,
+) error {
+	if !privateConnectivityRequested || !poolManager.IsEgressPool(pool, instance.TenantID) {
+		return nil
+	}
+	go func() {
+		if err := poolManager.Destroy(context.Background(), pool, instance.ID, instance, nil); err != nil {
+			logr.WithError(err).Errorln("failed to cleanup PC instance selected from an egress pool")
+		}
+		if err := poolManager.DestroyCapacity(context.Background(), reservedCapacity); err != nil {
+			logr.WithError(err).Errorln("failed to cleanup capacity reservation after PC egress conflict")
+		}
+	}()
+	return fmt.Errorf("private connectivity cannot be used with an egress-controlled pool")
 }
 
 func retrySetupHealth(

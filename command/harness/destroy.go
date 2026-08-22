@@ -105,6 +105,12 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)
 
+	// poolID is declared here (rather than at its first assignment below) so the deferred
+	// capacity-reservation cleanup closure below can read its final value for metric labeling -
+	// defer captures by reference, but the variable must already be in scope at the point the
+	// closure literal is written.
+	var poolID string
+
 	// Declare capacity variable early and defer its destruction to ensure cleanup happens regardless of errors
 	defer func() {
 		var capacity *types.CapacityReservation
@@ -115,14 +121,20 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 				logr.WithField("destroy_caller", "destroy_handler:deferred_capacity_cleanup").
 					WithField("reservation_id", capacity.ReservationID).
 					Infoln("destroy_capacity: deferred capacity reservation cleanup")
-				if destroyCapErr := poolManager.DestroyCapacity(ctx, capacity); destroyCapErr != nil {
+				capDestroyStart := time.Now()
+				destroyCapErr := poolManager.DestroyCapacity(ctx, capacity)
+				if destroyCapErr != nil {
 					logr.WithError(destroyCapErr).Errorln("failed to destroy capacity reservation")
 				}
+				capOutcome, capReason := classifyCleanupErr(ctx, destroyCapErr, CleanupReasonCloudCallFailed)
+				metrics.RecordCleanupAttempt(CleanupResourceCapacityReservation, poolID, capacity.GetZone(), capOutcome, capReason)
+				metrics.RecordCleanupDuration(CleanupResourceCapacityReservation, poolID, capacity.GetZone(), capOutcome, time.Since(capDestroyStart))
 			}
+			// crs.Find returning an error (e.g. no reservation exists for this stage) means there
+			// is nothing to clean up - intentionally not recorded as a cleanup attempt.
 		}
 	}()
 
-	var poolID string
 	var stageOwner *types.StageOwner
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
@@ -158,6 +170,18 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr = logr.
 		WithField("instance_id", inst.ID).
 		WithField("instance_name", inst.Name)
+
+	// usageStartUnix is a best-effort proxy for "became inuse at": there's no dedicated column
+	// for that, so this reads inst.Updated before it gets overwritten below. It's only reliable
+	// when nothing else wrote to this row between the inuse claim and now; if inst came from the
+	// caller's request payload rather than a fresh DB fetch (see the ValidateStructForKeys branch
+	// above), Updated will be zero and usage duration is simply not recorded for that call.
+	// Known limitation: for instances claimed from the non-distributed Manager's warm pool,
+	// inst.Updated is not refreshed at claim time (see provisionFromPool in
+	// app/drivers/provisioner.go), so this proxy reflects "last touched at" rather than "became
+	// inuse at" and can understate/overstate usage duration by however long the instance sat
+	// idle in the pool before being claimed.
+	usageStartUnix := inst.Updated
 
 	// Update instance state to terminating and update timestamp
 	inst.State = types.StateTerminating
@@ -215,16 +239,28 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.WithField("destroy_caller", "destroy_handler:api_request").
 		Infoln("successfully invoked lite engine cleanup, destroying instance")
 
-	if err = poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType); err != nil {
-		return nil, fmt.Errorf("cannot destroy the instance: %w", err)
+	vmDestroyStart := time.Now()
+	destroyErr := poolManager.Destroy(ctx, poolID, inst.ID, inst, &r.StorageCleanupType)
+	vmOutcome, vmReason := classifyCleanupErr(ctx, destroyErr, CleanupReasonCloudCallFailed)
+	metrics.RecordCleanupAttempt(CleanupResourceVM, poolID, inst.Zone, vmOutcome, vmReason)
+	metrics.RecordCleanupDuration(CleanupResourceVM, poolID, inst.Zone, vmOutcome, time.Since(vmDestroyStart))
+	if destroyErr != nil {
+		return nil, fmt.Errorf("cannot destroy the instance: %w", destroyErr)
 	}
 	logr.Infoln("destroy_handler: instance destroyed successfully")
 
+	recordNormalCleanupUsageDuration(metrics, poolID, inst, usageStartUnix)
+
 	envState().Delete(r.StageRuntimeID)
 
-	if err = s.Delete(ctx, r.StageRuntimeID); err != nil {
-		logr.WithError(err).Errorln("failed to delete stage owner entity")
+	stageOwnerDeleteStart := time.Now()
+	stageOwnerErr := s.Delete(ctx, r.StageRuntimeID)
+	if stageOwnerErr != nil {
+		logr.WithError(stageOwnerErr).Errorln("failed to delete stage owner entity")
 	}
+	stageOwnerOutcome, stageOwnerReason := classifyCleanupErr(ctx, stageOwnerErr, CleanupReasonStoreError)
+	metrics.RecordCleanupAttempt(CleanupResourceStageOwner, poolID, inst.Zone, stageOwnerOutcome, stageOwnerReason)
+	metrics.RecordCleanupDuration(CleanupResourceStageOwner, poolID, inst.Zone, stageOwnerOutcome, time.Since(stageOwnerDeleteStart))
 
 	return inst, nil
 }
@@ -265,6 +301,22 @@ func resolveDestroyInstance(
 		return nil, false, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
 	}
 	return instance, false, nil
+}
+
+// recordNormalCleanupUsageDuration records runner_vm_usage_duration_seconds with
+// termination_reason=normal_cleanup after a successful handleDestroy. usageStartUnix is a
+// best-effort proxy for "became inuse at" (inst.Updated, read before it was overwritten to
+// terminating); it is 0/unset when inst was built from the caller's request payload rather than
+// fetched fresh from the DB (see the ValidateStructForKeys branch in handleDestroy), in which
+// case usage duration is simply not recorded for that call.
+func recordNormalCleanupUsageDuration(metrics *metric.Metrics, poolID string, inst *types.Instance, usageStartUnix int64) {
+	if metrics == nil || usageStartUnix <= 0 {
+		return
+	}
+	metrics.RecordVMUsageDuration(
+		poolID, inst.Zone, inst.Size, string(inst.Source),
+		drivers.VMTerminationReasonNormalCleanup, time.Since(time.Unix(usageStartUnix, 0)),
+	)
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
