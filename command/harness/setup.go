@@ -53,7 +53,6 @@ type liteEngineHealthClient interface {
 
 type liteEngineSetupClient interface {
 	Setup(context.Context, *api.SetupRequest) (*api.SetupResponse, error)
-	RetrySetup(context.Context, *api.SetupRequest, time.Duration) (*api.SetupResponse, error)
 }
 
 var (
@@ -598,7 +597,7 @@ func handleSetup(
 
 	cleanUpInstanceFn := func(consoleLogs bool) {
 		if consoleLogs {
-			logSerialConsoleOutputWithTimeout(
+			logSetupConsoleOutput(needsPrivateConnectivity,
 				poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
 		}
 		ilog.WithFields(logrus.Fields{
@@ -688,7 +687,7 @@ func handleSetup(
 	if needsPrivateConnectivity {
 		setupErr = runInstrumentedSetupPhase(ctx, func() error {
 			return runLiteEngineSetup(ctx, client, &r.SetupRequest, stageOwnerStore,
-				stageRuntimeID, pool, instance.ID, poolManager.GetSetupTimeout(), true)
+				stageRuntimeID, pool, instance.ID, poolManager.GetSetupTimeout())
 		}, metrics, pool, initZone, initVMType, initSource)
 	} else {
 		setupErr = runSetupPhase(ctx, client, &r.SetupRequest, poolManager.GetSetupTimeout(),
@@ -817,13 +816,7 @@ func runLiteEngineSetup(
 	stageOwnerStore store.StageOwnerStore,
 	stageRuntimeID, pool, instanceID string,
 	setupTimeout time.Duration,
-	privateConnectivityRequested bool,
 ) error {
-	if !privateConnectivityRequested {
-		_, err := client.RetrySetup(ctx, request, setupTimeout)
-		return err
-	}
-
 	if err := stageOwnerStore.Create(noContext,
 		&types.StageOwner{StageID: stageRuntimeID, PoolName: pool, InstanceID: instanceID}); err != nil {
 		return fmt.Errorf("%w: %v", errPrivateConnectivitySetupClaimFailed, err)
@@ -839,6 +832,19 @@ func runLiteEngineSetup(
 
 const serialConsoleLogTimeout = 10 * time.Second
 
+func logSetupConsoleOutput(
+	privateConnectivityRequested bool,
+	poolManager drivers.IManager,
+	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
+) {
+	if privateConnectivityRequested {
+		logSerialConsoleOutputWithTimeout(
+			poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+		return
+	}
+	logSerialConsoleOutput(poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+}
+
 func logSerialConsoleOutputWithTimeout(
 	poolManager drivers.IManager,
 	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
@@ -848,7 +854,7 @@ func logSerialConsoleOutputWithTimeout(
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		logSerialConsoleOutput(ctx, poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+		logSerialConsoleOutputContext(ctx, poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
 	}()
 
 	select {
@@ -860,6 +866,14 @@ func logSerialConsoleOutputWithTimeout(
 
 // logSerialConsoleOutput fetches and logs the serial console output for an instance.
 func logSerialConsoleOutput(
+	poolManager drivers.IManager,
+	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
+) {
+	logSerialConsoleOutputContext(
+		context.Background(), poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+}
+
+func logSerialConsoleOutputContext(
 	ctx context.Context,
 	poolManager drivers.IManager,
 	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,

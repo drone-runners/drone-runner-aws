@@ -22,9 +22,9 @@ else
         exit 1
     fi
 fi
-chmod 755 /opt/homebrew/bin/lite-engine
-touch "$HOME/.env"
-echo "SKIP_PREPARE_SERVER=true" >> "$HOME/.env";
+chmod 777 /opt/homebrew/bin/lite-engine
+touch $HOME/.env
+echo "SKIP_PREPARE_SERVER=true" >> .env;
 
 {{ if .PluginBinaryURI }}
 if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 {{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}  -O /usr/local/bin/plugin; then
@@ -94,4 +94,4 @@ chmod 777 /tmp/harness/bin/auto-injection
     fi
 {{ end }}
 
-/opt/homebrew/bin/lite-engine server --env-file "$HOME/.env" > "$HOME/lite-engine.log" 2>&1 &
+/opt/homebrew/bin/lite-engine server --env-file $HOME/.env > $HOME/lite-engine.log 2>&1 &
