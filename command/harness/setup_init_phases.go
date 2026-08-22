@@ -54,7 +54,7 @@ func runHealthCheckPhase(
 	pool, zone, vmType, source string,
 ) error {
 	start := time.Now()
-	_, err := client.RetryHealth(ctx, req)
+	err := retrySetupHealth(ctx, client, req, req.PrivateConnectivityRequested)
 	outcome, reason := classifyPhaseOutcome(ctx, err, InitReasonHealthFailed)
 	metrics.RecordVMHealthCheckAttempt(pool, zone, vmType, source, outcome, reason)
 	metrics.RecordVMHealthCheckDuration(pool, zone, vmType, source, outcome, time.Since(start))
@@ -72,8 +72,20 @@ func runSetupPhase(
 	metrics *metric.Metrics,
 	pool, zone, vmType, source string,
 ) error {
+	return runInstrumentedSetupPhase(ctx, func() error {
+		_, err := client.RetrySetup(ctx, req, timeout)
+		return err
+	}, metrics, pool, zone, vmType, source)
+}
+
+func runInstrumentedSetupPhase(
+	ctx context.Context,
+	setup func() error,
+	metrics *metric.Metrics,
+	pool, zone, vmType, source string,
+) error {
 	start := time.Now()
-	_, err := client.RetrySetup(ctx, req, timeout)
+	err := setup()
 	outcome, reason := classifyPhaseOutcome(ctx, err, InitReasonSetupFailed)
 	metrics.RecordVMSetupAttempt(pool, zone, vmType, source, outcome, reason)
 	metrics.RecordVMSetupDuration(pool, zone, vmType, source, outcome, time.Since(start))

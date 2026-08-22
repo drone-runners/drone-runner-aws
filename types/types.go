@@ -245,8 +245,9 @@ type QueryParams struct {
 }
 
 type StageOwner struct {
-	StageID  string `db:"stage_id" json:"stage_id"`
-	PoolName string `db:"pool_name" json:"pool_name"`
+	StageID    string `db:"stage_id" json:"stage_id"`
+	PoolName   string `db:"pool_name" json:"pool_name"`
+	InstanceID string `db:"instance_id" json:"instance_id,omitempty"`
 }
 
 type CapacityReservation struct {

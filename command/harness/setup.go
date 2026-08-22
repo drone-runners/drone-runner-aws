@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -46,9 +47,26 @@ type SetupVMResponse struct {
 	InstanceInfo          common.InstanceInfo `json:"instance_info"`
 }
 
+type liteEngineHealthClient interface {
+	RetryHealth(context.Context, *api.HealthRequest) (*api.HealthResponse, error)
+}
+
+type liteEngineSetupClient interface {
+	Setup(context.Context, *api.SetupRequest) (*api.SetupResponse, error)
+}
+
 var (
 	freeAccount = "free"
 	noContext   = context.Background()
+
+	// A PC /setup request carries a short-lived OIDC token and mutates both local
+	// lifecycle state and the remote tailnet. Once the request has been sent, a
+	// transport failure is ambiguous: LE may already have joined. Never replay
+	// that request on the same VM or another fallback pool.
+	errPrivateConnectivitySetupIndeterminate = stderrors.New(
+		"private connectivity setup failed after the workload identity request was sent")
+	errPrivateConnectivitySetupClaimFailed = stderrors.New(
+		"private connectivity setup could not acquire its durable stage claim")
 )
 
 // longRunningStageThresholdSec is the stage-timeout threshold above
@@ -57,6 +75,10 @@ var (
 // applies its extended grace window (7 days) instead of the default
 // maxAge.
 const longRunningStageThresholdSec = int64(24 * 60 * 60)
+
+// privateConnectivityContractVersion is the cross-repository setup/cleanup contract,
+// not a Lite Engine or Tailscale product-version gate.
+const privateConnectivityContractVersion = "v2"
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
@@ -82,6 +104,7 @@ func HandleSetup(
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
 	stageRuntimeID := r.ID
+	needsPrivateConnectivity := setupRequestNeedsPrivateConnectivity(r.SetupRequest.Envs)
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
@@ -224,7 +247,10 @@ func HandleSetup(
 		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, noProxy, metrics)
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(
+			ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager,
+			s, pool, owner, capacity, noProxy, metrics,
+		)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -253,6 +279,10 @@ func HandleSetup(
 				r.VMImageConfig.ImageVersion,
 				r.VMImageConfig.ImageName,
 			).Inc()
+			if stderrors.Is(poolErr, errPrivateConnectivitySetupIndeterminate) ||
+				stderrors.Is(poolErr, errPrivateConnectivitySetupClaimFailed) {
+				return nil, "", poolErr
+			}
 			continue
 		}
 		selectedPool = pool
@@ -263,22 +293,25 @@ func HandleSetup(
 
 	// If a successful fallback happened and we have an instance setup, record it
 	if foundPool && instance != nil { // check for instance != nil just in case
-		// add an entry in stage pool mapping if instance was created.
-		_, findErr := s.Find(noContext, stageRuntimeID)
-		if findErr != nil {
-			if cerr := s.Create(noContext, &types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
-				internalLogr.WithFields(logrus.Fields{
-					"instance_id":    instance.ID,
-					"pool":           selectedPool,
-					"destroy_caller": "setup:stage_owner_create_failed",
-				}).Infoln("destroy: cleaning up instance and capacity after stage owner create failure")
-				if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil); derr != nil {
-					internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
+		if !needsPrivateConnectivity {
+			// add an entry in stage pool mapping if instance was created.
+			_, findErr := s.Find(noContext, stageRuntimeID)
+			if findErr != nil {
+				if cerr := s.Create(noContext,
+					&types.StageOwner{StageID: stageRuntimeID, PoolName: selectedPool}); cerr != nil {
+					internalLogr.WithFields(logrus.Fields{
+						"instance_id":    instance.ID,
+						"pool":           selectedPool,
+						"destroy_caller": "setup:stage_owner_create_failed",
+					}).Infoln("destroy: cleaning up instance and capacity after stage owner create failure")
+					if derr := poolManager.Destroy(noContext, selectedPool, instance.ID, instance, nil); derr != nil {
+						internalLogr.WithError(derr).Errorln("failed to cleanup instance on setup failure")
+					}
+					if derr := poolManager.DestroyCapacity(noContext, capacity); derr != nil {
+						internalLogr.WithError(derr).Errorln("failed to cleanup capacity reservation on setup failure")
+					}
+					return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
 				}
-				if derr := poolManager.DestroyCapacity(noContext, capacity); derr != nil {
-					internalLogr.WithError(derr).Errorln("failed to cleanup capacity reservation on setup failure")
-				}
-				return nil, "", fmt.Errorf("could not create stage owner entity: %w", cerr)
 			}
 		}
 		if fallback {
@@ -413,10 +446,6 @@ func HandleSetup(
 	return resp, selectedPoolDriver, nil
 }
 
-// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
-// run a health check on the lite engine. It returns information about the setup
-// VM and an error if setup failed.
-// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
 // resumeToReadyOutcome classifies the result of the resume-to-ready span (StartInstance through
 // the health-check and setup phases below it) into the bounded outcome set for
 // runner_vm_resume_to_ready_duration_seconds. There is no `reason` label on this metric (see
@@ -433,6 +462,9 @@ func resumeToReadyOutcome(ctx context.Context, err error) string {
 	return drivers.VMLifecycleOutcomeError
 }
 
+// handleSetup provisions an instance, verifies Lite Engine health, and prepares the VM for the stage.
+// Ordinary setup remains retryable. Private Connectivity setup is sent once because its workload
+// identity cannot be replayed safely when the response outcome is unknown.
 func handleSetup(
 	ctx context.Context,
 	buildLog *logrus.Entry,
@@ -442,6 +474,7 @@ func handleSetup(
 	enableMock bool,
 	mockTimeout int,
 	poolManager drivers.IManager,
+	stageOwnerStore store.StageOwnerStore,
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
@@ -479,6 +512,7 @@ func handleSetup(
 		return nil, false, false, "", fmt.Errorf("could not find pool: %s", pool)
 	}
 
+	needsPrivateConnectivity := setupRequestNeedsPrivateConnectivity(r.SetupRequest.Envs)
 	if reservedCapacity != nil {
 		if pool != reservedCapacity.PoolName {
 			// capacity has not been reserved in this pool
@@ -529,6 +563,11 @@ func handleSetup(
 	initZone, initVMType = instance.Zone, instance.Size
 	initSource = computeInitSource(reservedCapacity, warmed, false)
 
+	if compatibilityErr := ensurePrivateConnectivityPoolCompatible(needsPrivateConnectivity, poolManager,
+		pool, instance, reservedCapacity, internalLogr); compatibilityErr != nil {
+		return nil, false, false, variantID, compatibilityErr
+	}
+
 	ilog := internalLogr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
@@ -558,13 +597,14 @@ func handleSetup(
 
 	cleanUpInstanceFn := func(consoleLogs bool) {
 		if consoleLogs {
-			logSerialConsoleOutput(poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+			logSetupConsoleOutput(needsPrivateConnectivity,
+				poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
 		}
 		ilog.WithFields(logrus.Fields{
 			"instance_id":    instanceID,
 			"pool":           pool,
-			"destroy_caller": "setup:le_health_check_failed",
-		}).Infoln("destroy: cleaning up instance and capacity after LE health check failure")
+			"destroy_caller": "setup:provisioned_instance_cleanup",
+		}).Infoln("destroy: cleaning up instance and capacity after setup failure")
 		if dErr := poolManager.Destroy(context.Background(), pool, instanceID, instance, nil); dErr != nil {
 			ilog.WithError(dErr).Errorln("failed to cleanup instance on setup failure")
 		}
@@ -621,12 +661,13 @@ func handleSetup(
 		PerformDNSLookup:                performDNSLookup,
 		Timeout:                         healthCheckTimeout,
 		HealthCheckConnectivityDuration: poolManager.GetHealthCheckConnectivityDuration(),
+		PrivateConnectivityRequested:    needsPrivateConnectivity,
 	}, metrics, pool, initZone, initVMType, initSource)
 	if healthErr != nil {
 		printError(buildLog, "Machine health check failed")
 		go cleanUpInstanceFn(true)
 		initFailureReason = InitReasonHealthFailed
-		return nil, false, false, variantID, fmt.Errorf("failed to call lite-engine retry health: %w", healthErr)
+		return nil, false, false, variantID, healthErr
 	}
 
 	printOK(buildLog, "Machine health check passed")
@@ -642,10 +683,23 @@ func handleSetup(
 		r.Volumes = appendEgressCAVolume(r.Volumes, instance.Platform.OS)
 		r.SetupRequest.EgressPolicy = mergeEgressPolicy(r.SetupRequest.EgressPolicy, instance.ProxyURL, noProxy)
 	}
-
-	setupErr := runSetupPhase(ctx, client, &r.SetupRequest, poolManager.GetSetupTimeout(), metrics, pool, initZone, initVMType, initSource)
+	var setupErr error
+	if needsPrivateConnectivity {
+		setupErr = runInstrumentedSetupPhase(ctx, func() error {
+			return runLiteEngineSetup(ctx, client, &r.SetupRequest, stageOwnerStore,
+				stageRuntimeID, pool, instance.ID, poolManager.GetSetupTimeout())
+		}, metrics, pool, initZone, initVMType, initSource)
+	} else {
+		setupErr = runSetupPhase(ctx, client, &r.SetupRequest, poolManager.GetSetupTimeout(),
+			metrics, pool, initZone, initVMType, initSource)
+	}
 	if setupErr != nil {
 		printError(buildLog, "Machine setup failed")
+		if needsPrivateConnectivity {
+			go cleanUpInstanceFn(!stderrors.Is(setupErr, errPrivateConnectivitySetupClaimFailed))
+			initFailureReason = InitReasonSetupFailed
+			return nil, false, false, variantID, setupErr
+		}
 		go cleanUpInstanceFn(true)
 		initFailureReason = InitReasonSetupFailed
 		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", setupErr)
@@ -690,12 +744,134 @@ func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Vol
 	return volumes
 }
 
+// setupRequestNeedsPrivateConnectivity reports whether SetupRequest envs carry any PC
+// contract field. DRA uses this only to avoid retrying an outcome-indeterminate setup
+// request containing a final workload identity token; LE owns all PC validation.
+func setupRequestNeedsPrivateConnectivity(envs map[string]string) bool {
+	for key := range envs {
+		if strings.HasPrefix(key, "HARNESS_PC_") {
+			return true
+		}
+	}
+	return false
+}
+
+func ensurePrivateConnectivityPoolCompatible(
+	privateConnectivityRequested bool,
+	poolManager drivers.IManager,
+	pool string,
+	instance *types.Instance,
+	reservedCapacity *types.CapacityReservation,
+	logr *logrus.Entry,
+) error {
+	if !privateConnectivityRequested || !poolManager.IsEgressPool(pool, instance.TenantID) {
+		return nil
+	}
+	go func() {
+		if err := poolManager.Destroy(context.Background(), pool, instance.ID, instance, nil); err != nil {
+			logr.WithError(err).Errorln("failed to cleanup PC instance selected from an egress pool")
+		}
+		if err := poolManager.DestroyCapacity(context.Background(), reservedCapacity); err != nil {
+			logr.WithError(err).Errorln("failed to cleanup capacity reservation after PC egress conflict")
+		}
+	}()
+	return fmt.Errorf("private connectivity cannot be used with an egress-controlled pool")
+}
+
+func retrySetupHealth(
+	ctx context.Context,
+	client liteEngineHealthClient,
+	request *api.HealthRequest,
+	privateConnectivityRequested bool,
+) error {
+	response, err := client.RetryHealth(ctx, request)
+	if err != nil {
+		return fmt.Errorf("failed to call lite-engine retry health: %w", err)
+	}
+	if !privateConnectivityRequested {
+		return nil
+	}
+	if response == nil {
+		return fmt.Errorf("lite-engine returned an empty private connectivity health response")
+	}
+	if !response.PrivateConnectivity {
+		return fmt.Errorf("lite-engine does not advertise private connectivity support")
+	}
+	if response.PrivateConnectivityVersion != privateConnectivityContractVersion {
+		return fmt.Errorf(
+			"lite-engine private connectivity contract %q is incompatible with required contract %q",
+			response.PrivateConnectivityVersion, privateConnectivityContractVersion,
+		)
+	}
+	if !response.PrivateConnectivityClean {
+		return fmt.Errorf("lite-engine reports private connectivity runtime is unavailable or not clean")
+	}
+	return nil
+}
+
+func runLiteEngineSetup(
+	ctx context.Context,
+	client liteEngineSetupClient,
+	request *api.SetupRequest,
+	stageOwnerStore store.StageOwnerStore,
+	stageRuntimeID, pool, instanceID string,
+	setupTimeout time.Duration,
+) error {
+	if err := stageOwnerStore.Create(noContext,
+		&types.StageOwner{StageID: stageRuntimeID, PoolName: pool, InstanceID: instanceID}); err != nil {
+		return fmt.Errorf("%w: %v", errPrivateConnectivitySetupClaimFailed, err)
+	}
+
+	setupCtx, setupCancel := context.WithTimeout(ctx, setupTimeout)
+	defer setupCancel()
+	if _, err := client.Setup(setupCtx, request); err != nil {
+		return fmt.Errorf("%w: %v", errPrivateConnectivitySetupIndeterminate, err)
+	}
+	return nil
+}
+
+const serialConsoleLogTimeout = 10 * time.Second
+
+func logSetupConsoleOutput(
+	privateConnectivityRequested bool,
+	poolManager drivers.IManager,
+	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
+) {
+	if privateConnectivityRequested {
+		logSerialConsoleOutputWithTimeout(
+			poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+		return
+	}
+	logSerialConsoleOutput(poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+}
+
+func logSerialConsoleOutputWithTimeout(
+	poolManager drivers.IManager,
+	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
+) {
+	ctx, cancel := context.WithTimeout(context.Background(), serialConsoleLogTimeout)
+	defer cancel()
+	logSerialConsoleOutputContext(ctx, poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+	if ctx.Err() != nil {
+		logrus.WithField("id", instanceID).Warnln("timed out fetching serial console output before cleanup")
+	}
+}
+
 // logSerialConsoleOutput fetches and logs the serial console output for an instance.
 func logSerialConsoleOutput(
 	poolManager drivers.IManager,
 	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
 ) {
-	out, logErr := poolManager.InstanceLogs(context.Background(), pool, instanceID)
+	logSerialConsoleOutputContext(
+		context.Background(), poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
+}
+
+func logSerialConsoleOutputContext(
+	ctx context.Context,
+	poolManager drivers.IManager,
+	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
+) {
+	out, logErr := poolManager.InstanceLogs(ctx, pool, instanceID)
 	if logErr != nil {
 		logrus.WithField("id", instanceID).WithError(logErr).Errorln("failed to fetch console output logs")
 		return

@@ -135,11 +135,13 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		}
 	}()
 
+	var stageOwner *types.StageOwner
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
 		if err != nil || entity == nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 		}
+		stageOwner = entity
 		poolID = entity.PoolName
 	} else {
 		poolID = r.InstanceInfo.PoolName
@@ -152,20 +154,17 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	logr.WithField("destroy_caller", "destroy_handler:api_request").
 		Infoln("starting the destroy process")
 
-	var inst *types.Instance
-	err := common.ValidateStructForKeys(r.InstanceInfo, []string{"ID", "Zone", "PoolName", "StorageIdentifier"})
+	inst, alreadyRemoved, err := resolveDestroyInstance(ctx, r, stageOwner, poolID, poolManager, logr)
 	if err != nil {
-		logr.Debugf("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v", err)
-		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
-		if err != nil {
-			return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
+		return nil, err
+	}
+	if alreadyRemoved {
+		logr.Infoln("instance was already removed; completing stage owner cleanup")
+		envState().Delete(r.StageRuntimeID)
+		if deleteErr := s.Delete(ctx, r.StageRuntimeID); deleteErr != nil {
+			return nil, fmt.Errorf("failed to delete stage owner entity: %w", deleteErr)
 		}
-		if inst == nil {
-			return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
-		}
-	} else {
-		logr.Infoln("Using the instance information from the VM Cleanup Request")
-		inst = common.BuildInstanceFromRequest(r.InstanceInfo)
+		return nil, nil
 	}
 
 	logr = logr.
@@ -264,6 +263,44 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	metrics.RecordCleanupDuration(CleanupResourceStageOwner, poolID, inst.Zone, stageOwnerOutcome, time.Since(stageOwnerDeleteStart))
 
 	return inst, nil
+}
+
+func resolveDestroyInstance(
+	ctx context.Context,
+	r *VMCleanupRequest,
+	stageOwner *types.StageOwner,
+	poolID string,
+	poolManager drivers.IManager,
+	logr *logrus.Entry,
+) (*types.Instance, bool, error) {
+	validationErr := common.ValidateStructForKeys(
+		r.InstanceInfo, []string{"ID", "Zone", "PoolName", "StorageIdentifier"})
+	if validationErr == nil {
+		logr.Infoln("Using the instance information from the VM Cleanup Request")
+		return common.BuildInstanceFromRequest(r.InstanceInfo), false, nil
+	}
+
+	logr.Debugf("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v",
+		validationErr)
+	if stageOwner != nil && stageOwner.InstanceID != "" {
+		instance, err := poolManager.Find(ctx, stageOwner.InstanceID)
+		if store.IsNotFound(err) || (err == nil && instance == nil) {
+			return nil, true, nil
+		}
+		if err != nil {
+			return nil, false, fmt.Errorf("cannot get the instance by ID: %w", err)
+		}
+		return instance, false, nil
+	}
+
+	instance, err := poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
+	if err != nil {
+		return nil, false, fmt.Errorf("cannot get the instance by tag: %w", err)
+	}
+	if instance == nil {
+		return nil, false, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+	}
+	return instance, false, nil
 }
 
 // recordNormalCleanupUsageDuration records runner_vm_usage_duration_seconds with
