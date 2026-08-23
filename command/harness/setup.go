@@ -595,7 +595,7 @@ func handleSetup(
 	instanceName := instance.Name
 	instanceIP := instance.Address
 
-	cleanUpInstanceFn := func(consoleLogs bool) {
+	cleanUpInstanceFn := func(consoleLogs, releaseStageOwner bool) {
 		if consoleLogs {
 			logSetupConsoleOutput(needsPrivateConnectivity,
 				poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
@@ -605,11 +605,20 @@ func handleSetup(
 			"pool":           pool,
 			"destroy_caller": "setup:provisioned_instance_cleanup",
 		}).Infoln("destroy: cleaning up instance and capacity after setup failure")
+		instanceDestroyed := false
 		if dErr := poolManager.Destroy(context.Background(), pool, instanceID, instance, nil); dErr != nil {
 			ilog.WithError(dErr).Errorln("failed to cleanup instance on setup failure")
+		} else {
+			instanceDestroyed = true
 		}
 		if dErr := poolManager.DestroyCapacity(context.Background(), reservedCapacity); dErr != nil {
 			ilog.WithError(dErr).Errorln("failed to cleanup capacity reservation on setup failure")
+		}
+		if releaseStageOwner && instanceDestroyed {
+			if deleteErr := stageOwnerStore.Delete(context.Background(), stageRuntimeID); deleteErr != nil {
+				ilog.WithError(deleteErr).Errorln(
+					"failed to release private connectivity stage owner after setup cleanup")
+			}
 		}
 	}
 
@@ -636,7 +645,7 @@ func handleSetup(
 
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
-			go cleanUpInstanceFn(false)
+			go cleanUpInstanceFn(false, false)
 			initFailureReason = InitReasonResumeFailed
 			return nil, false, false, variantID, fmt.Errorf("failed to start the instance up: %w", err)
 		}
@@ -646,7 +655,7 @@ func handleSetup(
 
 	client, err := tagAndConnectInstance(ctx, poolManager, instance, pool, stageRuntimeID, r.Tags, enableMock, mockTimeout)
 	if err != nil {
-		go cleanUpInstanceFn(false)
+		go cleanUpInstanceFn(false, false)
 		initFailureReason = InitReasonStateFailed
 		return nil, false, false, variantID, err
 	}
@@ -665,7 +674,7 @@ func handleSetup(
 	}, metrics, pool, initZone, initVMType, initSource)
 	if healthErr != nil {
 		printError(buildLog, "Machine health check failed")
-		go cleanUpInstanceFn(true)
+		go cleanUpInstanceFn(true, false)
 		initFailureReason = InitReasonHealthFailed
 		return nil, false, false, variantID, healthErr
 	}
@@ -696,11 +705,12 @@ func handleSetup(
 	if setupErr != nil {
 		printError(buildLog, "Machine setup failed")
 		if needsPrivateConnectivity {
-			go cleanUpInstanceFn(!stderrors.Is(setupErr, errPrivateConnectivitySetupClaimFailed))
+			claimOwned := stderrors.Is(setupErr, errPrivateConnectivitySetupIndeterminate)
+			go cleanUpInstanceFn(claimOwned, claimOwned)
 			initFailureReason = InitReasonSetupFailed
 			return nil, false, false, variantID, setupErr
 		}
-		go cleanUpInstanceFn(true)
+		go cleanUpInstanceFn(true, false)
 		initFailureReason = InitReasonSetupFailed
 		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", setupErr)
 	}
