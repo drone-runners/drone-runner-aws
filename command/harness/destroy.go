@@ -100,6 +100,7 @@ func HandleDestroy(
 	}
 }
 
+//nolint:gocyclo // Keep the ordered VM, LE, capacity, and durable-claim cleanup lifecycle visible.
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
 	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
 	logr = logr.WithField("retry_count", retryCount)

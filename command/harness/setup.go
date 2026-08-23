@@ -465,6 +465,8 @@ func resumeToReadyOutcome(ctx context.Context, err error) string {
 // handleSetup provisions an instance, verifies Lite Engine health, and prepares the VM for the stage.
 // Ordinary setup remains retryable. Private Connectivity setup is sent once because its workload
 // identity cannot be replayed safely when the response outcome is unknown.
+//
+//nolint:funlen // Keep the ordered VM provisioning and one-shot PC setup lifecycle visible.
 func handleSetup(
 	ctx context.Context,
 	buildLog *logrus.Entry,
