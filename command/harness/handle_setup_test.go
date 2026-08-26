@@ -165,7 +165,7 @@ func TestHandleSetup_PoolNotFound_RecordsInitAttempt(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, nil, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, nil, false, "pool1", "owner1", nil, "", metrics)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
@@ -183,7 +183,7 @@ func TestHandleSetup_PoolExhausted_RecordsPoolExhaustedReason(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, nil, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, nil, false, "pool1", "owner1", nil, "", metrics)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
@@ -202,7 +202,7 @@ func TestHandleSetup_CloudCreateFailed_RecordsCloudCreateFailedReason(t *testing
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, nil, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, nil, false, "pool1", "owner1", nil, "", metrics)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
@@ -224,7 +224,7 @@ func TestHandleSetup_ResumeFailed_RecordsResumeFailedReason(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, nil, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, nil, false, "pool1", "owner1", nil, "", metrics)
 
 	require.Error(t, err)
 	// Note: cleanUpInstanceFn runs in a fire-and-forget goroutine (`go cleanUpInstanceFn(...)`),
@@ -249,7 +249,7 @@ func TestHandleSetup_StateFailed_RecordsStateFailedReason(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, nil, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, nil, false, "pool1", "owner1", nil, "", metrics)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(

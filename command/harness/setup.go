@@ -16,6 +16,7 @@ import (
 	"github.com/drone/runner-go/logger"
 	"github.com/harness/lite-engine/api"
 	lespec "github.com/harness/lite-engine/engine/spec"
+	"github.com/harness/lite-engine/pc"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	errors "github.com/drone-runners/drone-runner-aws/app/types"
@@ -61,8 +62,8 @@ var (
 	// that request on the same VM or another fallback pool.
 	errPrivateConnectivitySetupIndeterminate = stderrors.New(
 		"private connectivity setup failed after the workload identity request was sent")
-	errPrivateConnectivitySetupClaimFailed = stderrors.New(
-		"private connectivity setup could not acquire its durable stage claim")
+	errPrivateConnectivitySetupClaimConflict = stderrors.New(
+		"private connectivity setup already has a durable stage claim")
 )
 
 // longRunningStageThresholdSec is the stage-timeout threshold above
@@ -96,7 +97,6 @@ func HandleSetup(
 ) (*SetupVMResponse, string, error) {
 	initStartTime := time.Now()
 	stageRuntimeID := r.ID
-	needsPrivateConnectivity := setupRequestNeedsPrivateConnectivity(r.SetupRequest.Envs)
 	if stageRuntimeID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'id' in the request body is empty")
 	}
@@ -104,6 +104,7 @@ func HandleSetup(
 	if r.PoolID == "" {
 		return nil, "", errors.NewBadRequestError("mandatory field 'pool_id' in the request body is empty")
 	}
+	needsPrivateConnectivity := normalizePrivateConnectivityEnvs(r.SetupRequest.Envs)
 
 	// Sets up logger to stream the logs in case log config is set
 	log := logrus.New()
@@ -241,7 +242,7 @@ func HandleSetup(
 		_, _, poolDriver := poolManager.Inspect(p)
 		instance, warmed, hibernated, variantID, poolErr = handleSetup(
 			ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager,
-			s, pool, owner, capacity, noProxy, metrics,
+			s, needsPrivateConnectivity, pool, owner, capacity, noProxy, metrics,
 		)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
@@ -272,7 +273,7 @@ func HandleSetup(
 				r.VMImageConfig.ImageName,
 			).Inc()
 			if stderrors.Is(poolErr, errPrivateConnectivitySetupIndeterminate) ||
-				stderrors.Is(poolErr, errPrivateConnectivitySetupClaimFailed) {
+				stderrors.Is(poolErr, errPrivateConnectivitySetupClaimConflict) {
 				return nil, "", poolErr
 			}
 			continue
@@ -458,7 +459,7 @@ func resumeToReadyOutcome(ctx context.Context, err error) string {
 // Ordinary setup remains retryable. Private Connectivity setup is sent once because its workload
 // identity cannot be replayed safely when the response outcome is unknown.
 //
-//nolint:funlen // Keep the ordered VM provisioning and one-shot PC setup lifecycle visible.
+//nolint:funlen,gocyclo // Keep the ordered VM provisioning and one-shot PC setup lifecycle visible.
 func handleSetup(
 	ctx context.Context,
 	buildLog *logrus.Entry,
@@ -469,6 +470,7 @@ func handleSetup(
 	mockTimeout int,
 	poolManager drivers.IManager,
 	stageOwnerStore store.StageOwnerStore,
+	needsPrivateConnectivity bool,
 	pool,
 	owner string,
 	reservedCapacity *types.CapacityReservation,
@@ -506,7 +508,6 @@ func handleSetup(
 		return nil, false, false, "", fmt.Errorf("could not find pool: %s", pool)
 	}
 
-	needsPrivateConnectivity := setupRequestNeedsPrivateConnectivity(r.SetupRequest.Envs)
 	if reservedCapacity != nil {
 		if pool != reservedCapacity.PoolName {
 			// capacity has not been reserved in this pool
@@ -557,11 +558,6 @@ func handleSetup(
 	initZone, initVMType = instance.Zone, instance.Size
 	initSource = computeInitSource(reservedCapacity, warmed, false)
 
-	if compatibilityErr := ensurePrivateConnectivityPoolCompatible(needsPrivateConnectivity, poolManager,
-		pool, instance, reservedCapacity, internalLogr); compatibilityErr != nil {
-		return nil, false, false, variantID, compatibilityErr
-	}
-
 	ilog := internalLogr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).
 		WithField("id", instance.ID).
@@ -594,10 +590,14 @@ func handleSetup(
 			logSetupConsoleOutput(needsPrivateConnectivity,
 				poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
 		}
+		destroyCaller := "setup:le_health_check_failed"
+		if needsPrivateConnectivity {
+			destroyCaller = "setup:private_connectivity_failed"
+		}
 		ilog.WithFields(logrus.Fields{
 			"instance_id":    instanceID,
 			"pool":           pool,
-			"destroy_caller": "setup:provisioned_instance_cleanup",
+			"destroy_caller": destroyCaller,
 		}).Infoln("destroy: cleaning up instance and capacity after setup failure")
 		instanceDestroyed := false
 		if dErr := poolManager.Destroy(context.Background(), pool, instanceID, cleanupInstance, nil); dErr != nil {
@@ -700,7 +700,23 @@ func handleSetup(
 		printError(buildLog, "Machine setup failed")
 		if needsPrivateConnectivity {
 			claimOwned := stderrors.Is(setupErr, errPrivateConnectivitySetupIndeterminate)
-			go cleanUpInstanceFn(instance, claimOwned, claimOwned)
+			if claimOwned {
+				leCtx, leCancel := context.WithTimeout(noContext, liteEngineDestroyTimeout)
+				_, cleanupErr := client.Destroy(leCtx, &api.DestroyRequest{
+					LogDrone:       false,
+					LogKey:         r.LogKey,
+					LiteEnginePath: oshelp.GetLiteEngineLogsPath(instance.OS),
+					StageRuntimeID: stageRuntimeID,
+				})
+				leCancel()
+				if cleanupErr != nil {
+					ilog.WithError(cleanupErr).Warnln(
+						"could not invoke lite-engine cleanup after uncertain private connectivity setup")
+				}
+			}
+			// PC setup cleanup is synchronous so the setup response cannot race the normal
+			// stage-destroy request. The durable claim is released only after VM destruction.
+			cleanUpInstanceFn(instance, claimOwned, claimOwned)
 			initFailureReason = InitReasonSetupFailed
 			return nil, false, false, variantID, setupErr
 		}
@@ -748,15 +764,16 @@ func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Vol
 	return volumes
 }
 
-// setupRequestNeedsPrivateConnectivity reports whether SetupRequest envs carry a PC
-// contract. An isolated explicit false is normalized away so old and new Lite Engine
-// binaries both receive the exact legacy non-PC request. Any other reserved field remains
-// fail-closed and uses the one-shot setup path because it may contain a workload token.
-func setupRequestNeedsPrivateConnectivity(envs map[string]string) bool {
-	const enabledEnv = "HARNESS_PC_ENABLED"
-	enabledValue, enabledPresent := envs[enabledEnv]
+const privateConnectivityEnvPrefix = "HARNESS_PC_"
+
+// normalizePrivateConnectivityEnvs identifies a PC contract and removes an isolated explicit
+// disabled marker. That normalization gives old and new Lite Engine binaries the exact legacy
+// request for PC-off stages. Any other reserved field remains fail-closed and uses the one-shot
+// setup path because it may carry a workload token.
+func normalizePrivateConnectivityEnvs(envs map[string]string) bool {
+	enabledValue, enabledPresent := envs[pc.EnvEnabled]
 	for key := range envs {
-		if strings.HasPrefix(key, "HARNESS_PC_") && key != enabledEnv {
+		if strings.HasPrefix(key, privateConnectivityEnvPrefix) && key != pc.EnvEnabled {
 			return true
 		}
 	}
@@ -764,32 +781,10 @@ func setupRequestNeedsPrivateConnectivity(envs map[string]string) bool {
 		return false
 	}
 	if strings.EqualFold(strings.TrimSpace(enabledValue), "false") {
-		delete(envs, enabledEnv)
+		delete(envs, pc.EnvEnabled)
 		return false
 	}
 	return true
-}
-
-func ensurePrivateConnectivityPoolCompatible(
-	privateConnectivityRequested bool,
-	poolManager drivers.IManager,
-	pool string,
-	instance *types.Instance,
-	reservedCapacity *types.CapacityReservation,
-	logr *logrus.Entry,
-) error {
-	if !privateConnectivityRequested || !poolManager.IsEgressPool(pool, instance.TenantID) {
-		return nil
-	}
-	go func() {
-		if err := poolManager.Destroy(context.Background(), pool, instance.ID, instance, nil); err != nil {
-			logr.WithError(err).Errorln("failed to cleanup PC instance selected from an egress pool")
-		}
-		if err := poolManager.DestroyCapacity(context.Background(), reservedCapacity); err != nil {
-			logr.WithError(err).Errorln("failed to cleanup capacity reservation after PC egress conflict")
-		}
-	}()
-	return fmt.Errorf("private connectivity cannot be used with an egress-controlled pool")
 }
 
 func runLiteEngineSetup(
@@ -802,13 +797,16 @@ func runLiteEngineSetup(
 ) error {
 	if err := stageOwnerStore.Create(noContext,
 		&types.StageOwner{StageID: stageRuntimeID, PoolName: pool, InstanceID: instanceID}); err != nil {
-		return fmt.Errorf("%w: %v", errPrivateConnectivitySetupClaimFailed, err)
+		if store.IsConflict(err) {
+			return fmt.Errorf("%w: %w", errPrivateConnectivitySetupClaimConflict, err)
+		}
+		return fmt.Errorf("could not persist private connectivity stage claim: %w", err)
 	}
 
 	setupCtx, setupCancel := context.WithTimeout(ctx, setupTimeout)
 	defer setupCancel()
 	if _, err := client.Setup(setupCtx, request); err != nil {
-		return fmt.Errorf("%w: %v", errPrivateConnectivitySetupIndeterminate, err)
+		return fmt.Errorf("%w: %w", errPrivateConnectivitySetupIndeterminate, err)
 	}
 	return nil
 }
@@ -832,6 +830,9 @@ func logSerialConsoleOutputWithTimeout(
 	poolManager drivers.IManager,
 	pool, instanceID, instanceName, instanceIP, stageRuntimeID string,
 ) {
+	// PC setup cleanup is synchronous to protect the durable one-shot claim. Bound optional
+	// diagnostics so they cannot delay VM destruction; hosted cloud drivers propagate this
+	// context to their provider API calls. Legacy non-PC cleanup remains asynchronous and unchanged.
 	ctx, cancel := context.WithTimeout(context.Background(), serialConsoleLogTimeout)
 	defer cancel()
 	logSerialConsoleOutputContext(ctx, poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)

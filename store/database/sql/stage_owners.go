@@ -2,11 +2,15 @@ package sql
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
+	"github.com/mattn/go-sqlite3"
 )
 
 var _ store.StageOwnerStore = (*StageOwnerStore)(nil)
@@ -30,7 +34,23 @@ func (s StageOwnerStore) Create(_ context.Context, stageOwner *types.StageOwner)
 	if err != nil {
 		return err
 	}
-	return s.db.QueryRow(query, arg...).Scan(&stageOwner.StageID)
+	err = s.db.QueryRow(query, arg...).Scan(&stageOwner.StageID)
+	if isUniqueConstraintViolation(err) {
+		return fmt.Errorf("%w: stage owner %q already exists", store.ErrConflict, stageOwner.StageID)
+	}
+	return err
+}
+
+func isUniqueConstraintViolation(err error) bool {
+	var postgresErr *pq.Error
+	if errors.As(err, &postgresErr) && postgresErr.Code == "23505" {
+		return true
+	}
+
+	var sqliteErr sqlite3.Error
+	return errors.As(err, &sqliteErr) &&
+		(sqliteErr.ExtendedCode == sqlite3.ErrConstraintPrimaryKey ||
+			sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique)
 }
 
 func (s StageOwnerStore) Delete(ctx context.Context, id string) error {

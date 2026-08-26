@@ -3,16 +3,19 @@ package harness
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/harness/lite-engine/api"
+	"github.com/harness/lite-engine/pc"
 	"github.com/stretchr/testify/require"
 
+	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
-func TestSetupRequestNeedsPrivateConnectivity(t *testing.T) {
+func TestNormalizePrivateConnectivityEnvs(t *testing.T) {
 	tests := []struct {
 		name      string
 		envs      map[string]string
@@ -20,18 +23,18 @@ func TestSetupRequestNeedsPrivateConnectivity(t *testing.T) {
 		wantEnvs  map[string]string
 	}{
 		{"absent", map[string]string{"CI": "true"}, false, map[string]string{"CI": "true"}},
-		{"false", map[string]string{"HARNESS_PC_ENABLED": "false"}, false, map[string]string{}},
+		{"false", map[string]string{pc.EnvEnabled: "false"}, false, map[string]string{}},
 		{"false with payload", map[string]string{
-			"HARNESS_PC_ENABLED": "false", "HARNESS_PC_OIDC_TOKEN": "token",
-		}, true, map[string]string{"HARNESS_PC_ENABLED": "false", "HARNESS_PC_OIDC_TOKEN": "token"}},
-		{"true", map[string]string{"HARNESS_PC_ENABLED": "true"}, true,
-			map[string]string{"HARNESS_PC_ENABLED": "true"}},
-		{"partial", map[string]string{"HARNESS_PC_OIDC_TOKEN": "token"}, true,
-			map[string]string{"HARNESS_PC_OIDC_TOKEN": "token"}},
+			pc.EnvEnabled: "false", pc.EnvOIDCToken: "token",
+		}, true, map[string]string{pc.EnvEnabled: "false", pc.EnvOIDCToken: "token"}},
+		{"true", map[string]string{pc.EnvEnabled: "true"}, true,
+			map[string]string{pc.EnvEnabled: "true"}},
+		{"partial", map[string]string{pc.EnvOIDCToken: "token"}, true,
+			map[string]string{pc.EnvOIDCToken: "token"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.requested, setupRequestNeedsPrivateConnectivity(tt.envs))
+			require.Equal(t, tt.requested, normalizePrivateConnectivityEnvs(tt.envs))
 			require.Equal(t, tt.wantEnvs, tt.envs)
 		})
 	}
@@ -70,11 +73,19 @@ func TestRunLiteEngineSetupIsOneShot(t *testing.T) {
 	require.Equal(t, 1, setupCalls)
 	require.Equal(t, &types.StageOwner{StageID: "stage", PoolName: "pool", InstanceID: "instance"}, owners.created)
 
+	owners.createErr = fmt.Errorf("%w: duplicate stage", store.ErrConflict)
+	setupCalls = 0
+	err = runLiteEngineSetup(context.Background(), setupClient{calls: &setupCalls}, &api.SetupRequest{},
+		owners, "stage", "pool", "instance", time.Second)
+	require.ErrorIs(t, err, errPrivateConnectivitySetupClaimConflict)
+	require.Zero(t, setupCalls)
+
 	owners.createErr = errors.New("database unavailable")
 	setupCalls = 0
 	err = runLiteEngineSetup(context.Background(), setupClient{calls: &setupCalls}, &api.SetupRequest{},
 		owners, "stage", "pool", "instance", time.Second)
-	require.ErrorIs(t, err, errPrivateConnectivitySetupClaimFailed)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, errPrivateConnectivitySetupClaimConflict)
 	require.Zero(t, setupCalls)
 
 	owners.createErr = nil

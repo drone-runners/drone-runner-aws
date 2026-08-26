@@ -136,21 +136,17 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	}()
 
 	var stageOwner *types.StageOwner
-	entity, stageOwnerFindErr := s.Find(ctx, r.StageRuntimeID)
-	if stageOwnerFindErr == nil && entity != nil {
-		stageOwner = entity
-	} else if stageOwnerFindErr != nil && !store.IsNotFound(stageOwnerFindErr) {
-		if r.InstanceInfo.PoolName == "" {
+	if r.InstanceInfo.PoolName == "" {
+		entity, stageOwnerFindErr := s.Find(ctx, r.StageRuntimeID)
+		if stageOwnerFindErr == nil && entity != nil {
+			stageOwner = entity
+		} else if stageOwnerFindErr != nil && !store.IsNotFound(stageOwnerFindErr) {
 			return nil, fmt.Errorf(
 				"failed to find stage owner entity for stage %s: %w", r.StageRuntimeID, stageOwnerFindErr)
 		}
-		logr.WithError(stageOwnerFindErr).Warnln(
-			"could not read stage owner; continuing with complete cleanup request")
 	}
 
-	if stageOwner != nil && stageOwner.InstanceID != "" && stageOwner.PoolName != "" {
-		poolID = stageOwner.PoolName
-	} else if r.InstanceInfo.PoolName != "" {
+	if r.InstanceInfo.PoolName != "" {
 		poolID = r.InstanceInfo.PoolName
 	} else if stageOwner != nil && stageOwner.PoolName != "" {
 		poolID = stageOwner.PoolName
@@ -172,7 +168,14 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if alreadyRemoved {
 		logr.Infoln("instance was already removed; completing stage owner cleanup")
 		envState().Delete(r.StageRuntimeID)
-		if deleteErr := s.Delete(ctx, r.StageRuntimeID); deleteErr != nil {
+		stageOwnerDeleteStart := time.Now()
+		deleteErr := s.Delete(ctx, r.StageRuntimeID)
+		stageOwnerOutcome, stageOwnerReason := classifyCleanupErr(ctx, deleteErr, CleanupReasonStoreError)
+		metrics.RecordCleanupAttempt(
+			CleanupResourceStageOwner, poolID, "", stageOwnerOutcome, stageOwnerReason)
+		metrics.RecordCleanupDuration(
+			CleanupResourceStageOwner, poolID, "", stageOwnerOutcome, time.Since(stageOwnerDeleteStart))
+		if deleteErr != nil {
 			return nil, fmt.Errorf("failed to delete stage owner entity: %w", deleteErr)
 		}
 		return nil, nil

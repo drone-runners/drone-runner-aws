@@ -23,6 +23,8 @@ func NewStageOwnerStore(db *leveldb.DB) *StageOwnerStore {
 
 type StageOwnerStore struct {
 	db *leveldb.DB
+	// LevelDB has no conditional put. The mutex makes the local Has+Put claim atomic
+	// against competing Create calls; stage IDs are never reused within this process.
 	mu sync.Mutex
 }
 
@@ -54,7 +56,7 @@ func (s *StageOwnerStore) Create(_ context.Context, stageOwner *types.StageOwner
 		return err
 	}
 	if exists {
-		return fmt.Errorf("stage owner %q already exists", stageOwner.StageID)
+		return fmt.Errorf("%w: stage owner %q already exists", store.ErrConflict, stageOwner.StageID)
 	}
 
 	var data bytes.Buffer
