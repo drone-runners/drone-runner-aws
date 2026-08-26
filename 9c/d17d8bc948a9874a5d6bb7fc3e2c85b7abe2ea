@@ -1,0 +1,23 @@
+command/config/config.go
+  s_bc7f8335e11597::t_b6c54819299027 529-530
+go.mod
+  s_bc7f8335e11597::t_6e8d60b42a1194 32
+go.sum
+  s_bc7f8335e11597::t_681d9372ea3aa8 246-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "9cd17d8bc948a9874a5d6bb7fc3e2c85b7abe2ea",
+  "prompts": {},
+  "sessions": {
+    "s_bc7f8335e11597": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f6ee264-f308-4b81-8362-30c3f6165aa5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rishikesh Chaudhary <rishikesh.chaudhary@harness.io>"
+    }
+  }
+}
