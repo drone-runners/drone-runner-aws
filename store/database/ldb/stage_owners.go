@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"fmt"
-	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
 
@@ -18,21 +16,18 @@ var _ store.StageOwnerStore = (*StageOwnerStore)(nil)
 const ssKeyPrefix = "stage-owner-"
 
 func NewStageOwnerStore(db *leveldb.DB) *StageOwnerStore {
-	return &StageOwnerStore{db: db}
+	return &StageOwnerStore{db}
 }
 
 type StageOwnerStore struct {
 	db *leveldb.DB
-	// LevelDB has no conditional put. The mutex makes the local Has+Put claim atomic
-	// against competing Create calls; stage IDs are never reused within this process.
-	mu sync.Mutex
 }
 
-func (s *StageOwnerStore) getKey(id string) string {
+func (s StageOwnerStore) getKey(id string) string {
 	return ssKeyPrefix + id
 }
 
-func (s *StageOwnerStore) Find(_ context.Context, id string) (*types.StageOwner, error) {
+func (s StageOwnerStore) Find(_ context.Context, id string) (*types.StageOwner, error) {
 	key := s.getKey(id)
 	data, err := s.db.Get([]byte(key), nil)
 	if err != nil {
@@ -46,19 +41,8 @@ func (s *StageOwnerStore) Find(_ context.Context, id string) (*types.StageOwner,
 	return dst, nil
 }
 
-func (s *StageOwnerStore) Create(_ context.Context, stageOwner *types.StageOwner) error {
+func (s StageOwnerStore) Create(_ context.Context, stageOwner *types.StageOwner) error {
 	key := s.getKey(stageOwner.StageID)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	exists, err := s.db.Has([]byte(key), nil)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return fmt.Errorf("%w: stage owner %q already exists", store.ErrConflict, stageOwner.StageID)
-	}
-
 	var data bytes.Buffer
 	enc := gob.NewEncoder(&data)
 	if err := enc.Encode(stageOwner); err != nil {
@@ -68,11 +52,11 @@ func (s *StageOwnerStore) Create(_ context.Context, stageOwner *types.StageOwner
 	return s.db.Put([]byte(key), data.Bytes(), nil)
 }
 
-func (s *StageOwnerStore) Delete(ctx context.Context, id string) error {
+func (s StageOwnerStore) Delete(ctx context.Context, id string) error {
 	key := s.getKey(id)
 	return s.db.Delete([]byte(key), nil)
 }
 
-func (s *StageOwnerStore) Purge(ctx context.Context) error {
+func (s StageOwnerStore) Purge(ctx context.Context) error {
 	panic("implement me")
 }

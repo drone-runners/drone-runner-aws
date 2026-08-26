@@ -1,1 +1,0 @@
-ALTER TABLE stage_owner ADD COLUMN instance_id VARCHAR(250) NOT NULL DEFAULT '';

@@ -72,20 +72,8 @@ func runSetupPhase(
 	metrics *metric.Metrics,
 	pool, zone, vmType, source string,
 ) error {
-	return runInstrumentedSetupPhase(ctx, func() error {
-		_, err := client.RetrySetup(ctx, req, timeout)
-		return err
-	}, metrics, pool, zone, vmType, source)
-}
-
-func runInstrumentedSetupPhase(
-	ctx context.Context,
-	setup func() error,
-	metrics *metric.Metrics,
-	pool, zone, vmType, source string,
-) error {
 	start := time.Now()
-	err := setup()
+	_, err := client.RetrySetup(ctx, req, timeout)
 	outcome, reason := classifyPhaseOutcome(ctx, err, InitReasonSetupFailed)
 	metrics.RecordVMSetupAttempt(pool, zone, vmType, source, outcome, reason)
 	metrics.RecordVMSetupDuration(pool, zone, vmType, source, outcome, time.Since(start))
