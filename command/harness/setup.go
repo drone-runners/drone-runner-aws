@@ -47,10 +47,6 @@ type SetupVMResponse struct {
 	InstanceInfo          common.InstanceInfo `json:"instance_info"`
 }
 
-type liteEngineHealthClient interface {
-	RetryHealth(context.Context, *api.HealthRequest) (*api.HealthResponse, error)
-}
-
 type liteEngineSetupClient interface {
 	Setup(context.Context, *api.SetupRequest) (*api.SetupResponse, error)
 }
@@ -75,10 +71,6 @@ var (
 // applies its extended grace window (7 days) instead of the default
 // maxAge.
 const longRunningStageThresholdSec = int64(24 * 60 * 60)
-
-// privateConnectivityContractVersion is the cross-repository setup/cleanup contract,
-// not a Lite Engine or Tailscale product-version gate.
-const privateConnectivityContractVersion = "v2"
 
 // HandleSetup tries to setup an instance in any of the pools given in the setup request.
 // It calls handleSetup internally for each pool instance trying to complete a setup.
@@ -597,7 +589,7 @@ func handleSetup(
 	instanceName := instance.Name
 	instanceIP := instance.Address
 
-	cleanUpInstanceFn := func(consoleLogs, releaseStageOwner bool) {
+	cleanUpInstanceFn := func(cleanupInstance *types.Instance, consoleLogs, releaseStageOwner bool) {
 		if consoleLogs {
 			logSetupConsoleOutput(needsPrivateConnectivity,
 				poolManager, pool, instanceID, instanceName, instanceIP, stageRuntimeID)
@@ -608,7 +600,7 @@ func handleSetup(
 			"destroy_caller": "setup:provisioned_instance_cleanup",
 		}).Infoln("destroy: cleaning up instance and capacity after setup failure")
 		instanceDestroyed := false
-		if dErr := poolManager.Destroy(context.Background(), pool, instanceID, instance, nil); dErr != nil {
+		if dErr := poolManager.Destroy(context.Background(), pool, instanceID, cleanupInstance, nil); dErr != nil {
 			ilog.WithError(dErr).Errorln("failed to cleanup instance on setup failure")
 		} else {
 			instanceDestroyed = true
@@ -645,9 +637,10 @@ func handleSetup(
 			metrics.RecordVMResumeToReadyDuration(pool, resumeZone, resumeVMType, outcome, time.Since(resumeToReadyStart))
 		}()
 
+		provisionedInstance := instance
 		instance, err = poolManager.StartInstance(ctx, pool, instance.ID, &r.InstanceInfo)
 		if err != nil {
-			go cleanUpInstanceFn(false, false)
+			go cleanUpInstanceFn(provisionedInstance, false, false)
 			initFailureReason = InitReasonResumeFailed
 			return nil, false, false, variantID, fmt.Errorf("failed to start the instance up: %w", err)
 		}
@@ -657,7 +650,7 @@ func handleSetup(
 
 	client, err := tagAndConnectInstance(ctx, poolManager, instance, pool, stageRuntimeID, r.Tags, enableMock, mockTimeout)
 	if err != nil {
-		go cleanUpInstanceFn(false, false)
+		go cleanUpInstanceFn(instance, false, false)
 		initFailureReason = InitReasonStateFailed
 		return nil, false, false, variantID, err
 	}
@@ -672,13 +665,12 @@ func handleSetup(
 		PerformDNSLookup:                performDNSLookup,
 		Timeout:                         healthCheckTimeout,
 		HealthCheckConnectivityDuration: poolManager.GetHealthCheckConnectivityDuration(),
-		PrivateConnectivityRequested:    needsPrivateConnectivity,
 	}, metrics, pool, initZone, initVMType, initSource)
 	if healthErr != nil {
 		printError(buildLog, "Machine health check failed")
-		go cleanUpInstanceFn(true, false)
+		go cleanUpInstanceFn(instance, true, false)
 		initFailureReason = InitReasonHealthFailed
-		return nil, false, false, variantID, healthErr
+		return nil, false, false, variantID, fmt.Errorf("failed to call lite-engine retry health: %w", healthErr)
 	}
 
 	printOK(buildLog, "Machine health check passed")
@@ -708,11 +700,11 @@ func handleSetup(
 		printError(buildLog, "Machine setup failed")
 		if needsPrivateConnectivity {
 			claimOwned := stderrors.Is(setupErr, errPrivateConnectivitySetupIndeterminate)
-			go cleanUpInstanceFn(claimOwned, claimOwned)
+			go cleanUpInstanceFn(instance, claimOwned, claimOwned)
 			initFailureReason = InitReasonSetupFailed
 			return nil, false, false, variantID, setupErr
 		}
-		go cleanUpInstanceFn(true, false)
+		go cleanUpInstanceFn(instance, true, false)
 		initFailureReason = InitReasonSetupFailed
 		return nil, false, false, variantID, fmt.Errorf("failed to call setup lite-engine: %w", setupErr)
 	}
@@ -756,16 +748,26 @@ func appendEgressCAVolume(volumes []*lespec.Volume, osName string) []*lespec.Vol
 	return volumes
 }
 
-// setupRequestNeedsPrivateConnectivity reports whether SetupRequest envs carry any PC
-// contract field. DRA uses this only to avoid retrying an outcome-indeterminate setup
-// request containing a final workload identity token; LE owns all PC validation.
+// setupRequestNeedsPrivateConnectivity reports whether SetupRequest envs carry a PC
+// contract. An isolated explicit false is normalized away so old and new Lite Engine
+// binaries both receive the exact legacy non-PC request. Any other reserved field remains
+// fail-closed and uses the one-shot setup path because it may contain a workload token.
 func setupRequestNeedsPrivateConnectivity(envs map[string]string) bool {
+	const enabledEnv = "HARNESS_PC_ENABLED"
+	enabledValue, enabledPresent := envs[enabledEnv]
 	for key := range envs {
-		if strings.HasPrefix(key, "HARNESS_PC_") {
+		if strings.HasPrefix(key, "HARNESS_PC_") && key != enabledEnv {
 			return true
 		}
 	}
-	return false
+	if !enabledPresent {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(enabledValue), "false") {
+		delete(envs, enabledEnv)
+		return false
+	}
+	return true
 }
 
 func ensurePrivateConnectivityPoolCompatible(
@@ -788,37 +790,6 @@ func ensurePrivateConnectivityPoolCompatible(
 		}
 	}()
 	return fmt.Errorf("private connectivity cannot be used with an egress-controlled pool")
-}
-
-func retrySetupHealth(
-	ctx context.Context,
-	client liteEngineHealthClient,
-	request *api.HealthRequest,
-	privateConnectivityRequested bool,
-) error {
-	response, err := client.RetryHealth(ctx, request)
-	if err != nil {
-		return fmt.Errorf("failed to call lite-engine retry health: %w", err)
-	}
-	if !privateConnectivityRequested {
-		return nil
-	}
-	if response == nil {
-		return fmt.Errorf("lite-engine returned an empty private connectivity health response")
-	}
-	if !response.PrivateConnectivity {
-		return fmt.Errorf("lite-engine does not advertise private connectivity support")
-	}
-	if response.PrivateConnectivityVersion != privateConnectivityContractVersion {
-		return fmt.Errorf(
-			"lite-engine private connectivity contract %q is incompatible with required contract %q",
-			response.PrivateConnectivityVersion, privateConnectivityContractVersion,
-		)
-	}
-	if !response.PrivateConnectivityClean {
-		return fmt.Errorf("lite-engine reports private connectivity runtime is unavailable or not clean")
-	}
-	return nil
 }
 
 func runLiteEngineSetup(

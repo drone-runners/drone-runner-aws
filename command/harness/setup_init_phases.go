@@ -54,7 +54,7 @@ func runHealthCheckPhase(
 	pool, zone, vmType, source string,
 ) error {
 	start := time.Now()
-	err := retrySetupHealth(ctx, client, req, req.PrivateConnectivityRequested)
+	_, err := client.RetryHealth(ctx, req)
 	outcome, reason := classifyPhaseOutcome(ctx, err, InitReasonHealthFailed)
 	metrics.RecordVMHealthCheckAttempt(pool, zone, vmType, source, outcome, reason)
 	metrics.RecordVMHealthCheckDuration(pool, zone, vmType, source, outcome, time.Since(start))
