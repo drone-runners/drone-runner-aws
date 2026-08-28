@@ -74,13 +74,14 @@ write_files:
     Description=Rolling tcpdump for lite-engine port 9079
     After=network-online.target
     Wants=network-online.target
+    StartLimitIntervalSec=60
+    StartLimitBurst=5
 
     [Service]
     Type=simple
-    ExecStartPre=/bin/mkdir -p /tmp/le-pcap
-    ExecStart=/usr/bin/tcpdump -i any -s 96 -G 60 -W 30 \
+    ExecStartPre=/usr/bin/install -d -o tcpdump -g tcpdump -m 0750 /tmp/le-pcap
+    ExecStart=/usr/bin/tcpdump -i any -s 96 -G 60 -W 120 \
       -w /tmp/le-pcap/le-%%Y%%m%%d-%%H%%M%%S.pcap \
-      -Z root \
       'port 9079 or icmp'
     Restart=always
     RestartSec=2
@@ -230,11 +231,11 @@ runcmd:
 {{ template "ubuntu_binaries" . }}
   
   {{ if and .IsHosted .EnableLEDiagnostics }}
-  # Install tcpdump and start a rolling 30-min capture of port-9079 traffic.
+  # Install tcpdump and start a rolling two-hour capture of port-9079 traffic.
   # Diagnostic aid for cross-region drops affecting RetryStartStep.
   - |
-    DEBIAN_FRONTEND=noninteractive apt-get install -y tcpdump || true
-    systemctl enable --now le-pcap.service || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -y tcpdump || echo "WARNING: tcpdump installation failed; continuing VM startup"
+    systemctl enable --now le-pcap.service || echo "WARNING: le-pcap service failed to start; continuing VM startup"
     systemctl is-active le-pcap.service && echo "le-pcap: active" || echo "le-pcap: NOT RUNNING"
   {{ end }}
 

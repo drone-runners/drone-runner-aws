@@ -81,6 +81,22 @@ func TestLinuxRendersValidYAML(t *testing.T) {
 				if gotPcap != wantPcap {
 					t.Errorf("le-pcap diagnostics block presence = %t, want %t", gotPcap, wantPcap)
 				}
+				if strings.Contains(s, "-Z root") {
+					t.Error("rendered tcpdump command must not use -Z root")
+				}
+				if wantPcap {
+					for _, directive := range []string{
+						"Restart=always",
+						"StartLimitIntervalSec=60",
+						"StartLimitBurst=5",
+						"-G 60 -W 120",
+						"install -d -o tcpdump -g tcpdump -m 0750 /tmp/le-pcap",
+					} {
+						if !strings.Contains(s, directive) {
+							t.Errorf("rendered tcpdump service missing %q", directive)
+						}
+					}
+				}
 			})
 		}
 	}
