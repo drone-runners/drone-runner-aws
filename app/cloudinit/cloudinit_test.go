@@ -90,6 +90,7 @@ func TestLinuxRendersValidYAML(t *testing.T) {
 						"StartLimitIntervalSec=60",
 						"StartLimitBurst=5",
 						"-G 60 -W 120",
+						"install -d -o tcpdump -g tcpdump -m 0750 /tmp/le-pcap",
 					} {
 						if !strings.Contains(s, directive) {
 							t.Errorf("rendered tcpdump service missing %q", directive)
