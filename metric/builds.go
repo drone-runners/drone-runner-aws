@@ -139,7 +139,7 @@ func BuildCount() *prometheus.CounterVec {
 			Name: "harness_ci_pipeline_execution_total",
 			Help: "Total number of completed pipeline executions (failed + successful)",
 		},
-		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "resource_class", "address", "image_version", "image_name", "variant_id"},
+		[]string{"pool_id", "os", "arch", "driver", "distributed", "zone", "owner_id", "resource_class", "image_version", "image_name", "variant_id"},
 	)
 }
 
