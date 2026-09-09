@@ -188,6 +188,36 @@ func TestBuildCreateCandidates_NetworkConfigsStayInOrder(t *testing.T) {
 	}
 }
 
+func TestBuildRegionalBulkInsertCandidatesIgnoresZonalAttemptCap(t *testing.T) {
+	p := &config{
+		projectID: "proj",
+		networkConfigs: []networkConfig{
+			{
+				network:    "vpc-central",
+				subnetwork: "sub-central",
+				zones:      []string{"us-central1-a", "us-central1-b", "us-central1-c"},
+			},
+			{
+				network:    "vpc-west",
+				subnetwork: "sub-west",
+				zones:      []string{"us-west1-a", "us-west1-b"},
+			},
+		},
+	}
+	first := createCandidate{
+		zone:       "us-west1-a",
+		network:    "projects/proj/global/networks/vpc-west",
+		subnetwork: "projects/proj/regions/us-west1/subnetworks/sub-west",
+	}
+
+	zonal := p.buildCreateCandidates(first, testMachineType)
+	got := p.buildRegionalBulkInsertCandidates(zonal)
+
+	if got[0].zone != "us-west1-a" || got[1].zone != "us-west1-b" {
+		t.Fatalf("bulk candidates=%v, want all zones from selected west network", zonesOf(got))
+	}
+}
+
 func TestBuildCreateCandidates_ExcludesDuplicateFirstZone(t *testing.T) {
 	p := &config{
 		projectID: "proj",
@@ -903,5 +933,40 @@ func TestPoolYAMLTopologies_Deprioritization(t *testing.T) {
 		if got[0] == zoneUSWest1A {
 			t.Fatalf("stocked-out zone should be deprioritized off the front, got %v", got)
 		}
+	}
+}
+
+func TestMapToInstanceUsesActualMachineType(t *testing.T) {
+	p := &config{}
+	vm := &compute.Instance{
+		MachineType: "https://www.googleapis.com/compute/v1/projects/proj/zones/us-central1-a/machineTypes/c4d-standard-8-lssd",
+		NetworkInterfaces: []*compute.NetworkInterface{{
+			AccessConfigs: []*compute.AccessConfig{{NatIP: "203.0.113.1"}},
+		}},
+	}
+
+	instance, err := p.mapToInstance(vm, "us-central1-a", &types.InstanceCreateOpts{}, false, false, "image", "c4d-standard-8", "network")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if instance.Size != "c4d-standard-8-lssd" {
+		t.Fatalf("size=%q, want actual machine type", instance.Size)
+	}
+}
+
+func TestMapToInstanceFallsBackToRequestedMachineType(t *testing.T) {
+	p := &config{}
+	vm := &compute.Instance{
+		NetworkInterfaces: []*compute.NetworkInterface{{
+			AccessConfigs: []*compute.AccessConfig{{NatIP: "203.0.113.1"}},
+		}},
+	}
+
+	instance, err := p.mapToInstance(vm, "us-central1-a", &types.InstanceCreateOpts{}, false, false, "image", "c4d-standard-8", "network")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if instance.Size != "c4d-standard-8" {
+		t.Fatalf("size=%q, want requested machine type", instance.Size)
 	}
 }

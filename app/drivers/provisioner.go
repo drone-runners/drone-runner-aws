@@ -219,6 +219,7 @@ func (m *Manager) setupInstance(
 		createOptions.ResourceClass = setupParams.ResourceClass
 		createOptions.Zones = setupParams.Zones
 		createOptions.MachineType = setupParams.MachineType
+		createOptions.MachineTypeFallbacks = append([]types.MachineTypeFallback(nil), setupParams.MachineTypeFallbacks...)
 		createOptions.NestedVirtualization = setupParams.NestedVirtualization
 		createOptions.GPU = setupParams.GPU
 		createOptions.StageRuntimeID = setupParams.StageRuntimeID
@@ -263,6 +264,9 @@ func (m *Manager) setupInstance(
 	}
 	createOptions.InternalLabels = map[string]string{"retain": retain}
 	source := resolveInstanceSource(setupParams)
+	// A hot-pool instance must be created with its configured primary type.
+	// Machine-type fallbacks are only for on-demand and predictor provisioning.
+	createOptions.DisableMachineTypeFallbacks = source == types.InstanceSourcePool
 	if createOptions.IsHosted {
 		createOptions.VMLabels = buildIdentityVMLabels(setupParams, timeout, m.env, pool.Name, source)
 	}
@@ -515,6 +519,9 @@ func deepCopySetupParams(params *types.SetupInstanceParams) *types.SetupInstance
 	if len(params.Zones) > 0 {
 		result.Zones = make([]string, len(params.Zones))
 		copy(result.Zones, params.Zones)
+	}
+	if len(params.MachineTypeFallbacks) > 0 {
+		result.MachineTypeFallbacks = append([]types.MachineTypeFallback(nil), params.MachineTypeFallbacks...)
 	}
 
 	return &result

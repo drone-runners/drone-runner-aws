@@ -88,6 +88,13 @@ func WithSize(size string) Option {
 	}
 }
 
+// WithMachineTypeFallbacks configures ranked alternatives for regional bulkInsert.
+func WithMachineTypeFallbacks(fallbacks []types.MachineTypeFallback) Option {
+	return func(p *config) {
+		p.machineTypeFallbacks = append([]types.MachineTypeFallback(nil), fallbacks...)
+	}
+}
+
 // WithNetwork returns an option to set the network.
 func WithNetwork(network string) Option {
 	return func(p *config) {

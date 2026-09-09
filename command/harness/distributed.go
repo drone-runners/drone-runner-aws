@@ -249,6 +249,7 @@ func buildScalableVariants(variants []types.PoolVariant) []jobs.ScalableVariant 
 				VariantID:            variant.VariantID,
 				ImageName:            variant.ImageName,
 				MachineType:          variant.MachineType,
+				MachineTypeFallbacks: append([]types.MachineTypeFallback(nil), variant.MachineTypeFallbacks...),
 				NestedVirtualization: variant.NestedVirtualization,
 				Hibernate:            variant.Hibernate,
 				Zones:                variant.Zones,

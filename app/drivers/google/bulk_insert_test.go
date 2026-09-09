@@ -1,0 +1,1354 @@
+package google
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/drone/runner-go/logger"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"google.golang.org/api/compute/v1"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/api/option"
+
+	"github.com/drone-runners/drone-runner-aws/metric"
+	"github.com/drone-runners/drone-runner-aws/types"
+)
+
+func TestValidateBulkInsertParamsRejectsInvalidCombinations(t *testing.T) {
+	valid := BulkInsertParams{
+		Project:     "proj",
+		Region:      "us-central1",
+		Name:        "vm-1",
+		Zones:       []string{"us-central1-a"},
+		MachineType: "e2-medium",
+		SourceImage: "projects/proj/global/images/runner",
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*BulkInsertParams)
+		wantErr string
+	}{
+		{
+			name: "both machine type and selections",
+			mutate: func(p *BulkInsertParams) {
+				p.Selections = []BulkInsertSelection{{Name: "one", Rank: 1, MachineTypes: []string{"n2-standard-2"}}}
+			},
+			wantErr: "exactly one",
+		},
+		{
+			name: "duplicate VM name",
+			mutate: func(p *BulkInsertParams) {
+				p.ExtraNames = []string{"vm-1"}
+			},
+			wantErr: "duplicate",
+		},
+		{
+			name: "min count exceeds count",
+			mutate: func(p *BulkInsertParams) {
+				p.MinCount = 2
+			},
+			wantErr: "exceeds",
+		},
+		{
+			name: "negative min count",
+			mutate: func(p *BulkInsertParams) {
+				p.MinCount = -1
+			},
+			wantErr: "cannot be negative",
+		},
+		{
+			name: "zone outside region",
+			mutate: func(p *BulkInsertParams) {
+				p.Zones = []string{"us-west1-a"}
+			},
+			wantErr: "outside region",
+		},
+		{
+			name: "duplicate allowed zone",
+			mutate: func(p *BulkInsertParams) {
+				p.Zones = []string{"us-central1-a", "us-central1-a"}
+			},
+			wantErr: "duplicate",
+		},
+		{
+			name: "allowed and denied zone",
+			mutate: func(p *BulkInsertParams) {
+				p.DenyZones = []string{"us-central1-a"}
+			},
+			wantErr: "both allowed and denied",
+		},
+		{
+			name: "duplicate selection name",
+			mutate: func(p *BulkInsertParams) {
+				p.MachineType = ""
+				p.Selections = []BulkInsertSelection{
+					{Name: "same", Rank: 1, MachineTypes: []string{"e2-medium"}},
+					{Name: "same", Rank: 2, MachineTypes: []string{"n2-standard-2"}},
+				}
+			},
+			wantErr: "duplicate selection",
+		},
+		{
+			name: "invalid selection rank",
+			mutate: func(p *BulkInsertParams) {
+				p.MachineType = ""
+				p.Selections = []BulkInsertSelection{{Name: "one", Rank: 0, MachineTypes: []string{"e2-medium"}}}
+			},
+			wantErr: "rank",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			params := valid
+			params.Zones = append([]string(nil), valid.Zones...)
+			test.mutate(&params)
+			err := validateBulkInsertParams(params)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("error=%v, want containing %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestZoneFromBulkInsertMetadata(t *testing.T) {
+	op := &compute.Operation{
+		InstancesBulkInsertOperationMetadata: &compute.InstancesBulkInsertOperationMetadata{
+			PerLocationStatus: map[string]compute.BulkInsertOperationStatus{
+				"zones/us-west1-a": {CreatedVmCount: 0, FailedToCreateVmCount: 1},
+				"zones/us-west1-b": {CreatedVmCount: 1, Status: "DONE"},
+			},
+		},
+	}
+	got, err := zoneFromBulkInsertMetadata(op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "us-west1-b" {
+		t.Fatalf("zone = %q, want us-west1-b", got)
+	}
+}
+
+func TestZoneFromBulkInsertMetadata_NoneCreated(t *testing.T) {
+	op := &compute.Operation{
+		InstancesBulkInsertOperationMetadata: &compute.InstancesBulkInsertOperationMetadata{
+			PerLocationStatus: map[string]compute.BulkInsertOperationStatus{
+				"zones/us-west1-a": {CreatedVmCount: 0},
+			},
+		},
+	}
+	if _, err := zoneFromBulkInsertMetadata(op); err == nil {
+		t.Fatal("expected error when no VM was created")
+	}
+}
+
+func TestZoneFromBulkInsertMetadata_RolledBack(t *testing.T) {
+	op := &compute.Operation{
+		InstancesBulkInsertOperationMetadata: &compute.InstancesBulkInsertOperationMetadata{
+			PerLocationStatus: map[string]compute.BulkInsertOperationStatus{
+				"zones/us-west1-a": {
+					CreatedVmCount: 1,
+					DeletedVmCount: 1,
+					Status:         "DONE",
+				},
+			},
+		},
+	}
+	if _, err := zoneFromBulkInsertMetadata(op); err == nil {
+		t.Fatal("expected error when the created VM was rolled back")
+	}
+}
+
+func TestBuildBulkInsertRequest_LocationPolicyAndPrivateIP(t *testing.T) {
+	req := buildBulkInsertRequest(BulkInsertParams{
+		Project:     "ci-play",
+		Region:      "us-west1",
+		Name:        "bulk-test-abc",
+		Zones:       []string{"us-west1-a", "us-west1-b"},
+		MachineType: "e2-medium",
+		SourceImage: "projects/ci-play/global/images/hosted-vm-64",
+		DiskSizeGb:  100,
+		PrivateIP:   true,
+	})
+	if req.Count != 1 || req.MinCount != 1 {
+		t.Fatalf("count=%d minCount=%d", req.Count, req.MinCount)
+	}
+	if _, ok := req.PerInstanceProperties["bulk-test-abc"]; !ok {
+		t.Fatal("missing perInstanceProperties name key")
+	}
+	if req.LocationPolicy.TargetShape != "ANY" {
+		t.Fatalf("targetShape=%s", req.LocationPolicy.TargetShape)
+	}
+	if req.LocationPolicy.Locations["zones/us-west1-a"].Preference != "ALLOW" {
+		t.Fatal("expected ALLOW for us-west1-a")
+	}
+	if len(req.InstanceProperties.NetworkInterfaces[0].AccessConfigs) != 0 {
+		t.Fatal("private IP should omit access configs")
+	}
+	if req.InstanceProperties.MachineType != "e2-medium" {
+		t.Fatalf("machineType=%s", req.InstanceProperties.MachineType)
+	}
+	wantImage := "https://www.googleapis.com/compute/v1/projects/ci-play/global/images/hosted-vm-64"
+	gotImage := req.InstanceProperties.Disks[0].InitializeParams.SourceImage
+	if gotImage != wantImage {
+		t.Fatalf("sourceImage=%s want %s", gotImage, wantImage)
+	}
+}
+
+func TestBuildBulkInsertRequest_Selections(t *testing.T) {
+	req := buildBulkInsertRequest(BulkInsertParams{
+		Project: "ci-play",
+		Region:  "us-west1",
+		Name:    "bulk-test-flex",
+		Zones:   []string{"us-west1-a"},
+		Selections: []BulkInsertSelection{
+			{Name: "preferred", Rank: 1, MachineTypes: []string{"e2-medium"}},
+			{Name: "fallback", Rank: 2, MachineTypes: []string{"n2-standard-2"}},
+		},
+	})
+	if req.InstanceFlexibilityPolicy == nil {
+		t.Fatal("expected instanceFlexibilityPolicy")
+	}
+	if req.InstanceProperties.MachineType != "" {
+		t.Fatalf("machineType should be empty when selections are set, got %s", req.InstanceProperties.MachineType)
+	}
+	if got := req.InstanceFlexibilityPolicy.InstanceSelections["preferred"].Rank; got != 1 {
+		t.Fatalf("rank=%d", got)
+	}
+}
+
+func TestBuildBulkInsertRequest_DenyZones(t *testing.T) {
+	req := buildBulkInsertRequest(BulkInsertParams{
+		Project:   "ci-play",
+		Region:    "us-central1",
+		Name:      "bulk-test-deny",
+		Zones:     []string{"us-central1-a", "us-central1-b", "us-central1-c"},
+		DenyZones: []string{"us-central1-f"},
+	})
+	if req.LocationPolicy.Locations["zones/us-central1-a"].Preference != "ALLOW" {
+		t.Fatal("expected ALLOW for us-central1-a")
+	}
+	if req.LocationPolicy.Locations["zones/us-central1-f"].Preference != "DENY" {
+		t.Fatal("expected DENY for us-central1-f")
+	}
+}
+
+func TestBulkInsertCandidatesUseFirstRegionalNetworkGroup(t *testing.T) {
+	candidates := []createCandidate{
+		{zone: "us-central1-a", network: "vpc", subnetwork: "central", tags: []string{"runner"}, proxyURL: "http://central"},
+		{zone: "us-central1-b", network: "vpc", subnetwork: "central", tags: []string{"runner"}, proxyURL: "http://central"},
+		{zone: "us-west1-a", network: "vpc", subnetwork: "west", tags: []string{"runner"}, proxyURL: "http://west"},
+	}
+
+	got := bulkInsertCandidates(candidates)
+
+	if len(got) != 2 {
+		t.Fatalf("bulk candidates=%v, want two central candidates", got)
+	}
+	if got[0].zone != "us-central1-a" || got[1].zone != "us-central1-b" {
+		t.Fatalf("bulk zones=%v, want [us-central1-a us-central1-b]", zonesOf(got))
+	}
+}
+
+func TestBuildRegionalBulkInsertRequestBuildsConfiguredRanks(t *testing.T) {
+	userdata := "cloud-config"
+	in := &compute.Instance{
+		Name:                    "runner-pool-abc",
+		MinCpuPlatform:          "Automatic",
+		CanIpForward:            false,
+		AdvancedMachineFeatures: &compute.AdvancedMachineFeatures{EnableNestedVirtualization: true},
+		Metadata:                &compute.Metadata{Items: []*compute.MetadataItems{{Key: "user-data", Value: &userdata}}},
+		Labels:                  map[string]string{"pool": "paid"},
+		Tags:                    &compute.Tags{Items: []string{"runner", "runner-pool-abc"}},
+		ServiceAccounts:         []*compute.ServiceAccount{{Email: "default", Scopes: []string{"scope"}}},
+		Scheduling:              &compute.Scheduling{OnHostMaintenance: "MIGRATE"},
+		Disks: []*compute.AttachedDisk{{
+			Boot: true,
+			InitializeParams: &compute.AttachedDiskInitializeParams{
+				SourceImage: "https://www.googleapis.com/compute/v1/projects/images/global/images/runner",
+				DiskSizeGb:  200,
+			},
+		}},
+		NetworkInterfaces: []*compute.NetworkInterface{{
+			Network:    "projects/proj/global/networks/vpc",
+			Subnetwork: "projects/proj/regions/us-central1/subnetworks/central",
+		}},
+	}
+
+	req, err := buildRegionalBulkInsertRequest(
+		in,
+		"c4d-standard-8",
+		"hyperdisk-balanced",
+		[]types.MachineTypeFallback{{MachineType: "c4d-standard-8-lssd", DiskType: "hyperdisk-extreme"}},
+		[]string{"us-central1-a", "us-central1-b"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if req.Count != 1 || req.MinCount != 1 {
+		t.Fatalf("count=%d minCount=%d, want 1/1", req.Count, req.MinCount)
+	}
+	if _, ok := req.PerInstanceProperties[in.Name]; !ok {
+		t.Fatalf("missing exact VM name %q", in.Name)
+	}
+	if req.InstanceProperties.MachineType != "" {
+		t.Fatalf("machine type=%q, want empty with instance flexibility", req.InstanceProperties.MachineType)
+	}
+	if req.InstanceFlexibilityPolicy == nil {
+		t.Fatal("missing machine type selections")
+	}
+	selections := req.InstanceFlexibilityPolicy.InstanceSelections
+	if got := selections["rank-1"]; got.Rank != 1 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-8"}) {
+		t.Fatalf("primary selection=%+v", got)
+	}
+	if got := selections["rank-2"]; got.Rank != 2 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-8-lssd"}) {
+		t.Fatalf("fallback selection=%+v", got)
+	}
+	if req.InstanceProperties.Metadata != in.Metadata ||
+		req.InstanceProperties.AdvancedMachineFeatures != in.AdvancedMachineFeatures ||
+		req.InstanceProperties.ServiceAccounts[0].Email != "default" {
+		t.Fatal("instance properties were not preserved")
+	}
+	if req.InstanceProperties.Disks != nil {
+		t.Fatal("selection disks must override instance properties disks")
+	}
+	if got := selections["rank-1"].Disks[0].InitializeParams.DiskType; got != "hyperdisk-balanced" {
+		t.Fatalf("primary disk type=%q", got)
+	}
+	if got := selections["rank-2"].Disks[0].InitializeParams.DiskType; got != "hyperdisk-extreme" {
+		t.Fatalf("fallback disk type=%q", got)
+	}
+	if got := selections["rank-2"].Disks[0].InitializeParams.SourceImage; got != in.Disks[0].InitializeParams.SourceImage {
+		t.Fatalf("fallback disk source image=%q", got)
+	}
+	if len(req.LocationPolicy.Zones) != 2 {
+		t.Fatalf("locationPolicy zones=%d, want 2", len(req.LocationPolicy.Zones))
+	}
+}
+
+func TestBuildRegionalBulkInsertRequestRejectsIncompleteFallback(t *testing.T) {
+	_, err := buildRegionalBulkInsertRequest(
+		newTestInstance(),
+		"e2-medium",
+		"pd-balanced",
+		[]types.MachineTypeFallback{{MachineType: "n2-standard-2"}},
+		[]string{"us-central1-a"},
+	)
+	if err == nil || !strings.Contains(err.Error(), "requires machine_type and disk_type") {
+		t.Fatalf("error=%v, want required fallback fields error", err)
+	}
+}
+
+func TestBulkInsertOneVMRejectsBatchParameters(t *testing.T) {
+	var calls int32
+	p, cleanup := newBulkTestConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	}))
+	defer cleanup()
+
+	_, err := BulkInsertOneVM(context.Background(), p.service, BulkInsertParams{
+		Project:     "proj",
+		Region:      "us-central1",
+		Name:        "vm-1",
+		ExtraNames:  []string{"vm-2"},
+		Zones:       []string{"us-central1-a", "us-central1-b"},
+		MachineType: "e2-medium",
+	})
+	if err == nil || !strings.Contains(err.Error(), "exactly one VM") {
+		t.Fatalf("error=%v, want exactly-one-VM validation error", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Fatalf("API calls=%d, want 0", got)
+	}
+}
+
+func TestBulkInsertVMsReturnsEveryNamedInstance(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+				"instancesBulkInsertOperationMetadata": map[string]any{
+					"perLocationStatus": map[string]any{
+						"zones/us-central1-a": map[string]any{"createdVmCount": 1, "status": "DONE"},
+						"zones/us-central1-b": map[string]any{"createdVmCount": 1, "status": "DONE"},
+					},
+				},
+			})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances/vm-1"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":        "vm-1",
+				"zone":        "projects/proj/zones/us-central1-a",
+				"machineType": "projects/proj/zones/us-central1-a/machineTypes/e2-medium",
+			})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances/vm-2"):
+			http.NotFound(w, r)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-b/instances/vm-2"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":        "vm-2",
+				"zone":        "projects/proj/zones/us-central1-b",
+				"machineType": "projects/proj/zones/us-central1-b/machineTypes/e2-medium",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	result, err := BulkInsertVMs(context.Background(), p.service, BulkInsertParams{
+		Project:     "proj",
+		Region:      "us-central1",
+		Name:        "vm-1",
+		ExtraNames:  []string{"vm-2"},
+		MinCount:    2,
+		Zones:       []string{"us-central1-a", "us-central1-b"},
+		MachineType: "e2-medium",
+		SourceImage: "projects/proj/global/images/runner",
+	})
+	if err != nil {
+		t.Fatalf("BulkInsertVMs: %v", err)
+	}
+	if len(result.Instances) != 2 {
+		t.Fatalf("instances=%v, want vm-1 and vm-2", result.Instances)
+	}
+	if result.Instances["vm-1"].Zone != "us-central1-a" {
+		t.Fatalf("vm-1 zone=%q", result.Instances["vm-1"].Zone)
+	}
+	if result.Instances["vm-2"].Zone != "us-central1-b" {
+		t.Fatalf("vm-2 zone=%q", result.Instances["vm-2"].Zone)
+	}
+}
+
+func TestBulkInsertVMsCollectsLaterInstancesAfterOneLookupFails(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+				"instancesBulkInsertOperationMetadata": map[string]any{
+					"perLocationStatus": map[string]any{
+						"zones/us-central1-a": map[string]any{"createdVmCount": 1, "status": "DONE"},
+						"zones/us-central1-b": map[string]any{"createdVmCount": 1, "status": "DONE"},
+					},
+				},
+			})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/instances/vm-1"):
+			http.NotFound(w, r)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances/vm-2"):
+			http.NotFound(w, r)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-b/instances/vm-2"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":        "vm-2",
+				"zone":        "projects/proj/zones/us-central1-b",
+				"machineType": "projects/proj/zones/us-central1-b/machineTypes/e2-medium",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	result, err := BulkInsertVMs(context.Background(), p.service, BulkInsertParams{
+		Project:     "proj",
+		Region:      "us-central1",
+		Name:        "vm-1",
+		ExtraNames:  []string{"vm-2"},
+		MinCount:    1,
+		Zones:       []string{"us-central1-a", "us-central1-b"},
+		MachineType: "e2-medium",
+		SourceImage: "projects/proj/global/images/runner",
+	})
+	if err != nil {
+		t.Fatalf("expected minCount partial success, got %v", err)
+	}
+	if result == nil || result.Instances["vm-2"] == nil {
+		t.Fatalf("result=%v, want vm-2 retained despite vm-1 lookup failure", result)
+	}
+	if result.Failures["vm-1"] == nil {
+		t.Fatalf("failures=%v, want vm-1 lookup failure", result.Failures)
+	}
+}
+
+func TestBulkInsertOneVMResolvesAmbiguousSubmissionWithSameRequestID(t *testing.T) {
+	var bulkCalls int32
+	var requestIDs []string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			requestIDs = append(requestIDs, r.URL.Query().Get("requestId"))
+			if atomic.AddInt32(&bulkCalls, 1) == 1 {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"error": map[string]any{
+						"code":    http.StatusServiceUnavailable,
+						"message": "ambiguous submission",
+						"errors":  []map[string]any{{"reason": "backendError"}},
+					},
+				})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+				"instancesBulkInsertOperationMetadata": map[string]any{
+					"perLocationStatus": map[string]any{
+						"zones/us-central1-a": map[string]any{"createdVmCount": 1, "status": "DONE"},
+					},
+				},
+			})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances/vm-1"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":        "vm-1",
+				"zone":        "projects/proj/zones/us-central1-a",
+				"machineType": "projects/proj/zones/us-central1-a/machineTypes/e2-medium",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	result, err := BulkInsertOneVM(context.Background(), p.service, BulkInsertParams{
+		Project:     "proj",
+		Region:      "us-central1",
+		Name:        "vm-1",
+		Zones:       []string{"us-central1-a"},
+		MachineType: "e2-medium",
+		SourceImage: "projects/proj/global/images/runner",
+	})
+	if err != nil {
+		t.Fatalf("BulkInsertOneVM: %v", err)
+	}
+	if result.Zone != "us-central1-a" {
+		t.Fatalf("zone=%q, want us-central1-a", result.Zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 2 {
+		t.Fatalf("bulk calls=%d, want 2", got)
+	}
+	if len(requestIDs) != 2 || requestIDs[0] == "" || requestIDs[0] != requestIDs[1] {
+		t.Fatalf("request IDs=%v, want the same non-empty ID", requestIDs)
+	}
+}
+
+func TestBulkInsertOneVMErrorCarriesDiagnosticsWithoutSuccessResult(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+				"error": map[string]any{
+					"errors": []map[string]any{{"code": "QUOTA_EXCEEDED", "message": "quota exhausted"}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	result, err := BulkInsertOneVM(context.Background(), p.service, BulkInsertParams{
+		Project:     "proj",
+		Region:      "us-central1",
+		Name:        "vm-1",
+		Zones:       []string{"us-central1-a"},
+		MachineType: "e2-medium",
+		SourceImage: "projects/proj/global/images/runner",
+	})
+	if result != nil {
+		t.Fatalf("result=%v, want nil when VM creation failed", result)
+	}
+	var bulkError *BulkInsertError
+	if !errors.As(err, &bulkError) {
+		t.Fatalf("error=%v, want BulkInsertError", err)
+	}
+	if bulkError.RequestID == "" || bulkError.InsertResponse == nil || bulkError.FinalOperation == nil {
+		t.Fatalf("bulk error diagnostics incomplete: %+v", bulkError)
+	}
+}
+
+func TestInsertWithBulkFallbackUsesExistingInsertAfterDefinitiveRejection(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]any{
+					"code":    http.StatusBadRequest,
+					"message": "bulkInsert request is not supported for this instance configuration",
+					"errors":  []map[string]any{{"reason": "invalid"}},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances"):
+			atomic.AddInt32(&insertCalls, 1)
+			var instance compute.Instance
+			if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
+				t.Errorf("decode zonal insert: %v", err)
+			}
+			if instance.Name != "test-vm" {
+				t.Errorf("fallback name=%q, want test-vm", instance.Name)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "id": "2"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/operations/zonal-op"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "status": "DONE", "id": "2"})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	in := newTestInstance()
+	in.Metadata = &compute.Metadata{}
+	in.NetworkInterfaces = []*compute.NetworkInterface{{}}
+	candidates := twoZoneCandidates()
+
+	_, succeeded, err := insertWithBulkFallbackForTest(p, in, candidates, true, false)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if succeeded.zone != "us-central1-a" {
+		t.Fatalf("succeeded zone=%q, want us-central1-a", succeeded.zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 1 {
+		t.Fatalf("bulk calls=%d, want 1", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 1 {
+		t.Fatalf("zonal insert calls=%d, want 1", got)
+	}
+}
+
+func TestInsertWithBulkFallbackDoesNotRetryZonallyAfterAmbiguousRejection(t *testing.T) {
+	var bulkCalls, insertCalls, reconcileCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"error": map[string]any{
+					"code":    http.StatusServiceUnavailable,
+					"message": "backend unavailable after request submission",
+					"errors":  []map[string]any{{"reason": "backendError"}},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/"):
+			atomic.AddInt32(&insertCalls, 1)
+			http.Error(w, "unexpected zonal insert", http.StatusInternalServerError)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-b/instances/test-vm"):
+			if atomic.AddInt32(&reconcileCalls, 1) == 1 {
+				http.NotFound(w, r)
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"name": "test-vm"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/instances/test-vm"):
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.bulkInsertReconcileTimeout = 25 * time.Millisecond
+	p.bulkInsertReconcilePollInterval = 5 * time.Millisecond
+
+	_, failedCandidate, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err == nil {
+		t.Fatal("expected ambiguous bulkInsert error")
+	}
+	if failedCandidate.zone != "us-central1-b" {
+		t.Fatalf("failed candidate zone=%q, want reconciled us-central1-b", failedCandidate.zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got < 2 {
+		t.Fatalf("bulk calls=%d, want at least 2 idempotent attempts", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 0 {
+		t.Fatalf("zonal insert calls=%d, want 0", got)
+	}
+	if got := atomic.LoadInt32(&reconcileCalls); got < 2 {
+		t.Fatalf("reconcile calls=%d, want at least 2 to catch delayed visibility", got)
+	}
+}
+
+func TestInsertWithBulkFallbackDoesNotRetryZonallyWhenAmbiguityCannotBeReconciled(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"error": map[string]any{"code": http.StatusServiceUnavailable, "message": "ambiguous submission"},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/"):
+			atomic.AddInt32(&insertCalls, 1)
+			http.Error(w, "unexpected zonal insert", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.bulkInsertReconcileTimeout = 25 * time.Millisecond
+	p.bulkInsertReconcilePollInterval = time.Millisecond
+
+	_, candidate, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err == nil {
+		t.Fatal("expected ambiguous bulkInsert error")
+	}
+	if candidate.zone != "" || candidate.network != "" || candidate.subnetwork != "" {
+		t.Fatalf("candidate=%+v, want no reconciled candidate", candidate)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got < 2 {
+		t.Fatalf("bulk calls=%d, want idempotent retry", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 0 {
+		t.Fatalf("zonal insert calls=%d, want 0", got)
+	}
+}
+
+func TestInsertWithBulkFallbackReturnsRegionalSuccess(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			var request compute.BulkInsertInstanceResource
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode bulkInsert request: %v", err)
+			}
+			selections := request.InstanceFlexibilityPolicy.InstanceSelections
+			if got := selections["rank-1"]; got.Rank != 1 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-8"}) {
+				t.Errorf("primary selection=%+v", got)
+			}
+			if got := selections["rank-1"].Disks[0].InitializeParams.DiskType; got != "hyperdisk-balanced" {
+				t.Errorf("primary disk type=%q, want hyperdisk-balanced", got)
+			}
+			if got := selections["rank-2"]; got.Rank != 2 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-8-lssd"}) {
+				t.Errorf("fallback selection=%+v", got)
+			}
+			if got := selections["rank-2"].Disks[0].InitializeParams.DiskType; got != "hyperdisk-balanced" {
+				t.Errorf("fallback disk type=%q, want hyperdisk-balanced", got)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+				"instancesBulkInsertOperationMetadata": map[string]any{
+					"perLocationStatus": map[string]any{
+						"zones/us-central1-b": map[string]any{"createdVmCount": 1, "status": "DONE"},
+					},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/"):
+			atomic.AddInt32(&insertCalls, 1)
+			http.Error(w, "unexpected zonal insert", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	in := newTestInstance()
+	in.Disks[0].Boot = true
+
+	operation, succeeded, err := insertWithBulkFallbackForTest(
+		p, in, twoZoneCandidates(), true, false,
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if operation == nil || operation.Name != "regional-op" {
+		t.Fatalf("operation=%v, want regional-op", operation)
+	}
+	if succeeded.zone != "us-central1-b" {
+		t.Fatalf("succeeded zone=%q, want us-central1-b", succeeded.zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 1 {
+		t.Fatalf("bulk calls=%d, want 1", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 0 {
+		t.Fatalf("zonal insert calls=%d, want 0", got)
+	}
+}
+
+func TestInsertWithBulkFallbackTreatsMissingPlacementMetadataAsAmbiguous(t *testing.T) {
+	var insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+			})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-b/instances/test-vm"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "test-vm"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/instances/test-vm"):
+			http.NotFound(w, r)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/"):
+			atomic.AddInt32(&insertCalls, 1)
+			http.Error(w, "unexpected zonal insert", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.bulkInsertReconcileTimeout = 25 * time.Millisecond
+	p.bulkInsertReconcilePollInterval = 5 * time.Millisecond
+
+	_, failedCandidate, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err == nil {
+		t.Fatal("expected ambiguous metadata error")
+	}
+	if failedCandidate.zone != "us-central1-b" {
+		t.Fatalf("failed candidate zone=%q, want reconciled us-central1-b", failedCandidate.zone)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 0 {
+		t.Fatalf("zonal insert calls=%d, want 0", got)
+	}
+}
+
+func TestInsertWithBulkFallbackResubmitsAmbiguousRequestWithSameRequestID(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	var requestIDs []string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			call := atomic.AddInt32(&bulkCalls, 1)
+			requestIDs = append(requestIDs, r.URL.Query().Get("requestId"))
+			if call == 1 {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"error": map[string]any{
+						"code":    http.StatusServiceUnavailable,
+						"message": "backend unavailable after request submission",
+						"errors":  []map[string]any{{"reason": "backendError"}},
+					},
+				})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+				"instancesBulkInsertOperationMetadata": map[string]any{
+					"perLocationStatus": map[string]any{
+						"zones/us-central1-b": map[string]any{"createdVmCount": 1, "status": "DONE"},
+					},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/"):
+			atomic.AddInt32(&insertCalls, 1)
+			http.Error(w, "unexpected zonal insert", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.bulkInsertReconcileTimeout = 100 * time.Millisecond
+	p.bulkInsertReconcilePollInterval = time.Millisecond
+
+	operation, succeeded, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if operation == nil || operation.Name != "regional-op" {
+		t.Fatalf("operation=%v, want regional-op", operation)
+	}
+	if succeeded.zone != "us-central1-b" {
+		t.Fatalf("succeeded zone=%q, want us-central1-b", succeeded.zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 2 {
+		t.Fatalf("bulk calls=%d, want 2", got)
+	}
+	if len(requestIDs) != 2 || requestIDs[0] == "" || requestIDs[0] != requestIDs[1] {
+		t.Fatalf("request IDs=%v, want the same non-empty ID", requestIDs)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 0 {
+		t.Fatalf("zonal insert calls=%d, want 0", got)
+	}
+}
+
+func TestInsertWithBulkFallbackDoesNotTreatPollingRejectionAsSubmissionRejection(t *testing.T) {
+	var bulkCalls, pollCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			if atomic.AddInt32(&pollCalls, 1) == 1 {
+				writeJSON(w, http.StatusForbidden, map[string]any{
+					"error": map[string]any{
+						"code":    http.StatusForbidden,
+						"message": "temporary polling permission failure",
+						"errors":  []map[string]any{{"reason": "forbidden"}},
+					},
+				})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name":   "regional-op",
+				"status": "DONE",
+				"id":     "1",
+				"instancesBulkInsertOperationMetadata": map[string]any{
+					"perLocationStatus": map[string]any{
+						"zones/us-central1-b": map[string]any{"createdVmCount": 1, "status": "DONE"},
+					},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/"):
+			atomic.AddInt32(&insertCalls, 1)
+			http.Error(w, "unexpected zonal insert", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.bulkInsertReconcileTimeout = 100 * time.Millisecond
+	p.bulkInsertReconcilePollInterval = time.Millisecond
+
+	operation, succeeded, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if operation == nil || operation.Name != "regional-op" {
+		t.Fatalf("operation=%v, want regional-op", operation)
+	}
+	if succeeded.zone != "us-central1-b" {
+		t.Fatalf("succeeded zone=%q, want us-central1-b", succeeded.zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 2 {
+		t.Fatalf("bulk calls=%d, want 2", got)
+	}
+	if got := atomic.LoadInt32(&pollCalls); got != 2 {
+		t.Fatalf("poll calls=%d, want 2", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 0 {
+		t.Fatalf("zonal insert calls=%d, want 0", got)
+	}
+}
+
+func TestInsertWithBulkFallbackDoesNotTreatResolutionRejectionAsInitialRejection(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			if atomic.AddInt32(&bulkCalls, 1) == 1 {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"error": map[string]any{
+						"code":    http.StatusServiceUnavailable,
+						"message": "ambiguous submission",
+						"errors":  []map[string]any{{"reason": "backendError"}},
+					},
+				})
+				return
+			}
+			writeJSON(w, http.StatusForbidden, map[string]any{
+				"error": map[string]any{
+					"code":    http.StatusForbidden,
+					"message": "resolution request rejected",
+					"errors":  []map[string]any{{"reason": "forbidden"}},
+				},
+			})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-b/instances/test-vm"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "test-vm"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/instances/test-vm"):
+			http.NotFound(w, r)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/"):
+			atomic.AddInt32(&insertCalls, 1)
+			http.Error(w, "unexpected zonal insert", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.bulkInsertReconcileTimeout = 25 * time.Millisecond
+	p.bulkInsertReconcilePollInterval = 5 * time.Millisecond
+
+	_, failedCandidate, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err == nil {
+		t.Fatal("expected ambiguous bulkInsert error")
+	}
+	if failedCandidate.zone != "us-central1-b" {
+		t.Fatalf("failed candidate zone=%q, want reconciled us-central1-b", failedCandidate.zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got < 2 {
+		t.Fatalf("bulk calls=%d, want at least 2", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 0 {
+		t.Fatalf("zonal insert calls=%d, want 0", got)
+	}
+}
+
+func TestInsertWithBulkFallbackUsesZonalCreateAfterRegionalRollback(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name": "regional-op", "status": "DONE", "id": "1",
+				"instancesBulkInsertOperationMetadata": map[string]any{
+					"perLocationStatus": map[string]any{
+						"zones/us-central1-a": map[string]any{
+							"createdVmCount": 1, "deletedVmCount": 1, "status": "DONE",
+						},
+					},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances"):
+			atomic.AddInt32(&insertCalls, 1)
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "id": "2"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/operations/zonal-op"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "status": "DONE", "id": "2"})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	_, succeeded, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if succeeded.zone != "us-central1-a" {
+		t.Fatalf("succeeded zone=%q, want us-central1-a", succeeded.zone)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 1 {
+		t.Fatalf("bulk calls=%d, want 1", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 1 {
+		t.Fatalf("zonal insert calls=%d, want 1", got)
+	}
+}
+
+func TestInsertWithBulkFallbackBypassesBulkForReservation(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			http.Error(w, "unexpected bulk insert", http.StatusInternalServerError)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances"):
+			atomic.AddInt32(&insertCalls, 1)
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "id": "2"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/operations/zonal-op"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "status": "DONE", "id": "2"})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	_, _, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), false, true,
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 0 {
+		t.Fatalf("bulk calls=%d, want 0", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 1 {
+		t.Fatalf("zonal insert calls=%d, want 1", got)
+	}
+}
+
+func TestInsertWithBulkFallbackUsesZonalCreateWithoutConfiguredFallbacks(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]any{"code": http.StatusBadRequest, "message": "unexpected bulkInsert"},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances"):
+			atomic.AddInt32(&insertCalls, 1)
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "id": "2"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/operations/zonal-op"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "status": "DONE", "id": "2"})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.machineTypeFallbacks = nil
+
+	_, _, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 0 {
+		t.Fatalf("bulk calls=%d, want 0", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 1 {
+		t.Fatalf("zonal insert calls=%d, want 1", got)
+	}
+}
+
+func TestInsertWithBulkFallbackBypassesBulkForHotPool(t *testing.T) {
+	var bulkCalls, insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/bulkInsert"):
+			atomic.AddInt32(&bulkCalls, 1)
+			http.Error(w, "unexpected bulk insert", http.StatusInternalServerError)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances"):
+			atomic.AddInt32(&insertCalls, 1)
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "id": "2"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/operations/zonal-op"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "status": "DONE", "id": "2"})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	_, _, err := p.insertWithBulkFallback(
+		context.Background(), newTestInstance(), twoZoneCandidates(),
+		&types.InstanceCreateOpts{DisableMachineTypeFallbacks: true},
+		"c4d-standard-8", "hyperdisk-balanced", true, false, logger.Discard(),
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if got := atomic.LoadInt32(&bulkCalls); got != 0 {
+		t.Fatalf("bulk calls=%d, want 0", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 1 {
+		t.Fatalf("zonal insert calls=%d, want 1", got)
+	}
+}
+
+func TestWaitRegionOperationCancelsDuringPollDelay(t *testing.T) {
+	p, cleanup := newBulkTestConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "status": "PENDING"})
+	}))
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(10*time.Millisecond, cancel)
+	start := time.Now()
+	_, err := waitRegionOperation(ctx, p.service, "proj", "us-central1", "regional-op")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error=%v, want context canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("cancellation took %s, want under 250ms", elapsed)
+	}
+}
+
+func TestWaitRegionOperationRecordsRetryMetric(t *testing.T) {
+	var calls int32
+	p, cleanup := newBulkTestConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"error": map[string]any{
+					"code":    http.StatusServiceUnavailable,
+					"message": "backend hiccup",
+					"errors":  []map[string]any{{"reason": "backendError"}},
+				},
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "status": "DONE"})
+	}))
+	defer cleanup()
+	p.metrics = newTestMetrics()
+
+	_, err := waitRegionOperationWithMetrics(
+		context.Background(), p.service, p.metrics, "proj", "us-central1", "regional-op",
+	)
+	if err != nil {
+		t.Fatalf("waitRegionOperationWithMetrics: %v", err)
+	}
+	retries := testutil.ToFloat64(p.metrics.GCPOperationRetriesCount.WithLabelValues(
+		metric.GCPResourceRegion,
+		metric.GCPOperationGet,
+		metric.GCPReasonBackendError,
+		"us-central1",
+	))
+	if retries != 1 {
+		t.Fatalf("retry metric=%v, want 1", retries)
+	}
+}
+
+func TestIsDefinitiveBulkInsertRejection(t *testing.T) {
+	tests := []struct {
+		status int
+		want   bool
+	}{
+		{status: http.StatusBadRequest, want: true},
+		{status: http.StatusForbidden, want: true},
+		{status: http.StatusConflict, want: false},
+		{status: http.StatusTooManyRequests, want: false},
+		{status: 499, want: false},
+		{status: http.StatusServiceUnavailable, want: false},
+	}
+
+	for _, test := range tests {
+		err := &bulkInsertSubmissionError{err: &googleapi.Error{Code: test.status}}
+		if got := isDefinitiveBulkInsertRejection(err); got != test.want {
+			t.Errorf("status %d: got %v, want %v", test.status, got, test.want)
+		}
+	}
+
+	if isDefinitiveBulkInsertRejection(&googleapi.Error{Code: http.StatusForbidden}) {
+		t.Fatal("polling error must not be classified as a submission rejection")
+	}
+}
+
+func TestStandaloneBulkInsertReturnsDefinitiveErrorAfterAmbiguousSubmission(t *testing.T) {
+	var calls int32
+	p, cleanup := newBulkTestConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, "/bulkInsert") {
+			http.NotFound(w, r)
+			return
+		}
+		if atomic.AddInt32(&calls, 1) == 1 {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"error": map[string]any{"code": http.StatusServiceUnavailable, "message": "ambiguous"},
+			})
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": map[string]any{"code": http.StatusBadRequest, "message": "invalid request"},
+		})
+	}))
+	defer cleanup()
+
+	_, _, err := submitAndWaitStandaloneBulkInsert(
+		context.Background(), p.service, "proj", "us-central1", "request-id",
+		&compute.BulkInsertInstanceResource{},
+	)
+	if err == nil || !strings.Contains(err.Error(), "invalid request") {
+		t.Fatalf("error=%v, want definitive rejection", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("bulk calls=%d, want 2", got)
+	}
+}
+
+func TestGetCreatedInstanceUsesBoundedContextAfterCallerCancellation(t *testing.T) {
+	var calls int32
+	p, cleanup := newBulkTestConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || !strings.Contains(r.URL.Path, "/instances/test-vm") {
+			http.NotFound(w, r)
+			return
+		}
+		atomic.AddInt32(&calls, 1)
+		writeJSON(w, http.StatusOK, map[string]any{"name": "test-vm"})
+	}))
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	vm, err := p.getCreatedInstance(ctx, "proj", "us-central1-a", "test-vm")
+	if err != nil {
+		t.Fatalf("getCreatedInstance: %v", err)
+	}
+	if vm.Name != "test-vm" {
+		t.Fatalf("name=%q, want test-vm", vm.Name)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("get calls=%d, want 1 recovery request", got)
+	}
+}
+
+func insertWithBulkFallbackForTest(
+	p *config,
+	in *compute.Instance,
+	candidates []createCandidate,
+	stockoutRetryEnabled, usesReservation bool,
+) (*compute.Operation, createCandidate, error) {
+	return p.insertWithBulkFallback(
+		context.Background(),
+		in,
+		candidates,
+		&types.InstanceCreateOpts{},
+		"c4d-standard-8",
+		"hyperdisk-balanced",
+		stockoutRetryEnabled,
+		usesReservation,
+		logger.Discard(),
+	)
+}
+
+func newBulkTestConfig(t *testing.T, handler http.Handler) (*config, func()) {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	service, err := compute.NewService(context.Background(), option.WithHTTPClient(server.Client()))
+	if err != nil {
+		server.Close()
+		t.Fatalf("compute service: %v", err)
+	}
+	service.BasePath = server.URL + "/"
+	return &config{
+		projectID:   "proj",
+		service:     service,
+		userDataKey: "user-data",
+		machineTypeFallbacks: []types.MachineTypeFallback{
+			{MachineType: "c4d-standard-8-lssd", DiskType: "hyperdisk-balanced"},
+		},
+	}, server.Close
+}
