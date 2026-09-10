@@ -886,7 +886,7 @@ func insertWithBulkFallbackForTest(
 	)
 }
 
-func newBulkTestConfig(t *testing.T, handler http.Handler) (*config, func()) {
+func newBulkTestConfig(t *testing.T, handler http.Handler) (testConfig *config, cleanup func()) {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	service, err := compute.NewService(context.Background(), option.WithHTTPClient(server.Client()))

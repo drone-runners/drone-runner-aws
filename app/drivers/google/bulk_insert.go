@@ -25,6 +25,8 @@ import (
 const (
 	defaultBulkInsertReconcileTimeout      = 30 * time.Second
 	defaultBulkInsertReconcilePollInterval = 2 * time.Second
+	bulkInsertFallbackRankOffset           = 2
+	bulkInsertOperationDone                = "DONE"
 )
 
 type definitiveBulkInsertError struct {
@@ -62,7 +64,7 @@ func bulkInsertCandidates(candidates []createCandidate) []createCandidate {
 	matching := make([]createCandidate, 0, len(candidates))
 	first := candidates[0]
 	for _, candidate := range candidates {
-		if sameBulkInsertCandidateGroup(first, candidate) {
+		if sameBulkInsertCandidateGroup(&first, &candidate) {
 			matching = append(matching, candidate)
 		}
 	}
@@ -81,7 +83,7 @@ func (p *config) buildRegionalBulkInsertCandidates(candidates []createCandidate)
 	}
 
 	add := func(candidate createCandidate) {
-		if _, exists := seen[candidate.zone]; exists || !sameBulkInsertCandidateGroup(first, candidate) {
+		if _, exists := seen[candidate.zone]; exists || !sameBulkInsertCandidateGroup(&first, &candidate) {
 			return
 		}
 		seen[candidate.zone] = struct{}{}
@@ -115,7 +117,7 @@ func (p *config) buildRegionalBulkInsertCandidates(candidates []createCandidate)
 	return regional
 }
 
-func sameBulkInsertCandidateGroup(first, candidate createCandidate) bool {
+func sameBulkInsertCandidateGroup(first, candidate *createCandidate) bool {
 	return regionFromZone(candidate.zone) == regionFromZone(first.zone) &&
 		candidate.network == first.network &&
 		candidate.subnetwork == first.subnetwork &&
@@ -155,8 +157,9 @@ func buildRegionalBulkInsertRequest(
 		Disks:        cloneBulkInsertBootDisks(in.Disks, bootDiskType),
 	}
 	for index, fallback := range fallbacks {
-		selections[fmt.Sprintf("rank-%d", index+2)] = compute.InstanceFlexibilityPolicyInstanceSelection{
-			Rank:         int64(index + 2),
+		rank := index + bulkInsertFallbackRankOffset
+		selections[fmt.Sprintf("rank-%d", rank)] = compute.InstanceFlexibilityPolicyInstanceSelection{
+			Rank:         int64(rank),
 			MachineTypes: []string{fallback.MachineType},
 			Disks:        cloneBulkInsertBootDisks(in.Disks, fallback.DiskType),
 		}
@@ -319,25 +322,25 @@ func (p *config) insertRegionalBulkInstance(
 		machineType,
 		classifyOpts{},
 		func() error {
-			var err error
-			finalOperation, err = p.submitAndWaitRegionalBulkInsert(
+			var operationErr error
+			finalOperation, operationErr = p.submitAndWaitRegionalBulkInsert(
 				ctx, region, requestID, request,
 			)
-			if err != nil {
-				if isDefinitiveBulkInsertRejection(err) {
+			if operationErr != nil {
+				if isDefinitiveBulkInsertRejection(operationErr) {
 					return &definitiveBulkInsertError{
-						err: fmt.Errorf("google: bulkInsert request rejected: %w", err),
+						err: fmt.Errorf("google: bulkInsert request rejected: %w", operationErr),
 					}
 				}
-				finalOperation, err = p.resolveAmbiguousBulkInsert(
+				finalOperation, operationErr = p.resolveAmbiguousBulkInsert(
 					region, requestID, request,
 				)
-				if err != nil {
-					return fmt.Errorf("google: bulkInsert operation outcome is unknown: %w", err)
+				if operationErr != nil {
+					return fmt.Errorf("google: bulkInsert operation outcome is unknown: %w", operationErr)
 				}
 			}
-			zone, err = completedBulkInsertZone(finalOperation)
-			return err
+			zone, operationErr = completedBulkInsertZone(finalOperation)
+			return operationErr
 		},
 	)
 	return finalOperation, zone, err
@@ -450,7 +453,7 @@ func (p *config) reconcileAmbiguousBulkInsert(
 	timeout, pollInterval := p.bulkInsertReconcileSettings()
 
 	// The caller context is commonly the source of the ambiguous outcome. Use a
-	// bounded independent context so a cancelled request cannot skip cleanup
+	// bounded independent context so a canceled request cannot skip cleanup
 	// reconciliation for a VM that GCP may still be creating.
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -514,12 +517,12 @@ func (p *config) getCreatedInstance(
 	return vm, nil
 }
 
-func (p *config) bulkInsertReconcileSettings() (time.Duration, time.Duration) {
-	timeout := p.bulkInsertReconcileTimeout
+func (p *config) bulkInsertReconcileSettings() (timeout, pollInterval time.Duration) {
+	timeout = p.bulkInsertReconcileTimeout
 	if timeout <= 0 {
 		timeout = defaultBulkInsertReconcileTimeout
 	}
-	pollInterval := p.bulkInsertReconcilePollInterval
+	pollInterval = p.bulkInsertReconcilePollInterval
 	if pollInterval <= 0 {
 		pollInterval = defaultBulkInsertReconcilePollInterval
 	}
@@ -568,7 +571,7 @@ func waitRegionOperationWithMetrics(
 			}
 			return nil, err
 		}
-		if op.Status == "DONE" {
+		if op.Status == bulkInsertOperationDone {
 			return op, nil
 		}
 		if err := waitForBulkInsertRetry(ctx, retryBackoffSec*time.Second); err != nil {
