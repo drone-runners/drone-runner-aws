@@ -1718,14 +1718,18 @@ func TestScaler_MultiTenantVariantsScaleUpIndependently(t *testing.T) {
 	}
 }
 
-// TestScaler_MultiTenantVariantMachineTypeOnJobs verifies setup jobs for a tenant variant
-// carry that tenant's MachineType (not another tenant's).
-func TestScaler_MultiTenantVariantMachineTypeOnJobs(t *testing.T) {
+// TestScaler_MultiTenantVariantSetupParamsOnJobs verifies setup jobs retain each
+// tenant variant's provisioning parameters.
+func TestScaler_MultiTenantVariantSetupParamsOnJobs(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
 	mockPredictor := NewMockPredictor()
 	historyStore := NewMockUtilizationHistoryStore()
 	const image = "ubuntu-2204"
+	expectedFallback := types.MachineTypeFallback{
+		MachineType: "c4d-standard-8",
+		DiskType:    "hyperdisk-balanced",
+	}
 
 	mockPredictor.SetPredictionForTenant("pool-1", "default", "large", image, 0)
 	mockPredictor.SetPredictionForTenant("pool-1", "acctA", "large", image, 0)
@@ -1741,7 +1745,10 @@ func TestScaler_MultiTenantVariantMachineTypeOnJobs(t *testing.T) {
 		Tenants: []ScalableTenant{
 			{ID: "default", MinSize: 0, Variants: []ScalableVariant{{
 				MinSize: 1,
-				Params:  types.SetupInstanceParams{VariantID: "large", MachineType: "c4d-standard-8-lssd"},
+				Params: types.SetupInstanceParams{
+					VariantID: "large", MachineType: "c4d-standard-8-lssd",
+					MachineTypeFallbacks: []types.MachineTypeFallback{expectedFallback},
+				},
 			}}},
 			{ID: "acctA", MinSize: 0, Variants: []ScalableVariant{{
 				MinSize: 1,
@@ -1759,19 +1766,25 @@ func TestScaler_MultiTenantVariantMachineTypeOnJobs(t *testing.T) {
 		t.Fatalf("ScalePool: %v", err)
 	}
 
-	got := map[string]string{}
+	got := map[string]types.SetupInstanceParams{}
 	for _, job := range outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance) {
 		var p types.SetupInstanceParams
 		if err := json.Unmarshal(*job.JobParams, &p); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		got[p.TenantID] = p.MachineType
+		if p.Source != types.InstanceSourcePredictor {
+			t.Errorf("%s source: got %q, want %q", p.TenantID, p.Source, types.InstanceSourcePredictor)
+		}
+		got[p.TenantID] = p
 	}
-	if got["default"] != "c4d-standard-8-lssd" {
-		t.Errorf("default machine_type: got %q", got["default"])
+	if got["default"].MachineType != "c4d-standard-8-lssd" {
+		t.Errorf("default machine_type: got %q", got["default"].MachineType)
 	}
-	if got["acctA"] != "c4d-standard-8" {
-		t.Errorf("acctA machine_type: got %q", got["acctA"])
+	if got["acctA"].MachineType != "c4d-standard-8" {
+		t.Errorf("acctA machine_type: got %q", got["acctA"].MachineType)
+	}
+	if fallbacks := got["default"].MachineTypeFallbacks; len(fallbacks) != 1 || fallbacks[0] != expectedFallback {
+		t.Errorf("default machine_type_fallbacks: got %+v, want [%+v]", fallbacks, expectedFallback)
 	}
 }
 

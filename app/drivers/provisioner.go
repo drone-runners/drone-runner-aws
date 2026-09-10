@@ -264,9 +264,7 @@ func (m *Manager) setupInstance(
 	}
 	createOptions.InternalLabels = map[string]string{"retain": retain}
 	source := resolveInstanceSource(setupParams)
-	// A hot-pool instance must be created with its configured primary type.
-	// Machine-type fallbacks are only for on-demand and predictor provisioning.
-	createOptions.DisableMachineTypeFallbacks = source == types.InstanceSourcePool
+	createOptions.DisableMachineTypeFallbacks = disableMachineTypeFallbacks(source)
 	if createOptions.IsHosted {
 		createOptions.VMLabels = buildIdentityVMLabels(setupParams, timeout, m.env, pool.Name, source)
 	}
@@ -543,6 +541,10 @@ func resolveInstanceSource(params *types.SetupInstanceParams) types.InstanceSour
 		return params.Source
 	}
 	return types.InstanceSourcePool
+}
+
+func disableMachineTypeFallbacks(source types.InstanceSource) bool {
+	return source == types.InstanceSourcePool || source == types.InstanceSourcePredictor
 }
 
 // classifyVMCreationError maps a driver.Create() error into the bounded outcome/reason set for
