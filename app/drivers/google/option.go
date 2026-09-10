@@ -13,6 +13,12 @@ import (
 
 type Option func(*config)
 
+const (
+	defaultGoogleResourceName = "default"
+	defaultUserDataKey        = "user-data"
+	defaultZone               = "us-central1-a"
+)
+
 func SetPlatformDefaults(platform *types.Platform) (*types.Platform, error) {
 	if platform.Arch == "" {
 		platform.Arch = oshelp.ArchAMD64
@@ -99,7 +105,7 @@ func WithMachineTypeFallbacks(fallbacks []types.MachineTypeFallback) Option {
 func WithNetwork(network string) Option {
 	return func(p *config) {
 		if network == "" {
-			p.network = "default"
+			p.network = defaultGoogleResourceName
 		} else {
 			p.network = network
 		}
@@ -171,7 +177,7 @@ func WithUserDataKey(text, platform string) Option {
 	return func(p *config) {
 		p.userDataKey = text
 		if p.userDataKey == "" && platform == oshelp.OSLinux {
-			p.userDataKey = "user-data"
+			p.userDataKey = defaultUserDataKey
 		} else {
 			p.userDataKey = "windows-startup-script-ps1"
 		}
@@ -182,7 +188,7 @@ func WithUserDataKey(text, platform string) Option {
 func WithZones(zones ...string) Option {
 	return func(p *config) {
 		if len(zones) == 0 {
-			p.zones = []string{"us-central1-a"}
+			p.zones = []string{defaultZone}
 		} else {
 			p.zones = zones
 		}
@@ -204,7 +210,7 @@ func WithScopes(scopes ...string) Option {
 func WithServiceAccountEmail(email string) Option {
 	return func(p *config) {
 		if email == "" {
-			p.serviceAccountEmail = "default"
+			p.serviceAccountEmail = defaultGoogleResourceName
 		} else {
 			p.serviceAccountEmail = email
 		}
