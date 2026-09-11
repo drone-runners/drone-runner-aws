@@ -27,6 +27,7 @@ const (
 	defaultBulkInsertReconcilePollInterval = 2 * time.Second
 	bulkInsertFallbackRankOffset           = 2
 	bulkInsertOperationDone                = "DONE"
+	maxBulkInsertFallbacks                 = 9
 )
 
 type definitiveBulkInsertError struct {
@@ -248,6 +249,9 @@ func (p *config) insertWithBulkFallback(
 	if len(fallbacks) == 0 {
 		fallbacks = p.machineTypeFallbacks
 	}
+	if len(fallbacks) > maxBulkInsertFallbacks {
+		fallbacks = fallbacks[:maxBulkInsertFallbacks]
+	}
 	if len(fallbacks) > 0 {
 		if err := validateMachineTypeFallbacks(fallbacks); err != nil {
 			return nil, createCandidate{}, err
@@ -350,12 +354,7 @@ func completedBulkInsertZone(operation *compute.Operation) (string, error) {
 	if zone, err := zoneFromBulkInsertMetadata(operation); err == nil {
 		return zone, nil
 	}
-	if operation == nil ||
-		operation.InstancesBulkInsertOperationMetadata == nil ||
-		len(operation.InstancesBulkInsertOperationMetadata.PerLocationStatus) == 0 {
-		return "", errors.New("google: bulkInsert operation completed without placement metadata")
-	}
-	if operation.Error != nil && len(operation.Error.Errors) > 0 {
+	if operation != nil && operation.Error != nil && len(operation.Error.Errors) > 0 {
 		operationError := operation.Error.Errors[0]
 		return "", &definitiveBulkInsertError{
 			err: fmt.Errorf(
@@ -364,6 +363,11 @@ func completedBulkInsertZone(operation *compute.Operation) (string, error) {
 				operationError.Message,
 			),
 		}
+	}
+	if operation == nil ||
+		operation.InstancesBulkInsertOperationMetadata == nil ||
+		len(operation.InstancesBulkInsertOperationMetadata.PerLocationStatus) == 0 {
+		return "", errors.New("google: bulkInsert operation completed without placement metadata")
 	}
 	return "", &definitiveBulkInsertError{
 		err: errors.New("google: bulkInsert operation completed without creating a VM"),

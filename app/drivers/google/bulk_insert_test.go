@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -67,6 +68,27 @@ func TestZoneFromBulkInsertMetadata_RolledBack(t *testing.T) {
 	}
 	if _, err := zoneFromBulkInsertMetadata(op); err == nil {
 		t.Fatal("expected error when the created VM was rolled back")
+	}
+}
+
+func TestCompletedBulkInsertZonePrefersSuccessfulPlacementOverOperationError(t *testing.T) {
+	op := &compute.Operation{
+		Error: &compute.OperationError{
+			Errors: []*compute.OperationErrorErrors{{Code: "INTERNAL", Message: "stale error"}},
+		},
+		InstancesBulkInsertOperationMetadata: &compute.InstancesBulkInsertOperationMetadata{
+			PerLocationStatus: map[string]compute.BulkInsertOperationStatus{
+				"zones/us-west1-b": {CreatedVmCount: 1, Status: "DONE"},
+			},
+		},
+	}
+
+	zone, err := completedBulkInsertZone(op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if zone != "us-west1-b" {
+		t.Fatalf("zone = %q, want us-west1-b", zone)
 	}
 }
 
@@ -320,7 +342,7 @@ func TestInsertWithBulkFallbackDoesNotRetryZonallyWhenAmbiguityCannotBeReconcile
 	}
 }
 
-func TestInsertWithBulkFallbackReturnsRegionalSuccess(t *testing.T) {
+func TestInsertWithBulkFallbackLimitsConfiguredFallbacks(t *testing.T) {
 	var bulkCalls, insertCalls int32
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -331,17 +353,26 @@ func TestInsertWithBulkFallbackReturnsRegionalSuccess(t *testing.T) {
 				t.Errorf("decode bulkInsert request: %v", err)
 			}
 			selections := request.InstanceFlexibilityPolicy.InstanceSelections
+			if len(selections) != 10 {
+				t.Errorf("selection count=%d, want primary plus 9 fallbacks", len(selections))
+			}
+			if _, exists := selections["rank-11"]; exists {
+				t.Error("rank-11 must be omitted to stay within GCP's ten-selection limit")
+			}
 			if got := selections["rank-1"]; got.Rank != 1 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-8"}) {
 				t.Errorf("primary selection=%+v", got)
 			}
 			if got := selections["rank-1"].Disks[0].InitializeParams.DiskType; got != "hyperdisk-balanced" {
 				t.Errorf("primary disk type=%q, want hyperdisk-balanced", got)
 			}
-			if got := selections["rank-2"]; got.Rank != 2 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-8-lssd"}) {
+			if got := selections["rank-2"]; got.Rank != 2 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-9"}) {
 				t.Errorf("fallback selection=%+v", got)
 			}
 			if got := selections["rank-2"].Disks[0].InitializeParams.DiskType; got != "hyperdisk-balanced" {
 				t.Errorf("fallback disk type=%q, want hyperdisk-balanced", got)
+			}
+			if got := selections["rank-10"]; got.Rank != 10 || !slices.Equal(got.MachineTypes, []string{"c4d-standard-17"}) {
+				t.Errorf("last fallback selection=%+v", got)
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
@@ -364,6 +395,14 @@ func TestInsertWithBulkFallbackReturnsRegionalSuccess(t *testing.T) {
 	})
 	p, cleanup := newBulkTestConfig(t, handler)
 	defer cleanup()
+	p.machineTypeFallbacks = make([]types.MachineTypeFallback, maxBulkInsertFallbacks+1)
+	for index := range p.machineTypeFallbacks {
+		p.machineTypeFallbacks[index] = types.MachineTypeFallback{
+			MachineType: fmt.Sprintf("c4d-standard-%d", index+9),
+			DiskType:    "hyperdisk-balanced",
+		}
+	}
+	p.machineTypeFallbacks[maxBulkInsertFallbacks].DiskType = ""
 	in := newTestInstance()
 	in.Disks[0].Boot = true
 
@@ -653,6 +692,45 @@ func TestInsertWithBulkFallbackUsesZonalCreateAfterRegionalRollback(t *testing.T
 	}
 	if got := atomic.LoadInt32(&bulkCalls); got != 1 {
 		t.Fatalf("bulk calls=%d, want 1", got)
+	}
+	if got := atomic.LoadInt32(&insertCalls); got != 1 {
+		t.Fatalf("zonal insert calls=%d, want 1", got)
+	}
+}
+
+func TestInsertWithBulkFallbackUsesZonalCreateAfterOperationErrorWithoutMetadata(t *testing.T) {
+	var insertCalls int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "regional-op", "id": "1"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/regions/us-central1/operations/regional-op"):
+			writeJSON(w, http.StatusOK, map[string]any{
+				"name": "regional-op", "status": "DONE", "id": "1",
+				"error": map[string]any{
+					"errors": []map[string]any{{"code": "QUOTA_EXCEEDED", "message": "quota exhausted"}},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances"):
+			atomic.AddInt32(&insertCalls, 1)
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "id": "2"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/operations/zonal-op"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "status": "DONE", "id": "2"})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+
+	_, succeeded, err := insertWithBulkFallbackForTest(
+		p, newTestInstance(), twoZoneCandidates(), true, false,
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if succeeded.zone != "us-central1-a" {
+		t.Fatalf("succeeded zone=%q, want us-central1-a", succeeded.zone)
 	}
 	if got := atomic.LoadInt32(&insertCalls); got != 1 {
 		t.Fatalf("zonal insert calls=%d, want 1", got)
