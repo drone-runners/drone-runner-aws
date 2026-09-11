@@ -188,3 +188,19 @@ func TestDeepCopySetupParams_ZonesImmutability(t *testing.T) {
 		t.Errorf("Result.Zones was not modified! Expected 'modified-zone', got '%s'", result.Zones[0])
 	}
 }
+
+func TestDeepCopySetupParams_MachineTypeFallbacksImmutability(t *testing.T) {
+	params := &types.SetupInstanceParams{
+		MachineTypeFallbacks: []types.MachineTypeFallback{{
+			MachineType: "c4d-standard-8-lssd",
+			DiskType:    "hyperdisk-balanced",
+		}},
+	}
+
+	result := deepCopySetupParams(params)
+	result.MachineTypeFallbacks[0].MachineType = "n2-standard-8"
+
+	if params.MachineTypeFallbacks[0].MachineType != "c4d-standard-8-lssd" {
+		t.Fatalf("original machine type fallback was modified: %+v", params.MachineTypeFallbacks)
+	}
+}
