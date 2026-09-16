@@ -508,7 +508,7 @@ type EnvConfig struct {
 		EnableAutoPool               bool     `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		EnableLEDiagnostics          bool     `envconfig:"DRONE_ENABLE_LE_DIAGNOSTICS" default:"false"`
 		HarnessTestBinaryURI         string   `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.7"`
+		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.8"`
 		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.7"`
 		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"15"`
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.19"`
