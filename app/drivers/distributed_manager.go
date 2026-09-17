@@ -420,7 +420,7 @@ func (d *DistributedManager) provisionFromPool(
 					ImageName:            inst.Image,
 					NestedVirtualization: inst.EnableNestedVirtualization,
 					GPU:                  inst.GPU,
-					MachineType:          inst.Size,
+					MachineType:          setupParams.MachineType,
 					Hibernate:            inst.IsHibernated,
 					VariantID:            inst.VariantID,
 					TenantID:             inst.TenantID,
@@ -588,6 +588,9 @@ func applyVariantToSetupParams(setupParams *types.SetupInstanceParams, variant *
 	}
 	if variant.DiskType != "" {
 		setupParams.DiskType = variant.DiskType
+	}
+	if len(variant.MachineTypeFallbacks) > 0 {
+		setupParams.MachineTypeFallbacks = append([]types.MachineTypeFallback(nil), variant.MachineTypeFallbacks...)
 	}
 	if variant.GPU {
 		setupParams.GPU = true

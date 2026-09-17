@@ -62,6 +62,37 @@ func TestDistributedProvisionFromPool_SuccessfulClaim(t *testing.T) {
 	assert.Equal(t, "inst-1", inst.ID)
 }
 
+func TestDistributedProvisionFromPoolClaimsConfiguredPrimaryMachineType(t *testing.T) {
+	claimed := &types.Instance{
+		ID: "inst-1", Pool: "pool1", Zone: "us-east1-b", Size: "c4d-standard-8",
+		State: types.StateInUse, Source: types.InstanceSourceOnDemand, VariantID: "large",
+	}
+	store := &mockInstanceStore{
+		FindAndClaimFunc: func(_ context.Context, params *types.QueryParams, _ types.InstanceState, _ []types.InstanceState, _ bool) (*types.Instance, error) {
+			assert.Equal(t, "c4d-standard-8", params.MachineType)
+			assert.Equal(t, "large", params.VariantID)
+			return claimed, nil
+		},
+		UpdateFunc: func(_ context.Context, _ *types.Instance) error { return nil },
+	}
+	d, pool := newProvisionTestManager(store, &flexibleMockDriver{})
+	pool.PoolVariants = []types.PoolVariant{{
+		SetupInstanceParams: types.SetupInstanceParams{
+			VariantID: "large", ResourceClass: "large", MachineType: "c4d-standard-8",
+			MachineTypeFallbacks: []types.MachineTypeFallback{{MachineType: "c4d-standard-8-lssd", DiskType: "hyperdisk-balanced"}},
+		},
+	}}
+
+	inst, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
+		context.Background(), pool, "tls", "owner1",
+		&types.ProvisionParams{ResourceClass: "large"}, nil, nil, 60, pool.Name, nil, false,
+	)
+
+	require.NoError(t, err)
+	assert.True(t, warmed)
+	assert.Equal(t, claimed.ID, inst.ID)
+}
+
 func TestDistributedProvisionFromPool_EmptyPool_FallsBackToColdCreate(t *testing.T) {
 	store := &mockInstanceStore{
 		FindAndClaimFunc: func(_ context.Context, _ *types.QueryParams, _ types.InstanceState, _ []types.InstanceState, _ bool) (*types.Instance, error) {

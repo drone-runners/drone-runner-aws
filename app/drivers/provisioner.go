@@ -219,6 +219,7 @@ func (m *Manager) setupInstance(
 		createOptions.ResourceClass = setupParams.ResourceClass
 		createOptions.Zones = setupParams.Zones
 		createOptions.MachineType = setupParams.MachineType
+		createOptions.MachineTypeFallbacks = append([]types.MachineTypeFallback(nil), setupParams.MachineTypeFallbacks...)
 		createOptions.NestedVirtualization = setupParams.NestedVirtualization
 		createOptions.GPU = setupParams.GPU
 		createOptions.StageRuntimeID = setupParams.StageRuntimeID
@@ -263,6 +264,7 @@ func (m *Manager) setupInstance(
 	}
 	createOptions.InternalLabels = map[string]string{"retain": retain}
 	source := resolveInstanceSource(setupParams)
+	createOptions.DisableMachineTypeFallbacks = disableMachineTypeFallbacks(source)
 	if createOptions.IsHosted {
 		createOptions.VMLabels = buildIdentityVMLabels(setupParams, timeout, m.env, pool.Name, source)
 	}
@@ -516,6 +518,9 @@ func deepCopySetupParams(params *types.SetupInstanceParams) *types.SetupInstance
 		result.Zones = make([]string, len(params.Zones))
 		copy(result.Zones, params.Zones)
 	}
+	if len(params.MachineTypeFallbacks) > 0 {
+		result.MachineTypeFallbacks = append([]types.MachineTypeFallback(nil), params.MachineTypeFallbacks...)
+	}
 
 	return &result
 }
@@ -536,6 +541,10 @@ func resolveInstanceSource(params *types.SetupInstanceParams) types.InstanceSour
 		return params.Source
 	}
 	return types.InstanceSourcePool
+}
+
+func disableMachineTypeFallbacks(source types.InstanceSource) bool {
+	return source == types.InstanceSourcePool || source == types.InstanceSourcePredictor
 }
 
 // classifyVMCreationError maps a driver.Create() error into the bounded outcome/reason set for
