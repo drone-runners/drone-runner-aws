@@ -256,28 +256,29 @@ type (
 
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
-		Account                    GoogleAccount     `json:"account,omitempty"  yaml:"account"`
-		Image                      string            `json:"image,omitempty" yaml:"image,omitempty"`
-		Name                       string            `json:"name,omitempty" yaml:"name,omitempty"`
-		Tags                       []string          `json:"tags,omitempty" yaml:"tags,omitempty"` // Deprecated: use networks[].tags
-		Size                       string            `json:"size,omitempty" yaml:"size,omitempty"`
-		MachineType                string            `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-		UserData                   string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath               string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
-		UserDataKey                string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
-		Disk                       disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
-		Network                    string            `json:"network,omitempty" yaml:"network,omitempty"`       // Deprecated: use networks[]
-		Subnetwork                 string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"` // Deprecated: use networks[]
-		Networks                   []GoogleNetwork   `json:"networks,omitempty" yaml:"networks,omitempty"`
-		PrivateIP                  bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
-		Zone                       []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
-		Labels                     map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
-		Scopes                     []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
-		Hibernate                  bool              `json:"hibernate,omitempty"`
-		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
-		GPU                        bool              `json:"gpu,omitempty" yaml:"gpu,omitempty"`
-		EgressControl              bool              `json:"egress_control,omitempty" yaml:"egress_control,omitempty"`
+		Account                    GoogleAccount               `json:"account,omitempty"  yaml:"account"`
+		Image                      string                      `json:"image,omitempty" yaml:"image,omitempty"`
+		Name                       string                      `json:"name,omitempty" yaml:"name,omitempty"`
+		Tags                       []string                    `json:"tags,omitempty" yaml:"tags,omitempty"` // Deprecated: use networks[].tags
+		Size                       string                      `json:"size,omitempty" yaml:"size,omitempty"`
+		MachineType                string                      `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+		MachineTypeFallbacks       []types.MachineTypeFallback `json:"machine_type_fallbacks,omitempty" yaml:"machine_type_fallbacks,omitempty"`
+		UserData                   string                      `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath               string                      `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+		UserDataKey                string                      `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
+		Disk                       disk                        `json:"disk,omitempty" yaml:"disk,omitempty"`
+		Network                    string                      `json:"network,omitempty" yaml:"network,omitempty"`       // Deprecated: use networks[]
+		Subnetwork                 string                      `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"` // Deprecated: use networks[]
+		Networks                   []GoogleNetwork             `json:"networks,omitempty" yaml:"networks,omitempty"`
+		PrivateIP                  bool                        `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
+		Zone                       []string                    `json:"zone,omitempty" yaml:"zone,omitempty"`
+		Labels                     map[string]string           `json:"labels,omitempty" yaml:"labels,omitempty"`
+		Scopes                     []string                    `json:"scopes,omitempty" yaml:"scopes,omitempty"`
+		Hibernate                  bool                        `json:"hibernate,omitempty"`
+		EnableNestedVirtualization bool                        `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+		EnableC4D                  bool                        `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
+		GPU                        bool                        `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+		EgressControl              bool                        `json:"egress_control,omitempty" yaml:"egress_control,omitempty"`
 	}
 
 	GoogleAccount struct {
@@ -508,7 +509,7 @@ type EnvConfig struct {
 		EnableAutoPool               bool     `envconfig:"DRONE_ENABLE_AUTO_POOL" default:"false"`
 		EnableLEDiagnostics          bool     `envconfig:"DRONE_ENABLE_LE_DIAGNOSTICS" default:"false"`
 		HarnessTestBinaryURI         string   `envconfig:"DRONE_HARNESS_TEST_BINARY_URI"`
-		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.7"`
+		PluginBinaryURI              string   `envconfig:"DRONE_PLUGIN_BINARY_URI" default:"https://github.com/drone/plugin/releases/download/v3.9.8"`
 		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.7"`
 		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"15"`
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.19"`

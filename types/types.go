@@ -195,6 +195,8 @@ type InstanceCreateOpts struct {
 	VMLabels                     map[string]string
 	Zones                        []string
 	MachineType                  string
+	MachineTypeFallbacks         []MachineTypeFallback
+	DisableMachineTypeFallbacks  bool
 	LiteEngineFallbackPath       string
 	PluginBinaryFallbackURI      string
 	VMImageConfig                VMImageConfig
@@ -216,6 +218,11 @@ type InstanceCreateOpts struct {
 	StageRuntimeID      string
 	PipelineExecutionID string
 	TenantID            string
+}
+
+type MachineTypeFallback struct {
+	MachineType string `json:"machine_type" yaml:"machine_type"`
+	DiskType    string `json:"disk_type" yaml:"disk_type"`
 }
 
 // Platform defines the target platform.
@@ -360,18 +367,19 @@ type OutboxJob struct {
 
 // SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
 type SetupInstanceParams struct {
-	ImageName            string         `json:"image_name,omitempty" yaml:"image_name,omitempty"`
-	NestedVirtualization bool           `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-	MachineType          string         `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-	Hibernate            bool           `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
-	Zones                []string       `json:"zones,omitempty" yaml:"zones,omitempty"`
-	VariantID            string         `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
-	TenantID             string         `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
-	DiskSize             int64          `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
-	DiskType             string         `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
-	ResourceClass        string         `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
-	GPU                  bool           `json:"gpu,omitempty" yaml:"gpu,omitempty"`
-	Source               InstanceSource `json:"source,omitempty" yaml:"source,omitempty"`
+	ImageName            string                `json:"image_name,omitempty" yaml:"image_name,omitempty"`
+	NestedVirtualization bool                  `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+	MachineType          string                `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+	MachineTypeFallbacks []MachineTypeFallback `json:"machine_type_fallbacks,omitempty" yaml:"machine_type_fallbacks,omitempty"`
+	Hibernate            bool                  `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
+	Zones                []string              `json:"zones,omitempty" yaml:"zones,omitempty"`
+	VariantID            string                `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	TenantID             string                `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
+	DiskSize             int64                 `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
+	DiskType             string                `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
+	ResourceClass        string                `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
+	GPU                  bool                  `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	Source               InstanceSource        `json:"source,omitempty" yaml:"source,omitempty"`
 
 	// SkipCloudVMCleanup, when true, causes the instance to be labeled
 	// retain=true so the runner's background purger leaves it alone.
