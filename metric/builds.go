@@ -49,6 +49,11 @@ type Metrics struct {
 	GCPOperationRetriesCount *prometheus.CounterVec
 	GCPOperationsInflight    *prometheus.GaugeVec
 
+	GCPBulkInsertAttemptsCount  *prometheus.CounterVec
+	GCPBulkInsertPlacementCount *prometheus.CounterVec
+	GCPBulkInsertDuration       *prometheus.HistogramVec
+	GCPBulkInsertReconcileCount *prometheus.CounterVec
+
 	// Background instance/capacity purger metrics
 	PurgerLastRunTimestamp             *prometheus.GaugeVec
 	PurgerInstanceDestroyAttemptsCount *prometheus.CounterVec

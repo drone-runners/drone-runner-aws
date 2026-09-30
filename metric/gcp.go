@@ -1,6 +1,14 @@
 package metric
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+// gcpOperationDurationBuckets is shared by logical GCP operation latency and
+// regional bulkInsert latency so the two histograms stay comparable.
+var gcpOperationDurationBuckets = []float64{0.5, 1, 2, 5, 10, 20, 30, 60, 90, 120, 180, 300, 600}
 
 // GCP API/operation outcome values. Bounded, shared across the raw API
 // request layer and the logical operation layer.
@@ -102,7 +110,7 @@ func GCPOperationDuration() *prometheus.HistogramVec {
 		prometheus.HistogramOpts{
 			Name:    "runner_gcp_operation_duration_seconds",
 			Help:    "End-to-end duration of a logical GCP operation, including retries and long-running-operation polling",
-			Buckets: []float64{0.5, 1, 2, 5, 10, 20, 30, 60, 90, 120, 180, 300, 600},
+			Buckets: gcpOperationDurationBuckets,
 		},
 		[]string{"resource", "operation", "outcome", "zone", "vm_type"},
 	)
@@ -121,6 +129,68 @@ func GCPOperationRetriesCount() *prometheus.CounterVec {
 	)
 }
 
+// Bulk insert outcomes. These describe the regional bulkInsert call itself.
+// A later zonal insert stays on runner_gcp_operations_total.
+const (
+	BulkInsertOutcomeSuccess   = "success"
+	BulkInsertOutcomeRejected  = "rejected"
+	BulkInsertOutcomeAmbiguous = "ambiguous"
+)
+
+// Bulk insert reconcile outcomes, recorded only after an ambiguous call.
+const (
+	BulkInsertReconcileFound    = "found"
+	BulkInsertReconcileNotFound = "not_found"
+	BulkInsertReconcileTimeout  = "timeout"
+)
+
+// GCPBulkInsertAttemptsCount counts regional bulkInsert calls.
+func GCPBulkInsertAttemptsCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "runner_gcp_bulk_insert_attempts_total",
+			Help: "Total number of regional GCP bulkInsert calls",
+		},
+		[]string{"pool_id", "resource_class", "region", "vm_type", "outcome", "reason"},
+	)
+}
+
+// GCPBulkInsertPlacementCount counts VMs placed by a successful bulkInsert,
+// including the machine type GCP created and its flexibility rank.
+func GCPBulkInsertPlacementCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "runner_gcp_bulk_insert_placement_total",
+			Help: "Total number of VMs placed by a successful regional GCP bulkInsert",
+		},
+		[]string{"pool_id", "resource_class", "region", "zone", "vm_type", "rank"},
+	)
+}
+
+// GCPBulkInsertDuration observes how long a regional bulkInsert attempt took,
+// excluding any zonal insert that follows a rejection.
+func GCPBulkInsertDuration() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "runner_gcp_bulk_insert_duration_seconds",
+			Help:    "Duration of a regional GCP bulkInsert attempt, excluding a following zonal insert",
+			Buckets: gcpOperationDurationBuckets,
+		},
+		[]string{"region", "resource_class", "outcome"},
+	)
+}
+
+// GCPBulkInsertReconcileCount counts reconciliation after an ambiguous bulkInsert.
+func GCPBulkInsertReconcileCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "runner_gcp_bulk_insert_reconcile_total",
+			Help: "Total number of reconciliations after an ambiguous regional GCP bulkInsert",
+		},
+		[]string{"region", "outcome"},
+	)
+}
+
 // GCPOperationsInflight tracks the number of logical GCP operations
 // currently in progress, so operations stuck beyond their expected duration
 // remain visible as a non-decaying gauge rather than only showing up after
@@ -133,4 +203,34 @@ func GCPOperationsInflight() *prometheus.GaugeVec {
 		},
 		[]string{"resource", "operation", "zone"},
 	)
+}
+
+// RecordBulkInsertAttempt increments the bulkInsert attempt counter and observes its duration.
+// Safe to call on a nil *Metrics. Negative durations are not observed.
+func (m *Metrics) RecordBulkInsertAttempt(poolID, resourceClass, region, vmType, outcome, reason string, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	if m.GCPBulkInsertAttemptsCount != nil {
+		m.GCPBulkInsertAttemptsCount.WithLabelValues(poolID, resourceClass, region, vmType, outcome, reason).Inc()
+	}
+	if m.GCPBulkInsertDuration != nil && duration >= 0 {
+		m.GCPBulkInsertDuration.WithLabelValues(region, resourceClass, outcome).Observe(duration.Seconds())
+	}
+}
+
+// RecordBulkInsertPlacement increments the placement counter for a VM created by bulkInsert.
+func (m *Metrics) RecordBulkInsertPlacement(poolID, resourceClass, region, zone, vmType, rank string) {
+	if m == nil || m.GCPBulkInsertPlacementCount == nil {
+		return
+	}
+	m.GCPBulkInsertPlacementCount.WithLabelValues(poolID, resourceClass, region, zone, vmType, rank).Inc()
+}
+
+// RecordBulkInsertReconcile increments the reconcile counter after an ambiguous bulkInsert.
+func (m *Metrics) RecordBulkInsertReconcile(region, outcome string) {
+	if m == nil || m.GCPBulkInsertReconcileCount == nil {
+		return
+	}
+	m.GCPBulkInsertReconcileCount.WithLabelValues(region, outcome).Inc()
 }

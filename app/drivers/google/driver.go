@@ -717,7 +717,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	op, succeeded, err := p.insertWithBulkFallback(ctx, in, candidates, opts, machineType, bootDiskType, stockoutRetryEnabled, usesReservation, logr)
+	op, succeeded, placement, err := p.insertWithBulkFallback(ctx, in, candidates, opts, machineType, bootDiskType, stockoutRetryEnabled, usesReservation, logr)
 	if err != nil {
 		return nil, succeeded.zone, err
 	}
@@ -737,7 +737,11 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	vm, err := p.getCreatedInstance(ctx, p.projectID, zone, name)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
+		recordBulkInsertPlacement(p.metrics, placement, "")
 		return nil, zone, err
+	}
+	if placement != nil {
+		recordBulkInsertPlacement(p.metrics, placement, path.Base(vm.MachineType))
 	}
 
 	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, gpu, image, machineType, resolvedNetwork)

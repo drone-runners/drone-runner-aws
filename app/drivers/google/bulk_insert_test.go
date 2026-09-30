@@ -825,7 +825,7 @@ func TestInsertWithBulkFallbackBypassesBulkForHotPool(t *testing.T) {
 	p, cleanup := newBulkTestConfig(t, handler)
 	defer cleanup()
 
-	_, _, err := p.insertWithBulkFallback(
+	_, _, _, err := p.insertWithBulkFallback(
 		context.Background(), newTestInstance(), twoZoneCandidates(),
 		&types.InstanceCreateOpts{DisableMachineTypeFallbacks: true},
 		"c4d-standard-8", "hyperdisk-balanced", true, false, logger.Discard(),
@@ -951,7 +951,7 @@ func insertWithBulkFallbackForTest(
 	candidates []createCandidate,
 	stockoutRetryEnabled, usesReservation bool,
 ) (*compute.Operation, createCandidate, error) {
-	return p.insertWithBulkFallback(
+	op, candidate, _, err := p.insertWithBulkFallback(
 		context.Background(),
 		in,
 		candidates,
@@ -962,6 +962,113 @@ func insertWithBulkFallbackForTest(
 		usesReservation,
 		logger.Discard(),
 	)
+	return op, candidate, err
+}
+
+func TestBulkInsertRank(t *testing.T) {
+	fallbacks := []types.MachineTypeFallback{
+		{MachineType: "n2-standard-8", DiskType: "pd-balanced"},
+		{MachineType: "e2-standard-8", DiskType: "pd-balanced"},
+	}
+	if got := bulkInsertRank("c4d-standard-8", "c4d-standard-8", fallbacks); got != "1" {
+		t.Fatalf("rank = %s, want 1", got)
+	}
+	if got := bulkInsertRank("n2-standard-8", "c4d-standard-8", fallbacks); got != "2" {
+		t.Fatalf("rank = %s, want 2", got)
+	}
+	if got := bulkInsertRank("e2-standard-8", "c4d-standard-8", fallbacks); got != "3" {
+		t.Fatalf("rank = %s, want 3", got)
+	}
+	if got := bulkInsertRank("c3-standard-8", "c4d-standard-8", fallbacks); got != "0" {
+		t.Fatalf("rank = %s, want 0", got)
+	}
+}
+
+func TestRecordBulkInsertPlacement(t *testing.T) {
+	fallbacks := []types.MachineTypeFallback{{MachineType: "n2-standard-8", DiskType: "pd-balanced"}}
+	placement := &bulkInsertPlacement{
+		poolID:        "linux-amd64",
+		resourceClass: "medium",
+		region:        "us-central1",
+		zone:          "us-central1-a",
+		requestedType: "c4d-standard-8",
+		fallbacks:     fallbacks,
+	}
+	tests := []struct {
+		name    string
+		created string
+		vmType  string
+		rank    string
+	}{
+		{name: "requested type", created: "c4d-standard-8", vmType: "c4d-standard-8", rank: "1"},
+		{name: "fallback type", created: "n2-standard-8", vmType: "n2-standard-8", rank: "2"},
+		{name: "missing created type", created: ".", vmType: "c4d-standard-8", rank: "1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &metric.Metrics{GCPBulkInsertPlacementCount: metric.GCPBulkInsertPlacementCount()}
+			recordBulkInsertPlacement(m, placement, tt.created)
+			got := testutil.ToFloat64(m.GCPBulkInsertPlacementCount.WithLabelValues(
+				"linux-amd64", "medium", "us-central1", "us-central1-a", tt.vmType, tt.rank,
+			))
+			if got != 1 {
+				t.Fatalf("placement = %v, want 1 for %s rank %s", got, tt.vmType, tt.rank)
+			}
+		})
+	}
+}
+
+func TestInsertWithBulkFallbackRecordsRejectedAttempt(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/regions/us-central1/instances/bulkInsert"):
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]any{
+					"code":    http.StatusBadRequest,
+					"message": "bulkInsert request is not supported",
+					"errors":  []map[string]any{{"reason": "invalid"}},
+				},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/zones/us-central1-a/instances"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "id": "2"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/zones/us-central1-a/operations/zonal-op"):
+			writeJSON(w, http.StatusOK, map[string]any{"name": "zonal-op", "status": "DONE", "id": "2"})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	p, cleanup := newBulkTestConfig(t, handler)
+	defer cleanup()
+	p.metrics = &metric.Metrics{
+		GCPAPIRequestsCount:         metric.GCPAPIRequestsCount(),
+		GCPAPIRequestDuration:       metric.GCPAPIRequestDuration(),
+		GCPOperationsCount:          metric.GCPOperationsCount(),
+		GCPOperationDuration:        metric.GCPOperationDuration(),
+		GCPOperationRetriesCount:    metric.GCPOperationRetriesCount(),
+		GCPOperationsInflight:       metric.GCPOperationsInflight(),
+		GCPBulkInsertAttemptsCount:  metric.GCPBulkInsertAttemptsCount(),
+		GCPBulkInsertDuration:       metric.GCPBulkInsertDuration(),
+		GCPBulkInsertPlacementCount: metric.GCPBulkInsertPlacementCount(),
+		GCPBulkInsertReconcileCount: metric.GCPBulkInsertReconcileCount(),
+	}
+
+	in := newTestInstance()
+	in.Metadata = &compute.Metadata{}
+	in.NetworkInterfaces = []*compute.NetworkInterface{{}}
+	_, _, _, err := p.insertWithBulkFallback(
+		context.Background(), in, twoZoneCandidates(),
+		&types.InstanceCreateOpts{PoolName: "linux-amd64", ResourceClass: "medium"},
+		"c4d-standard-8", "hyperdisk-balanced", true, false, logger.Discard(),
+	)
+	if err != nil {
+		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	got := testutil.ToFloat64(p.metrics.GCPBulkInsertAttemptsCount.WithLabelValues(
+		"linux-amd64", "medium", "us-central1", "c4d-standard-8", metric.BulkInsertOutcomeRejected, metric.GCPReasonInvalidRequest,
+	))
+	if got != 1 {
+		t.Fatalf("rejected attempts = %v, want 1", got)
+	}
 }
 
 func newBulkTestConfig(t *testing.T, handler http.Handler) (testConfig *config, cleanup func()) {

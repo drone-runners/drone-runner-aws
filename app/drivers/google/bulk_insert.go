@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -230,6 +231,17 @@ func cloneBulkInsertBootDisks(disks []*compute.AttachedDisk, bootDiskType string
 	return cloned
 }
 
+// bulkInsertPlacement is set only when regional bulkInsert created a VM.
+// The created machine type is known after the subsequent instance get.
+type bulkInsertPlacement struct {
+	poolID        string
+	resourceClass string
+	region        string
+	zone          string
+	requestedType string
+	fallbacks     []types.MachineTypeFallback
+}
+
 func (p *config) insertWithBulkFallback(
 	ctx context.Context,
 	in *compute.Instance,
@@ -238,12 +250,13 @@ func (p *config) insertWithBulkFallback(
 	machineType, bootDiskType string,
 	stockoutRetryEnabled, usesReservation bool,
 	logr logger.Logger,
-) (*compute.Operation, createCandidate, error) {
+) (*compute.Operation, createCandidate, *bulkInsertPlacement, error) {
 	if opts.DisableMachineTypeFallbacks {
-		return p.insertWithStockoutRetry(
+		op, candidate, err := p.insertWithStockoutRetry(
 			ctx, in, candidates, opts, machineType, bootDiskType,
 			stockoutRetryEnabled, usesReservation, logr,
 		)
+		return op, candidate, nil, err
 	}
 	fallbacks := opts.MachineTypeFallbacks
 	if len(fallbacks) == 0 {
@@ -254,15 +267,16 @@ func (p *config) insertWithBulkFallback(
 	}
 	if len(fallbacks) > 0 {
 		if err := validateMachineTypeFallbacks(fallbacks); err != nil {
-			return nil, createCandidate{}, err
+			return nil, createCandidate{}, nil, err
 		}
 	}
 	regionalCandidates := p.buildRegionalBulkInsertCandidates(candidates)
 	if len(fallbacks) == 0 || !stockoutRetryEnabled || usesReservation || len(regionalCandidates) == 0 {
-		return p.insertWithStockoutRetry(
+		op, candidate, err := p.insertWithStockoutRetry(
 			ctx, in, candidates, opts, machineType, bootDiskType,
 			stockoutRetryEnabled, usesReservation, logr,
 		)
+		return op, candidate, nil, err
 	}
 
 	first := regionalCandidates[0]
@@ -272,7 +286,7 @@ func (p *config) insertWithBulkFallback(
 	opts.EgressProxyURL = resolveEgressProxyURL(p.egressControl, first.proxyURL)
 	userData, err := lehelper.GenerateUserdata(p.userData, opts)
 	if err != nil {
-		return nil, first, err
+		return nil, first, nil, err
 	}
 	setUserdataMetadata(in, p.userDataKey, userData)
 
@@ -280,26 +294,71 @@ func (p *config) insertWithBulkFallback(
 	for index := range regionalCandidates {
 		zones[index] = regionalCandidates[index].zone
 	}
+	region := regionFromZone(zones[0])
+	started := time.Now()
 	operation, zone, err := p.insertRegionalBulkInstance(
 		ctx, in, machineType, bootDiskType, fallbacks, zones,
 	)
+	_, reason := classifyGCPError(context.Background(), err, classifyOpts{})
 	if err == nil {
 		succeeded := first
 		succeeded.zone = zone
 		logr.WithField("zone", zone).Debugln("google: regional bulkInsert provisioned VM")
-		return operation, succeeded, nil
+		p.metrics.RecordBulkInsertAttempt(opts.PoolName, opts.ResourceClass, region, machineType, metric.BulkInsertOutcomeSuccess, reason, time.Since(started))
+		return operation, succeeded, &bulkInsertPlacement{
+			poolID:        opts.PoolName,
+			resourceClass: opts.ResourceClass,
+			region:        region,
+			zone:          zone,
+			requestedType: machineType,
+			fallbacks:     append([]types.MachineTypeFallback(nil), fallbacks...),
+		}, nil
 	}
 
 	var definitiveError *definitiveBulkInsertError
 	if !errors.As(err, &definitiveError) {
-		reconciled := p.reconcileAmbiguousBulkInsert(in.Name, regionalCandidates, logr)
-		return nil, reconciled, err
+		reconciled, reconcileOutcome := p.reconcileAmbiguousBulkInsert(in.Name, regionalCandidates, logr)
+		p.metrics.RecordBulkInsertReconcile(region, reconcileOutcome)
+		p.metrics.RecordBulkInsertAttempt(opts.PoolName, opts.ResourceClass, region, machineType, metric.BulkInsertOutcomeAmbiguous, reason, time.Since(started))
+		return nil, reconciled, nil, err
 	}
 	logr.WithError(err).Warnln("google: regional bulkInsert failed; using zonal create path")
-	return p.insertWithStockoutRetry(
+	p.metrics.RecordBulkInsertAttempt(opts.PoolName, opts.ResourceClass, region, machineType, metric.BulkInsertOutcomeRejected, reason, time.Since(started))
+	op, candidate, retryErr := p.insertWithStockoutRetry(
 		ctx, in, candidates, opts, machineType, bootDiskType,
 		stockoutRetryEnabled, usesReservation, logr,
 	)
+	return op, candidate, nil, retryErr
+}
+
+func recordBulkInsertPlacement(m *metric.Metrics, placement *bulkInsertPlacement, createdMachineType string) {
+	if m == nil || placement == nil {
+		return
+	}
+	created := createdMachineType
+	if created == "" || created == "." || created == "/" {
+		created = placement.requestedType
+	}
+	m.RecordBulkInsertPlacement(
+		placement.poolID,
+		placement.resourceClass,
+		placement.region,
+		placement.zone,
+		created,
+		bulkInsertRank(created, placement.requestedType, placement.fallbacks),
+	)
+}
+
+func bulkInsertRank(created, requested string, fallbacks []types.MachineTypeFallback) string {
+	if created == requested {
+		return "1"
+	}
+	for index, fallback := range fallbacks {
+		if fallback.MachineType == created {
+			return strconv.Itoa(index + bulkInsertFallbackRankOffset)
+		}
+	}
+	return "0"
 }
 
 func (p *config) insertRegionalBulkInstance(
@@ -453,7 +512,7 @@ func (p *config) reconcileAmbiguousBulkInsert(
 	name string,
 	candidates []createCandidate,
 	logr logger.Logger,
-) createCandidate {
+) (createCandidate, string) {
 	timeout, pollInterval := p.bulkInsertReconcileSettings()
 
 	// The caller context is commonly the source of the ambiguous outcome. Use a
@@ -462,6 +521,7 @@ func (p *config) reconcileAmbiguousBulkInsert(
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	sawNonNotFound := false
 	for {
 		for _, candidate := range candidates {
 			_, err := apiCall(
@@ -480,10 +540,11 @@ func (p *config) reconcileAmbiguousBulkInsert(
 			if err == nil {
 				logr.WithField("zone", candidate.zone).
 					Warnln("google: found VM after ambiguous regional bulkInsert outcome")
-				return candidate
+				return candidate, metric.BulkInsertReconcileFound
 			}
 			var googleError *googleapi.Error
 			if !errors.As(err, &googleError) || googleError.Code != http.StatusNotFound {
+				sawNonNotFound = true
 				logr.WithField("zone", candidate.zone).
 					WithError(err).
 					Warnln("google: failed to reconcile ambiguous regional bulkInsert outcome")
@@ -491,7 +552,10 @@ func (p *config) reconcileAmbiguousBulkInsert(
 		}
 
 		if waitForBulkInsertRetry(ctx, pollInterval) != nil {
-			return createCandidate{}
+			if sawNonNotFound {
+				return createCandidate{}, metric.BulkInsertReconcileTimeout
+			}
+			return createCandidate{}, metric.BulkInsertReconcileNotFound
 		}
 	}
 }
