@@ -49,6 +49,12 @@ type Metrics struct {
 	GCPOperationRetriesCount *prometheus.CounterVec
 	GCPOperationsInflight    *prometheus.GaugeVec
 
+	GCPBulkInsertAttemptsCount  *prometheus.CounterVec
+	GCPBulkInsertPlacementCount *prometheus.CounterVec
+	GCPBulkInsertDuration       *prometheus.HistogramVec
+	GCPBulkInsertReconcileCount *prometheus.CounterVec
+	GCPStockoutAttemptsCount    *prometheus.CounterVec
+
 	// Background instance/capacity purger metrics
 	PurgerLastRunTimestamp             *prometheus.GaugeVec
 	PurgerInstanceDestroyAttemptsCount *prometheus.CounterVec
@@ -557,6 +563,7 @@ func RegisterMetrics() *Metrics {
 	gcpOperationDuration := GCPOperationDuration()
 	gcpOperationRetriesCount := GCPOperationRetriesCount()
 	gcpOperationsInflight := GCPOperationsInflight()
+	gcpStockoutAttemptsCount := GCPStockoutAttemptsCount()
 
 	// Background purger metrics
 	purgerLastRunTimestamp := PurgerLastRunTimestamp()
@@ -600,6 +607,7 @@ func RegisterMetrics() *Metrics {
 		instanceIdleAge,
 		gcpAPIRequestsCount, gcpAPIRequestDuration,
 		gcpOperationsCount, gcpOperationDuration, gcpOperationRetriesCount, gcpOperationsInflight,
+		gcpStockoutAttemptsCount,
 		purgerLastRunTimestamp, purgerInstanceDestroyAttemptsCount,
 		purgerInstancesForceDeletedCount, purgerCapacityDestroyAttemptsCount,
 		vmCreationAttemptsCount, vmCreationDurationCount, vmUsageDurationCount, vmsCurrent,
@@ -635,6 +643,7 @@ func RegisterMetrics() *Metrics {
 		GCPOperationDuration:                    gcpOperationDuration,
 		GCPOperationRetriesCount:                gcpOperationRetriesCount,
 		GCPOperationsInflight:                   gcpOperationsInflight,
+		GCPStockoutAttemptsCount:                gcpStockoutAttemptsCount,
 		PurgerLastRunTimestamp:                  purgerLastRunTimestamp,
 		PurgerInstanceDestroyAttemptsCount:      purgerInstanceDestroyAttemptsCount,
 		PurgerInstancesForceDeletedCount:        purgerInstancesForceDeletedCount,
