@@ -723,9 +723,6 @@ func TestInsertWithStockoutRetry_NoRetryWhenDisabled(t *testing.T) {
 // TestInsertWithStockoutRetry_RecordsEachStockoutAttempt counts one sample per
 // stocked-out zone. A later successful insert is not counted.
 func TestInsertWithStockoutRetry_RecordsEachStockoutAttempt(t *testing.T) {
-	const poolID = "linux-amd64"
-	const machineType = "c4d-standard-4"
-
 	t.Run("alternate zone succeeds", func(t *testing.T) {
 		f := &fakeCompute{stockoutZone: "us-central1-a"}
 		p, cleanup := newFakeComputeConfig(t, f)
@@ -734,7 +731,7 @@ func TestInsertWithStockoutRetry_RecordsEachStockoutAttempt(t *testing.T) {
 
 		_, succeeded, err := p.insertWithStockoutRetry(
 			context.Background(), newTestInstance(), twoZoneCandidates(),
-			&types.InstanceCreateOpts{PoolName: poolID}, machineType, "pd-balanced",
+			&types.InstanceCreateOpts{PoolName: stockoutTestPoolID}, stockoutTestMachineType, "pd-balanced",
 			true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
 		)
 		if err != nil {
@@ -743,9 +740,9 @@ func TestInsertWithStockoutRetry_RecordsEachStockoutAttempt(t *testing.T) {
 		if succeeded.zone != "us-central1-b" {
 			t.Fatalf("expected success in us-central1-b, got %s", succeeded.zone)
 		}
-		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-a", machineType, "1", 1)
-		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-b", machineType, "1", 0)
-		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-b", machineType, "2", 0)
+		assertStockoutAttempts(t, p.metrics, "us-central1-a", "1", 1)
+		assertStockoutAttempts(t, p.metrics, "us-central1-b", "1", 0)
+		assertStockoutAttempts(t, p.metrics, "us-central1-b", "2", 0)
 	})
 
 	t.Run("third try stockout", func(t *testing.T) {
@@ -761,15 +758,15 @@ func TestInsertWithStockoutRetry_RecordsEachStockoutAttempt(t *testing.T) {
 		}
 		_, _, err := p.insertWithStockoutRetry(
 			context.Background(), newTestInstance(), candidates,
-			&types.InstanceCreateOpts{PoolName: poolID}, machineType, "pd-balanced",
+			&types.InstanceCreateOpts{PoolName: stockoutTestPoolID}, stockoutTestMachineType, "pd-balanced",
 			true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
 		)
 		if err == nil {
 			t.Fatal("expected stockout error after the third try")
 		}
-		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-a", machineType, "1", 1)
-		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-b", machineType, "2", 1)
-		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-c", machineType, "3", 1)
+		assertStockoutAttempts(t, p.metrics, "us-central1-a", "1", 1)
+		assertStockoutAttempts(t, p.metrics, "us-central1-b", "2", 1)
+		assertStockoutAttempts(t, p.metrics, "us-central1-c", "3", 1)
 	})
 
 	t.Run("retry disabled", func(t *testing.T) {
@@ -780,13 +777,13 @@ func TestInsertWithStockoutRetry_RecordsEachStockoutAttempt(t *testing.T) {
 
 		_, _, err := p.insertWithStockoutRetry(
 			context.Background(), newTestInstance(), twoZoneCandidates(),
-			&types.InstanceCreateOpts{PoolName: poolID}, machineType, "pd-balanced",
+			&types.InstanceCreateOpts{PoolName: stockoutTestPoolID}, stockoutTestMachineType, "pd-balanced",
 			false /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
 		)
 		if err == nil {
 			t.Fatal("expected stockout error when retry is disabled")
 		}
-		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-a", machineType, "1", 1)
+		assertStockoutAttempts(t, p.metrics, "us-central1-a", "1", 1)
 	})
 }
 
@@ -802,11 +799,16 @@ func newStockoutTestMetrics() *metric.Metrics {
 	}
 }
 
-func assertStockoutAttempts(t *testing.T, m *metric.Metrics, poolID, zone, vmType, attempt string, want float64) {
+const (
+	stockoutTestPoolID      = "linux-amd64"
+	stockoutTestMachineType = "c4d-standard-4"
+)
+
+func assertStockoutAttempts(t *testing.T, m *metric.Metrics, zone, attempt string, want float64) {
 	t.Helper()
-	got := testutil.ToFloat64(m.GCPStockoutAttemptsCount.WithLabelValues(poolID, zone, vmType, attempt))
+	got := testutil.ToFloat64(m.GCPStockoutAttemptsCount.WithLabelValues(stockoutTestPoolID, zone, stockoutTestMachineType, attempt))
 	if got != want {
-		t.Errorf("stockout attempts pool=%s zone=%s vm_type=%s attempt=%s: got %v, want %v", poolID, zone, vmType, attempt, got, want)
+		t.Errorf("stockout attempts pool=%s zone=%s vm_type=%s attempt=%s: got %v, want %v", stockoutTestPoolID, zone, stockoutTestMachineType, attempt, got, want)
 	}
 }
 
