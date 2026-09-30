@@ -512,7 +512,7 @@ func (p *config) reconcileAmbiguousBulkInsert(
 	name string,
 	candidates []createCandidate,
 	logr logger.Logger,
-) (createCandidate, string) {
+) (candidate createCandidate, outcome string) {
 	timeout, pollInterval := p.bulkInsertReconcileSettings()
 
 	// The caller context is commonly the source of the ambiguous outcome. Use a

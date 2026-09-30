@@ -825,13 +825,19 @@ func TestInsertWithBulkFallbackBypassesBulkForHotPool(t *testing.T) {
 	p, cleanup := newBulkTestConfig(t, handler)
 	defer cleanup()
 
-	_, _, _, err := p.insertWithBulkFallback(
+	_, succeeded, placement, err := p.insertWithBulkFallback(
 		context.Background(), newTestInstance(), twoZoneCandidates(),
 		&types.InstanceCreateOpts{DisableMachineTypeFallbacks: true},
 		"c4d-standard-8", "hyperdisk-balanced", true, false, logger.Discard(),
 	)
 	if err != nil {
 		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if placement != nil {
+		t.Fatal("hot pool create must not report a bulkInsert placement")
+	}
+	if succeeded.zone != "us-central1-a" {
+		t.Fatalf("succeeded zone=%q, want us-central1-a", succeeded.zone)
 	}
 	if got := atomic.LoadInt32(&bulkCalls); got != 0 {
 		t.Fatalf("bulk calls=%d, want 0", got)
@@ -1055,13 +1061,19 @@ func TestInsertWithBulkFallbackRecordsRejectedAttempt(t *testing.T) {
 	in := newTestInstance()
 	in.Metadata = &compute.Metadata{}
 	in.NetworkInterfaces = []*compute.NetworkInterface{{}}
-	_, _, _, err := p.insertWithBulkFallback(
+	_, succeeded, placement, err := p.insertWithBulkFallback(
 		context.Background(), in, twoZoneCandidates(),
 		&types.InstanceCreateOpts{PoolName: "linux-amd64", ResourceClass: "medium"},
 		"c4d-standard-8", "hyperdisk-balanced", true, false, logger.Discard(),
 	)
 	if err != nil {
 		t.Fatalf("insertWithBulkFallback: %v", err)
+	}
+	if placement != nil {
+		t.Fatal("rejected bulkInsert must not report a placement")
+	}
+	if succeeded.zone != "us-central1-a" {
+		t.Fatalf("succeeded zone=%q, want us-central1-a", succeeded.zone)
 	}
 	got := testutil.ToFloat64(p.metrics.GCPBulkInsertAttemptsCount.WithLabelValues(
 		"linux-amd64", "medium", "us-central1", "c4d-standard-8", metric.BulkInsertOutcomeRejected, metric.GCPReasonInvalidRequest,
