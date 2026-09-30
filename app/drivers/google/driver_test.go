@@ -15,10 +15,12 @@ import (
 
 	"github.com/drone/runner-go/logger"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 
+	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
@@ -418,13 +420,26 @@ const stockoutMsg = "The zone 'projects/proj/zones/us-central1-a' does not have 
 // project-wide, so reusing a name across zones returns 409 alreadyExists unless
 // the previous instance was deleted first.
 type fakeCompute struct {
-	mu           sync.Mutex
-	exists       bool                // is the (project-wide) instance name currently taken
-	events       []string            // ordered insert:/delete: calls, for ordering asserts
-	inserts      []*compute.Instance // decoded request body of each accepted insert
-	insertCount  int32
-	deleteCount  int32
-	stockoutZone string // inserts here "succeed" then the op fails with stockout
+	mu            sync.Mutex
+	exists        bool                // is the (project-wide) instance name currently taken
+	events        []string            // ordered insert:/delete: calls, for ordering asserts
+	inserts       []*compute.Instance // decoded request body of each accepted insert
+	insertCount   int32
+	deleteCount   int32
+	stockoutZone  string   // inserts here "succeed" then the op fails with stockout
+	stockoutZones []string // additional zones whose inserts fail with stockout
+}
+
+func (f *fakeCompute) isStockout(zone string) bool {
+	if zone == f.stockoutZone {
+		return true
+	}
+	for _, stockoutZone := range f.stockoutZones {
+		if zone == stockoutZone {
+			return true
+		}
+	}
+	return false
 }
 
 func zoneFromPath(path string) string {
@@ -482,7 +497,7 @@ func (f *fakeCompute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	case r.Method == http.MethodGet && strings.Contains(path, "/operations/"):
 		op := path[strings.Index(path, "/operations/")+len("/operations/"):]
-		if strings.HasPrefix(op, "opinsert-") && strings.TrimPrefix(op, "opinsert-") == f.stockoutZone {
+		if strings.HasPrefix(op, "opinsert-") && f.isStockout(strings.TrimPrefix(op, "opinsert-")) {
 			writeJSON(w, http.StatusOK, map[string]any{
 				"name":   op,
 				"status": "DONE",
@@ -702,6 +717,96 @@ func TestInsertWithStockoutRetry_NoRetryWhenDisabled(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&f.deleteCount); got != 0 {
 		t.Errorf("expected no cleanup delete when retry disabled, got %d", got)
+	}
+}
+
+// TestInsertWithStockoutRetry_RecordsEachStockoutAttempt counts one sample per
+// stocked-out zone. A later successful insert is not counted.
+func TestInsertWithStockoutRetry_RecordsEachStockoutAttempt(t *testing.T) {
+	const poolID = "linux-amd64"
+	const machineType = "c4d-standard-4"
+
+	t.Run("alternate zone succeeds", func(t *testing.T) {
+		f := &fakeCompute{stockoutZone: "us-central1-a"}
+		p, cleanup := newFakeComputeConfig(t, f)
+		defer cleanup()
+		p.metrics = newStockoutTestMetrics()
+
+		_, succeeded, err := p.insertWithStockoutRetry(
+			context.Background(), newTestInstance(), twoZoneCandidates(),
+			&types.InstanceCreateOpts{PoolName: poolID}, machineType, "pd-balanced",
+			true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
+		)
+		if err != nil {
+			t.Fatalf("expected retry to succeed, got %v", err)
+		}
+		if succeeded.zone != "us-central1-b" {
+			t.Fatalf("expected success in us-central1-b, got %s", succeeded.zone)
+		}
+		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-a", machineType, "1", 1)
+		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-b", machineType, "1", 0)
+		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-b", machineType, "2", 0)
+	})
+
+	t.Run("third try stockout", func(t *testing.T) {
+		f := &fakeCompute{stockoutZones: []string{"us-central1-a", "us-central1-b", "us-central1-c"}}
+		p, cleanup := newFakeComputeConfig(t, f)
+		defer cleanup()
+		p.metrics = newStockoutTestMetrics()
+
+		candidates := []createCandidate{
+			{zone: "us-central1-a", network: "projects/proj/global/networks/vpc", subnetwork: "projects/proj/regions/us-central1/subnetworks/sub", tags: []string{"t"}},
+			{zone: "us-central1-b", network: "projects/proj/global/networks/vpc", subnetwork: "projects/proj/regions/us-central1/subnetworks/sub", tags: []string{"t"}},
+			{zone: "us-central1-c", network: "projects/proj/global/networks/vpc", subnetwork: "projects/proj/regions/us-central1/subnetworks/sub", tags: []string{"t"}},
+		}
+		_, _, err := p.insertWithStockoutRetry(
+			context.Background(), newTestInstance(), candidates,
+			&types.InstanceCreateOpts{PoolName: poolID}, machineType, "pd-balanced",
+			true /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
+		)
+		if err == nil {
+			t.Fatal("expected stockout error after the third try")
+		}
+		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-a", machineType, "1", 1)
+		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-b", machineType, "2", 1)
+		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-c", machineType, "3", 1)
+	})
+
+	t.Run("retry disabled", func(t *testing.T) {
+		f := &fakeCompute{stockoutZone: "us-central1-a"}
+		p, cleanup := newFakeComputeConfig(t, f)
+		defer cleanup()
+		p.metrics = newStockoutTestMetrics()
+
+		_, _, err := p.insertWithStockoutRetry(
+			context.Background(), newTestInstance(), twoZoneCandidates(),
+			&types.InstanceCreateOpts{PoolName: poolID}, machineType, "pd-balanced",
+			false /*stockoutRetryEnabled*/, false /*usesReservation*/, logger.Discard(),
+		)
+		if err == nil {
+			t.Fatal("expected stockout error when retry is disabled")
+		}
+		assertStockoutAttempts(t, p.metrics, poolID, "us-central1-a", machineType, "1", 1)
+	})
+}
+
+func newStockoutTestMetrics() *metric.Metrics {
+	return &metric.Metrics{
+		GCPAPIRequestsCount:      metric.GCPAPIRequestsCount(),
+		GCPAPIRequestDuration:    metric.GCPAPIRequestDuration(),
+		GCPOperationsCount:       metric.GCPOperationsCount(),
+		GCPOperationDuration:     metric.GCPOperationDuration(),
+		GCPOperationRetriesCount: metric.GCPOperationRetriesCount(),
+		GCPOperationsInflight:    metric.GCPOperationsInflight(),
+		GCPStockoutAttemptsCount: metric.GCPStockoutAttemptsCount(),
+	}
+}
+
+func assertStockoutAttempts(t *testing.T, m *metric.Metrics, poolID, zone, vmType, attempt string, want float64) {
+	t.Helper()
+	got := testutil.ToFloat64(m.GCPStockoutAttemptsCount.WithLabelValues(poolID, zone, vmType, attempt))
+	if got != want {
+		t.Errorf("stockout attempts pool=%s zone=%s vm_type=%s attempt=%s: got %v, want %v", poolID, zone, vmType, attempt, got, want)
 	}
 }
 

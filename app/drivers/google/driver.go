@@ -838,6 +838,7 @@ func (p *config) insertWithStockoutRetry(
 			attemptLogr.WithError(attemptErr).
 				WithField("machine_type", machineType).
 				Warnln("google: stockout detected for zone")
+			p.metrics.RecordStockoutAttempt(opts.PoolName, zone, machineType, attempt+1)
 			if !usesReservation {
 				p.markStockout(zone, machineType)
 			}

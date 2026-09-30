@@ -1,6 +1,7 @@
 package metric
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -180,6 +181,19 @@ func GCPBulkInsertDuration() *prometheus.HistogramVec {
 	)
 }
 
+// GCPStockoutAttemptsCount counts zonal VM create attempts that failed with a
+// GCP stockout. One increment matches one stocked-out candidate in the retry
+// loop. attempt is the 1-based try within that create: "1", "2", or "3".
+func GCPStockoutAttemptsCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "runner_gcp_stockout_attempts_total",
+			Help: "Total number of zonal VM create attempts that failed with a GCP stockout",
+		},
+		[]string{"pool_id", "zone", "vm_type", "attempt"},
+	)
+}
+
 // GCPBulkInsertReconcileCount counts reconciliation after an ambiguous bulkInsert.
 func GCPBulkInsertReconcileCount() *prometheus.CounterVec {
 	return prometheus.NewCounterVec(
@@ -203,6 +217,16 @@ func GCPOperationsInflight() *prometheus.GaugeVec {
 		},
 		[]string{"resource", "operation", "zone"},
 	)
+}
+
+// RecordStockoutAttempt increments the zonal stockout counter. attempt is the
+// 1-based try within the create. Safe to call on a nil *Metrics or when the
+// counter is not wired.
+func (m *Metrics) RecordStockoutAttempt(poolID, zone, vmType string, attempt int) {
+	if m == nil || m.GCPStockoutAttemptsCount == nil {
+		return
+	}
+	m.GCPStockoutAttemptsCount.WithLabelValues(poolID, zone, vmType, strconv.Itoa(attempt)).Inc()
 }
 
 // RecordBulkInsertAttempt increments the bulkInsert attempt counter and observes its duration.
