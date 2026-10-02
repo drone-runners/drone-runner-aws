@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -32,8 +33,10 @@ func TestBinaryPresence(t *testing.T) {
 		"lite-engine-darwin-arm64",
 		"lite-engine-windows-amd64.exe",
 	} {
-		checks = append(checks, urlCheck{"lite-engine primary", join(cfg.LiteEngine.Path, filename)})
-		checks = append(checks, urlCheck{"lite-engine fallback", join(cfg.LiteEngine.FallbackPath, filename)})
+		checks = append(checks,
+			urlCheck{"lite-engine primary", join(cfg.LiteEngine.Path, filename)},
+			urlCheck{"lite-engine fallback", join(cfg.LiteEngine.FallbackPath, filename)},
+		)
 	}
 
 	// plugin
@@ -44,8 +47,10 @@ func TestBinaryPresence(t *testing.T) {
 		"plugin-darwin-arm64",
 		"plugin-windows-amd64.exe",
 	} {
-		checks = append(checks, urlCheck{"plugin primary", join(cfg.Settings.PluginBinaryURI, filename)})
-		checks = append(checks, urlCheck{"plugin fallback", join(cfg.Settings.PluginBinaryFallbackURI, filename)})
+		checks = append(checks,
+			urlCheck{"plugin primary", join(cfg.Settings.PluginBinaryURI, filename)},
+			urlCheck{"plugin fallback", join(cfg.Settings.PluginBinaryFallbackURI, filename)},
+		)
 	}
 
 	// auto-injection
@@ -67,8 +72,10 @@ func TestBinaryPresence(t *testing.T) {
 		"hcli-darwin-arm64",
 		"hcli-windows-amd64.exe",
 	} {
-		checks = append(checks, urlCheck{"hcli primary", join(cfg.Settings.AnnotationsBinaryURI, filename)})
-		checks = append(checks, urlCheck{"hcli fallback", join(cfg.Settings.AnnotationsBinaryFallbackURI, filename)})
+		checks = append(checks,
+			urlCheck{"hcli primary", join(cfg.Settings.AnnotationsBinaryURI, filename)},
+			urlCheck{"hcli fallback", join(cfg.Settings.AnnotationsBinaryFallbackURI, filename)},
+		)
 	}
 
 	// envman
@@ -76,8 +83,10 @@ func TestBinaryPresence(t *testing.T) {
 		"envman-Linux-x86_64",
 		"envman-Darwin-arm64",
 	} {
-		checks = append(checks, urlCheck{"envman primary", join(cfg.Settings.EnvmanBinaryURI, filename)})
-		checks = append(checks, urlCheck{"envman fallback", join(cfg.Settings.EnvmanBinaryFallbackURI, filename)})
+		checks = append(checks,
+			urlCheck{"envman primary", join(cfg.Settings.EnvmanBinaryURI, filename)},
+			urlCheck{"envman fallback", join(cfg.Settings.EnvmanBinaryFallbackURI, filename)},
+		)
 	}
 
 	// tmate
@@ -86,15 +95,21 @@ func TestBinaryPresence(t *testing.T) {
 		"tmate-1.0-static-linux-arm64v8.tar.xz",
 		"tmate-1.0-static-mac-arm64.tar.xz",
 	} {
-		checks = append(checks, urlCheck{"tmate primary", join(cfg.Settings.TmateBinaryURI, filename)})
-		checks = append(checks, urlCheck{"tmate fallback", join(cfg.Settings.TmateBinaryFallbackURI, filename)})
+		checks = append(checks,
+			urlCheck{"tmate primary", join(cfg.Settings.TmateBinaryURI, filename)},
+			urlCheck{"tmate fallback", join(cfg.Settings.TmateBinaryFallbackURI, filename)},
+		)
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	failed := false
 
 	for _, c := range checks {
-		resp, err := client.Head(c.url)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodHead, c.url, nil)
+		if err != nil {
+			t.Fatalf("failed to build request for %s: %v", c.url, err)
+		}
+		resp, err := client.Do(req)
 		if err != nil {
 			t.Logf("FAIL [%s] %s: %v", c.label, c.url, err)
 			failed = true
