@@ -105,7 +105,7 @@ func TestBinaryPresence(t *testing.T) {
 	failed := false
 
 	for _, c := range checks {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodHead, c.url, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodHead, c.url, http.NoBody)
 		if err != nil {
 			t.Fatalf("failed to build request for %s: %v", c.url, err)
 		}
