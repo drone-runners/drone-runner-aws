@@ -172,10 +172,17 @@ func (m *Manager) purgeStaleInstancesForPool(
 			m.metrics.RecordInstanceDestroyAttempt(pool.Name, instance.Zone, reasonByID[instance.ID], outcome)
 			if outcome == PurgerOutcomeDestroyed && reasonByID[instance.ID] == PurgerReasonBusyMaxAge {
 				if usageStart, ok := usageStartByID[instance.ID]; ok && usageStart > 0 {
+					dwell := time.Since(time.Unix(usageStart, 0))
 					m.metrics.RecordVMUsageDuration(
 						pool.Name, instance.Zone, instance.Size, string(instance.Source),
-						VMTerminationReasonPurgerStale, time.Since(time.Unix(usageStart, 0)),
+						VMTerminationReasonPurgerStale, dwell,
 					)
+					// Note: still keyed off inst.Updated here (not inst.Started), per the known
+					// limitation documented on usageStartByID above - this Manager's warm-pool
+					// claim path doesn't refresh instance_started, so Started would overstate
+					// dwell by however long the instance sat idle in the pool before being
+					// claimed. Only DistributedManager's claim path reliably refreshes Started.
+					m.metrics.RecordVMUsageSeconds(instance.OwnerID, string(instance.Provider), instance.Zone, instance.OS, instance.Arch, instance.Size, dwell)
 				}
 			}
 		}

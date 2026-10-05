@@ -65,6 +65,7 @@ type Metrics struct {
 	VMCreationAttemptsCount *prometheus.CounterVec
 	VMCreationDurationCount *prometheus.HistogramVec
 	VMUsageDurationCount    *prometheus.HistogramVec
+	VMUsageSecondsTotal     *prometheus.CounterVec
 	VMsCurrent              *prometheus.GaugeVec
 
 	// Hibernation and resume metrics
@@ -575,6 +576,7 @@ func RegisterMetrics() *Metrics {
 	vmCreationAttemptsCount := VMCreationAttemptsCount()
 	vmCreationDurationCount := VMCreationDurationCount()
 	vmUsageDurationCount := VMUsageDurationCount()
+	vmUsageSecondsTotal := VMUsageSecondsTotal()
 	vmsCurrent := VMsCurrent()
 
 	// Hibernation and resume metrics
@@ -610,7 +612,7 @@ func RegisterMetrics() *Metrics {
 		gcpStockoutAttemptsCount,
 		purgerLastRunTimestamp, purgerInstanceDestroyAttemptsCount,
 		purgerInstancesForceDeletedCount, purgerCapacityDestroyAttemptsCount,
-		vmCreationAttemptsCount, vmCreationDurationCount, vmUsageDurationCount, vmsCurrent,
+		vmCreationAttemptsCount, vmCreationDurationCount, vmUsageDurationCount, vmUsageSecondsTotal, vmsCurrent,
 		vmHibernateAttemptsCount, vmHibernateDurationCount, vmResumeAttemptsCount,
 		vmResumeDurationCount, vmResumeToReadyDurationCount,
 		vmHealthCheckAttemptsCount, vmHealthCheckDurationCount, vmSetupAttemptsCount,
@@ -651,6 +653,7 @@ func RegisterMetrics() *Metrics {
 		VMCreationAttemptsCount:                 vmCreationAttemptsCount,
 		VMCreationDurationCount:                 vmCreationDurationCount,
 		VMUsageDurationCount:                    vmUsageDurationCount,
+		VMUsageSecondsTotal:                     vmUsageSecondsTotal,
 		VMsCurrent:                              vmsCurrent,
 		VMHibernateAttemptsCount:                vmHibernateAttemptsCount,
 		VMHibernateDurationCount:                vmHibernateDurationCount,

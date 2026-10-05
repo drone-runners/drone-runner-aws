@@ -106,7 +106,15 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 
 	for rows.Next() {
 		var deletedRow types.Instance
-		err := rows.Scan(&deletedRow.ID, &deletedRow.Name, &deletedRow.NodeID, &deletedRow.RunnerName, &deletedRow.TenantID, &deletedRow.Zone)
+		// Column order must match instanceCleanupReturningColumns (app/drivers/distributed_manager.go),
+		// the only RETURNING clause callers of DeleteAndReturn currently use. instance_started,
+		// instance_owner_id, instance_provider, instance_size, instance_os, and instance_arch are
+		// returned so callers can compute per-account/machine-type usage duration (CI-24547) from
+		// the row as it existed right before being claimed/deleted, without a separate re-fetch.
+		err := rows.Scan(
+			&deletedRow.ID, &deletedRow.Name, &deletedRow.NodeID, &deletedRow.RunnerName, &deletedRow.TenantID, &deletedRow.Zone,
+			&deletedRow.Started, &deletedRow.OwnerID, &deletedRow.Provider, &deletedRow.Size, &deletedRow.OS, &deletedRow.Arch,
+		)
 		if err != nil {
 			tx.Rollback() //nolint
 			return nil, err
