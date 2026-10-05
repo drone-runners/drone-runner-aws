@@ -1,0 +1,43 @@
+metric/builds.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 68,579,615,656
+app/drivers/distributed_manager.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 1168-1179,1215,1258-1270,1298,1338
+store/database/sql/instances.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 109-117
+app/drivers/purger_metrics.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 68-71
+app/drivers/purger_test.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 161-162,197-207,240
+app/drivers/distributed_manager_purger_test.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 183-265
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 266
+command/harness/destroy.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 175-186,270-275,280,283,285
+command/harness/destroy_vm_metrics_test.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 16-20,26,30,38
+app/drivers/purger_metrics_test.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 45-50,92,142-147
+metric/vm.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 53-68,110-120
+app/drivers/purger.go
+  2f4608e5-2751-4f90-b175-2f3e88ab639e 175,178,180-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "97453573dc506cc6ecf03cff84f7ad68241c1b79",
+  "prompts": {
+    "223577bb30448ff2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2f4608e5-2751-4f90-b175-2f3e88ab639e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 229,
+      "total_deletions": 45,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
