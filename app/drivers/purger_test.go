@@ -158,7 +158,8 @@ func TestManager_PurgeStaleInstancesForPool_BusyDestroy_RecordsVMUsageDuration(t
 	usageStart := now.Add(-90 * time.Minute)
 	staleBusy := &types.Instance{
 		ID: "busy-stale", Pool: "pool1", State: types.StateInUse, Zone: "us-east1-a",
-		Size: "n1-standard-2", Source: types.InstanceSourcePool,
+		Size: "n1-standard-2", Source: types.InstanceSourcePool, OwnerID: "acct-1",
+		Provider: types.DriverType("mock"), Platform: types.Platform{OS: "linux", Arch: "amd64"},
 		Started: now.Add(-2 * time.Hour).Unix(), Updated: usageStart.Unix(),
 	}
 
@@ -193,6 +194,17 @@ func TestManager_PurgeStaleInstancesForPool_BusyDestroy_RecordsVMUsageDuration(t
 		// dwell should be ~90 minutes (usageStart to now), with generous slack for test runtime.
 		assert.InDelta(t, 90*time.Minute.Seconds(), rec.dwell.Seconds(), 30)
 	}
+
+	if assert.Len(t, fakeMetrics.vmUsageSeconds, 1) {
+		rec := fakeMetrics.vmUsageSeconds[0]
+		assert.Equal(t, "acct-1", rec.accountID)
+		assert.Equal(t, "mock", rec.provider)
+		assert.Equal(t, "us-east1-a", rec.zone)
+		assert.Equal(t, "linux", rec.osName)
+		assert.Equal(t, "amd64", rec.arch)
+		assert.Equal(t, "n1-standard-2", rec.size)
+		assert.InDelta(t, 90*time.Minute.Seconds(), rec.dwell.Seconds(), 30)
+	}
 }
 
 func TestManager_PurgeStaleInstancesForPool_FreeDestroy_DoesNotRecordVMUsageDuration(t *testing.T) {
@@ -225,6 +237,7 @@ func TestManager_PurgeStaleInstancesForPool_FreeDestroy_DoesNotRecordVMUsageDura
 	err := m.purgeStaleInstancesForPool(context.Background(), pool, "server", time.Hour, time.Hour)
 	assert.NoError(t, err)
 	assert.Empty(t, fakeMetrics.vmUsageDurs)
+	assert.Empty(t, fakeMetrics.vmUsageSeconds)
 }
 
 func TestManager_PurgeStaleInstancesForPool_NilMetricsSafe(t *testing.T) {

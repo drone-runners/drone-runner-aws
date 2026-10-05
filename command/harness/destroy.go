@@ -172,17 +172,18 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_id", inst.ID).
 		WithField("instance_name", inst.Name)
 
-	// usageStartUnix is a best-effort proxy for "became inuse at": there's no dedicated column
-	// for that, so this reads inst.Updated before it gets overwritten below. It's only reliable
-	// when nothing else wrote to this row between the inuse claim and now; if inst came from the
-	// caller's request payload rather than a fresh DB fetch (see the ValidateStructForKeys branch
-	// above), Updated will be zero and usage duration is simply not recorded for that call.
-	// Known limitation: for instances claimed from the non-distributed Manager's warm pool,
-	// inst.Updated is not refreshed at claim time (see provisionFromPool in
-	// app/drivers/provisioner.go), so this proxy reflects "last touched at" rather than "became
-	// inuse at" and can understate/overstate usage duration by however long the instance sat
-	// idle in the pool before being claimed.
-	usageStartUnix := inst.Updated
+	// usageStartUnix is "became inuse at": inst.Started, read before it gets overwritten below.
+	// For DistributedManager this is reliable - FindAndClaim's updateStartTime param refreshes
+	// instance_started to "now" atomically on every transition into StateInUse (hot-pool claim,
+	// on-demand creation, and hibernate-resume all set/refresh it - see
+	// app/drivers/distributed_manager.go and app/drivers/provisioner.go). It's zero/unset (and
+	// usage duration simply isn't recorded) only when inst came from the caller's request payload
+	// rather than a fresh DB fetch (see the ValidateStructForKeys branch above).
+	// Known limitation: for instances claimed from the non-distributed Manager's warm pool
+	// without going through hibernation, Started is not refreshed at claim time (see
+	// provisionFromPool in app/drivers/provisioner.go), so this can overstate usage duration by
+	// however long the instance sat idle in the pool before being claimed.
+	usageStartUnix := inst.Started
 
 	// Update instance state to terminating and update timestamp
 	inst.State = types.StateTerminating
@@ -266,20 +267,22 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	return inst, nil
 }
 
-// recordNormalCleanupUsageDuration records runner_vm_usage_duration_seconds with
-// termination_reason=normal_cleanup after a successful handleDestroy. usageStartUnix is a
-// best-effort proxy for "became inuse at" (inst.Updated, read before it was overwritten to
-// terminating); it is 0/unset when inst was built from the caller's request payload rather than
-// fetched fresh from the DB (see the ValidateStructForKeys branch in handleDestroy), in which
-// case usage duration is simply not recorded for that call.
+// recordNormalCleanupUsageDuration records runner_vm_usage_duration_seconds (pool-sliced) and
+// runner_vm_usage_seconds_total (account/machine-type-sliced, CI-24547) after a successful
+// handleDestroy. usageStartUnix is "became inuse at" (inst.Started, read before it was
+// overwritten to terminating); it is 0/unset when inst was built from the caller's request
+// payload rather than fetched fresh from the DB (see the ValidateStructForKeys branch in
+// handleDestroy), in which case usage duration is simply not recorded for that call.
 func recordNormalCleanupUsageDuration(metrics *metric.Metrics, poolID string, inst *types.Instance, usageStartUnix int64) {
 	if metrics == nil || usageStartUnix <= 0 {
 		return
 	}
+	dwell := time.Since(time.Unix(usageStartUnix, 0))
 	metrics.RecordVMUsageDuration(
 		poolID, inst.Zone, inst.Size, string(inst.Source),
-		drivers.VMTerminationReasonNormalCleanup, time.Since(time.Unix(usageStartUnix, 0)),
+		drivers.VMTerminationReasonNormalCleanup, dwell,
 	)
+	metrics.RecordVMUsageSeconds(inst.OwnerID, string(inst.Provider), inst.Zone, inst.OS, inst.Arch, inst.Size, dwell)
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {

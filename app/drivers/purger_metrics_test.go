@@ -42,6 +42,12 @@ type vmUsageDurationRecord struct {
 	dwell                                           time.Duration
 }
 
+// vmUsageSecondsRecord captures one call to fakePurgerMetrics.RecordVMUsageSeconds.
+type vmUsageSecondsRecord struct {
+	accountID, provider, zone, osName, arch, size string
+	dwell                                         time.Duration
+}
+
 // vmHibernateAttemptRecord captures one call to fakePurgerMetrics.RecordVMHibernateAttempt.
 type vmHibernateAttemptRecord struct {
 	poolID, zone, vmType, outcome, reason string
@@ -83,6 +89,7 @@ type fakePurgerMetrics struct {
 	vmCreationAtts   []vmCreationAttemptRecord
 	vmCreationDurs   []vmCreationDurationRecord
 	vmUsageDurs      []vmUsageDurationRecord
+	vmUsageSeconds   []vmUsageSecondsRecord
 	vmHibernateAtts  []vmHibernateAttemptRecord
 	vmHibernateDurs  []vmHibernateDurationRecord
 	vmResumeAtts     []vmResumeAttemptRecord
@@ -130,6 +137,12 @@ func (f *fakePurgerMetrics) RecordVMUsageDuration(poolID, zone, vmType, source, 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.vmUsageDurs = append(f.vmUsageDurs, vmUsageDurationRecord{poolID, zone, vmType, source, terminationReason, dwell})
+}
+
+func (f *fakePurgerMetrics) RecordVMUsageSeconds(accountID, provider, zone, osName, arch, size string, dwell time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.vmUsageSeconds = append(f.vmUsageSeconds, vmUsageSecondsRecord{accountID, provider, zone, osName, arch, size, dwell})
 }
 
 func (f *fakePurgerMetrics) RecordVMHibernateAttempt(poolID, zone, vmType, outcome, reason string) {

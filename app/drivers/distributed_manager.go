@@ -1165,6 +1165,18 @@ func (d *DistributedManager) findOrphanedInUseCapacities(ctx context.Context, po
 	return orphans
 }
 
+// instanceCleanupReturningColumns is the RETURNING column list shared by every
+// DeleteAndReturn call in this file (claim-to-terminating, final delete-after-destroy,
+// and force-delete-leaked). InstanceStore.DeleteAndReturn's row Scan is positional and
+// shared across all three call sites, so the column list - and its order - must stay
+// identical everywhere it's used. instance_started, instance_owner_id, instance_provider,
+// instance_size, instance_os, and instance_arch are included (beyond what's logged) so the
+// claim call site can compute per-account/machine-type usage duration (CI-24547) from the
+// pre-claim row state, which would otherwise be lost once instance_state/instance_updated
+// are overwritten by the same UPDATE.
+const instanceCleanupReturningColumns = "RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id, instance_zone, " +
+	"instance_started, instance_owner_id, instance_provider, instance_size, instance_os, instance_arch"
+
 // executeInstanceCleanup claims candidate rows into StateTerminating, asks the
 // driver to destroy them, and only deletes the DB rows that were destroyed
 // successfully. Rows whose destroy fails stay in StateTerminating and will be
@@ -1200,7 +1212,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		Set("instance_state", types.StateTerminating).
 		Set("instance_updated", squirrel.Expr("extract(epoch FROM now())")).
 		Where(conditions).
-		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id, instance_zone").
+		Suffix(instanceCleanupReturningColumns).
 		ToSql()
 	if err != nil {
 		return nil, err
@@ -1243,6 +1255,19 @@ func (d *DistributedManager) executeInstanceCleanup(
 				outcome = PurgerOutcomeFailedLeftForRetry
 			}
 			d.metrics.RecordInstanceDestroyAttempt(pool.Name, inst.Zone, reason, outcome)
+
+			// Usage duration/seconds only make sense for instances that were actually in use
+			// (cleanupType == "busy"); free/stuck-provisioning instances never ran a job.
+			// instance_started is reliable here because the claim UPDATE above (unlike the
+			// non-distributed Manager's warm-pool claim) always refreshes it to "now" on the
+			// transition into StateInUse - see FindAndClaim's updateStartTime param - so it
+			// still reflects "became inuse at" even though instance_updated was just overwritten
+			// to the terminating-claim time by this same cleanup pass.
+			if outcome == PurgerOutcomeDestroyed && cleanupType == "busy" && inst.Started > 0 {
+				dwell := time.Since(time.Unix(inst.Started, 0))
+				d.metrics.RecordVMUsageDuration(pool.Name, inst.Zone, inst.Size, string(inst.Source), VMTerminationReasonPurgerStale, dwell)
+				d.metrics.RecordVMUsageSeconds(inst.OwnerID, string(inst.Provider), inst.Zone, inst.OS, inst.Arch, inst.Size, dwell)
+			}
 		}
 	}
 
@@ -1270,7 +1295,7 @@ func (d *DistributedManager) executeInstanceCleanup(
 		deleteSQL, deleteArgs, buildErr := builder.
 			Delete("instances").
 			Where(squirrel.Eq{"instance_id": successfulIDs}).
-			Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id, instance_zone").
+			Suffix(instanceCleanupReturningColumns).
 			ToSql()
 		if buildErr != nil {
 			return successfulInstances, fmt.Errorf("failed to build delete query for destroyed instances: %w", buildErr)
@@ -1310,7 +1335,7 @@ func (d *DistributedManager) forceDeleteLeakedInstances(
 			squirrel.Eq{"instance_pool": pool.Name},
 			squirrel.Lt{"instance_started": leakCutoff},
 		}).
-		Suffix("RETURNING instance_id, instance_name, instance_node_id, runner_name, tenant_id, instance_zone").
+		Suffix(instanceCleanupReturningColumns).
 		ToSql()
 	if err != nil {
 		logr.WithError(err).Error("distributed dlite: purger: failed to build leak-candidate delete query")
