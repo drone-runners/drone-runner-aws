@@ -1,0 +1,19 @@
+app/drivers/purger_metrics_test.go
+  s_223577bb30448f::t_95aeb4f926113d 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dbd4c60186a7fde56a7deb7ea412662070790bcc",
+  "prompts": {},
+  "sessions": {
+    "s_223577bb30448f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2f4608e5-2751-4f90-b175-2f3e88ab639e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
