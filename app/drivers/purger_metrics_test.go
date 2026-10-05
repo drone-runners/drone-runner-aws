@@ -45,7 +45,7 @@ type vmUsageDurationRecord struct {
 // vmUsageSecondsRecord captures one call to fakePurgerMetrics.RecordVMUsageSeconds.
 type vmUsageSecondsRecord struct {
 	accountID, provider, zone, osName, arch, size string
-	dwell                                          time.Duration
+	dwell                                         time.Duration
 }
 
 // vmHibernateAttemptRecord captures one call to fakePurgerMetrics.RecordVMHibernateAttempt.
