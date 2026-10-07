@@ -779,3 +779,144 @@ func TestGetDynamicConfig_RoundRobinSetsSubnet(t *testing.T) {
 	assert.Equal(t, "us-east-1b", cfg2.availabilityZone)
 	assert.Equal(t, "subnet-bbb", cfg2.subnet)
 }
+
+// TestStart tests the Start method for hibernate resume behavior
+func TestStart(t *testing.T) {
+	instanceID := "i-1234567890abcdef0"
+
+	tests := []struct {
+		name    string
+		mock    *mockEC2Client
+		wantErr bool
+		wantIP  string
+		errMsg  string
+	}{
+		{
+			name: "instance already running",
+			mock: &mockEC2Client{
+				DescribeInstancesFunc: func(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+					return &ec2.DescribeInstancesOutput{
+						Reservations: []types.Reservation{
+							{
+								Instances: []types.Instance{
+									{
+										InstanceId:       aws.String(instanceID),
+										PrivateIpAddress: aws.String("10.0.0.1"),
+										State: &types.InstanceState{
+											Name: types.InstanceStateNameRunning,
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				},
+			},
+			wantErr: false,
+			wantIP:  "10.0.0.1",
+		},
+		{
+			name: "instance terminated - cannot start",
+			mock: &mockEC2Client{
+				DescribeInstancesFunc: func(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+					return &ec2.DescribeInstancesOutput{
+						Reservations: []types.Reservation{
+							{
+								Instances: []types.Instance{
+									{
+										InstanceId: aws.String(instanceID),
+										State: &types.InstanceState{
+											Name: types.InstanceStateNameTerminated,
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				},
+			},
+			wantErr: true,
+			errMsg:  "terminal state",
+		},
+		{
+			name: "instance shutting-down - cannot start",
+			mock: &mockEC2Client{
+				DescribeInstancesFunc: func(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+					return &ec2.DescribeInstancesOutput{
+						Reservations: []types.Reservation{
+							{
+								Instances: []types.Instance{
+									{
+										InstanceId: aws.String(instanceID),
+										State: &types.InstanceState{
+											Name: types.InstanceStateNameShuttingDown,
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				},
+			},
+			wantErr: true,
+			errMsg:  "terminal state",
+		},
+		{
+			name: "StartInstances API fails",
+			mock: &mockEC2Client{
+				DescribeInstancesFunc: func(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+					return &ec2.DescribeInstancesOutput{
+						Reservations: []types.Reservation{
+							{
+								Instances: []types.Instance{
+									{
+										InstanceId: aws.String(instanceID),
+										State: &types.InstanceState{
+											Name: types.InstanceStateNameStopped,
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				},
+				StartInstancesFunc: func(ctx context.Context, params *ec2.StartInstancesInput, optFns ...func(*ec2.Options)) (*ec2.StartInstancesOutput, error) {
+					return nil, errors.New("insufficient capacity")
+				},
+			},
+			wantErr: true,
+			errMsg:  "insufficient capacity",
+		},
+		{
+			name: "getInstance fails",
+			mock: &mockEC2Client{
+				DescribeInstancesFunc: func(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+					return nil, errors.New("describe failed")
+				},
+			},
+			wantErr: true,
+			errMsg:  "failed to get instance",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &amazonConfig{
+				service: tt.mock,
+			}
+			instance := &drtypes.Instance{
+				ID: instanceID,
+			}
+			ip, err := p.Start(context.Background(), instance, "test-pool")
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantIP, ip)
+			}
+		})
+	}
+}
