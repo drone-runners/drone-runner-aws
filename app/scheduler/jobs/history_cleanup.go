@@ -11,6 +11,7 @@ import (
 
 const (
 	HistoryCleanupJobName = "history-cleanup"
+	logFieldCutoffTime    = "cutoff_time"
 )
 
 // HistoryCleanupJob periodically removes old utilization history records.
@@ -71,8 +72,8 @@ func (j *HistoryCleanupJob) Execute(ctx context.Context) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"rows_deleted": rowsAffected,
-		"cutoff_time":  time.Unix(cutoff, 0),
+		"rows_deleted":     rowsAffected,
+		logFieldCutoffTime: time.Unix(cutoff, 0),
 	}).Infoln("cleaned up old utilization records")
 
 	if j.capabilityStore != nil {
@@ -81,8 +82,8 @@ func (j *HistoryCleanupJob) Execute(ctx context.Context) error {
 			return err
 		}
 		logrus.WithFields(logrus.Fields{
-			"rows_deleted": rows,
-			"cutoff_time":  time.Unix(cutoff, 0),
+			"rows_deleted":     rows,
+			logFieldCutoffTime: time.Unix(cutoff, 0),
 		}).Infoln("cleaned up old capability utilization records")
 	}
 

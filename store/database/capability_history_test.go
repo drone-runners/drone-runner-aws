@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -59,8 +60,10 @@ func capKey(tier, arch, variant, tenant string) types.CapabilityKey {
 	return types.CapabilityKey{Tier: tier, OS: "linux", Arch: arch, VariantID: variant, TenantID: tenant}
 }
 
-func capRecord(k types.CapabilityKey, pool, image string, inUse int, at int64) *types.CapabilityUtilizationRecord {
-	return &types.CapabilityUtilizationRecord{CapabilityKey: k, Pool: pool, ImageName: image, InUseInstances: inUse, RecordedAt: at}
+func ptrKey(k types.CapabilityKey) *types.CapabilityKey { return &k } //nolint:gocritic
+
+func capRecord(k *types.CapabilityKey, pool, image string, inUse int, at int64) *types.CapabilityUtilizationRecord {
+	return &types.CapabilityUtilizationRecord{CapabilityKey: *k, Pool: pool, ImageName: image, InUseInstances: inUse, RecordedAt: at}
 }
 
 func TestCapabilityHistory_SumsAcrossPoolsPerRange(t *testing.T) {
@@ -68,21 +71,21 @@ func TestCapabilityHistory_SumsAcrossPoolsPerRange(t *testing.T) {
 		ctx := context.Background()
 		medium := capKey(types.TierPaid, "amd64", "variant_medium", "default")
 		records := []*types.CapabilityUtilizationRecord{
-			capRecord(medium, "linux-amd64", "img-a", 4, 100),
-			capRecord(medium, "linux-amd64", "img-b", 1, 100),
-			capRecord(medium, "linux-amd64-fallback", "", 3, 100),
-			capRecord(medium, "linux-amd64", "img-a", 2, 130),
-			capRecord(medium, "linux-amd64", "", 9, 500),
+			capRecord(&medium, "linux-amd64", "img-a", 4, 100),
+			capRecord(&medium, "linux-amd64", "img-b", 1, 100),
+			capRecord(&medium, "linux-amd64-fallback", "", 3, 100),
+			capRecord(&medium, "linux-amd64", "img-a", 2, 130),
+			capRecord(&medium, "linux-amd64", "", 9, 500),
 			// Other keys must not leak into the medium sums.
-			capRecord(capKey(types.TierFree, "amd64", "variant_medium", "default"), "linux-amd64-free", "", 50, 100),
-			capRecord(capKey(types.TierPaid, "arm64", "variant_medium", "default"), "linux-arm64", "", 50, 100),
-			capRecord(capKey(types.TierPaid, "amd64", "variant_medium", "acctA"), "linux-amd64", "", 50, 100),
+			capRecord(ptrKey(capKey(types.TierFree, "amd64", "variant_medium", "default")), "linux-amd64-free", "", 50, 100),
+			capRecord(ptrKey(capKey(types.TierPaid, "arm64", "variant_medium", "default")), "linux-arm64", "", 50, 100),
+			capRecord(ptrKey(capKey(types.TierPaid, "amd64", "variant_medium", "acctA")), "linux-amd64", "", 50, 100),
 		}
 		if err := s.CreateBatch(ctx, records); err != nil {
 			t.Fatalf("CreateBatch: %v", err)
 		}
 
-		got, err := s.GetHistoryBatch(ctx, medium, []store.TimeRange{
+		got, err := s.GetHistoryBatch(ctx, &medium, []store.TimeRange{
 			{StartTime: 0, EndTime: 200},
 			{StartTime: 400, EndTime: 600},
 			{StartTime: 1000, EndTime: 2000},
@@ -103,13 +106,13 @@ func TestCapabilityHistory_SumsAcrossPoolsPerRange(t *testing.T) {
 		}
 
 		// Empty tenant/variant on lookup resolve to default.
-		got, err = s.GetHistoryBatch(ctx, capKey(types.TierFree, "amd64", "variant_medium", ""), []store.TimeRange{{StartTime: 0, EndTime: 200}})
+		got, err = s.GetHistoryBatch(ctx, ptrKey(capKey(types.TierFree, "amd64", "variant_medium", "")), []store.TimeRange{{StartTime: 0, EndTime: 200}})
 		if err != nil {
 			t.Fatalf("GetHistoryBatch: %v", err)
 		}
 		assertSums(t, "free", got[0], []int64{100}, []int{50})
 
-		none, err := s.GetHistoryBatch(ctx, medium, nil)
+		none, err := s.GetHistoryBatch(ctx, &medium, nil)
 		if err != nil || none != nil {
 			t.Errorf("no ranges should return nil, got %v, %v", none, err)
 		}
@@ -118,13 +121,16 @@ func TestCapabilityHistory_SumsAcrossPoolsPerRange(t *testing.T) {
 
 func assertSums(t *testing.T, label string, recs []types.CapabilityUtilizationRecord, at []int64, sums []int) {
 	t.Helper()
-	if len(recs) != len(at) {
-		t.Fatalf("%s: got %d points %+v, want %d", label, len(recs), recs, len(at))
-	}
+	got := make([][2]int64, 0, len(recs))
 	for i := range recs {
-		if recs[i].RecordedAt != at[i] || recs[i].InUseInstances != sums[i] {
-			t.Errorf("%s[%d] = (%d, %d), want (%d, %d)", label, i, recs[i].RecordedAt, recs[i].InUseInstances, at[i], sums[i])
-		}
+		got = append(got, [2]int64{recs[i].RecordedAt, int64(recs[i].InUseInstances)})
+	}
+	want := make([][2]int64, 0, len(at))
+	for i, ts := range at {
+		want = append(want, [2]int64{ts, int64(sums[i])})
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s: (recorded_at, sum) = %v, want %v", label, got, want)
 	}
 }
 
@@ -132,7 +138,7 @@ func TestCapabilityHistory_DefaultsAndNullImage(t *testing.T) {
 	forEachCapabilityDB(t, func(t *testing.T, db *sqlx.DB, s *sql.CapabilityHistoryStore) {
 		ctx := context.Background()
 		k := types.CapabilityKey{Tier: types.TierPaid, OS: "linux", Arch: "amd64"}
-		if err := s.CreateBatch(ctx, []*types.CapabilityUtilizationRecord{capRecord(k, "p", "", 1, 10), capRecord(k, "p", "img", 1, 20)}); err != nil {
+		if err := s.CreateBatch(ctx, []*types.CapabilityUtilizationRecord{capRecord(&k, "p", "", 1, 10), capRecord(&k, "p", "img", 1, 20)}); err != nil {
 			t.Fatalf("CreateBatch: %v", err)
 		}
 		var rows []struct {
@@ -164,7 +170,7 @@ func TestCapabilityHistory_CreateBatchLarge(t *testing.T) {
 		k := capKey(types.TierPaid, "amd64", "default", "default")
 		var records []*types.CapabilityUtilizationRecord
 		for i := 0; i < 1234; i++ {
-			records = append(records, capRecord(k, "p", "", 1, int64(i)))
+			records = append(records, capRecord(&k, "p", "", 1, int64(i)))
 		}
 		if err := s.CreateBatch(ctx, records); err != nil {
 			t.Fatalf("CreateBatch: %v", err)
@@ -187,7 +193,7 @@ func TestCapabilityHistory_DeleteOlderThan(t *testing.T) {
 		ctx := context.Background()
 		k := capKey(types.TierPaid, "amd64", "default", "default")
 		if err := s.CreateBatch(ctx, []*types.CapabilityUtilizationRecord{
-			capRecord(k, "p", "", 1, 10), capRecord(k, "p", "", 1, 20), capRecord(k, "p", "", 1, 30),
+			capRecord(&k, "p", "", 1, 10), capRecord(&k, "p", "", 1, 20), capRecord(&k, "p", "", 1, 30),
 		}); err != nil {
 			t.Fatalf("CreateBatch: %v", err)
 		}
@@ -198,7 +204,7 @@ func TestCapabilityHistory_DeleteOlderThan(t *testing.T) {
 		if n != 2 {
 			t.Errorf("deleted %d, want 2", n)
 		}
-		got, _ := s.GetHistoryBatch(ctx, k, []store.TimeRange{{StartTime: 0, EndTime: 100}})
+		got, _ := s.GetHistoryBatch(ctx, &k, []store.TimeRange{{StartTime: 0, EndTime: 100}})
 		assertSums(t, "remaining", got[0], []int64{30}, []int{1})
 	})
 }
@@ -224,7 +230,7 @@ func TestCapabilityHistory_BackfillPool(t *testing.T) {
 		insertOldHistory(t, db, "other-pool", "default", "default", "", 7, 100)
 
 		medium := capKey(types.TierPaid, "amd64", "variant_medium", "default")
-		if err := s.CreateBatch(ctx, []*types.CapabilityUtilizationRecord{capRecord(medium, "linux-amd64", "img", 6, 300)}); err != nil {
+		if err := s.CreateBatch(ctx, []*types.CapabilityUtilizationRecord{capRecord(&medium, "linux-amd64", "img", 6, 300)}); err != nil {
 			t.Fatalf("CreateBatch: %v", err)
 		}
 
@@ -236,17 +242,17 @@ func TestCapabilityHistory_BackfillPool(t *testing.T) {
 			t.Errorf("inserted %d rows, want 3", n)
 		}
 
-		got, err := s.GetHistoryBatch(ctx, medium, []store.TimeRange{{StartTime: 0, EndTime: 1000}})
+		got, err := s.GetHistoryBatch(ctx, &medium, []store.TimeRange{{StartTime: 0, EndTime: 1000}})
 		if err != nil {
 			t.Fatalf("GetHistoryBatch: %v", err)
 		}
 		assertSums(t, "medium", got[0], []int64{100, 200, 300}, []int{4, 5, 6})
 
-		tenant, _ := s.GetHistoryBatch(ctx, capKey(types.TierPaid, "amd64", "default", "acctA"), []store.TimeRange{{StartTime: 0, EndTime: 1000}})
+		tenant, _ := s.GetHistoryBatch(ctx, ptrKey(capKey(types.TierPaid, "amd64", "default", "acctA")), []store.TimeRange{{StartTime: 0, EndTime: 1000}})
 		assertSums(t, "tenant with empty variant", tenant[0], []int64{100}, []int{2})
 
 		var nullImages int
-		if err := db.Get(&nullImages, "SELECT COUNT(*) FROM capability_utilization_history WHERE image_name IS NULL"); err != nil {
+		if err = db.Get(&nullImages, "SELECT COUNT(*) FROM capability_utilization_history WHERE image_name IS NULL"); err != nil {
 			t.Fatalf("count: %v", err)
 		}
 		if nullImages != 1 {
@@ -278,7 +284,7 @@ func TestCapabilityHistory_BackfillPoolWithoutCapabilityRows(t *testing.T) {
 		if n != 1 {
 			t.Errorf("inserted %d rows, want 1", n)
 		}
-		got, _ := s.GetHistoryBatch(ctx, capKey(types.TierFree, "amd64", "default", "default"), []store.TimeRange{{StartTime: 0, EndTime: 1000}})
+		got, _ := s.GetHistoryBatch(ctx, ptrKey(capKey(types.TierFree, "amd64", "default", "default")), []store.TimeRange{{StartTime: 0, EndTime: 1000}})
 		assertSums(t, "free", got[0], []int64{100}, []int{1})
 
 		// The copied row is now the oldest, so a later run with a larger cutoff copies nothing.
@@ -300,8 +306,8 @@ func TestCapabilityHistory_BackfillLock(t *testing.T) {
 			t.Fatalf("first lock: ok=%v err=%v", ok, err)
 		}
 		if db.DriverName() == Postgres {
-			if _, ok2, err := s.TryLockBackfill(ctx); err != nil || ok2 {
-				t.Errorf("second lock should fail while held: ok=%v err=%v", ok2, err)
+			if _, ok2, lockErr := s.TryLockBackfill(ctx); lockErr != nil || ok2 {
+				t.Errorf("second lock should fail while held: ok=%v err=%v", ok2, lockErr)
 			}
 		}
 		release()

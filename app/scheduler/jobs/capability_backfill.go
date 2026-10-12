@@ -37,12 +37,12 @@ func BackfillCapabilityHistory(ctx context.Context, s store.CapabilityHistorySto
 		}
 		total += rows
 		logrus.WithFields(logrus.Fields{
-			"pool":     p.Name,
-			"tier":     p.Tier,
-			"os":       p.OS,
-			"arch":     p.Arch,
-			"rows":     rows,
-			"duration": time.Since(started).String(),
+			logFieldPool: p.Name,
+			"tier":       p.Tier,
+			"os":         p.OS,
+			"arch":       p.Arch,
+			"rows":       rows,
+			"duration":   time.Since(started).String(),
 		}).Infoln("capability backfill: pool done")
 	}
 	logrus.WithField("rows", total).Infoln("capability backfill: complete")

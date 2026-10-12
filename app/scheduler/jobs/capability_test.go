@@ -38,19 +38,19 @@ func (m *mockCapabilityHistoryStore) CreateBatch(_ context.Context, records []*t
 	return nil
 }
 
-func (m *mockCapabilityHistoryStore) GetHistoryBatch(context.Context, types.CapabilityKey, []store.TimeRange) ([][]types.CapabilityUtilizationRecord, error) {
+func (m *mockCapabilityHistoryStore) GetHistoryBatch(context.Context, *types.CapabilityKey, []store.TimeRange) ([][]types.CapabilityUtilizationRecord, error) {
 	return nil, nil
 }
 
 func (m *mockCapabilityHistoryStore) DeleteOlderThan(_ context.Context, ts int64) (int64, error) {
 	var kept []types.CapabilityUtilizationRecord
 	var deleted int64
-	for _, r := range m.records {
-		if r.RecordedAt < ts {
+	for i := range m.records {
+		if m.records[i].RecordedAt < ts {
 			deleted++
 			continue
 		}
-		kept = append(kept, r)
+		kept = append(kept, m.records[i])
 	}
 	m.records = kept
 	return deleted, nil

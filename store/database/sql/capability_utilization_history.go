@@ -15,6 +15,7 @@ var _ store.CapabilityHistoryStore = (*CapabilityHistoryStore)(nil)
 
 const (
 	capabilityHistoryTable = "capability_utilization_history"
+	colRecordedAt          = "recorded_at"
 	// capabilityBatchSize keeps a multi-row insert well under driver placeholder limits.
 	capabilityBatchSize = 500
 	// capabilityBackfillLockKey is the Postgres advisory lock key for the capability backfill.
@@ -41,8 +42,8 @@ func (s *CapabilityHistoryStore) CreateBatch(ctx context.Context, records []*typ
 			}
 			query = query.Values(
 				r.Tier, r.OS, r.Arch,
-				defaultIfEmpty(r.VariantID, types.DefaultVariantID),
-				defaultIfEmpty(r.TenantID, types.DefaultTenantID),
+				orDefaultID(r.VariantID),
+				orDefaultID(r.TenantID),
 				r.Pool, image, r.InUseInstances, r.RecordedAt,
 			)
 		}
@@ -61,14 +62,15 @@ type capabilitySumWithRangeIdx struct {
 
 func (s *CapabilityHistoryStore) GetHistoryBatch(
 	ctx context.Context,
-	key types.CapabilityKey,
+	capKey *types.CapabilityKey,
 	ranges []store.TimeRange,
 ) ([][]types.CapabilityUtilizationRecord, error) {
 	if len(ranges) == 0 {
 		return nil, nil
 	}
-	key.VariantID = defaultIfEmpty(key.VariantID, types.DefaultVariantID)
-	key.TenantID = defaultIfEmpty(key.TenantID, types.DefaultTenantID)
+	key := *capKey
+	key.VariantID = orDefaultID(key.VariantID)
+	key.TenantID = orDefaultID(key.TenantID)
 
 	var unionParts []string
 	var args []interface{}
@@ -113,7 +115,7 @@ func (s *CapabilityHistoryStore) GetHistoryBatch(
 
 func (s *CapabilityHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {
 	result, err := squirrel.Delete(capabilityHistoryTable).
-		Where(squirrel.Lt{"recorded_at": timestamp}).
+		Where(squirrel.Lt{colRecordedAt: timestamp}).
 		RunWith(s.db).
 		PlaceholderFormat(squirrel.Dollar).
 		ExecContext(ctx)
@@ -142,7 +144,7 @@ func (s *CapabilityHistoryStore) TryLockBackfill(ctx context.Context) (release f
 		return nil, false, nil
 	}
 	return func() {
-		// Use a fresh context so the unlock still runs if ctx was cancelled.
+		// Use a fresh context so the unlock still runs if ctx was canceled.
 		_, _ = conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", capabilityBackfillLockKey)
 		conn.Close()
 	}, true, nil
@@ -167,9 +169,11 @@ WHERE h.pool_name = $4
 	return result.RowsAffected()
 }
 
-func defaultIfEmpty(s, def string) string {
-	if s == "" {
-		return def
+// orDefaultID maps an empty variant or tenant id to "default" (types.DefaultVariantID and
+// types.DefaultTenantID share that value).
+func orDefaultID(id string) string {
+	if id == "" {
+		return types.DefaultTenantID
 	}
-	return s
+	return id
 }

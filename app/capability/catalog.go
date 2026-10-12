@@ -109,23 +109,24 @@ func NewCatalog(poolFile *config.PoolFile, drivers []string, platformOf Platform
 		baseVariant := defaultIfEmpty(inst.VariantID, types.DefaultVariantID)
 		for j := range p.Tenants {
 			t := &p.Tenants[j]
-			c.add(p.key(baseVariant, t.ID), Member{Pool: p.Name, Order: p.Order, MinSize: t.MinSize, Limit: t.Limit})
+			baseKey := p.key(baseVariant, t.ID)
+			c.add(&baseKey, Member{Pool: p.Name, Order: p.Order, MinSize: t.MinSize, Limit: t.Limit})
 			for k := range t.Variants {
 				v := &t.Variants[k]
-				c.add(p.key(defaultIfEmpty(v.VariantID, types.DefaultVariantID), t.ID),
-					Member{Pool: p.Name, Order: p.Order, MinSize: v.Pool, Limit: v.Limit, Variant: v})
+				variantKey := p.key(defaultIfEmpty(v.VariantID, types.DefaultVariantID), t.ID)
+				c.add(&variantKey, Member{Pool: p.Name, Order: p.Order, MinSize: v.Pool, Limit: v.Limit, Variant: v})
 			}
 		}
 	}
 	return c, nil
 }
 
-func (c *Catalog) add(key types.CapabilityKey, m Member) {
-	idx, ok := c.index[key]
+func (c *Catalog) add(key *types.CapabilityKey, m Member) {
+	idx, ok := c.index[*key]
 	if !ok {
 		idx = len(c.groups)
-		c.index[key] = idx
-		c.groups = append(c.groups, Group{Key: key})
+		c.index[*key] = idx
+		c.groups = append(c.groups, Group{Key: *key})
 	}
 	c.groups[idx].Members = append(c.groups[idx].Members, m)
 }
@@ -151,8 +152,8 @@ func (c *Catalog) Groups() []Group {
 }
 
 // Group returns the group for a key.
-func (c *Catalog) Group(key types.CapabilityKey) (Group, bool) {
-	idx, ok := c.index[key]
+func (c *Catalog) Group(key *types.CapabilityKey) (Group, bool) {
+	idx, ok := c.index[*key]
 	if !ok {
 		return Group{}, false
 	}

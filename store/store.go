@@ -75,7 +75,7 @@ type CapabilityHistoryStore interface {
 	CreateBatch(ctx context.Context, records []*types.CapabilityUtilizationRecord) error
 	// GetHistoryBatch returns, for each time range, the capability's in-use count summed across
 	// pools per recorded_at, ordered by recorded_at. Pool and ImageName are empty in the results.
-	GetHistoryBatch(ctx context.Context, key types.CapabilityKey, ranges []TimeRange) ([][]types.CapabilityUtilizationRecord, error)
+	GetHistoryBatch(ctx context.Context, key *types.CapabilityKey, ranges []TimeRange) ([][]types.CapabilityUtilizationRecord, error)
 	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 	// TryLockBackfill takes a cross-process lock for the backfill. ok is false if another process
 	// holds it. release must be called when ok is true.

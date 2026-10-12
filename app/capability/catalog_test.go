@@ -89,7 +89,9 @@ func key(tier, arch, variant, tenant string) types.CapabilityKey {
 	return types.CapabilityKey{Tier: tier, OS: "linux", Arch: arch, VariantID: variant, TenantID: tenant}
 }
 
-func memberPools(g Group) []string {
+func ptr(k types.CapabilityKey) *types.CapabilityKey { return &k } //nolint:gocritic
+
+func memberPools(g *Group) []string {
 	var out []string
 	for _, m := range g.Members {
 		out = append(out, m.Pool)
@@ -127,18 +129,18 @@ func TestNewCatalog_GroupsAcrossPoolsInFileOrder(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			g, ok := c.Group(tc.key)
+			g, ok := c.Group(&tc.key)
 			if !ok {
 				t.Fatalf("group %s not found", tc.key)
 			}
-			if got := memberPools(g); !reflect.DeepEqual(got, tc.want) {
+			if got := memberPools(&g); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("members = %v, want %v", got, tc.want)
 			}
 		})
 	}
 
 	// The egress tenant has no arm64 pool, so it gets no arm64 group to borrow from.
-	if _, ok := c.Group(key(types.TierPaid, "arm64", "default", egressTenant)); ok {
+	if _, ok := c.Group(ptr(key(types.TierPaid, "arm64", "default", egressTenant))); ok {
 		t.Error("egress tenant must not have an arm64 group")
 	}
 }
@@ -149,7 +151,7 @@ func TestNewCatalog_MemberSizing(t *testing.T) {
 		t.Fatalf("NewCatalog: %v", err)
 	}
 
-	g, _ := c.Group(key(types.TierPaid, "amd64", "variant_medium", "default"))
+	g, _ := c.Group(ptr(key(types.TierPaid, "amd64", "variant_medium", "default")))
 	if m := g.Members[0]; m.MinSize != 5 || m.Limit != 50 || m.Variant == nil || m.Variant.MachineType != "c4d-standard-8" {
 		t.Errorf("linux-amd64 variant_medium member = %+v", m)
 	}
@@ -157,12 +159,12 @@ func TestNewCatalog_MemberSizing(t *testing.T) {
 		t.Errorf("fallback variant_medium member = %+v", m)
 	}
 
-	base, _ := c.Group(key(types.TierPaid, "amd64", "default", "default"))
+	base, _ := c.Group(ptr(key(types.TierPaid, "amd64", "default", "default")))
 	if m := base.Members[0]; m.MinSize != 10 || m.Limit != 100 || m.Variant != nil {
 		t.Errorf("linux-amd64 base member = %+v", m)
 	}
 
-	tenantBase, _ := c.Group(key(types.TierPaid, "amd64", "default", egressTenant))
+	tenantBase, _ := c.Group(ptr(key(types.TierPaid, "amd64", "default", egressTenant)))
 	if m := tenantBase.Members[0]; m.MinSize != 2 {
 		t.Errorf("tenant pool override not applied: %+v", m)
 	}
@@ -170,12 +172,12 @@ func TestNewCatalog_MemberSizing(t *testing.T) {
 		t.Errorf("tenant without override should inherit pool size: %+v", m)
 	}
 
-	tenantVariant, _ := c.Group(key(types.TierPaid, "amd64", "variant_medium", egressTenant))
+	tenantVariant, _ := c.Group(ptr(key(types.TierPaid, "amd64", "variant_medium", egressTenant)))
 	if m := tenantVariant.Members[0]; m.MinSize != 3 {
 		t.Errorf("tenant variant override not applied: %+v", m)
 	}
 
-	ubuntu, _ := c.Group(key(types.TierPaid, "amd64", "variant_medium_ubuntu24", "default"))
+	ubuntu, _ := c.Group(ptr(key(types.TierPaid, "amd64", "variant_medium_ubuntu24", "default")))
 	if m := ubuntu.Members[0]; m.Variant == nil || m.Variant.ImageName != "ubuntu24-img" {
 		t.Errorf("variant image should be kept on the member: %+v", m)
 	}
@@ -213,9 +215,9 @@ func TestNewCatalog_DriverFilter(t *testing.T) {
 	if len(c.Pools()) != 1 || c.Pools()[0].Name != "linux-amd64-aws" {
 		t.Fatalf("expected only the AWS pool, got %d pools", len(c.Pools()))
 	}
-	g, ok := c.Group(key(types.TierPaid, "amd64", "default", "default"))
-	if !ok || !reflect.DeepEqual(memberPools(g), []string{"linux-amd64-aws"}) {
-		t.Errorf("AWS-only base group = %v", memberPools(g))
+	g, ok := c.Group(ptr(key(types.TierPaid, "amd64", "default", "default")))
+	if !ok || !reflect.DeepEqual(memberPools(&g), []string{"linux-amd64-aws"}) {
+		t.Errorf("AWS-only base group = %v", memberPools(&g))
 	}
 	if _, ok := c.Pool("linux-amd64"); ok {
 		t.Error("google pool must be excluded when only amazon is configured")
