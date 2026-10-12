@@ -1,0 +1,43 @@
+app/scheduler/jobs/capability_backfill.go
+  s_9dbc461897456f::t_824f4af71aa23b 40-45
+store/store.go
+  s_9dbc461897456f::t_6d4f4cd9a33b97 78
+app/scheduler/jobs/capability_test.go
+  s_9dbc461897456f::t_6d4f4cd9a33b97 41,48-49,53
+store/database/capability_history_test.go
+  s_9dbc461897456f::t_6d4f4cd9a33b97 63-66,74-78,80-82,88,109,115,141,173,196,207,233,245,251,255,287,309-310
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 7,124,126-133
+app/capability/catalog.go
+  s_9dbc461897456f::t_6d4f4cd9a33b97 112-113,116-117,124-125,128-129,155-156
+app/capability/catalog_test.go
+  s_9dbc461897456f::t_6d4f4cd9a33b97 92-94,132,136,143,154,162,167,175,180,218-220
+store/database/sql/capability_utilization_history.go
+  s_9dbc461897456f::t_7e113737f6159a 18,118
+  s_9dbc461897456f::t_6d4f4cd9a33b97 45-46,65,71-73,147,172-176,178
+app/scheduler/jobs/history_cleanup.go
+  s_9dbc461897456f::t_7e113737f6159a 14,75-76,85-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c454e10adffae481c250b639c24896ef7dfadfef",
+  "prompts": {
+    "9dbc461897456f00": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e22a05a7-ba51-48d4-a528-f4f200538d3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 92,
+      "total_deletions": 78,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_73ea4b83252c23": {
+      "author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
