@@ -69,3 +69,19 @@ type UtilizationHistoryStore interface {
 	HasRecentUsage(ctx context.Context, pool, tenantID, variantID, imageName string, since int64) (bool, error)
 	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 }
+
+// CapabilityHistoryStore persists in-use counts per capability (tier/os/arch/variant/tenant) and pool.
+type CapabilityHistoryStore interface {
+	CreateBatch(ctx context.Context, records []*types.CapabilityUtilizationRecord) error
+	// GetHistoryBatch returns, for each time range, the capability's in-use count summed across
+	// pools per recorded_at, ordered by recorded_at. Pool and ImageName are empty in the results.
+	GetHistoryBatch(ctx context.Context, key *types.CapabilityKey, ranges []TimeRange) ([][]types.CapabilityUtilizationRecord, error)
+	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
+	// TryLockBackfill takes a cross-process lock for the backfill. ok is false if another process
+	// holds it. release must be called when ok is true.
+	TryLockBackfill(ctx context.Context) (release func(), ok bool, err error)
+	// BackfillPool copies the pool's rows from instance_utilization_history that are older than
+	// the pool's oldest capability row (or than notAfter if the pool has none), tagging them
+	// with tier/os/arch. Re-running it inserts nothing new.
+	BackfillPool(ctx context.Context, pool, tier, os, arch string, notAfter int64) (int64, error)
+}

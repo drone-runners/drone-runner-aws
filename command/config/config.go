@@ -31,6 +31,8 @@ type (
 		Spec      interface{}         `json:"spec,omitempty"`
 		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
 		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
+		// Tier is the customer tier the pool serves: "paid" (default) or "free".
+		Tier string `json:"tier,omitempty" yaml:"tier,omitempty"`
 		// Tenants enables multi-tenant configuration for a single pool. Each entry is a
 		// per-account override that is deep-merged over the pool's top-level Spec (which acts
 		// as the default tenant). When empty, the pool is single-tenant and the flat Spec above
@@ -496,6 +498,12 @@ type EnvConfig struct {
 			MaxLookbackDays int     `envconfig:"DLITE_PREDICTOR_MAX_LOOKBACK_DAYS" default:"4"`
 			TargetWeekdays  int     `envconfig:"DLITE_PREDICTOR_TARGET_WEEKDAYS" default:"2"`
 		}
+		// Algorithm selects pool (current) or capability scheduling for prediction, scaling and hot-pool claims.
+		Algorithm string `envconfig:"DLITE_SCHEDULER_ALGORITHM" default:"pool"`
+		// PredictionDrivers lists the pool drivers this runner records capability history for, predicts and scales.
+		PredictionDrivers []string `envconfig:"DLITE_SCHEDULER_PREDICTION_DRIVERS" default:"google,amazon"`
+		// CapabilityBackfill copies existing pool utilization history into the capability history table on startup.
+		CapabilityBackfill bool `envconfig:"DLITE_SCHEDULER_CAPABILITY_BACKFILL" default:"false"`
 	}
 
 	Settings struct {
@@ -712,6 +720,14 @@ func (s *Instance) newSpec() (interface{}, error) {
 	}
 }
 
+// GetTier returns the pool tier, defaulting to paid when unset.
+func (s *Instance) GetTier() string {
+	if s.Tier == "" {
+		return types.TierPaid
+	}
+	return s.Tier
+}
+
 // Populates the Spec field of the Instance struct based on the Type field.
 func (s *Instance) populateSpec() error {
 	spec, err := s.newSpec()
@@ -744,6 +760,12 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, obj); err != nil {
 		return err
 	}
+
+	tier, err := types.ParseTier(s.Tier)
+	if err != nil {
+		return fmt.Errorf("pool %q: %w", s.Name, err)
+	}
+	s.Tier = tier
 
 	if err := s.populateSpec(); err != nil {
 		return err

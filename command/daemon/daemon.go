@@ -101,7 +101,7 @@ func (c *daemonCommand) run(*kingpin.ParseContext) error {
 		),
 	)
 
-	store, _, _, _, _, err := database.ProvideStore(ctx, env.Database.Driver, env.Database.Datasource, false, "") //nolint:dogsled
+	store, _, _, _, _, _, err := database.ProvideStore(ctx, env.Database.Driver, env.Database.Datasource, false, "") //nolint:dogsled
 	if err != nil {
 		logrus.WithError(err).Fatalln("Unable to start the database")
 	}

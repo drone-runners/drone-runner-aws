@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/drone-runners/drone-runner-aws/app/capability"
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/predictor"
 	"github.com/drone-runners/drone-runner-aws/app/scheduler"
@@ -41,7 +42,7 @@ type DistributedSetupConfig struct {
 func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, error) {
 	logrus.Infoln("Starting postgres database for distributed mode")
 
-	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, err := database.ProvideStore(
+	instanceStore, stageOwnerStore, outboxStore, capacityReservationStore, utilizationHistoryStore, capabilityHistoryStore, err := database.ProvideStore(
 		cfg.Ctx,
 		cfg.Env.DistributedMode.Driver,
 		cfg.Env.DistributedMode.Datasource,
@@ -87,21 +88,9 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	)
 	sched.Register(outboxCleanupJob)
 
-	// Register utilization tracking jobs if stores are available
-	if instanceStore != nil && utilizationHistoryStore != nil {
-		utilizationTrackerJob := jobs.NewUtilizationTrackerJob(
-			instanceStore,
-			utilizationHistoryStore,
-			time.Duration(cfg.Env.Scheduler.UtilizationTracker.IntervalSecs)*time.Second,
-		)
-		sched.Register(utilizationTrackerJob)
-
-		historyCleanupJob := jobs.NewHistoryCleanupJob(
-			utilizationHistoryStore,
-			time.Duration(cfg.Env.Scheduler.HistoryCleanup.IntervalHours)*time.Hour,
-			time.Duration(cfg.Env.Scheduler.HistoryCleanup.RetentionDays)*24*time.Hour,
-		)
-		sched.Register(historyCleanupJob)
+	algorithm, err := types.ParseSchedulerAlgorithm(cfg.Env.Scheduler.Algorithm)
+	if err != nil {
+		return nil, err
 	}
 
 	// Setup the pool
@@ -109,6 +98,49 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 	if err != nil {
 		logrus.WithError(err).Error("could not setup distributed pool")
 		return nil, err
+	}
+
+	catalog, err := capability.NewCatalog(poolConfig, cfg.Env.Scheduler.PredictionDrivers, func(pool string) types.Platform {
+		platform, _, _ := poolManager.Inspect(pool)
+		return platform
+	})
+	if err != nil {
+		logrus.WithError(err).Error("could not build capability catalog")
+		return nil, err
+	}
+	logrus.WithFields(logrus.Fields{
+		"algorithm":          algorithm,
+		"prediction_drivers": cfg.Env.Scheduler.PredictionDrivers,
+		"pools":              len(catalog.Pools()),
+		"capabilities":       len(catalog.Groups()),
+	}).Infoln("capability catalog built")
+
+	// Register utilization tracking jobs if stores are available
+	if instanceStore != nil && utilizationHistoryStore != nil {
+		utilizationTrackerJob := jobs.NewUtilizationTrackerJob(
+			instanceStore,
+			utilizationHistoryStore,
+			time.Duration(cfg.Env.Scheduler.UtilizationTracker.IntervalSecs)*time.Second,
+		)
+		historyCleanupJob := jobs.NewHistoryCleanupJob(
+			utilizationHistoryStore,
+			time.Duration(cfg.Env.Scheduler.HistoryCleanup.IntervalHours)*time.Hour,
+			time.Duration(cfg.Env.Scheduler.HistoryCleanup.RetentionDays)*24*time.Hour,
+		)
+		if capabilityHistoryStore != nil {
+			utilizationTrackerJob.WithCapabilityHistory(capabilityHistoryStore, catalog)
+			historyCleanupJob.WithCapabilityHistory(capabilityHistoryStore)
+		}
+		sched.Register(utilizationTrackerJob)
+		sched.Register(historyCleanupJob)
+
+		if capabilityHistoryStore != nil && cfg.Env.Scheduler.CapabilityBackfill {
+			go func() {
+				if _, err := jobs.BackfillCapabilityHistory(cfg.Ctx, capabilityHistoryStore, catalog); err != nil {
+					logrus.WithError(err).Errorln("capability backfill failed")
+				}
+			}()
+		}
 	}
 
 	// Register scaler if enabled and we have the necessary stores
@@ -123,6 +155,8 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			RecentUsageLookbackDays: cfg.Env.Scheduler.Scaler.RecentUsageLookbackDays,
 			RecentUsageMinInstances: cfg.Env.Scheduler.Scaler.RecentUsageMinInstances,
 			ScalePercent:            cfg.Env.Scheduler.Scaler.ScalePercent,
+			PredictionDrivers:       cfg.Env.Scheduler.PredictionDrivers,
+			Algorithm:               algorithm,
 		}
 
 		// Build scalable pools from pool config

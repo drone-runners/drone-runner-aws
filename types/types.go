@@ -3,6 +3,8 @@ package types
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/harness/lite-engine/engine/spec"
@@ -116,6 +118,9 @@ type Instance struct {
 // DefaultTenantID is the tenant identifier used for single-tenant pools and as the DB default
 // for the tenant_id column. It matches config.DefaultTenantID.
 const DefaultTenantID = "default"
+
+// DefaultVariantID is the variant identifier for a pool's base (non-variant) configuration.
+const DefaultVariantID = "default"
 
 // Passwords holds sensitive data.
 type Passwords struct {
@@ -437,6 +442,78 @@ type ScalerConfig struct {
 	// A value of 100 (or below) disables buffering; 115 adds a 15% hibernated buffer on top
 	// of the live scale-up. Default: 100 (disabled).
 	ScalePercent float64
+	// PredictionDrivers lists the pool drivers (e.g. google, amazon) this runner predicts and
+	// scales for. Empty means DefaultPredictionDrivers.
+	PredictionDrivers []string
+	// Algorithm selects the scheduling algorithm (pool or capability). Empty means pool.
+	Algorithm SchedulerAlgorithm
+}
+
+// SchedulerAlgorithm selects how warm-pool prediction, scaling and hot-pool claims are scoped.
+type SchedulerAlgorithm string
+
+const (
+	// SchedulerAlgorithmPool predicts, scales and claims per pool (current behavior).
+	SchedulerAlgorithmPool SchedulerAlgorithm = "pool"
+	// SchedulerAlgorithmCapability predicts, scales and claims per capability across pools.
+	SchedulerAlgorithmCapability SchedulerAlgorithm = "capability"
+)
+
+// ParseSchedulerAlgorithm validates an algorithm name. Empty resolves to SchedulerAlgorithmPool.
+func ParseSchedulerAlgorithm(s string) (SchedulerAlgorithm, error) {
+	switch SchedulerAlgorithm(strings.ToLower(strings.TrimSpace(s))) {
+	case "", SchedulerAlgorithmPool:
+		return SchedulerAlgorithmPool, nil
+	case SchedulerAlgorithmCapability:
+		return SchedulerAlgorithmCapability, nil
+	default:
+		return "", fmt.Errorf("unknown scheduler algorithm %q (want %q or %q)", s, SchedulerAlgorithmPool, SchedulerAlgorithmCapability)
+	}
+}
+
+// DefaultPredictionDrivers are the pool drivers predicted and scaled when none are configured.
+var DefaultPredictionDrivers = []string{string(Google), string(Amazon)}
+
+// Pool tiers. A pool serves exactly one tier; free and paid capacity are never mixed.
+const (
+	TierPaid = "paid"
+	TierFree = "free"
+)
+
+// ParseTier validates a pool tier. Empty resolves to TierPaid.
+func ParseTier(s string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", TierPaid:
+		return TierPaid, nil
+	case TierFree:
+		return TierFree, nil
+	default:
+		return "", fmt.Errorf("unknown tier %q (want %q or %q)", s, TierPaid, TierFree)
+	}
+}
+
+// CapabilityKey identifies interchangeable warm capacity across pools.
+type CapabilityKey struct {
+	Tier      string `db:"tier" json:"tier"`
+	OS        string `db:"os" json:"os"`
+	Arch      string `db:"arch" json:"arch"`
+	VariantID string `db:"variant_id" json:"variant_id"`
+	TenantID  string `db:"tenant_id" json:"tenant_id"`
+}
+
+func (k CapabilityKey) String() string {
+	return k.Tier + "/" + k.OS + "/" + k.Arch + "/" + k.VariantID + "/" + k.TenantID
+}
+
+// CapabilityUtilizationRecord is one pool's in-use count for a capability at a point in time.
+// ImageName is recorded for future use and is not part of the capability key.
+type CapabilityUtilizationRecord struct {
+	ID int64 `db:"id" json:"id"`
+	CapabilityKey
+	Pool           string `db:"pool_name" json:"pool"`
+	ImageName      string `db:"image_name" json:"image_name"`
+	InUseInstances int    `db:"in_use_instances" json:"in_use_instances"`
+	RecordedAt     int64  `db:"recorded_at" json:"recorded_at"`
 }
 
 // InstanceCount holds an instance count grouped by pool, tenant, variant, image, and GPU flag.
