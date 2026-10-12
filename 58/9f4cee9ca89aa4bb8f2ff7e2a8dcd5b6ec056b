@@ -1,0 +1,84 @@
+app/scheduler/jobs/capability_test.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-370
+command/daemon/daemon.go
+  s_9dbc461897456f::t_ba64180a4ee390 104
+app/scheduler/jobs/capability_backfill.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-50
+store/database/migrate/postgres/0029_create_table_capability_utilization_history.up.sql
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-21
+command/harness/distributed.go
+  s_9dbc461897456f::t_454cb21ceda13e 9,91-117,130-134,137-143,158-159
+  s_9dbc461897456f::t_ba64180a4ee390 45
+app/capability/catalog_test.go
+  s_9dbc461897456f::t_f2040f3f5d21c0 1-281
+store/database/wire.go
+  s_9dbc461897456f::t_454f6e5263c865 105-114,116,120,122,135,139-140
+command/config/config.go
+  s_9dbc461897456f::t_28431770da7568 501-506
+  s_9dbc461897456f::t_d7570699903e15 34-35,723-730,764-768
+  s_9dbc461897456f::t_e5fa69381daca9 769
+types/types.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 6-7,122-124,445-516
+app/scheduler/jobs/history_cleanup.go
+  s_9dbc461897456f::t_e61de6b202162f 21-22,38-43,78-87
+  s_9dbc461897456f::t_9861883f044cb8 88
+command/config/tier_test.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-112
+store/database/capability_history_test.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-314
+command/harness/delegate/delegate.go
+  s_9dbc461897456f::t_ba64180a4ee390 89
+command/exec.go
+  s_9dbc461897456f::t_ba64180a4ee390 136
+app/capability/catalog.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-193
+store/database/sql/capability_utilization_history.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-175
+store/database/migrate/sqlite/0019_create_table_capability_utilization_history.up.sql
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-21
+command/setup/setup.go
+  s_9dbc461897456f::t_ba64180a4ee390 135
+store/store.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 73-87
+  s_9dbc461897456f::t_5ae5cb63f5ef13 72
+app/scheduler/jobs/utilization_tracker.go
+  s_9dbc461897456f::t_e61de6b202162f 9,23-25,41-48,107-108,111-135
+  s_9dbc461897456f::t_ca6ce9315b8754 136
+app/scheduler/jobs/scaler_trigger.go
+  s_9dbc461897456f::t_db77f20b1f0609 6,11
+  s_9dbc461897456f::t_81d5320421d437 28,49,103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "589f4cee9ca89aa4bb8f2ff7e2a8dcd5b6ec056b",
+  "prompts": {
+    "9dbc461897456f00": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e22a05a7-ba51-48d4-a528-f4f200538d3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 1781,
+      "total_deletions": 25,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_73ea4b83252c23": {
+      "author": "Raghav <raghav.gupta@harness.io>"
+    }
+  },
+  "sessions": {
+    "s_9dbc461897456f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e22a05a7-ba51-48d4-a528-f4f200538d3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
