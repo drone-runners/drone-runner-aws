@@ -185,6 +185,16 @@ func (m *Manager) Inspect(name string) (platform types.Platform, rootDir, driver
 	return
 }
 
+// FullyQualifiedImage resolves an image name for a pool the same way hot-pool claims do. An
+// empty imageName resolves to the pool's default image.
+func (m *Manager) FullyQualifiedImage(ctx context.Context, poolName, imageName string) (string, error) {
+	entry := m.poolMap[poolName]
+	if entry == nil {
+		return "", fmt.Errorf("pool not found: %s", poolName)
+	}
+	return entry.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: imageName})
+}
+
 // Exists returns true if a pool with given name exists.
 func (m *Manager) Exists(name string) bool {
 	return m.poolMap[name] != nil

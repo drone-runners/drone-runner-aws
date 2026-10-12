@@ -3,12 +3,10 @@ package jobs
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/drone-runners/drone-runner-aws/app/capability"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -18,14 +16,13 @@ const (
 	ScalerTriggerJobName = "scaler-trigger"
 )
 
-// ScalerTriggerJob creates scale outbox jobs at aligned window boundaries.
-// It creates one scale job per pool to allow independent processing.
+// ScalerTriggerJob creates scale outbox jobs at aligned window boundaries, one per target of
+// its ScaleTargetSource so each target is processed independently.
 type ScalerTriggerJob struct {
 	outboxStore   store.OutboxStore
 	config        types.ScalerConfig
 	runnerName    string
-	pools         []ScalablePool
-	drivers       map[string]bool
+	targets       ScaleTargetSource
 	lastWindowKey int64 // Track last window to avoid duplicates
 }
 
@@ -34,7 +31,7 @@ func NewScalerTriggerJob(
 	outboxStore store.OutboxStore,
 	config types.ScalerConfig, //nolint:gocritic // acceptable for one-time setup
 	runnerName string,
-	pools []ScalablePool,
+	targets ScaleTargetSource,
 ) *ScalerTriggerJob {
 	if config.WindowDuration == 0 {
 		config.WindowDuration = DefaultWindowDuration
@@ -46,9 +43,8 @@ func NewScalerTriggerJob(
 	return &ScalerTriggerJob{
 		outboxStore: outboxStore,
 		config:      config,
-		drivers:     capability.DriverSet(config.PredictionDrivers),
 		runnerName:  runnerName,
-		pools:       pools,
+		targets:     targets,
 	}
 }
 
@@ -97,25 +93,22 @@ func (j *ScalerTriggerJob) Execute(ctx context.Context) error {
 		return nil // Already processed this window
 	}
 
-	// Create scale jobs for each pool
+	// Create one scale job per target
 	jobsCreated := 0
-	for _, pool := range j.pools {
-		if !j.drivers[strings.ToLower(pool.Driver)] {
-			continue
-		}
-
+	targets := j.targets.ScaleTargets()
+	for _, name := range targets {
 		// Check if a scale job already exists for this pool and window
-		existingJob, err := j.outboxStore.FindScaleJobForWindow(ctx, pool.Name, windowStart)
+		existingJob, err := j.outboxStore.FindScaleJobForWindow(ctx, name, windowStart)
 		if err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
-				"pool":         pool.Name,
+				logFieldPool:   name,
 				"window_start": time.Unix(windowStart, 0).Format(time.RFC3339),
 			}).Errorln("scaler trigger: failed to check for existing scale job")
 			continue
 		}
 		if existingJob != nil {
 			logrus.WithFields(logrus.Fields{
-				"pool":         pool.Name,
+				logFieldPool:   name,
 				"window_start": time.Unix(windowStart, 0).Format(time.RFC3339),
 				"job_id":       existingJob.ID,
 			}).Debugln("scaler trigger: scale job already exists for pool and window")
@@ -129,7 +122,7 @@ func (j *ScalerTriggerJob) Execute(ctx context.Context) error {
 		}
 		paramsJSON, err := json.Marshal(scaleParams)
 		if err != nil {
-			logrus.WithError(err).WithField("pool", pool.Name).
+			logrus.WithError(err).WithField("pool", name).
 				Errorln("scaler trigger: failed to marshal scale params")
 			continue
 		}
@@ -138,21 +131,21 @@ func (j *ScalerTriggerJob) Execute(ctx context.Context) error {
 		// Create the scale outbox job for this pool
 		// Leave RunnerName empty so any runner can process this job
 		job := &types.OutboxJob{
-			PoolName:  pool.Name,
+			PoolName:  name,
 			JobType:   types.OutboxJobTypeScale,
 			JobParams: &rawMsg,
 			Status:    types.OutboxJobStatusPending,
 		}
 
 		if err := j.outboxStore.Create(ctx, job); err != nil {
-			logrus.WithError(err).WithField("pool", pool.Name).
+			logrus.WithError(err).WithField("pool", name).
 				Errorln("scaler trigger: failed to create scale job")
 			continue
 		}
 
 		jobsCreated++
 		logrus.WithFields(logrus.Fields{
-			"pool":              pool.Name,
+			logFieldPool:        name,
 			"window_start":      time.Unix(windowStart, 0).Format(time.RFC3339),
 			"window_end":        time.Unix(windowEnd, 0).Format(time.RFC3339),
 			"job_id":            job.ID,
@@ -163,9 +156,9 @@ func (j *ScalerTriggerJob) Execute(ctx context.Context) error {
 	j.lastWindowKey = windowStart
 
 	logrus.WithFields(logrus.Fields{
-		"window_start": time.Unix(windowStart, 0).Format(time.RFC3339),
-		"jobs_created": jobsCreated,
-		"total_pools":  len(j.pools),
+		"window_start":  time.Unix(windowStart, 0).Format(time.RFC3339),
+		"jobs_created":  jobsCreated,
+		"total_targets": len(targets),
 	}).Infoln("scaler trigger: finished creating scale jobs for window")
 
 	return nil

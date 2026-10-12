@@ -27,7 +27,9 @@ type OutboxProcessor struct {
 	retryInterval time.Duration
 	maxRetries    int
 	batchSize     int
-	scaler        *Scaler
+
+	scaleJobRunner      ScaleJobRunner
+	setupFailureHandler SetupFailureHandler
 }
 
 // NewOutboxProcessor creates a new OutboxProcessor
@@ -47,10 +49,16 @@ func NewOutboxProcessor(
 	}
 }
 
-// SetScaler sets the scaler for processing scale jobs.
+// SetScaleJobRunner sets the runner for scale jobs.
 // This is set separately to avoid circular dependencies during initialization.
-func (p *OutboxProcessor) SetScaler(scaler *Scaler) {
-	p.scaler = scaler
+func (p *OutboxProcessor) SetScaleJobRunner(runner ScaleJobRunner) {
+	p.scaleJobRunner = runner
+}
+
+// SetSetupFailureHandler sets the handler that may take over failed setup_instance jobs. Without
+// one, failed jobs are retried.
+func (p *OutboxProcessor) SetSetupFailureHandler(handler SetupFailureHandler) {
+	p.setupFailureHandler = handler
 }
 
 // ProcessPendingJobs processes pending outbox jobs in batches.
@@ -136,14 +144,21 @@ func (p *OutboxProcessor) processJobWithRetry(ctx context.Context, job *types.Ou
 func (p *OutboxProcessor) processJob(ctx context.Context, job *types.OutboxJob) error {
 	switch job.JobType {
 	case types.OutboxJobTypeSetupInstance:
-		if err := p.processSetupInstanceJob(ctx, job); err != nil {
+		params, err := parseSetupInstanceParams(job)
+		if err != nil {
 			return err
 		}
-		logrus.WithFields(logrus.Fields{
-			"job_id":      job.ID,
-			"pool_name":   job.PoolName,
-			"runner_name": p.manager.GetRunnerName(),
-		}).Infoln("completed job to setup instance")
+		if err := p.processSetupInstanceJob(ctx, job, params); err != nil {
+			if !p.handleSetupFailure(ctx, job, params, err) {
+				return err
+			}
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"job_id":      job.ID,
+				"pool_name":   job.PoolName,
+				"runner_name": p.manager.GetRunnerName(),
+			}).Infoln("completed job to setup instance")
+		}
 
 	case types.OutboxJobTypeScale:
 		if err := p.processScaleJob(ctx, job); err != nil {
@@ -189,10 +204,14 @@ func (p *OutboxProcessor) CleanupOldJobs(ctx context.Context) error {
 	return nil
 }
 
-// processScaleJob processes a pool-specific scale job
+func (p *OutboxProcessor) handleSetupFailure(ctx context.Context, job *types.OutboxJob, params *types.SetupInstanceParams, cause error) bool {
+	return p.setupFailureHandler != nil && p.setupFailureHandler.HandleSetupFailure(ctx, job.PoolName, params, cause)
+}
+
+// processScaleJob runs a scale job for its target
 func (p *OutboxProcessor) processScaleJob(ctx context.Context, job *types.OutboxJob) error {
-	if p.scaler == nil {
-		return fmt.Errorf("scaler not configured")
+	if p.scaleJobRunner == nil {
+		return fmt.Errorf("scale job runner not configured")
 	}
 
 	if job.JobParams == nil {
@@ -204,32 +223,29 @@ func (p *OutboxProcessor) processScaleJob(ctx context.Context, job *types.Outbox
 		return fmt.Errorf("failed to unmarshal scale job params: %w", err)
 	}
 
-	// Use pool name from the job directly
-	poolName := job.PoolName
-
 	logrus.WithFields(logrus.Fields{
 		"job_id":       job.ID,
-		"pool_name":    poolName,
+		"pool_name":    job.PoolName,
 		"window_start": time.Unix(params.WindowStart, 0).Format(time.RFC3339),
 		"window_end":   time.Unix(params.WindowEnd, 0).Format(time.RFC3339),
-	}).Infoln("processing scale job for pool")
+	}).Infoln("processing scale job")
 
-	return p.scaler.ScalePool(ctx, poolName, params.WindowStart, params.WindowEnd)
+	return p.scaleJobRunner.RunScaleJob(ctx, job.PoolName, params.WindowStart, params.WindowEnd)
+}
+
+func parseSetupInstanceParams(job *types.OutboxJob) (*types.SetupInstanceParams, error) {
+	if job.JobParams == nil {
+		return nil, nil
+	}
+	var params types.SetupInstanceParams
+	if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal job params: %w", err)
+	}
+	return &params, nil
 }
 
 // processSetupInstanceJob processes a setup instance job
-func (p *OutboxProcessor) processSetupInstanceJob(ctx context.Context, job *types.OutboxJob) error {
-	// Parse job params
-	var setupParams *types.SetupInstanceParams
-	if job.JobParams != nil {
-		var params types.SetupInstanceParams
-		if err := json.Unmarshal(*job.JobParams, &params); err != nil {
-			return fmt.Errorf("failed to unmarshal job params: %w", err)
-		}
-		setupParams = &params
-	}
-
-	// Setup instance with values from job params
+func (p *OutboxProcessor) processSetupInstanceJob(ctx context.Context, job *types.OutboxJob, setupParams *types.SetupInstanceParams) error {
 	_, err := p.manager.SetupInstanceForPool(ctx, job.PoolName, setupParams)
 	if err != nil {
 		return fmt.Errorf("failed to setup instance: %w", err)

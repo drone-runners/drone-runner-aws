@@ -9,8 +9,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/predictor"
+	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
@@ -62,9 +62,15 @@ type InstanceKey struct {
 	ImageName string
 }
 
+// ScalerManager is the subset of the distributed manager the scaler uses.
+type ScalerManager interface {
+	Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
+	FullyQualifiedImage(ctx context.Context, poolName, imageName string) (string, error)
+}
+
 // Scaler handles scaling pools up and down based on predictions.
 type Scaler struct {
-	manager       *drivers.DistributedManager
+	manager       ScalerManager
 	predictor     predictor.Predictor
 	instanceStore store.InstanceStore
 	historyStore  store.UtilizationHistoryStore
@@ -76,7 +82,7 @@ type Scaler struct {
 
 // NewScaler creates a new Scaler.
 func NewScaler(
-	manager *drivers.DistributedManager,
+	manager ScalerManager,
 	pred predictor.Predictor,
 	instanceStore store.InstanceStore,
 	historyStore store.UtilizationHistoryStore,
@@ -102,6 +108,11 @@ func NewScaler(
 		poolsToScale:  pools,
 		metrics:       metrics,
 	}
+}
+
+// RunScaleJob runs the scale job of a pool target.
+func (s *Scaler) RunScaleJob(ctx context.Context, target string, windowStart, windowEnd int64) error {
+	return s.ScalePool(ctx, target, windowStart, windowEnd)
 }
 
 // ScalePool scales a specific pool and its variants based on predictions for the given window.
@@ -390,6 +401,18 @@ func (s *Scaler) scaleDown(
 	poolName, tenantID, variantID, imageName string,
 	count int,
 ) {
+	destroyFreePredictorInstances(ctx, s.instanceStore, s.manager, poolName, tenantID, variantID, imageName, count)
+}
+
+// destroyFreePredictorInstances claims and destroys up to count free predictor-created
+// instances (live or hibernated) matching the pool, tenant, variant and image.
+func destroyFreePredictorInstances(
+	ctx context.Context,
+	instanceStore store.InstanceStore,
+	manager ScalerManager,
+	poolName, tenantID, variantID, imageName string,
+	count int,
+) {
 	logr := logrus.WithFields(logrus.Fields{
 		logFieldPool:      poolName,
 		logFieldTenantID:  tenantID,
@@ -414,7 +437,7 @@ func (s *Scaler) scaleDown(
 	destroyedCount := 0
 	for i := 0; i < count; i++ {
 		// Atomically find and claim a free instance, setting it to terminating state
-		inst, err := s.instanceStore.FindAndClaim(ctx, queryParams, types.StateTerminating, allowedStates, false)
+		inst, err := instanceStore.FindAndClaim(ctx, queryParams, types.StateTerminating, allowedStates, false)
 		if err != nil {
 			logr.WithError(err).Warnln("scaler: failed to find and claim instance for scale down")
 			break
@@ -430,7 +453,7 @@ func (s *Scaler) scaleDown(
 			"instance_state": string(inst.State),
 			"destroy_caller": "scaler:scale_down",
 		}).Infoln("scaler: destroying excess instance")
-		if err := s.manager.Destroy(ctx, poolName, inst.ID, inst, nil); err != nil {
+		if err := manager.Destroy(ctx, poolName, inst.ID, inst, nil); err != nil {
 			logr.WithError(err).WithField("instance_id", inst.ID).
 				Errorln("scaler: failed to destroy instance")
 			continue

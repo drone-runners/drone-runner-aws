@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -145,6 +146,9 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 
 	// Register scaler if enabled and we have the necessary stores
 	if instanceStore != nil && utilizationHistoryStore != nil {
+		if algorithm == types.SchedulerAlgorithmCapability && capabilityHistoryStore == nil {
+			return nil, fmt.Errorf("scheduler algorithm %q requires the capability history store (postgres)", algorithm)
+		}
 		scalerConfig := types.ScalerConfig{
 			Enabled:                 cfg.Env.Scheduler.Scaler.Enabled,
 			WindowDuration:          time.Duration(cfg.Env.Scheduler.Scaler.WindowDurationMins) * time.Minute,
@@ -171,37 +175,54 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 			MaxLookbackDays:  cfg.Env.Scheduler.Predictor.MaxLookbackDays,
 			TargetWeekdays:   cfg.Env.Scheduler.Predictor.TargetWeekdays,
 		}
-		pred := predictor.NewEMAWeekendDecayPredictor(
-			utilizationHistoryStore,
-			predictorConfig,
+		var (
+			scaleTargets   jobs.ScaleTargetSource
+			scaleJobRunner jobs.ScaleJobRunner
 		)
-
-		// Create scaler
-		scaler := jobs.NewScaler(
-			poolManager,
-			pred,
-			instanceStore,
-			utilizationHistoryStore,
-			outboxStore,
-			scalerConfig,
-			scalablePools,
-			cfg.Metrics,
-		)
-
-		// Set scaler on outbox processor
-		outboxProcessor.SetScaler(scaler)
+		switch algorithm {
+		case types.SchedulerAlgorithmCapability:
+			capabilityScaler := jobs.NewCapabilityScaler(
+				poolManager,
+				predictor.NewEMAWeekendDecayPredictorFromHistory(predictor.NewCapabilityHistoryReader(capabilityHistoryStore), predictorConfig),
+				instanceStore,
+				capabilityHistoryStore,
+				outboxStore,
+				catalog,
+				scalerConfig,
+				cfg.Metrics,
+			)
+			scaleTargets = jobs.NewCapabilityScaleTargets(catalog, scalerConfig.DisabledPools)
+			scaleJobRunner = capabilityScaler
+			outboxProcessor.SetSetupFailureHandler(capabilityScaler)
+		case types.SchedulerAlgorithmPool:
+			scaleTargets = jobs.NewPoolScaleTargets(scalablePools, scalerConfig.PredictionDrivers)
+			scaleJobRunner = jobs.NewScaler(
+				poolManager,
+				predictor.NewEMAWeekendDecayPredictor(utilizationHistoryStore, predictorConfig),
+				instanceStore,
+				utilizationHistoryStore,
+				outboxStore,
+				scalerConfig,
+				scalablePools,
+				cfg.Metrics,
+			)
+		default:
+			return nil, fmt.Errorf("unknown scheduler algorithm %q", algorithm)
+		}
+		outboxProcessor.SetScaleJobRunner(scaleJobRunner)
 
 		// Create and register scaler trigger job
 		scalerTriggerJob := jobs.NewScalerTriggerJob(
 			outboxStore,
 			scalerConfig,
 			cfg.Env.Runner.Name,
-			scalablePools,
+			scaleTargets,
 		)
 		sched.Register(scalerTriggerJob)
 
 		logrus.WithFields(logrus.Fields{
 			"enabled":         scalerConfig.Enabled,
+			"algorithm":       scalerConfig.Algorithm,
 			"window_duration": scalerConfig.WindowDuration,
 			"lead_time":       scalerConfig.LeadTime,
 			"pools":           len(scalablePools),

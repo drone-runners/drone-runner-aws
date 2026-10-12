@@ -15,8 +15,8 @@ import (
 // - Weekend Offset adjustment for day-of-week patterns
 // - 3 Week Historical Offset with Decay for seasonal patterns
 type EMAWeekendDecayPredictor struct {
-	historyStore store.UtilizationHistoryStore
-	config       PredictorConfig
+	history HistoryReader
+	config  PredictorConfig
 }
 
 // PredictorConfig contains configuration parameters for the predictor.
@@ -59,11 +59,16 @@ func DefaultPredictorConfig() PredictorConfig {
 	}
 }
 
-// NewEMAWeekendDecayPredictor creates a new predictor with the given history store and config.
+// NewEMAWeekendDecayPredictor creates a new predictor over pool utilization history.
 func NewEMAWeekendDecayPredictor(historyStore store.UtilizationHistoryStore, config PredictorConfig) *EMAWeekendDecayPredictor { //nolint:gocritic
+	return NewEMAWeekendDecayPredictorFromHistory(NewPoolHistoryReader(historyStore), config)
+}
+
+// NewEMAWeekendDecayPredictorFromHistory creates a new predictor over the given history.
+func NewEMAWeekendDecayPredictorFromHistory(history HistoryReader, config PredictorConfig) *EMAWeekendDecayPredictor { //nolint:gocritic
 	return &EMAWeekendDecayPredictor{
-		historyStore: historyStore,
-		config:       config,
+		history: history,
+		config:  config,
 	}
 }
 
@@ -148,14 +153,7 @@ func (p *EMAWeekendDecayPredictor) calculateEMA(ctx context.Context, input *Pred
 	}
 
 	// Fetch all time ranges in a single batch query
-	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
-		ctx,
-		input.PoolName,
-		input.TenantID,
-		input.VariantID,
-		input.ImageName,
-		ranges,
-	)
+	batchResults, err := p.history.ReadHistory(ctx, input, ranges)
 	if err != nil {
 		return 0, err
 	}
@@ -214,14 +212,7 @@ func (p *EMAWeekendDecayPredictor) calculateHistoricalWithDecay(ctx context.Cont
 	}
 
 	// Fetch all 3 weeks in a single batch query
-	batchResults, err := p.historyStore.GetUtilizationHistoryBatch(
-		ctx,
-		input.PoolName,
-		input.TenantID,
-		input.VariantID,
-		input.ImageName,
-		ranges,
-	)
+	batchResults, err := p.history.ReadHistory(ctx, input, ranges)
 	if err != nil {
 		return 0, err
 	}

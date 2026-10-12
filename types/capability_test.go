@@ -56,3 +56,17 @@ func TestCapabilityKeyString(t *testing.T) {
 		t.Errorf("String() = %q, want %q", got, want)
 	}
 }
+
+func TestCapabilityScaleJobName(t *testing.T) {
+	k := CapabilityKey{Tier: TierFree, OS: "linux", Arch: "arm64", VariantID: "default", TenantID: "acct-1"}
+	name := CapabilityScaleJobName(&k)
+	if name != "cap:free/linux/arm64/default/acct-1" {
+		t.Errorf("name = %q", name)
+	}
+	if got, ok := ParseCapabilityScaleJobName(name); !ok || got != k.String() {
+		t.Errorf("parse(%q) = %q, %v", name, got, ok)
+	}
+	if _, ok := ParseCapabilityScaleJobName("linux-amd64"); ok {
+		t.Error("pool names must not parse as capability jobs")
+	}
+}
