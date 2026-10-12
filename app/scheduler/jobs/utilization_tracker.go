@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/drone-runners/drone-runner-aws/app/capability"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -19,6 +20,9 @@ type UtilizationTrackerJob struct {
 	instanceStore store.InstanceStore
 	historyStore  store.UtilizationHistoryStore
 	interval      time.Duration
+
+	capabilityStore store.CapabilityHistoryStore
+	catalog         *capability.Catalog
 }
 
 // NewUtilizationTrackerJob creates a new UtilizationTrackerJob.
@@ -32,6 +36,14 @@ func NewUtilizationTrackerJob(
 		historyStore:  historyStore,
 		interval:      interval,
 	}
+}
+
+// WithCapabilityHistory also records each snapshot into the capability history table for
+// pools in the catalog. Pools outside the catalog (unsupported drivers) are skipped there.
+func (j *UtilizationTrackerJob) WithCapabilityHistory(s store.CapabilityHistoryStore, catalog *capability.Catalog) *UtilizationTrackerJob {
+	j.capabilityStore = s
+	j.catalog = catalog
+	return j
 }
 
 // Name returns the job name.
@@ -92,5 +104,33 @@ func (j *UtilizationTrackerJob) Execute(ctx context.Context) error {
 		}).Debugln("recorded utilization")
 	}
 
+	j.recordCapabilityHistory(ctx, counts, now)
+
 	return nil
+}
+
+func (j *UtilizationTrackerJob) recordCapabilityHistory(ctx context.Context, counts []types.InstanceCount, now int64) {
+	if j.capabilityStore == nil || j.catalog == nil {
+		return
+	}
+	records := make([]*types.CapabilityUtilizationRecord, 0, len(counts))
+	for _, c := range counts {
+		key, ok := j.catalog.KeyFor(c.Pool, c.TenantID, c.VariantID)
+		if !ok {
+			continue
+		}
+		records = append(records, &types.CapabilityUtilizationRecord{
+			CapabilityKey:  key,
+			Pool:           c.Pool,
+			ImageName:      c.ImageName,
+			InUseInstances: c.Count,
+			RecordedAt:     now,
+		})
+	}
+	if len(records) == 0 {
+		return
+	}
+	if err := j.capabilityStore.CreateBatch(ctx, records); err != nil {
+		logrus.WithError(err).WithField("records", len(records)).Errorln("failed to create capability utilization records")
+	}
 }

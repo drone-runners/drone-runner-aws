@@ -3,10 +3,12 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/drone-runners/drone-runner-aws/app/capability"
 	"github.com/drone-runners/drone-runner-aws/store"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -23,6 +25,7 @@ type ScalerTriggerJob struct {
 	config        types.ScalerConfig
 	runnerName    string
 	pools         []ScalablePool
+	drivers       map[string]bool
 	lastWindowKey int64 // Track last window to avoid duplicates
 }
 
@@ -43,6 +46,7 @@ func NewScalerTriggerJob(
 	return &ScalerTriggerJob{
 		outboxStore: outboxStore,
 		config:      config,
+		drivers:     capability.DriverSet(config.PredictionDrivers),
 		runnerName:  runnerName,
 		pools:       pools,
 	}
@@ -96,8 +100,7 @@ func (j *ScalerTriggerJob) Execute(ctx context.Context) error {
 	// Create scale jobs for each pool
 	jobsCreated := 0
 	for _, pool := range j.pools {
-		// Only process pools with google or amazon drivers
-		if pool.Driver != string(types.Google) && pool.Driver != string(types.Amazon) {
+		if !j.drivers[strings.ToLower(pool.Driver)] {
 			continue
 		}
 

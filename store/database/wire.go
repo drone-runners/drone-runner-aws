@@ -102,14 +102,24 @@ func ProvideSQLUtilizationHistoryStore(db *sqlx.DB) store.UtilizationHistoryStor
 	}
 }
 
+// ProvideSQLCapabilityHistoryStore provides a capability utilization history store.
+func ProvideSQLCapabilityHistoryStore(db *sqlx.DB) store.CapabilityHistoryStore {
+	switch db.DriverName() {
+	case Postgres:
+		return sql.NewCapabilityHistoryStore(db)
+	default:
+		return nil
+	}
+}
+
 //nolint:gocritic
-func ProvideStore(ctx context.Context, driver, datasource string, iamAuth bool, iamRegion string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, error) { //nolint:lll
+func ProvideStore(ctx context.Context, driver, datasource string, iamAuth bool, iamRegion string) (store.InstanceStore, store.StageOwnerStore, store.OutboxStore, store.CapacityReservationStore, store.UtilizationHistoryStore, store.CapabilityHistoryStore, error) { //nolint:lll
 	if driver == "leveldb" {
 		db, err := leveldb.OpenFile(datasource, nil)
 		if err != nil {
-			return nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
-		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil, nil
+		return ldb.NewInstanceStore(db), ldb.NewStageOwnerStore(db), nil, nil, nil, nil, nil
 	}
 
 	var (
@@ -122,9 +132,10 @@ func ProvideStore(ctx context.Context, driver, datasource string, iamAuth bool, 
 		db, err = ProvideSQLDatabase(driver, datasource)
 	}
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	return ProvideSQLInstanceStore(db), ProvideSQLStageOwnerStore(db), ProvideSQLOutboxStore(db),
-		ProvideSQLCapacityReservationStore(db), ProvideSQLUtilizationHistoryStore(db), nil
+		ProvideSQLCapacityReservationStore(db), ProvideSQLUtilizationHistoryStore(db),
+		ProvideSQLCapabilityHistoryStore(db), nil
 }
