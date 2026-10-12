@@ -1,0 +1,114 @@
+metric/capability.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-10,12-14,16-17,19-61,63-64
+  s_9dbc461897456f::t_6da076bcd40479 11,15,18,62
+store/database/sql/capability_utilization_history.go
+  s_9dbc461897456f::t_75eb5b7cefe021 5,122-133,135-146
+  s_9dbc461897456f::t_d398f21a3e5652 20,39,134
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 81-82,86,90
+  s_9dbc461897456f::t_bb3f55171f7ac1 147-148
+app/predictor/capability_predictor_test.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-106,108-133,135-148,154-156,159-162
+  s_9dbc461897456f::t_a6a2fd7cb7f50c 107,134,149-153,157-158
+types/types.go
+  s_9dbc461897456f::t_75eb5b7cefe021 408-413,514-527
+  s_9dbc461897456f::t_dfbb999378a72d 528
+store/database/capability_history_test.go
+  s_9dbc461897456f::t_572ad6a50af71c 69-94
+  s_9dbc461897456f::t_427de12d259f59 347-382
+app/scheduler/jobs/capability_scaler.go
+  s_9dbc461897456f::t_c049cfd6573997 164,174,177,317,356
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-21,33-34,58-65,68-75,87-91,93-131,133-163,165-173,175-176,178-179,181-244,246-247,249-255,257-267,269-273,279-307,314-316,318-355,357-371,373-386,393-438,440-443
+  s_9dbc461897456f::t_0108b2ea4ddb92 66-67,308-313
+  s_9dbc461897456f::t_447a8cfa8e47d7 22-32,35-57,76-86,92,132,180,245,248,256,268,274-278,372,387-392,439
+app/scheduler/jobs/capability_scaler_test.go
+  s_9dbc461897456f::t_d398f21a3e5652 164,167-169,174,179,186,291,339,352,360,372,390,401,409,418,425,436,466-468,553
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-92,94-129,131-163,165-166,170-173,175-178,180-185,187-290,292-338,340-351,353-359,364-371,373-389,391-400,402-408,410-417,419-424,426-435,437-444,450-451,453-465,469-470,472-474,476-493,495-499,501-511,542,544-549,551,554-564,566,568-572,574,576-577,579-584,587-596,599-600,602-615,617-635,637-644,652,661-662
+  s_9dbc461897456f::t_847b13e6bf1d39 361-363,597-598
+  s_9dbc461897456f::t_cc788e2b0aca47 512-540
+  s_9dbc461897456f::t_a254dbd25a184d 93,130,445-449,452,471,475,494,500,541,543,550,552,565,567,573,575,578,585-586,601,616,636,645-651,653-660
+types/capability_test.go
+  s_9dbc461897456f::t_427de12d259f59 59-72
+metric/capability_test.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-44
+store/store.go
+  s_9dbc461897456f::t_bbbe16b3bac2ff 39-41
+  s_9dbc461897456f::t_75eb5b7cefe021 82-83
+app/scheduler/jobs/outbox.go
+  s_9dbc461897456f::t_36489b6a955460 30-32,52,54-61,147-148,151-161,207-211,213-214,228,231,233,245
+  s_9dbc461897456f::t_ef4543b9d0fca7 236-242,244,247-248
+store/database/sql/outbox.go
+  s_9dbc461897456f::t_9719891b3fd934 263-264
+  s_9dbc461897456f::t_bc7b7222f615c2 16-17,76,225,261-262
+  s_9dbc461897456f::t_bbbe16b3bac2ff 255-260,265-274
+app/scheduler/jobs/scaler_test.go
+  s_9dbc461897456f::t_0108b2ea4ddb92 376-400
+  s_9dbc461897456f::t_8f49358903432f 425,440,455,470,491,555,569,917
+app/scheduler/jobs/scale_strategy.go
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 1-90
+command/harness/distributed.go
+  s_9dbc461897456f::t_4638f49ab296e5 178-180,182-196,198-208,211-212,219
+  s_9dbc461897456f::t_6da076bcd40479 197,209-210
+  s_9dbc461897456f::t_097eea3741d026 5,149-151,225
+app/scheduler/jobs/scaler.go
+  s_9dbc461897456f::t_26cce58f1d0cb6 113-117,403-414,440,456
+  s_9dbc461897456f::t_f711ef908915c7 13,65-70,73,85
+app/capability/catalog.go
+  s_9dbc461897456f::t_f711ef908915c7 163-172
+app/scheduler/jobs/scaler_trigger.go
+  s_9dbc461897456f::t_e566628dcf276f 19-20,25,34,47,96,98
+  s_9dbc461897456f::t_79a7b614370261 111,125,134,141,148
+  e22a05a7-ba51-48d4-a528-f4f200538d3e 104
+  s_9dbc461897456f::t_cbae67fdf3d7ef 159-160
+  s_9dbc461897456f::t_35417b0f9d7308 99,101,161
+metric/builds.go
+  s_9dbc461897456f::t_ac03dc5daddf73 39-44,562-565,619-620,653-656
+app/drivers/manager.go
+  s_9dbc461897456f::t_ac03dc5daddf73 188-197
+app/predictor/history_reader.go
+  s_9dbc461897456f::t_e1f02addabdda5 1-66
+store/database/outbox_test.go
+  s_9dbc461897456f::t_cc788e2b0aca47 1-71
+app/predictor/ema_weekend_decay_predictor.go
+  s_9dbc461897456f::t_e1f02addabdda5 18-19,62,64,67-68,70-71,156,215
+  s_9dbc461897456f::t_69456b8b376dda 65-66
+app/scheduler/jobs/capability_test.go
+  s_9dbc461897456f::t_830431a7dd52e5 45-54
+  s_9dbc461897456f::t_3ff936c0bae52c 366
+app/predictor/predictor.go
+  s_9dbc461897456f::t_69456b8b376dda 5-6,20
+  s_9dbc461897456f::t_e1f02addabdda5 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f9d7e8294c354339454795583a4ac5381409cb1a",
+  "prompts": {
+    "9dbc461897456f00": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e22a05a7-ba51-48d4-a528-f4f200538d3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>",
+      "total_additions": 2158,
+      "total_deletions": 332,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_73ea4b83252c23": {
+      "author": "Raghav <raghav.gupta@harness.io>"
+    }
+  },
+  "sessions": {
+    "s_9dbc461897456f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e22a05a7-ba51-48d4-a528-f4f200538d3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Raghav <raghav.gupta@harness.io>"
+    }
+  }
+}
