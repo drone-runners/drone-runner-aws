@@ -179,7 +179,7 @@ func (h *HTTPHandlers) HandleDestroy(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Context.TaskID = rs.CorrelationID
 
-	err := h.service.Destroy(r.Context(), req)
+	_, err := h.service.Destroy(r.Context(), req)
 	if err != nil {
 		logrus.WithField("stage_runtime_id", req.StageRuntimeID).
 			WithField("task_id", rs.CorrelationID).

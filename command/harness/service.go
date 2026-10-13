@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/harness/lite-engine/api"
+	"github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -132,7 +133,7 @@ func (s *VMService) Step(ctx context.Context, req *ExecuteVMRequest, async bool)
 }
 
 // Destroy handles VM cleanup/destroy requests.
-func (s *VMService) Destroy(ctx context.Context, req *VMCleanupRequest) error {
+func (s *VMService) Destroy(ctx context.Context, req *VMCleanupRequest) (*spec.OSStats, error) {
 	return HandleDestroy(
 		ctx,
 		req,
