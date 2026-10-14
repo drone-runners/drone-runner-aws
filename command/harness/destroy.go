@@ -240,6 +240,18 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).
 				Infof("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
 					resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
+
+			logr.WithField("p50_cpu", resp.OSStats.P50CPUUsagePct).
+				WithField("p90_cpu", resp.OSStats.P90CPUUsagePct).
+				WithField("p95_cpu", resp.OSStats.P95CPUUsagePct).
+				WithField("p99_cpu", resp.OSStats.P99CPUUsagePct).
+				WithField("p50_mem", resp.OSStats.P50MemUsagePct).
+				WithField("p90_mem", resp.OSStats.P90MemUsagePct).
+				WithField("p95_mem", resp.OSStats.P95MemUsagePct).
+				WithField("p99_mem", resp.OSStats.P99MemUsagePct).
+				WithField("disk_read_mb", resp.OSStats.DiskTotalReadMB).
+				WithField("disk_write_mb", resp.OSStats.DiskTotalWriteMB).
+				Infoln("destroy: resource utilization stats received from lite-engine")
 		}
 	}
 
