@@ -238,10 +238,13 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 			logr.WithField("cpu_ge50", cpuGe50).WithField("cpu_ge70", cpuGe70).WithField("cpu_ge90", cpuGe90).
 				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).
-				Infof("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
-					resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
-
-			logr.WithField("p50_cpu", resp.OSStats.P50CPUUsagePct).
+				WithField("total_mem_mb", resp.OSStats.TotalMemMB).
+				WithField("cpu_cores", resp.OSStats.CPUCores).
+				WithField("avg_cpu_pct", resp.OSStats.AvgCPUUsagePct).
+				WithField("max_cpu_pct", resp.OSStats.MaxCPUUsagePct).
+				WithField("avg_mem_pct", resp.OSStats.AvgMemUsagePct).
+				WithField("max_mem_pct", resp.OSStats.MaxMemUsagePct).
+				WithField("p50_cpu", resp.OSStats.P50CPUUsagePct).
 				WithField("p90_cpu", resp.OSStats.P90CPUUsagePct).
 				WithField("p95_cpu", resp.OSStats.P95CPUUsagePct).
 				WithField("p99_cpu", resp.OSStats.P99CPUUsagePct).
