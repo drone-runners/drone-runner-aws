@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/harness/lite-engine/api"
+	"github.com/harness/lite-engine/engine/spec"
 
 	"github.com/drone-runners/drone-runner-aws/app/drivers"
 	"github.com/drone-runners/drone-runner-aws/app/lehelper"
@@ -47,9 +48,9 @@ func HandleDestroy(
 	mockTimeout int, // only used for scale testing
 	poolManager drivers.IManager,
 	metrics *metric.Metrics,
-) error {
+) (*spec.OSStats, error) {
 	if r.StageRuntimeID == "" {
-		return ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
+		return nil, ierrors.NewBadRequestError("mandatory field 'stage_runtime_id' in the request body is empty")
 	}
 	logr := logrus.
 		WithField("stage_runtime_id", r.StageRuntimeID).
@@ -82,27 +83,27 @@ func HandleDestroy(
 				default:
 				}
 			}
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-timer.C:
-			_, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
+			_, osStats, err := handleDestroy(ctx, r, s, crs, enableMock, mockTimeout, poolManager, metrics, cnt, logr)
 			if err != nil {
 				if lastErr == nil || (lastErr.Error() != err.Error()) {
 					logr.WithError(err).Errorln("could not destroy VM")
 					lastErr = err
 				}
 				if duration == backoff.Stop {
-					return err
+					return nil, err
 				}
 				cnt++
 				continue
 			}
-			return nil
+			return osStats, nil
 		}
 	}
 }
 
 func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerStore, crs store.CapacityReservationStore, enableMock bool, mockTimeout int,
-	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, error) {
+	poolManager drivers.IManager, metrics *metric.Metrics, retryCount int, logr *logrus.Entry) (*types.Instance, *spec.OSStats, error) {
 	logr = logr.WithField("retry_count", retryCount)
 
 	// poolID is declared here (rather than at its first assignment below) so the deferred
@@ -138,7 +139,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if r.InstanceInfo.PoolName == "" {
 		entity, err := s.Find(ctx, r.StageRuntimeID)
 		if err != nil || entity == nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
+			return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to find stage owner entity for stage: %s", r.StageRuntimeID))
 		}
 		poolID = entity.PoolName
 	} else {
@@ -158,10 +159,10 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		logr.Debugf("Instance information is not passed to the VM Cleanup Request, fetching it from the DB: %v", err)
 		inst, err = poolManager.GetInstanceByStageID(ctx, poolID, r.StageRuntimeID)
 		if err != nil {
-			return nil, fmt.Errorf("cannot get the instance by tag: %w", err)
+			return nil, nil, fmt.Errorf("cannot get the instance by tag: %w", err)
 		}
 		if inst == nil {
-			return nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
+			return nil, nil, fmt.Errorf("instance with stage runtime ID %s not found", r.StageRuntimeID)
 		}
 	} else {
 		logr.Infoln("Using the instance information from the VM Cleanup Request")
@@ -172,17 +173,18 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 		WithField("instance_id", inst.ID).
 		WithField("instance_name", inst.Name)
 
-	// usageStartUnix is a best-effort proxy for "became inuse at": there's no dedicated column
-	// for that, so this reads inst.Updated before it gets overwritten below. It's only reliable
-	// when nothing else wrote to this row between the inuse claim and now; if inst came from the
-	// caller's request payload rather than a fresh DB fetch (see the ValidateStructForKeys branch
-	// above), Updated will be zero and usage duration is simply not recorded for that call.
-	// Known limitation: for instances claimed from the non-distributed Manager's warm pool,
-	// inst.Updated is not refreshed at claim time (see provisionFromPool in
-	// app/drivers/provisioner.go), so this proxy reflects "last touched at" rather than "became
-	// inuse at" and can understate/overstate usage duration by however long the instance sat
-	// idle in the pool before being claimed.
-	usageStartUnix := inst.Updated
+	// usageStartUnix is "became inuse at": inst.Started, read before it gets overwritten below.
+	// For DistributedManager this is reliable - FindAndClaim's updateStartTime param refreshes
+	// instance_started to "now" atomically on every transition into StateInUse (hot-pool claim,
+	// on-demand creation, and hibernate-resume all set/refresh it - see
+	// app/drivers/distributed_manager.go and app/drivers/provisioner.go). It's zero/unset (and
+	// usage duration simply isn't recorded) only when inst came from the caller's request payload
+	// rather than a fresh DB fetch (see the ValidateStructForKeys branch above).
+	// Known limitation: for instances claimed from the non-distributed Manager's warm pool
+	// without going through hibernation, Started is not refreshed at claim time (see
+	// provisionFromPool in app/drivers/provisioner.go), so this can overstate usage duration by
+	// however long the instance sat idle in the pool before being claimed.
+	usageStartUnix := inst.Started
 
 	// Update instance state to terminating and update timestamp
 	inst.State = types.StateTerminating
@@ -190,6 +192,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	if updateErr := poolManager.Update(ctx, inst); updateErr != nil {
 		logr.WithError(updateErr).Warnln("failed to update instance state to terminating")
 	}
+
+	var osStats *spec.OSStats
 
 	logr.Traceln("invoking lite engine cleanup")
 	client, err := lehelper.GetClient(inst, poolManager.GetTLSServerName(), inst.Port, enableMock, mockTimeout)
@@ -207,6 +211,8 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 			logr.WithError(destroyErr).Errorln("could not invoke lite engine cleanup")
 		}
 		if resp != nil && resp.OSStats != nil {
+			osStats = resp.OSStats
+
 			var cpuGe50, cpuGe70, cpuGe90, memGe50, memGe70, memGe90 bool
 			if resp.OSStats.MaxCPUUsagePct >= 50.0 { //nolint:mnd
 				cpuGe50 = true
@@ -232,8 +238,23 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 
 			logr.WithField("cpu_ge50", cpuGe50).WithField("cpu_ge70", cpuGe70).WithField("cpu_ge90", cpuGe90).
 				WithField("mem_ge50", memGe50).WithField("mem_ge70", memGe70).WithField("mem_ge90", memGe90).
-				Infof("execution stats: total_mem_mb: %f, cpu_cores: %d, avg_mem_usage_pct (%%): %.2f, avg_cpu_usage (%%): %.2f, max_mem_usage_pct (%%): %.2f, max_cpu_usage_pct (%%): %.2f",
-					resp.OSStats.TotalMemMB, resp.OSStats.CPUCores, resp.OSStats.AvgMemUsagePct, resp.OSStats.AvgCPUUsagePct, resp.OSStats.MaxMemUsagePct, resp.OSStats.MaxCPUUsagePct)
+				WithField("total_mem_mb", resp.OSStats.TotalMemMB).
+				WithField("cpu_cores", resp.OSStats.CPUCores).
+				WithField("avg_cpu_pct", resp.OSStats.AvgCPUUsagePct).
+				WithField("max_cpu_pct", resp.OSStats.MaxCPUUsagePct).
+				WithField("avg_mem_pct", resp.OSStats.AvgMemUsagePct).
+				WithField("max_mem_pct", resp.OSStats.MaxMemUsagePct).
+				WithField("p50_cpu", resp.OSStats.P50CPUUsagePct).
+				WithField("p90_cpu", resp.OSStats.P90CPUUsagePct).
+				WithField("p95_cpu", resp.OSStats.P95CPUUsagePct).
+				WithField("p99_cpu", resp.OSStats.P99CPUUsagePct).
+				WithField("p50_mem", resp.OSStats.P50MemUsagePct).
+				WithField("p90_mem", resp.OSStats.P90MemUsagePct).
+				WithField("p95_mem", resp.OSStats.P95MemUsagePct).
+				WithField("p99_mem", resp.OSStats.P99MemUsagePct).
+				WithField("disk_read_mb", resp.OSStats.DiskTotalReadMB).
+				WithField("disk_write_mb", resp.OSStats.DiskTotalWriteMB).
+				Infoln("destroy: resource utilization stats received from lite-engine")
 		}
 	}
 
@@ -246,7 +267,7 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	metrics.RecordCleanupAttempt(CleanupResourceVM, poolID, inst.Zone, vmOutcome, vmReason)
 	metrics.RecordCleanupDuration(CleanupResourceVM, poolID, inst.Zone, vmOutcome, time.Since(vmDestroyStart))
 	if destroyErr != nil {
-		return nil, fmt.Errorf("cannot destroy the instance: %w", destroyErr)
+		return nil, nil, fmt.Errorf("cannot destroy the instance: %w", destroyErr)
 	}
 	logr.Infoln("destroy_handler: instance destroyed successfully")
 
@@ -263,23 +284,25 @@ func handleDestroy(ctx context.Context, r *VMCleanupRequest, s store.StageOwnerS
 	metrics.RecordCleanupAttempt(CleanupResourceStageOwner, poolID, inst.Zone, stageOwnerOutcome, stageOwnerReason)
 	metrics.RecordCleanupDuration(CleanupResourceStageOwner, poolID, inst.Zone, stageOwnerOutcome, time.Since(stageOwnerDeleteStart))
 
-	return inst, nil
+	return inst, osStats, nil
 }
 
-// recordNormalCleanupUsageDuration records runner_vm_usage_duration_seconds with
-// termination_reason=normal_cleanup after a successful handleDestroy. usageStartUnix is a
-// best-effort proxy for "became inuse at" (inst.Updated, read before it was overwritten to
-// terminating); it is 0/unset when inst was built from the caller's request payload rather than
-// fetched fresh from the DB (see the ValidateStructForKeys branch in handleDestroy), in which
-// case usage duration is simply not recorded for that call.
+// recordNormalCleanupUsageDuration records runner_vm_usage_duration_seconds (pool-sliced) and
+// runner_vm_usage_seconds_total (account/machine-type-sliced, CI-24547) after a successful
+// handleDestroy. usageStartUnix is "became inuse at" (inst.Started, read before it was
+// overwritten to terminating); it is 0/unset when inst was built from the caller's request
+// payload rather than fetched fresh from the DB (see the ValidateStructForKeys branch in
+// handleDestroy), in which case usage duration is simply not recorded for that call.
 func recordNormalCleanupUsageDuration(metrics *metric.Metrics, poolID string, inst *types.Instance, usageStartUnix int64) {
 	if metrics == nil || usageStartUnix <= 0 {
 		return
 	}
+	dwell := time.Since(time.Unix(usageStartUnix, 0))
 	metrics.RecordVMUsageDuration(
 		poolID, inst.Zone, inst.Size, string(inst.Source),
-		drivers.VMTerminationReasonNormalCleanup, time.Since(time.Unix(usageStartUnix, 0)),
+		drivers.VMTerminationReasonNormalCleanup, dwell,
 	)
+	metrics.RecordVMUsageSeconds(inst.OwnerID, string(inst.Provider), inst.Zone, inst.OS, inst.Arch, inst.Size, dwell)
 }
 
 func createBackoff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {

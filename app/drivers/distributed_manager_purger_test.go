@@ -180,6 +180,90 @@ func TestDistributedPurger_ExecuteInstanceCleanup_HappyPath(t *testing.T) {
 	assert.Empty(t, store.snapshot(), "store should be empty after successful destroy")
 }
 
+func TestDistributedPurger_ExecuteInstanceCleanup_BusyDestroy_RecordsVMUsageMetrics(t *testing.T) {
+	// Busy instances destroyed by the purger should emit both the pool-sliced
+	// runner_vm_usage_duration_seconds histogram and the account/machine-type-sliced
+	// runner_vm_usage_seconds_total counter (CI-24547) - previously neither was emitted at all
+	// for this path, since instance_started/instance_owner_id/etc weren't returned by the claim
+	// query's RETURNING clause.
+	now := time.Now()
+	// maxAge must exceed usageStart's age / 2, otherwise forceDeleteLeakedInstances (which runs
+	// first and force-deletes anything older than 2*maxAge) would delete the row before the
+	// claim query below ever sees it.
+	maxAge := 2 * time.Hour
+	usageStart := now.Add(-90 * time.Minute)
+	store := newPurgerFakeStore(&types.Instance{
+		ID: "inst-1", Name: "vm-1", Pool: "pool1", State: types.StateInUse, Zone: "us-east1-a",
+		Size: "n1-standard-2", Source: types.InstanceSourcePool, OwnerID: "acct-1",
+		Provider: types.DriverType("mock"), Platform: types.Platform{OS: "linux", Arch: "amd64"},
+		Started: usageStart.Unix(),
+	})
+
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyFunc: func(_ context.Context, _ []*types.Instance) ([]*types.Instance, error) {
+			return nil, nil // destroy succeeds
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, fakeMetrics)
+	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
+
+	successful, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "busy", maxAge)
+	assert.NoError(t, err)
+	assert.Len(t, successful, 1)
+
+	if assert.Len(t, fakeMetrics.vmUsageDurs, 1) {
+		rec := fakeMetrics.vmUsageDurs[0]
+		assert.Equal(t, "pool1", rec.poolID)
+		assert.Equal(t, "us-east1-a", rec.zone)
+		assert.Equal(t, "n1-standard-2", rec.vmType)
+		assert.Equal(t, string(types.InstanceSourcePool), rec.source)
+		assert.Equal(t, VMTerminationReasonPurgerStale, rec.terminationReason)
+		assert.InDelta(t, 90*time.Minute.Seconds(), rec.dwell.Seconds(), 30)
+	}
+
+	if assert.Len(t, fakeMetrics.vmUsageSeconds, 1) {
+		rec := fakeMetrics.vmUsageSeconds[0]
+		assert.Equal(t, "acct-1", rec.accountID)
+		assert.Equal(t, "mock", rec.provider)
+		assert.Equal(t, "us-east1-a", rec.zone)
+		assert.Equal(t, "linux", rec.osName)
+		assert.Equal(t, "amd64", rec.arch)
+		assert.Equal(t, "n1-standard-2", rec.size)
+		assert.InDelta(t, 90*time.Minute.Seconds(), rec.dwell.Seconds(), 30)
+	}
+}
+
+func TestDistributedPurger_ExecuteInstanceCleanup_FreeDestroy_DoesNotRecordVMUsageMetrics(t *testing.T) {
+	// Free (never in-use) instances destroyed by the purger should not emit either usage metric.
+	now := time.Now()
+	// See the comment on maxAge in the BusyDestroy test above re: forceDeleteLeakedInstances.
+	maxAge := 2 * time.Hour
+	store := newPurgerFakeStore(&types.Instance{
+		ID: "inst-1", Name: "vm-1", Pool: "pool1", State: types.StateCreated,
+		Started: now.Add(-30 * time.Minute).Unix(),
+	})
+
+	driver := &flexibleMockDriver{
+		driverName: "mock",
+		DestroyFunc: func(_ context.Context, _ []*types.Instance) ([]*types.Instance, error) {
+			return nil, nil
+		},
+	}
+
+	fakeMetrics := &fakePurgerMetrics{}
+	d, pool := newPurgerTestManagerWithMetrics(store, driver, fakeMetrics)
+	conditions := squirrel.Or{squirrel.Eq{"instance_pool": "pool1"}}
+
+	successful, err := d.executeInstanceCleanup(context.Background(), pool, conditions, "free", maxAge)
+	assert.NoError(t, err)
+	assert.Len(t, successful, 1)
+	assert.Empty(t, fakeMetrics.vmUsageDurs)
+	assert.Empty(t, fakeMetrics.vmUsageSeconds)
+}
+
 func TestDistributedPurger_ExecuteInstanceCleanup_DestroyFailureKeepsRow(t *testing.T) {
 	// Dummy data: three rows, driver.Destroy reports inst-2 as failed.
 	// Expectation (the fix): inst-1 and inst-3 are deleted, inst-2 stays

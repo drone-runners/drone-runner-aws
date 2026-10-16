@@ -31,6 +31,8 @@ type (
 		Spec      interface{}         `json:"spec,omitempty"`
 		VariantID string              `json:"variant_id,omitempty" yaml:"variant_id,omitempty" default:"default"`
 		Variants  []types.PoolVariant `json:"variants,omitempty" yaml:"variants,omitempty"`
+		// Tier is the customer tier the pool serves: "paid" (default) or "free".
+		Tier string `json:"tier,omitempty" yaml:"tier,omitempty"`
 		// Tenants enables multi-tenant configuration for a single pool. Each entry is a
 		// per-account override that is deep-merged over the pool's top-level Spec (which acts
 		// as the default tenant). When empty, the pool is single-tenant and the flat Spec above
@@ -256,28 +258,29 @@ type (
 
 	// Google specifies the configuration for a GCP instance.
 	Google struct {
-		Account                    GoogleAccount     `json:"account,omitempty"  yaml:"account"`
-		Image                      string            `json:"image,omitempty" yaml:"image,omitempty"`
-		Name                       string            `json:"name,omitempty" yaml:"name,omitempty"`
-		Tags                       []string          `json:"tags,omitempty" yaml:"tags,omitempty"` // Deprecated: use networks[].tags
-		Size                       string            `json:"size,omitempty" yaml:"size,omitempty"`
-		MachineType                string            `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-		UserData                   string            `json:"user_data,omitempty" yaml:"user_data,omitempty"`
-		UserDataPath               string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
-		UserDataKey                string            `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
-		Disk                       disk              `json:"disk,omitempty" yaml:"disk,omitempty"`
-		Network                    string            `json:"network,omitempty" yaml:"network,omitempty"`       // Deprecated: use networks[]
-		Subnetwork                 string            `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"` // Deprecated: use networks[]
-		Networks                   []GoogleNetwork   `json:"networks,omitempty" yaml:"networks,omitempty"`
-		PrivateIP                  bool              `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
-		Zone                       []string          `json:"zone,omitempty" yaml:"zone,omitempty"`
-		Labels                     map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
-		Scopes                     []string          `json:"scopes,omitempty" yaml:"scopes,omitempty"`
-		Hibernate                  bool              `json:"hibernate,omitempty"`
-		EnableNestedVirtualization bool              `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-		EnableC4D                  bool              `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
-		GPU                        bool              `json:"gpu,omitempty" yaml:"gpu,omitempty"`
-		EgressControl              bool              `json:"egress_control,omitempty" yaml:"egress_control,omitempty"`
+		Account                    GoogleAccount               `json:"account,omitempty"  yaml:"account"`
+		Image                      string                      `json:"image,omitempty" yaml:"image,omitempty"`
+		Name                       string                      `json:"name,omitempty" yaml:"name,omitempty"`
+		Tags                       []string                    `json:"tags,omitempty" yaml:"tags,omitempty"` // Deprecated: use networks[].tags
+		Size                       string                      `json:"size,omitempty" yaml:"size,omitempty"`
+		MachineType                string                      `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+		MachineTypeFallbacks       []types.MachineTypeFallback `json:"machine_type_fallbacks,omitempty" yaml:"machine_type_fallbacks,omitempty"`
+		UserData                   string                      `json:"user_data,omitempty" yaml:"user_data,omitempty"`
+		UserDataPath               string                      `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+		UserDataKey                string                      `json:"user_data_key,omitempty" yaml:"user_data_key,omitempty"`
+		Disk                       disk                        `json:"disk,omitempty" yaml:"disk,omitempty"`
+		Network                    string                      `json:"network,omitempty" yaml:"network,omitempty"`       // Deprecated: use networks[]
+		Subnetwork                 string                      `json:"subnetwork,omitempty" yaml:"subnetwork,omitempty"` // Deprecated: use networks[]
+		Networks                   []GoogleNetwork             `json:"networks,omitempty" yaml:"networks,omitempty"`
+		PrivateIP                  bool                        `json:"private_ip,omitempty" yaml:"private_ip,omitempty"`
+		Zone                       []string                    `json:"zone,omitempty" yaml:"zone,omitempty"`
+		Labels                     map[string]string           `json:"labels,omitempty" yaml:"labels,omitempty"`
+		Scopes                     []string                    `json:"scopes,omitempty" yaml:"scopes,omitempty"`
+		Hibernate                  bool                        `json:"hibernate,omitempty"`
+		EnableNestedVirtualization bool                        `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+		EnableC4D                  bool                        `json:"enable_c4d,omitempty" yaml:"enable_c4d,omitempty"`
+		GPU                        bool                        `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+		EgressControl              bool                        `json:"egress_control,omitempty" yaml:"egress_control,omitempty"`
 	}
 
 	GoogleAccount struct {
@@ -495,6 +498,12 @@ type EnvConfig struct {
 			MaxLookbackDays int     `envconfig:"DLITE_PREDICTOR_MAX_LOOKBACK_DAYS" default:"4"`
 			TargetWeekdays  int     `envconfig:"DLITE_PREDICTOR_TARGET_WEEKDAYS" default:"2"`
 		}
+		// Algorithm selects pool (current) or capability scheduling for prediction, scaling and hot-pool claims.
+		Algorithm string `envconfig:"DLITE_SCHEDULER_ALGORITHM" default:"pool"`
+		// PredictionDrivers lists the pool drivers this runner records capability history for, predicts and scales.
+		PredictionDrivers []string `envconfig:"DLITE_SCHEDULER_PREDICTION_DRIVERS" default:"google,amazon"`
+		// CapabilityBackfill copies existing pool utilization history into the capability history table on startup.
+		CapabilityBackfill bool `envconfig:"DLITE_SCHEDULER_CAPABILITY_BACKFILL" default:"false"`
 	}
 
 	Settings struct {
@@ -512,8 +521,8 @@ type EnvConfig struct {
 		PluginBinaryFallbackURI      string   `envconfig:"DRONE_PLUGIN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-plugin/v3.9.7"`
 		PurgerTime                   int64    `envconfig:"DRONE_PURGER_TIME_MINUTES" default:"15"`
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.19"`
-		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.23/"`
-		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.23/"`
+		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.30/"`
+		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.30/"`
 		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/v2.5.6/"`
 		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/v2.5.6/"`
 		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`
@@ -526,8 +535,8 @@ type EnvConfig struct {
 	}
 
 	LiteEngine struct {
-		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.197/"`
-		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.197/"`
+		Path                string `envconfig:"DRONE_LITE_ENGINE_PATH" default:"https://github.com/harness/lite-engine/releases/download/v0.5.202/"`
+		FallbackPath        string `envconfig:"DRONE_LITE_ENGINE_FALLBACK_PATH" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-lite-engine/v0.5.202/"`
 		EnableMock          bool   `envconfig:"DRONE_LITE_ENGINE_ENABLE_MOCK"`
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
@@ -711,6 +720,14 @@ func (s *Instance) newSpec() (interface{}, error) {
 	}
 }
 
+// GetTier returns the pool tier, defaulting to paid when unset.
+func (s *Instance) GetTier() string {
+	if s.Tier == "" {
+		return types.TierPaid
+	}
+	return s.Tier
+}
+
 // Populates the Spec field of the Instance struct based on the Type field.
 func (s *Instance) populateSpec() error {
 	spec, err := s.newSpec()
@@ -743,6 +760,12 @@ func (s *Instance) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, obj); err != nil {
 		return err
 	}
+
+	tier, err := types.ParseTier(s.Tier)
+	if err != nil {
+		return fmt.Errorf("pool %q: %w", s.Name, err)
+	}
+	s.Tier = tier
 
 	if err := s.populateSpec(); err != nil {
 		return err

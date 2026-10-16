@@ -65,6 +65,10 @@ type MetricsRecorder interface {
 	// RecordVMUsageDuration observes how long a VM was in the inuse state before being
 	// terminated (see vm_metrics.go for the bounded termination_reason values).
 	RecordVMUsageDuration(poolID, zone, vmType, source, terminationReason string, dwell time.Duration)
+	// RecordVMUsageSeconds adds to the cumulative total time a VM spent in the inuse state,
+	// sliced by account/machine dimensions rather than pool/termination_reason - see
+	// metric/vm.go. Used for per-account/machine-type usage tracking (CI-24547).
+	RecordVMUsageSeconds(accountID, provider, zone, osName, arch, size string, dwell time.Duration)
 	// RecordVMHibernateAttempt records the outcome of one logical hibernate operation (the whole
 	// hibernateOrStopWithRetries call, including any internal retries - see
 	// vm_lifecycle_metrics.go for the bounded outcome/reason values).

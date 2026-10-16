@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -100,6 +101,7 @@ type config struct {
 	scopes                     []string
 	serviceAccountEmail        string
 	size                       string
+	machineTypeFallbacks       []types.MachineTypeFallback
 	tags                       []string
 	zones                      []string
 	userData                   string
@@ -114,6 +116,10 @@ type config struct {
 	networkConfigIndex         uint64
 
 	stockoutCache *expirable.LRU[string, struct{}]
+
+	// Temporary internal settings until bulkInsert is represented in pool configuration.
+	bulkInsertReconcileTimeout      time.Duration
+	bulkInsertReconcilePollInterval time.Duration
 
 	// metrics is nil-safe: when unset, all instrumentation calls become no-ops.
 	metrics *metric.Metrics
@@ -711,7 +717,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		}
 	}
 
-	op, succeeded, err := p.insertWithStockoutRetry(ctx, in, candidates, opts, machineType, bootDiskType, stockoutRetryEnabled, usesReservation, logr)
+	op, succeeded, placement, err := p.insertWithBulkFallback(ctx, in, candidates, opts, machineType, bootDiskType, stockoutRetryEnabled, usesReservation, logr)
 	if err != nil {
 		return nil, succeeded.zone, err
 	}
@@ -728,10 +734,14 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Debugln("google: [provision] VM provisioned")
 
-	vm, err := p.getInstance(ctx, p.projectID, zone, name)
+	vm, err := p.getCreatedInstance(ctx, p.projectID, zone, name)
 	if err != nil {
 		logr.WithError(err).Errorln("google: failed to get VM")
+		recordBulkInsertPlacement(p.metrics, placement, "")
 		return nil, zone, err
+	}
+	if placement != nil {
+		recordBulkInsertPlacement(p.metrics, placement, path.Base(vm.MachineType))
 	}
 
 	instanceMap, err := p.mapToInstance(vm, zone, opts, enableNestedVirtualization, gpu, image, machineType, resolvedNetwork)
@@ -828,6 +838,7 @@ func (p *config) insertWithStockoutRetry(
 			attemptLogr.WithError(attemptErr).
 				WithField("machine_type", machineType).
 				Warnln("google: stockout detected for zone")
+			p.metrics.RecordStockoutAttempt(opts.PoolName, zone, machineType, attempt+1)
 			if !usesReservation {
 				p.markStockout(zone, machineType)
 			}
@@ -1339,6 +1350,10 @@ func (p *config) mapToInstance(
 	for _, port := range opts.GitspaceOpts.Ports {
 		gitspacePortMappings[port] = port
 	}
+	actualMachineType := path.Base(vm.MachineType)
+	if actualMachineType == "" || actualMachineType == "." || actualMachineType == "/" {
+		actualMachineType = machineType
+	}
 	return types.Instance{
 		ID:                         strconv.FormatUint(vm.Id, 10),
 		Name:                       vm.Name,
@@ -1347,7 +1362,7 @@ func (p *config) mapToInstance(
 		Pool:                       opts.PoolName,
 		Image:                      image,
 		Zone:                       zone,
-		Size:                       machineType,
+		Size:                       actualMachineType,
 		Platform:                   opts.Platform,
 		Address:                    instanceIP,
 		CACert:                     opts.CACert,

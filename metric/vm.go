@@ -50,6 +50,22 @@ func VMUsageDurationCount() *prometheus.HistogramVec {
 	)
 }
 
+// VMUsageSecondsTotal is a cumulative counter (not a histogram) of total time VMs spent in the
+// inuse state, sliced by account and machine dimensions. It exists specifically to answer "total
+// usage time for account X on machine type Y" style queries for cost/abuse tracking (CI-24547),
+// which a Histogram can't answer cheaply or exactly - a Counter is the idiomatic Prometheus
+// pattern for cumulative totals (c.f. node_cpu_seconds_total), and is far cheaper per label
+// combination than extending VMUsageDurationCount's bucketed histogram with an account_id label.
+func VMUsageSecondsTotal() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "runner_vm_usage_seconds_total",
+			Help: "Cumulative time VMs spent in the inuse state, by account and machine dimensions",
+		},
+		[]string{"account_id", "provider", "zone", "os", "arch", "size"},
+	)
+}
+
 // VMsCurrent reports the current number of VMs by pool, zone, VM type, source, and lifecycle
 // state. Additive to RunningCount: this gauge exists to add zone/vm_type granularity (RunningCount
 // already carries os/arch/driver/owner_id/hibernate instead), not to replace it.
@@ -90,4 +106,15 @@ func (m *Metrics) RecordVMUsageDuration(poolID, zone, vmType, source, terminatio
 		return
 	}
 	m.VMUsageDurationCount.WithLabelValues(poolID, zone, vmType, source, terminationReason).Observe(dwell.Seconds())
+}
+
+// RecordVMUsageSeconds adds dwell to the cumulative runner_vm_usage_seconds_total counter for the
+// given account/machine-dimension combination. Negative dwell times are dropped rather than
+// recorded, for the same reason as RecordVMUsageDuration (guards against a stale/missing
+// "became inuse at" timestamp at the caller).
+func (m *Metrics) RecordVMUsageSeconds(accountID, provider, zone, osName, arch, size string, dwell time.Duration) {
+	if m == nil || dwell < 0 {
+		return
+	}
+	m.VMUsageSecondsTotal.WithLabelValues(accountID, provider, zone, osName, arch, size).Add(dwell.Seconds())
 }

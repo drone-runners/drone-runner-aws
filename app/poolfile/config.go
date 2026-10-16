@@ -384,6 +384,7 @@ func buildGoogleDriver(g *config.Google, instance *config.Instance, metrics *met
 		google.WithDiskType(g.Disk.Type),
 		google.WithMachineImage(g.Image),
 		google.WithSize(g.MachineType),
+		google.WithMachineTypeFallbacks(g.MachineTypeFallbacks),
 		google.WithNetwork(g.Network),
 		google.WithSubnetwork(g.Subnetwork),
 		google.WithPrivateIP(g.PrivateIP),

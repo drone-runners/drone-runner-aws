@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 )
@@ -90,38 +91,38 @@ func (h *OTELLogHook) Fire(entry *logrus.Entry) (retErr error) {
 	// Build OTEL log record
 	var record otellog.Record
 	record.SetTimestamp(entry.Time)
-	record.SetBody(otellog.StringValue(entry.Message))
+	record.SetBody(attribute.StringValue(entry.Message))
 	record.SetSeverity(mapLogrusLevel(entry.Level))
 	record.SetSeverityText(entry.Level.String())
 
 	// Collect attributes from various sources
-	attrs := make([]otellog.KeyValue, 0, len(entry.Data)+len(h.context)+baseAttributeCapacity)
+	attrs := make([]attribute.KeyValue, 0, len(entry.Data)+len(h.context)+baseAttributeCapacity)
 
 	// Add logrus entry fields (entry.Data)
 	for k, v := range entry.Data {
-		attrs = append(attrs, otellog.String(k, fmt.Sprintf("%v", v)))
+		attrs = append(attrs, attribute.String(k, fmt.Sprintf("%v", v)))
 	}
 
 	// Add hook-level context (accountId, runnerName, service, etc.)
 	h.contextMu.RLock()
 	for k, v := range h.context {
-		attrs = append(attrs, otellog.String(k, v))
+		attrs = append(attrs, attribute.String(k, v))
 	}
 	h.contextMu.RUnlock()
 
 	// Add caller info if available
 	if entry.HasCaller() {
 		attrs = append(attrs,
-			otellog.String("code.filepath", entry.Caller.File),
-			otellog.String("code.function", entry.Caller.Function),
-			otellog.Int("code.lineno", entry.Caller.Line),
+			attribute.String("code.filepath", entry.Caller.File),
+			attribute.String("code.function", entry.Caller.Function),
+			attribute.Int("code.lineno", entry.Caller.Line),
 		)
 	}
 
 	// Add error info if present
 	if errValue, ok := entry.Data[logrus.ErrorKey]; ok {
 		if err, isErr := errValue.(error); isErr {
-			attrs = append(attrs, otellog.String("exception.message", err.Error()))
+			attrs = append(attrs, attribute.String("exception.message", err.Error()))
 		}
 	}
 

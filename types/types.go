@@ -3,6 +3,8 @@ package types
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/harness/lite-engine/engine/spec"
@@ -117,6 +119,9 @@ type Instance struct {
 // for the tenant_id column. It matches config.DefaultTenantID.
 const DefaultTenantID = "default"
 
+// DefaultVariantID is the variant identifier for a pool's base (non-variant) configuration.
+const DefaultVariantID = "default"
+
 // Passwords holds sensitive data.
 type Passwords struct {
 	AnkaToken          string
@@ -195,6 +200,8 @@ type InstanceCreateOpts struct {
 	VMLabels                     map[string]string
 	Zones                        []string
 	MachineType                  string
+	MachineTypeFallbacks         []MachineTypeFallback
+	DisableMachineTypeFallbacks  bool
 	LiteEngineFallbackPath       string
 	PluginBinaryFallbackURI      string
 	VMImageConfig                VMImageConfig
@@ -216,6 +223,11 @@ type InstanceCreateOpts struct {
 	StageRuntimeID      string
 	PipelineExecutionID string
 	TenantID            string
+}
+
+type MachineTypeFallback struct {
+	MachineType string `json:"machine_type" yaml:"machine_type"`
+	DiskType    string `json:"disk_type" yaml:"disk_type"`
 }
 
 // Platform defines the target platform.
@@ -360,18 +372,19 @@ type OutboxJob struct {
 
 // SetupInstanceParams represents the additional parameters for setting up an instance asynchronously
 type SetupInstanceParams struct {
-	ImageName            string         `json:"image_name,omitempty" yaml:"image_name,omitempty"`
-	NestedVirtualization bool           `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
-	MachineType          string         `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
-	Hibernate            bool           `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
-	Zones                []string       `json:"zones,omitempty" yaml:"zones,omitempty"`
-	VariantID            string         `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
-	TenantID             string         `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
-	DiskSize             int64          `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
-	DiskType             string         `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
-	ResourceClass        string         `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
-	GPU                  bool           `json:"gpu,omitempty" yaml:"gpu,omitempty"`
-	Source               InstanceSource `json:"source,omitempty" yaml:"source,omitempty"`
+	ImageName            string                `json:"image_name,omitempty" yaml:"image_name,omitempty"`
+	NestedVirtualization bool                  `json:"enable_nested_virtualization,omitempty" yaml:"enable_nested_virtualization,omitempty"`
+	MachineType          string                `json:"machine_type,omitempty" yaml:"machine_type,omitempty"`
+	MachineTypeFallbacks []MachineTypeFallback `json:"machine_type_fallbacks,omitempty" yaml:"machine_type_fallbacks,omitempty"`
+	Hibernate            bool                  `json:"hibernate,omitempty" yaml:"hibernate,omitempty"`
+	Zones                []string              `json:"zones,omitempty" yaml:"zones,omitempty"`
+	VariantID            string                `json:"variant_id,omitempty" yaml:"variant_id,omitempty"`
+	TenantID             string                `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
+	DiskSize             int64                 `json:"disk_size,omitempty" yaml:"disk_size,omitempty"`
+	DiskType             string                `json:"disk_type,omitempty" yaml:"disk_type,omitempty"`
+	ResourceClass        string                `json:"resource_class,omitempty" yaml:"resource_class,omitempty"`
+	GPU                  bool                  `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	Source               InstanceSource        `json:"source,omitempty" yaml:"source,omitempty"`
 
 	// SkipCloudVMCleanup, when true, causes the instance to be labeled
 	// retain=true so the runner's background purger leaves it alone.
@@ -429,6 +442,78 @@ type ScalerConfig struct {
 	// A value of 100 (or below) disables buffering; 115 adds a 15% hibernated buffer on top
 	// of the live scale-up. Default: 100 (disabled).
 	ScalePercent float64
+	// PredictionDrivers lists the pool drivers (e.g. google, amazon) this runner predicts and
+	// scales for. Empty means DefaultPredictionDrivers.
+	PredictionDrivers []string
+	// Algorithm selects the scheduling algorithm (pool or capability). Empty means pool.
+	Algorithm SchedulerAlgorithm
+}
+
+// SchedulerAlgorithm selects how warm-pool prediction, scaling and hot-pool claims are scoped.
+type SchedulerAlgorithm string
+
+const (
+	// SchedulerAlgorithmPool predicts, scales and claims per pool (current behavior).
+	SchedulerAlgorithmPool SchedulerAlgorithm = "pool"
+	// SchedulerAlgorithmCapability predicts, scales and claims per capability across pools.
+	SchedulerAlgorithmCapability SchedulerAlgorithm = "capability"
+)
+
+// ParseSchedulerAlgorithm validates an algorithm name. Empty resolves to SchedulerAlgorithmPool.
+func ParseSchedulerAlgorithm(s string) (SchedulerAlgorithm, error) {
+	switch SchedulerAlgorithm(strings.ToLower(strings.TrimSpace(s))) {
+	case "", SchedulerAlgorithmPool:
+		return SchedulerAlgorithmPool, nil
+	case SchedulerAlgorithmCapability:
+		return SchedulerAlgorithmCapability, nil
+	default:
+		return "", fmt.Errorf("unknown scheduler algorithm %q (want %q or %q)", s, SchedulerAlgorithmPool, SchedulerAlgorithmCapability)
+	}
+}
+
+// DefaultPredictionDrivers are the pool drivers predicted and scaled when none are configured.
+var DefaultPredictionDrivers = []string{string(Google), string(Amazon)}
+
+// Pool tiers. A pool serves exactly one tier; free and paid capacity are never mixed.
+const (
+	TierPaid = "paid"
+	TierFree = "free"
+)
+
+// ParseTier validates a pool tier. Empty resolves to TierPaid.
+func ParseTier(s string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", TierPaid:
+		return TierPaid, nil
+	case TierFree:
+		return TierFree, nil
+	default:
+		return "", fmt.Errorf("unknown tier %q (want %q or %q)", s, TierPaid, TierFree)
+	}
+}
+
+// CapabilityKey identifies interchangeable warm capacity across pools.
+type CapabilityKey struct {
+	Tier      string `db:"tier" json:"tier"`
+	OS        string `db:"os" json:"os"`
+	Arch      string `db:"arch" json:"arch"`
+	VariantID string `db:"variant_id" json:"variant_id"`
+	TenantID  string `db:"tenant_id" json:"tenant_id"`
+}
+
+func (k CapabilityKey) String() string {
+	return k.Tier + "/" + k.OS + "/" + k.Arch + "/" + k.VariantID + "/" + k.TenantID
+}
+
+// CapabilityUtilizationRecord is one pool's in-use count for a capability at a point in time.
+// ImageName is recorded for future use and is not part of the capability key.
+type CapabilityUtilizationRecord struct {
+	ID int64 `db:"id" json:"id"`
+	CapabilityKey
+	Pool           string `db:"pool_name" json:"pool"`
+	ImageName      string `db:"image_name" json:"image_name"`
+	InUseInstances int    `db:"in_use_instances" json:"in_use_instances"`
+	RecordedAt     int64  `db:"recorded_at" json:"recorded_at"`
 }
 
 // InstanceCount holds an instance count grouped by pool, tenant, variant, image, and GPU flag.
