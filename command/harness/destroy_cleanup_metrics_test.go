@@ -69,7 +69,7 @@ func TestHandleDestroy_LiteEngineCleanupFailure_StillRecordsVMCleanupSuccess(t *
 	stageOwners := &fakeStageOwnerStore{}
 	metrics := newTestCleanupMetrics()
 
-	inst, _, err := handleDestroy(context.Background(), validCleanupRequest(), stageOwners, nil, /* crs */
+	inst, err := handleDestroy(context.Background(), validCleanupRequest(), stageOwners, nil, /* crs */
 		false /* enableMock */, 0, poolManager, metrics, 0, discardLogr())
 
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestHandleDestroy_VMDestroyFailure_RecordsCleanupError(t *testing.T) {
 	stageOwners := &fakeStageOwnerStore{}
 	metrics := newTestCleanupMetrics()
 
-	_, _, err := handleDestroy(context.Background(), validCleanupRequest(), stageOwners, nil, /* crs */
+	_, err := handleDestroy(context.Background(), validCleanupRequest(), stageOwners, nil, /* crs */
 		false /* enableMock */, 0, poolManager, metrics, 0, discardLogr())
 
 	require.Error(t, err)
@@ -113,7 +113,7 @@ func TestHandleDestroy_StageOwnerDeleteFailure_RecordedButNonFatal(t *testing.T)
 	}
 	metrics := newTestCleanupMetrics()
 
-	inst, _, err := handleDestroy(context.Background(), validCleanupRequest(), stageOwners, nil, /* crs */
+	inst, err := handleDestroy(context.Background(), validCleanupRequest(), stageOwners, nil, /* crs */
 		false /* enableMock */, 0, poolManager, metrics, 0, discardLogr())
 
 	require.NoError(t, err, "stage-owner delete failure must remain non-fatal to the overall destroy call")

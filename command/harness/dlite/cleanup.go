@@ -37,7 +37,7 @@ func (t *VMCleanupTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Execute cleanup.
 	vmService := t.c.getVMService()
-	_, err := vmService.Destroy(ctx, req)
+	err := vmService.Destroy(ctx, req)
 	if err != nil {
 		t.c.runner.Metrics.ErrorCount.WithLabelValues(accountID, strconv.FormatBool(req.Distributed)).Inc()
 		logr.WithError(err).WithField("account_id", accountID).Error("could not destroy VM")
