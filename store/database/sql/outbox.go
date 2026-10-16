@@ -13,6 +13,8 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
+const colJobType = "job_type"
+
 // Ensure OutboxStore implements store.OutboxStore interface.
 var _ store.OutboxStore = (*outboxStore)(nil)
 
@@ -71,7 +73,7 @@ func (s *outboxStore) FindAndClaimPending(ctx context.Context, runnerName string
 		Where(squirrel.And{
 			squirrel.Eq{"runner_name": runnerName},
 			squirrel.Eq{"status": types.OutboxJobStatusPending},
-			squirrel.Eq{"job_type": jobTypes},
+			squirrel.Eq{colJobType: jobTypes},
 			squirrel.Or{
 				squirrel.Eq{"processed_at": nil},
 				squirrel.Expr("processed_at < extract(epoch FROM now() - make_interval(mins := ?))", int(retryInterval.Minutes())),
@@ -220,7 +222,7 @@ func (s *outboxStore) FindScaleJobForWindow(ctx context.Context, poolName string
 	).
 		From("outbox_jobs").
 		Where(squirrel.And{
-			squirrel.Eq{"job_type": types.OutboxJobTypeScale},
+			squirrel.Eq{colJobType: types.OutboxJobTypeScale},
 			squirrel.Eq{"pool_name": poolName},
 			squirrel.Expr("(job_params->>'window_start')::bigint = ?", windowStart),
 		}).
@@ -249,4 +251,24 @@ func (s *outboxStore) FindScaleJobForWindow(ctx context.Context, poolName string
 	}
 
 	return job, nil
+}
+
+// CountSetupJobs counts the setup_instance jobs still in the outbox for the pool, tenant and variant.
+func (s *outboxStore) CountSetupJobs(ctx context.Context, poolName, tenantID, variantID string) (int, error) {
+	query := squirrel.Select("COUNT(*)").
+		From("outbox_jobs").
+		Where(squirrel.And{
+			squirrel.Eq{colJobType: types.OutboxJobTypeSetupInstance},
+			squirrel.Eq{colPoolName: poolName},
+			squirrel.Expr("COALESCE(NULLIF(job_params->>'tenant_id', ''), ?) = ?", types.DefaultTenantID, orDefaultID(tenantID)),
+			squirrel.Expr("COALESCE(NULLIF(job_params->>'variant_id', ''), ?) = ?", types.DefaultVariantID, orDefaultID(variantID)),
+		}).
+		RunWith(s.db).
+		PlaceholderFormat(squirrel.Dollar)
+
+	var n int
+	if err := query.QueryRowContext(ctx).Scan(&n); err != nil {
+		return 0, fmt.Errorf("error counting setup jobs: %w", err)
+	}
+	return n, nil
 }

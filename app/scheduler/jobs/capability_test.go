@@ -42,6 +42,16 @@ func (m *mockCapabilityHistoryStore) GetHistoryBatch(context.Context, *types.Cap
 	return nil, nil
 }
 
+func (m *mockCapabilityHistoryStore) HasRecentUsage(_ context.Context, key *types.CapabilityKey, since int64) (bool, error) {
+	for i := range m.records {
+		r := &m.records[i]
+		if r.CapabilityKey == *key && r.RecordedAt >= since && r.InUseInstances > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (m *mockCapabilityHistoryStore) DeleteOlderThan(_ context.Context, ts int64) (int64, error) {
 	var kept []types.CapabilityUtilizationRecord
 	var deleted int64
@@ -353,7 +363,7 @@ func TestScalerTrigger_OnlyConfiguredPredictionDrivers(t *testing.T) {
 				LeadTime:          time.Hour,
 				PredictionDrivers: tc.drivers,
 			}
-			job := NewScalerTriggerJob(outbox, cfg, "runner", pools)
+			job := NewScalerTriggerJob(outbox, cfg, "runner", NewPoolScaleTargets(pools, cfg.PredictionDrivers))
 			if err := job.Execute(context.Background()); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}

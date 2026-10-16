@@ -36,6 +36,12 @@ type Metrics struct {
 	// Scaler metrics
 	ScalerPredictedInstances *prometheus.GaugeVec
 
+	// Capability scaler metrics
+	ScalerCapabilityPredictedInstances *prometheus.GaugeVec
+	ScalerCapabilityTargetInstances    *prometheus.GaugeVec
+	ScalerCapabilityFreeInstances      *prometheus.GaugeVec
+	ScalerCreateSpillCount             *prometheus.CounterVec
+
 	// Instance idle age metric
 	InstanceIdleAge *prometheus.HistogramVec
 
@@ -553,6 +559,10 @@ func RegisterMetrics() *Metrics {
 
 	// Scaler metrics
 	scalerPredictedInstances := ScalerPredictedInstances()
+	scalerCapabilityPredictedInstances := ScalerCapabilityPredictedInstances()
+	scalerCapabilityTargetInstances := ScalerCapabilityTargetInstances()
+	scalerCapabilityFreeInstances := ScalerCapabilityFreeInstances()
+	scalerCreateSpillCount := ScalerCreateSpillCount()
 
 	// Instance idle age metric
 	instanceIdleAge := InstanceIdleAge()
@@ -606,6 +616,8 @@ func RegisterMetrics() *Metrics {
 		capacityReservationPerPoolDurationCount, capacityReservationFallbackCount,
 		capacityReservationFailedCount,
 		scalerPredictedInstances,
+		scalerCapabilityPredictedInstances, scalerCapabilityTargetInstances, scalerCapabilityFreeInstances,
+		scalerCreateSpillCount,
 		instanceIdleAge,
 		gcpAPIRequestsCount, gcpAPIRequestDuration,
 		gcpOperationsCount, gcpOperationDuration, gcpOperationRetriesCount, gcpOperationsInflight,
@@ -638,6 +650,10 @@ func RegisterMetrics() *Metrics {
 		CapacityReservationFallbackCount:        capacityReservationFallbackCount,
 		CapacityReservationFailedCount:          capacityReservationFailedCount,
 		ScalerPredictedInstances:                scalerPredictedInstances,
+		ScalerCapabilityPredictedInstances:      scalerCapabilityPredictedInstances,
+		ScalerCapabilityTargetInstances:         scalerCapabilityTargetInstances,
+		ScalerCapabilityFreeInstances:           scalerCapabilityFreeInstances,
+		ScalerCreateSpillCount:                  scalerCreateSpillCount,
 		InstanceIdleAge:                         instanceIdleAge,
 		GCPAPIRequestsCount:                     gcpAPIRequestsCount,
 		GCPAPIRequestDuration:                   gcpAPIRequestDuration,

@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/Masterminds/squirrel"
@@ -16,6 +17,7 @@ var _ store.CapabilityHistoryStore = (*CapabilityHistoryStore)(nil)
 const (
 	capabilityHistoryTable = "capability_utilization_history"
 	colRecordedAt          = "recorded_at"
+	colInUseInstances      = "in_use_instances"
 	// capabilityBatchSize keeps a multi-row insert well under driver placeholder limits.
 	capabilityBatchSize = 500
 	// capabilityBackfillLockKey is the Postgres advisory lock key for the capability backfill.
@@ -34,7 +36,7 @@ func (s *CapabilityHistoryStore) CreateBatch(ctx context.Context, records []*typ
 	for start := 0; start < len(records); start += capabilityBatchSize {
 		end := min(start+capabilityBatchSize, len(records))
 		query := squirrel.Insert(capabilityHistoryTable).
-			Columns("tier", "os", "arch", "variant_id", "tenant_id", "pool_name", "image_name", "in_use_instances", "recorded_at")
+			Columns("tier", "os", "arch", "variant_id", "tenant_id", "pool_name", "image_name", colInUseInstances, colRecordedAt)
 		for _, r := range records[start:end] {
 			var image interface{}
 			if r.ImageName != "" {
@@ -76,12 +78,16 @@ func (s *CapabilityHistoryStore) GetHistoryBatch(
 	var args []interface{}
 	argIdx := 1
 	for i, r := range ranges {
+		// Every runner pod records the same global counts, so pods ticking in the same second
+		// write identical rows; MAX keeps one per pool and image before summing across pools.
 		//nolint:mnd
 		sub := fmt.Sprintf(
 			"SELECT recorded_at, SUM(in_use_instances) AS in_use_instances, %d AS range_idx "+
+				"FROM (SELECT recorded_at, pool_name, image_name, MAX(in_use_instances) AS in_use_instances "+
 				"FROM %s "+
 				"WHERE tier = $%d AND os = $%d AND arch = $%d AND variant_id = $%d AND tenant_id = $%d "+
 				"AND recorded_at >= $%d AND recorded_at <= $%d "+
+				"GROUP BY recorded_at, pool_name, image_name) AS per_pool "+
 				"GROUP BY recorded_at",
 			i, capabilityHistoryTable, argIdx, argIdx+1, argIdx+2, argIdx+3, argIdx+4, argIdx+5, argIdx+6,
 		)
@@ -111,6 +117,33 @@ func (s *CapabilityHistoryStore) GetHistoryBatch(
 		})
 	}
 	return result, nil
+}
+
+func (s *CapabilityHistoryStore) HasRecentUsage(ctx context.Context, key *types.CapabilityKey, since int64) (bool, error) {
+	var exists int
+	err := squirrel.Select("1").
+		From(capabilityHistoryTable).
+		Where(squirrel.Eq{
+			"tier":       key.Tier,
+			"os":         key.OS,
+			"arch":       key.Arch,
+			colVariantID: orDefaultID(key.VariantID),
+			colTenantID:  orDefaultID(key.TenantID),
+		}).
+		Where(squirrel.GtOrEq{colRecordedAt: since}).
+		Where(squirrel.Gt{colInUseInstances: 0}).
+		Limit(1).
+		RunWith(s.db).
+		PlaceholderFormat(squirrel.Dollar).
+		QueryRowContext(ctx).
+		Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("error checking capability recent usage: %w", err)
+	}
+	return true, nil
 }
 
 func (s *CapabilityHistoryStore) DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error) {

@@ -2,6 +2,8 @@ package predictor
 
 import (
 	"context"
+
+	"github.com/drone-runners/drone-runner-aws/types"
 )
 
 // PredictionInput contains the input data for making a prediction.
@@ -14,6 +16,8 @@ type PredictionInput struct {
 	EndTimestamp   int64
 	VariantID      string
 	ImageName      string
+	// Capability identifies the group for a predictor reading CapabilityHistoryReader.
+	Capability *types.CapabilityKey
 }
 
 // PredictionResult contains the output of a prediction.

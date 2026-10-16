@@ -160,6 +160,16 @@ func (c *Catalog) Group(key *types.CapabilityKey) (Group, bool) {
 	return c.groups[idx], true
 }
 
+// GroupByName returns the group whose key String() is name.
+func (c *Catalog) GroupByName(name string) (Group, bool) {
+	for i := range c.groups {
+		if c.groups[i].Key.String() == name {
+			return c.groups[i], true
+		}
+	}
+	return Group{}, false
+}
+
 // KeyFor returns the capability key of an instance in pool with the given tenant and variant.
 // ok is false when the pool is not in the catalog.
 func (c *Catalog) KeyFor(pool, tenantID, variantID string) (types.CapabilityKey, bool) {

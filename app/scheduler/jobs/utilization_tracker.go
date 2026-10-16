@@ -76,6 +76,13 @@ func (j *UtilizationTrackerJob) Execute(ctx context.Context) error {
 		return err
 	}
 
+	j.recordPoolHistory(ctx, counts, now)
+	j.recordCapabilityHistory(ctx, counts, now)
+
+	return nil
+}
+
+func (j *UtilizationTrackerJob) recordPoolHistory(ctx context.Context, counts []types.InstanceCount, now int64) {
 	for _, c := range counts {
 		record := &types.UtilizationRecord{
 			Pool:           c.Pool,
@@ -103,10 +110,6 @@ func (j *UtilizationTrackerJob) Execute(ctx context.Context) error {
 			"count":      c.Count,
 		}).Debugln("recorded utilization")
 	}
-
-	j.recordCapabilityHistory(ctx, counts, now)
-
-	return nil
 }
 
 func (j *UtilizationTrackerJob) recordCapabilityHistory(ctx context.Context, counts []types.InstanceCount, now int64) {

@@ -66,6 +66,32 @@ func capRecord(k *types.CapabilityKey, pool, image string, inUse int, at int64) 
 	return &types.CapabilityUtilizationRecord{CapabilityKey: *k, Pool: pool, ImageName: image, InUseInstances: inUse, RecordedAt: at}
 }
 
+// Every runner pod records the same global counts; pods ticking in the same second must not
+// double the group's sum.
+func TestCapabilityHistory_DuplicateRowsFromPodsCountOnce(t *testing.T) {
+	forEachCapabilityDB(t, func(t *testing.T, _ *sqlx.DB, s *sql.CapabilityHistoryStore) {
+		ctx := context.Background()
+		medium := capKey(types.TierPaid, "amd64", "variant_medium", "default")
+		var records []*types.CapabilityUtilizationRecord
+		for pod := 0; pod < 3; pod++ {
+			records = append(records,
+				capRecord(&medium, "linux-amd64", "img-a", 4, 100),
+				capRecord(&medium, "linux-amd64", "img-b", 1, 100),
+				capRecord(&medium, "linux-amd64-fallback", "", 3, 100),
+			)
+		}
+		records = append(records, capRecord(&medium, "linux-amd64", "img-a", 4, 101))
+		if err := s.CreateBatch(ctx, records); err != nil {
+			t.Fatalf("CreateBatch: %v", err)
+		}
+		got, err := s.GetHistoryBatch(ctx, &medium, []store.TimeRange{{StartTime: 0, EndTime: 200}})
+		if err != nil {
+			t.Fatalf("GetHistoryBatch: %v", err)
+		}
+		assertSums(t, "deduped", got[0], []int64{100, 101}, []int{8, 4})
+	})
+}
+
 func TestCapabilityHistory_SumsAcrossPoolsPerRange(t *testing.T) {
 	forEachCapabilityDB(t, func(t *testing.T, _ *sqlx.DB, s *sql.CapabilityHistoryStore) {
 		ctx := context.Background()
@@ -316,5 +342,41 @@ func TestCapabilityHistory_BackfillLock(t *testing.T) {
 			t.Fatalf("lock after release: ok=%v err=%v", ok, err)
 		}
 		release2()
+	})
+}
+
+func TestCapabilityHistory_HasRecentUsage(t *testing.T) {
+	forEachCapabilityDB(t, func(t *testing.T, _ *sqlx.DB, s *sql.CapabilityHistoryStore) {
+		ctx := context.Background()
+		medium := capKey(types.TierPaid, "amd64", "variant_medium", "default")
+		idle := capKey(types.TierPaid, "amd64", "default", "default")
+		if err := s.CreateBatch(ctx, []*types.CapabilityUtilizationRecord{
+			capRecord(&medium, "linux-amd64-fallback", "", 2, 100),
+			capRecord(&idle, "linux-amd64", "", 0, 500),
+			capRecord(ptrKey(capKey(types.TierFree, "amd64", "variant_medium", "default")), "linux-amd64-free", "", 9, 500),
+		}); err != nil {
+			t.Fatalf("CreateBatch: %v", err)
+		}
+		cases := []struct {
+			name  string
+			key   types.CapabilityKey
+			since int64
+			want  bool
+		}{
+			{"usage in another pool of the group counts", medium, 50, true},
+			{"usage before since is ignored", medium, 101, false},
+			{"zero in-use rows are not usage", idle, 0, false},
+			{"other tenant is ignored", capKey(types.TierPaid, "amd64", "variant_medium", "acctA"), 0, false},
+			{"empty tenant resolves to default", capKey(types.TierPaid, "amd64", "variant_medium", ""), 0, true},
+		}
+		for _, tc := range cases {
+			got, err := s.HasRecentUsage(ctx, &tc.key, tc.since)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if got != tc.want {
+				t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+			}
+		}
 	})
 }
