@@ -132,6 +132,20 @@ func (m *Manager) GetPoolSpec(poolName string) (interface{}, error) {
 	return entry.Spec, nil
 }
 
+// GetPoolSpecForAccount returns the tenant-merged pool specification for the tenant that
+// accountID resolves to. Unknown accounts and single-tenant pools return the default spec.
+func (m *Manager) GetPoolSpecForAccount(poolName, accountID string) (interface{}, error) {
+	entry := m.poolMap[poolName]
+	if entry == nil {
+		return nil, fmt.Errorf("manager: pool %s not found", poolName)
+	}
+	spec := specForTenant(&entry.Pool, entry.Pool.ResolveTenant(accountID))
+	if spec == nil {
+		return nil, fmt.Errorf("manager: pool %s does not have a stored spec", poolName)
+	}
+	return spec, nil
+}
+
 // IsEgressPool reports whether egress_control is enabled for the given pool tenant.
 // Merge happens at pool load: this reads the already-merged tenant Spec. Empty tenantID
 // and unknown tenants fall back to the default tenant / pool Spec.
@@ -140,15 +154,16 @@ func (m *Manager) IsEgressPool(poolName, tenantID string) bool {
 	if entry == nil {
 		return false
 	}
-	spec := egressSpecForTenant(&entry.Pool, tenantID)
+	spec := specForTenant(&entry.Pool, tenantID)
 	if g, ok := spec.(*config.Google); ok {
 		return g.EgressControl
 	}
 	return false
 }
 
-// egressSpecForTenant returns the provider Spec used for egress checks after tenant merge.
-func egressSpecForTenant(pool *Pool, tenantID string) interface{} {
+// specForTenant returns the tenant-merged provider Spec for tenantID, falling back to the
+// default tenant and then the pool Spec.
+func specForTenant(pool *Pool, tenantID string) interface{} {
 	if pool == nil {
 		return nil
 	}

@@ -110,7 +110,10 @@ func (f *fakeIManager) Inspect(string) (types.Platform, string, string) {
 	return types.Platform{}, "", "mock"
 }
 func (f *fakeIManager) GetPoolSpec(string) (interface{}, error) { return nil, nil }
-func (f *fakeIManager) IsEgressPool(string, string) bool        { return false }
+func (f *fakeIManager) GetPoolSpecForAccount(string, string) (interface{}, error) {
+	return nil, nil
+}
+func (f *fakeIManager) IsEgressPool(string, string) bool { return false }
 
 func (f *fakeIManager) StartInstance(ctx context.Context, poolName, instanceID string, _ *common.InstanceInfo) (*types.Instance, error) {
 	if f.startInstanceFunc != nil {
