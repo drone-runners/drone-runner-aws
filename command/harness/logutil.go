@@ -76,7 +76,10 @@ func usePlainFormatter(l *logrus.Logger) { l.SetFormatter(&plainFormatter{}) }
 //  1. imageVersion (from VMImageConfig.ImageVersion)
 //  2. imageName    (from VMImageConfig.ImageName)
 //  3. pool image   (derived from the pool YAML config, with the account's tenant override applied)
-func logRequestedMachine(logr *logrus.Entry, poolManager drivers.IManager, poolID, accountID string, platform *types.Platform, resourceClass, imageVersion, imageName, stageRuntimeID string, isNested bool) {
+func logRequestedMachine(
+	logr *logrus.Entry, poolManager drivers.IManager, poolID, accountID string,
+	platform *types.Platform, resourceClass, imageVersion, imageName, stageRuntimeID string, isNested bool,
+) {
 	printTitle(logr, "Requested machine:")
 	printKV(logr, "Machine Size", resourceClass)
 	printKV(logr, "OS", capitalize(platform.OS))
