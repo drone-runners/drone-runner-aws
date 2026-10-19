@@ -285,6 +285,7 @@ type MockOutboxStore struct {
 	jobs           []*types.OutboxJob
 	nextID         int64
 	scaleJobsFound map[int64]*types.OutboxJob
+	createErr      error
 }
 
 func NewMockOutboxStore() *MockOutboxStore {
@@ -296,6 +297,9 @@ func NewMockOutboxStore() *MockOutboxStore {
 }
 
 func (m *MockOutboxStore) Create(ctx context.Context, job *types.OutboxJob) error {
+	if m.createErr != nil {
+		return m.createErr
+	}
 	job.ID = m.nextID
 	m.nextID++
 	job.CreatedAt = time.Now().Unix()

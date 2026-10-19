@@ -386,8 +386,8 @@ func (s *CapabilityScaler) createSetupJob(ctx context.Context, poolName string, 
 
 // HandleSetupFailure spills a failed capability setup job to the next pool of its group, in
 // pool-file order, skipping pools already tried, disabled pools and pools at their limit. It
-// returns true when the failure was handled (a new job was created, or no pool was left and the
-// job should be dropped) and false for jobs that are not capability jobs.
+// returns true only when a job was created in another pool. Otherwise the failed job keeps the
+// outbox's normal retries in its own pool, and each retry that fails tries to spill again.
 func (s *CapabilityScaler) HandleSetupFailure(ctx context.Context, failedPool string, params *types.SetupInstanceParams, cause error) bool {
 	if params == nil || params.Capability == nil {
 		return false
@@ -400,9 +400,9 @@ func (s *CapabilityScaler) HandleSetupFailure(ctx context.Context, failedPool st
 
 	group, ok := s.catalog.Group(&key)
 	if !ok {
-		logr.Warnln("scaler: capability group no longer exists, dropping failed setup job")
+		logr.Warnln("scaler: capability group no longer exists, retrying setup job in its pool")
 		s.recordSpill(failedPool, "", metric.SpillOutcomeExhausted)
-		return true
+		return false
 	}
 
 	tried := params.TriedPools
@@ -431,9 +431,9 @@ func (s *CapabilityScaler) HandleSetupFailure(ctx context.Context, failedPool st
 		return true
 	}
 
-	logr.WithField("tried_pools", tried).Warnln("scaler: every pool of the capability group failed, dropping setup job")
+	logr.WithField("tried_pools", tried).Warnln("scaler: no pool of the capability group to spill to, retrying setup job in its pool")
 	s.recordSpill(failedPool, "", metric.SpillOutcomeExhausted)
-	return true
+	return false
 }
 
 func (s *CapabilityScaler) recordSpill(from, to, outcome string) {

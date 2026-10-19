@@ -52,7 +52,8 @@ func ScalerCapabilityFreeInstances() *prometheus.GaugeVec {
 }
 
 // ScalerCreateSpillCount counts predictor instance creations moved to another pool of their
-// capability group after a failure. to_pool is empty when no pool is left.
+// capability group after a failure. to_pool is empty when no pool is left, in which case the
+// failed job is retried in its own pool.
 func ScalerCreateSpillCount() *prometheus.CounterVec {
 	return prometheus.NewCounterVec(
 		prometheus.CounterOpts{

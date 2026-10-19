@@ -21,7 +21,8 @@ type ScaleJobRunner interface {
 }
 
 // SetupFailureHandler takes over a setup_instance job that failed. It returns true when the
-// failure is handled and the job must be deleted instead of retried.
+// failure is handled and the job must be deleted instead of retried; false keeps the normal
+// retries.
 type SetupFailureHandler interface {
 	HandleSetupFailure(ctx context.Context, pool string, params *types.SetupInstanceParams, cause error) bool
 }

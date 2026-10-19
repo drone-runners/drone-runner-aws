@@ -547,12 +547,12 @@ func TestHandleSetupFailure_SkipsDisabledPools(t *testing.T) {
 	}
 }
 
-func TestHandleSetupFailure_ExhaustedDropsJob(t *testing.T) {
+func TestHandleSetupFailure_ExhaustedKeepsRetries(t *testing.T) {
 	h := newCapHarness(t, 0, nil)
 	handled := h.scaler.HandleSetupFailure(context.Background(), "linux-amd64-west4",
 		spillParams(&capMedium, "linux-amd64", "linux-amd64-fallback", "linux-amd64-west4"), errors.New("boom"))
-	if !handled {
-		t.Fatal("exhausted spill should still be handled so the job is dropped")
+	if handled {
+		t.Fatal("with no pool to spill to, the job must keep its normal retries")
 	}
 	if n := len(h.setupJobs(t)); n != 0 {
 		t.Errorf("no new job expected, got %d", n)
@@ -564,9 +564,19 @@ func TestHandleSetupFailure_ExhaustedDropsJob(t *testing.T) {
 
 func TestHandleSetupFailure_TenantGroupHasNoOtherPools(t *testing.T) {
 	h := newCapHarness(t, 0, nil)
-	h.scaler.HandleSetupFailure(context.Background(), "linux-amd64", spillParams(&capEgress, "linux-amd64"), errors.New("boom"))
+	if h.scaler.HandleSetupFailure(context.Background(), "linux-amd64", spillParams(&capEgress, "linux-amd64"), errors.New("boom")) {
+		t.Error("a single-pool group must keep the normal retries in its pool")
+	}
 	if n := len(h.setupJobs(t)); n != 0 {
 		t.Errorf("egress tenant must never spill to pools without the tenant, got %d jobs", n)
+	}
+}
+
+func TestHandleSetupFailure_SpillCreateErrorKeepsRetries(t *testing.T) {
+	h := newCapHarness(t, 0, nil)
+	h.outbox.createErr = errors.New("db down")
+	if h.scaler.HandleSetupFailure(context.Background(), "linux-amd64", spillParams(&capMedium, "linux-amd64"), errors.New("boom")) {
+		t.Error("a spill that could not be written must not drop the failed job")
 	}
 }
 
