@@ -69,6 +69,10 @@ type PoolManager interface {
 	// GetPoolSpec returns the pool specification.
 	GetPoolSpec(poolName string) (interface{}, error)
 
+	// GetPoolSpecForAccount returns the tenant-merged pool specification for the tenant the
+	// account resolves to. Unknown accounts and single-tenant pools return the default spec.
+	GetPoolSpecForAccount(poolName, accountID string) (interface{}, error)
+
 	// IsEgressPool reports whether egress_control is enabled for the pool tenant.
 	// For single-tenant pools tenantID is ignored. Empty tenantID resolves to the default tenant.
 	IsEgressPool(poolName, tenantID string) bool
