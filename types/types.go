@@ -405,6 +405,12 @@ type SetupInstanceParams struct {
 	// capacity reservation attempt may take before failing over to the next
 	// fallback pool. 0 means use the runner default.
 	ReservationPerPoolTimeout int64 `json:"reservation_per_pool_timeout,omitempty" yaml:"reservation_per_pool_timeout,omitempty"`
+
+	// Capability is set on predictor jobs created by the capability scaler. When creating the
+	// instance fails, the job spills over to the next pool of this capability group.
+	Capability *CapabilityKey `json:"capability,omitempty" yaml:"-"`
+	// TriedPools lists the pools a capability job has already failed on (including its current pool).
+	TriedPools []string `json:"tried_pools,omitempty" yaml:"-"`
 }
 
 // ScaleJobParams represents the parameters for a scaling job.
@@ -503,6 +509,21 @@ type CapabilityKey struct {
 
 func (k CapabilityKey) String() string {
 	return k.Tier + "/" + k.OS + "/" + k.Arch + "/" + k.VariantID + "/" + k.TenantID
+}
+
+// CapabilityScaleJobPrefix marks scale outbox jobs that target a capability group rather than a
+// pool. The job's PoolName is the prefix followed by CapabilityKey.String().
+const CapabilityScaleJobPrefix = "cap:"
+
+// CapabilityScaleJobName returns the outbox PoolName for a capability group's scale job.
+func CapabilityScaleJobName(k *CapabilityKey) string {
+	return CapabilityScaleJobPrefix + k.String()
+}
+
+// ParseCapabilityScaleJobName returns the capability key string from a scale job PoolName.
+// ok is false for pool scale jobs.
+func ParseCapabilityScaleJobName(poolName string) (key string, ok bool) {
+	return strings.CutPrefix(poolName, CapabilityScaleJobPrefix)
 }
 
 // CapabilityUtilizationRecord is one pool's in-use count for a capability at a point in time.

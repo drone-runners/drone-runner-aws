@@ -285,6 +285,7 @@ type MockOutboxStore struct {
 	jobs           []*types.OutboxJob
 	nextID         int64
 	scaleJobsFound map[int64]*types.OutboxJob
+	createErr      error
 }
 
 func NewMockOutboxStore() *MockOutboxStore {
@@ -296,6 +297,9 @@ func NewMockOutboxStore() *MockOutboxStore {
 }
 
 func (m *MockOutboxStore) Create(ctx context.Context, job *types.OutboxJob) error {
+	if m.createErr != nil {
+		return m.createErr
+	}
 	job.ID = m.nextID
 	m.nextID++
 	job.CreatedAt = time.Now().Unix()
@@ -373,6 +377,31 @@ func (m *MockOutboxStore) FindScaleJobForWindow(ctx context.Context, poolName st
 	return nil, nil
 }
 
+func (m *MockOutboxStore) CountSetupJobs(_ context.Context, poolName, tenantID, variantID string) (int, error) {
+	orDefault := func(id string) string {
+		if id == "" {
+			return types.DefaultTenantID
+		}
+		return id
+	}
+	n := 0
+	for _, job := range m.jobs {
+		if job.JobType != types.OutboxJobTypeSetupInstance || job.PoolName != poolName {
+			continue
+		}
+		var params types.SetupInstanceParams
+		if job.JobParams != nil {
+			if err := json.Unmarshal(*job.JobParams, &params); err != nil {
+				return 0, err
+			}
+		}
+		if orDefault(params.TenantID) == orDefault(tenantID) && orDefault(params.VariantID) == orDefault(variantID) {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (m *MockOutboxStore) GetJobs() []*types.OutboxJob {
 	return m.jobs
 }
@@ -397,7 +426,7 @@ func TestScalerTriggerJob_Name(t *testing.T) {
 		Enabled:        true,
 	}
 	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	if job.Name() != ScalerTriggerJobName {
 		t.Errorf("expected name %q, got %q", ScalerTriggerJobName, job.Name())
@@ -412,7 +441,7 @@ func TestScalerTriggerJob_Interval(t *testing.T) {
 		Enabled:        true,
 	}
 	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	if job.Interval() != 1*time.Minute {
 		t.Errorf("expected interval 1 minute, got %v", job.Interval())
@@ -427,7 +456,7 @@ func TestScalerTriggerJob_RunOnStart(t *testing.T) {
 		Enabled:        true,
 	}
 	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	if !job.RunOnStart() {
 		t.Error("expected RunOnStart to return true")
@@ -442,7 +471,7 @@ func TestScalerTriggerJob_Execute_Disabled(t *testing.T) {
 		Enabled:        false, // Disabled
 	}
 	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	err := job.Execute(context.Background())
 	if err != nil {
@@ -463,7 +492,7 @@ func TestScalerTriggerJob_GetNextWindowBoundary(t *testing.T) {
 		Enabled:        true,
 	}
 	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	tests := []struct {
 		name        string
@@ -527,7 +556,7 @@ func TestScalerTriggerJob_GetWindowDuration(t *testing.T) {
 		Enabled:        true,
 	}
 	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	if job.GetWindowDuration() != 45*time.Minute {
 		t.Errorf("expected window duration 45 minutes, got %v", job.GetWindowDuration())
@@ -541,7 +570,7 @@ func TestScalerTriggerJob_DefaultConfig(t *testing.T) {
 		// WindowDuration and LeadTime not set
 	}
 	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	if job.config.WindowDuration != DefaultWindowDuration {
 		t.Errorf("expected default window duration %v, got %v", DefaultWindowDuration, job.config.WindowDuration)
@@ -889,7 +918,7 @@ func TestScalerTriggerJob_CreatesPoolSpecificJobs(t *testing.T) {
 		{Name: "pool-1", MinSize: 1},
 		{Name: "pool-2", MinSize: 2},
 	}
-	job := NewScalerTriggerJob(outboxStore, config, "test-runner", pools)
+	job := NewScalerTriggerJob(outboxStore, config, "test-runner", NewPoolScaleTargets(pools, config.PredictionDrivers))
 
 	// Simulate time within lead time window
 	// We need to set up a scenario where the trigger executes

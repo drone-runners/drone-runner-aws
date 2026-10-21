@@ -36,6 +36,9 @@ type OutboxStore interface {
 	DeleteOlderThan(context.Context, int64) (int64, error)
 	// FindScaleJobForWindow checks if a scale job already exists for the given pool and window
 	FindScaleJobForWindow(ctx context.Context, poolName string, windowStart int64) (*types.OutboxJob, error)
+	// CountSetupJobs counts the setup_instance jobs still in the outbox for the pool, tenant and
+	// variant. Empty tenant or variant in a job's params count as the default.
+	CountSetupJobs(ctx context.Context, poolName, tenantID, variantID string) (int, error)
 }
 
 type CapacityReservationStore interface {
@@ -76,6 +79,8 @@ type CapabilityHistoryStore interface {
 	// GetHistoryBatch returns, for each time range, the capability's in-use count summed across
 	// pools per recorded_at, ordered by recorded_at. Pool and ImageName are empty in the results.
 	GetHistoryBatch(ctx context.Context, key *types.CapabilityKey, ranges []TimeRange) ([][]types.CapabilityUtilizationRecord, error)
+	// HasRecentUsage reports whether the capability had any non-zero utilization since the timestamp.
+	HasRecentUsage(ctx context.Context, key *types.CapabilityKey, since int64) (bool, error)
 	DeleteOlderThan(ctx context.Context, timestamp int64) (int64, error)
 	// TryLockBackfill takes a cross-process lock for the backfill. ok is false if another process
 	// holds it. release must be called when ok is true.
