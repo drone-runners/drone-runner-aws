@@ -260,6 +260,60 @@ func TestCatalog_KeyFor(t *testing.T) {
 	}
 }
 
+func TestCatalog_ClaimPools(t *testing.T) {
+	c, err := NewCatalog(parsePools(t), nil, platformOf)
+	if err != nil {
+		t.Fatalf("NewCatalog: %v", err)
+	}
+
+	cases := []struct {
+		name                  string
+		pool, tenant, variant string
+		wantTier              string
+		wantPools             []string
+		wantOK                bool
+	}{
+		{"fallback pool sees the whole group in file order", "linux-amd64-fallback", "", "variant_medium",
+			types.TierPaid, []string{"linux-amd64", "linux-amd64-fallback"}, true},
+		{"tenant group", "linux-amd64", egressTenant, "", types.TierPaid, []string{"linux-amd64", "linux-amd64-fallback"}, true},
+		{"free tier kept apart", "linux-amd64-free", "", "variant_medium", types.TierFree, []string{"linux-amd64-free"}, true},
+		{"variant the pool does not define", "linux-amd64-fallback", "", "variant_medium_ubuntu24", "", nil, false},
+		{"tenant the pool does not define", "linux-amd64-free", egressTenant, "", "", nil, false},
+		{"unsupported driver", "macos-arm64", "", "", "", nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tier, pools, ok := c.ClaimPools(tc.pool, tc.tenant, tc.variant)
+			if ok != tc.wantOK || tier != tc.wantTier || !reflect.DeepEqual(pools, tc.wantPools) {
+				t.Errorf("ClaimPools = %q, %v, %v; want %q, %v, %v", tier, pools, ok, tc.wantTier, tc.wantPools, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestCatalog_PlatformAndPlatformPools(t *testing.T) {
+	c, err := NewCatalog(parsePools(t), nil, platformOf)
+	if err != nil {
+		t.Fatalf("NewCatalog: %v", err)
+	}
+	if tier, os, arch, ok := c.Platform("linux-amd64-free"); !ok || tier != types.TierFree || os != "linux" || arch != "amd64" {
+		t.Errorf("Platform(free) = %q %q %q %v", tier, os, arch, ok)
+	}
+	if _, _, _, ok := c.Platform("macos-arm64"); ok {
+		t.Error("Platform must reject unsupported-driver pools")
+	}
+	if got := c.PlatformPools(types.TierPaid, "linux", "amd64"); !reflect.DeepEqual(got,
+		[]string{"linux-amd64", "linux-amd64-fallback", "linux-amd64-aws"}) {
+		t.Errorf("paid linux/amd64 pools = %v", got)
+	}
+	if got := c.PlatformPools(types.TierFree, "linux", "amd64"); !reflect.DeepEqual(got, []string{"linux-amd64-free"}) {
+		t.Errorf("free linux/amd64 pools = %v", got)
+	}
+	if got := c.PlatformPools(types.TierFree, "linux", "arm64"); got != nil {
+		t.Errorf("free linux/arm64 pools = %v, want none", got)
+	}
+}
+
 func TestNewCatalog_NilPoolFile(t *testing.T) {
 	c, err := NewCatalog(nil, nil, nil)
 	if err != nil {

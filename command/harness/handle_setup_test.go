@@ -49,12 +49,23 @@ type fakeIManager struct {
 	destroyFunc          func(ctx context.Context, poolName, instanceID string) error
 	destroyCapacityFunc  func(ctx context.Context, capacity *types.CapacityReservation) error
 	getInstanceByStageID func(ctx context.Context, poolName, stageID string) (*types.Instance, error)
+	provisionParams      *types.ProvisionParams
+	provisionedPools     []string
+	provisionOwners      []string
+	provisionPoolFunc    func(pool string) (*types.CapacityReservation, error)
 }
 
 //nolint:gocritic // unnamed results mirror drivers.InstanceProvisioner's Provision signature
-func (f *fakeIManager) Provision(ctx context.Context, _, _, _ string, _ *types.ProvisionParams, _ *types.QueryParams,
+func (f *fakeIManager) Provision(ctx context.Context, poolName, _, ownerID string, params *types.ProvisionParams, _ *types.QueryParams,
 	_ *types.GitspaceAgentConfig, _ *types.StorageConfig, _ *common.InstanceInfo, _ int64, _ bool,
 	_ *types.CapacityReservation, _ bool) (*types.Instance, *types.CapacityReservation, bool, string, error) {
+	f.provisionParams = params
+	f.provisionedPools = append(f.provisionedPools, poolName)
+	f.provisionOwners = append(f.provisionOwners, ownerID)
+	if f.provisionPoolFunc != nil {
+		capacity, err := f.provisionPoolFunc(poolName)
+		return nil, capacity, false, "", err
+	}
 	if f.provisionFunc != nil {
 		return f.provisionFunc(ctx)
 	}
@@ -168,7 +179,7 @@ func TestHandleSetup_PoolNotFound_RecordsInitAttempt(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics, nil)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
@@ -186,7 +197,7 @@ func TestHandleSetup_PoolExhausted_RecordsPoolExhaustedReason(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics, nil)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
@@ -205,7 +216,7 @@ func TestHandleSetup_CloudCreateFailed_RecordsCloudCreateFailedReason(t *testing
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics, nil)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
@@ -227,7 +238,7 @@ func TestHandleSetup_ResumeFailed_RecordsResumeFailedReason(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics, nil)
 
 	require.Error(t, err)
 	// Note: cleanUpInstanceFn runs in a fire-and-forget goroutine (`go cleanUpInstanceFn(...)`),
@@ -252,9 +263,36 @@ func TestHandleSetup_StateFailed_RecordsStateFailedReason(t *testing.T) {
 	metrics := newTestInitMetrics()
 
 	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
-		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics)
+		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics, nil)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
 		"pool1", "us-east1-b", "n1-standard-2", InitSourceHotpool, InitOutcomeError, InitReasonStateFailed)), 0.0001)
+}
+
+// TestHandleSetup_ClaimFromAnotherPool covers an instance claimed from another pool of the
+// capability: the rest of the setup runs against the pool the instance came from.
+func TestHandleSetup_ClaimFromAnotherPool(t *testing.T) {
+	inst := &types.Instance{ID: "inst-1", Pool: "pool2", Zone: "us-east1-b", Size: "n1-standard-2", IsHibernated: true}
+	var startedIn string
+	poolManager := &fakeIManager{
+		provisionFunc: func(context.Context) (*types.Instance, *types.CapacityReservation, bool, string, error) {
+			return inst, nil, true, "default", nil
+		},
+		startInstanceFunc: func(_ context.Context, poolName, _ string) (*types.Instance, error) {
+			startedIn = poolName
+			return nil, errors.New("cloud provider rejected resume")
+		},
+	}
+	metrics := newTestInitMetrics()
+	scope := &types.ClaimScope{Pools: []string{"pool1"}, Platform: types.Platform{OS: "linux", Arch: "amd64"}}
+
+	_, _, _, _, err := handleSetup(context.Background(), discardLogr(), discardLogr(), newTestSetupRequest(), //nolint:dogsled
+		"runner", false, 0, poolManager, "pool1", "owner1", nil, "", metrics, scope)
+
+	require.Error(t, err)
+	assert.Same(t, scope, poolManager.provisionParams.Claim)
+	assert.Equal(t, "pool2", startedIn)
+	assert.InDelta(t, 1, testutil.ToFloat64(metrics.VMInitAttemptsCount.WithLabelValues(
+		"pool2", "us-east1-b", "n1-standard-2", InitSourceHibernated, InitOutcomeError, InitReasonResumeFailed)), 0.0001)
 }
