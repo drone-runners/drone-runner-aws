@@ -1,5 +1,5 @@
 # First Stage: Build environment with Go and dependencies
-FROM golang:1.24 as builder
+FROM golang:1.26 as builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git && \
@@ -18,7 +18,7 @@ COPY . .
 # CGO is required for sqlite3 support
 RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/harness-vm-runner
 #Second Stage: Final lightweight image
-FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.23.3
+FROM alpine:3
 WORKDIR /app
 RUN chown -R nobody:nobody /app
 RUN apk --no-cache add ca-certificates
