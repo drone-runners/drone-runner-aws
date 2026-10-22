@@ -43,6 +43,7 @@ const (
 	VMFusion     = DriverType("vmfusion")
 	Noop         = DriverType("noop")
 	Nomad        = DriverType("nomad")
+	Orka         = DriverType("orka")
 )
 
 // InstanceState type enumeration.
@@ -131,6 +132,7 @@ type Passwords struct {
 	AWSAccessKeyID     string
 	AWSAccessKeySecret string
 	AWSSessionToken    string
+	OrkaToken          string
 }
 
 type RunnerConfig struct {

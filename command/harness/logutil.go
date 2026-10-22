@@ -132,5 +132,11 @@ func derivePoolImageForLog(poolManager drivers.IManager, pool, accountID string)
 	if n, ok := spec.(*config.Nomad); ok {
 		return n.VM.Image
 	}
+	if o, ok := spec.(*config.Orka); ok {
+		if o.Image != "" {
+			return o.Image
+		}
+		return o.VMConfig
+	}
 	return ""
 }

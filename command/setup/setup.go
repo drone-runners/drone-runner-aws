@@ -44,6 +44,9 @@ type setupCommand struct {
 	ankabuildVMName     string
 	ankabuildURL        string
 	ankabuildToken      string
+	orkaNamespace       string
+	orkaURL             string
+	orkaToken           string
 }
 
 const (
@@ -93,6 +96,11 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 			env.Google.JSONPath = c.googleJSONPath
 		}
 		logrus.Infoln("setup: using google")
+	case c.orkaNamespace != "" && c.orkaURL != "":
+		logrus.Infoln("setup: using orka")
+		env.Orka.Namespace = c.orkaNamespace
+		env.Orka.URL = c.orkaURL
+		env.Orka.Token = c.orkaToken
 	default:
 		logrus.
 			Fatalln(`unsupported driver, please choose a driver setting the mandatory fields:
@@ -101,7 +109,8 @@ func (c *setupCommand) run(*kingpin.ParseContext) error { //nolint
 							for AnkaBuild     --ankabuild-vm-name --ankabuild-url --ankabuild-token
 							for Azure         --azure-client-id --azure-client-secret --azure-subscription-id --azure-tenant-id
 							for Digital Ocean --digital-ocean-pat
-							for Google        --google-project-id`)
+							for Google        --google-project-id
+							for Orka          --orka-namespace --orka-url --orka-token`)
 	}
 
 	// setup the global logrus logger.
@@ -291,4 +300,14 @@ func Register(app *kingpin.Application) {
 		StringVar(&c.googleProjectID)
 	cmd.Flag("google-json-path", "Google JSON path").
 		StringVar(&c.googleJSONPath)
+	// Orka specific flags
+	cmd.Flag("orka-namespace", "Orka namespace").
+		Default("").
+		StringVar(&c.orkaNamespace)
+	cmd.Flag("orka-url", "Orka controller URL").
+		Default("").
+		StringVar(&c.orkaURL)
+	cmd.Flag("orka-token", "Orka auth token").
+		Default("").
+		StringVar(&c.orkaToken)
 }
