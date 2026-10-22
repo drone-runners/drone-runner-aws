@@ -59,8 +59,10 @@ var (
 	// and is safe to skip during cleanup operations.
 	ErrInstanceNotFound = errors.New("google: instance not found in any zone")
 
+	allowDockerNetworkTag = "allow-docker"
+
 	defaultTags = []string{
-		"allow-docker",
+		allowDockerNetworkTag,
 	}
 
 	defaultScopes = []string{
@@ -526,9 +528,13 @@ func (p *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 }
 
 func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
-	p.init.Do(func() {
-		_ = p.setup(ctx)
-	})
+	// Ephemeral VMs make no inbound connection, so they must not create the
+	// shared 9079 firewall. A later lite-engine create still runs setup once.
+	if !opts.EphemeralDelegate {
+		p.init.Do(func() {
+			_ = p.setup(ctx)
+		})
+	}
 
 	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 	inst, zone, err := p.create(ctx, opts, name)
@@ -617,6 +623,9 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 	gpu := opts.GPU
 	opts.EnableC4D = p.enableC4D
 	opts.EgressControl = p.egressControl
+	if opts.EphemeralDelegate && p.egressControl {
+		drivers.PinBinaryDownloadsToHarness(opts)
+	}
 	// Note: opts.EgressProxyURL is deliberately left empty here. Each create
 	// attempt resolves the proxy for its own candidate's network and renders
 	// userdata with it (insertWithStockoutRetry), so a stockout retry into
@@ -785,7 +794,7 @@ func (p *config) insertWithStockoutRetry(
 		in.NetworkInterfaces[0].Network = cand.network
 		in.NetworkInterfaces[0].Subnetwork = cand.subnetwork
 		// Copy tags so appending name does not mutate the network config's backing slice.
-		in.Tags = &compute.Tags{Items: append(append([]string{}, cand.tags...), in.Name)}
+		in.Tags = &compute.Tags{Items: instanceNetworkTags(opts.EphemeralDelegate, cand.tags, in.Name)}
 
 		// Resolve the egress proxy for this candidate's network and render userdata
 		// with it, so a cross-network stockout retry never boots the VM with
@@ -853,6 +862,20 @@ func (p *config) insertWithStockoutRetry(
 	}
 	// Unreachable in practice: candidates always holds at least the first selection.
 	return nil, createCandidate{}, errors.New("google: no create candidates available")
+}
+
+// instanceNetworkTags copies the candidate tags and appends the instance name.
+// Ephemeral VMs drop allow-docker so an existing default-allow-docker rule,
+// which opens 2376 and 9079, does not apply to them.
+func instanceNetworkTags(ephemeral bool, tags []string, name string) []string {
+	items := make([]string, 0, len(tags)+1)
+	for _, tag := range tags {
+		if ephemeral && tag == allowDockerNetworkTag {
+			continue
+		}
+		items = append(items, tag)
+	}
+	return append(items, name)
 }
 
 // setUserdataMetadata replaces the userdata item on the shared instance spec,

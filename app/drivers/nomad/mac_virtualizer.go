@@ -53,7 +53,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 		return nil, "", "", err
 	}
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
-	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, vmImageConfig, resource, port)))
+	startupScript := base64.StdEncoding.EncodeToString([]byte(mv.generateStartupScript(vm, machinePassword, vmImageConfig, resource, port, opts.EphemeralDelegate)))
 	vmStartupScriptPath := fmt.Sprintf("/tmp/%s.sh", vm)
 	cloudInitScriptPath := fmt.Sprintf("/tmp/cloud_init_%s.sh", vm)
 	id = "tart_job_" + vm
@@ -113,7 +113,7 @@ func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defa
 						Resources: minNomadResources(mv.nomadConfig.MinNomadCPUMhz, mv.nomadConfig.MinNomadMemoryMb),
 						Config: map[string]interface{}{
 							"command": entrypoint,
-							"args":    []string{"-c", mv.getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vm)},
+							"args":    []string{"-c", mv.getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vm, opts.EphemeralDelegate)},
 						},
 						Lifecycle: &api.TaskLifecycle{
 							Sidecar: false,
@@ -131,7 +131,7 @@ func (mv *MacVirtualizer) generateUserData(userData string, opts *types.Instance
 	return lehelper.GenerateUserdata(userData, opts)
 }
 
-func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int) string { //nolint:gocritic
+func (mv *MacVirtualizer) generateStartupScript(vmID, machinePassword string, vmImageConfig types.VMImageConfig, resource cf.NomadResource, port int, ephemeral bool) string { //nolint:gocritic
 	// can ignore the error since it was already checked
 	memGB, _ := strconv.Atoi(resource.MemoryGB)
 	return fmt.Sprintf(`
@@ -245,51 +245,7 @@ else
     exit "1"
 fi
 
-attempt=1
-max_attempts=3
-sleep_duration=5
-
-# Stop VM to apply port forwarding otherwise VMs lose internet connectivity
-echo "Stopping tart VM with id $VM_ID"
-while [ "$attempt" -le "$max_attempts" ]; do
-  if /opt/homebrew/bin/tart stop "$VM_ID"; then
-    echo "VM stopped successfully."
-    break  # Exit the loop if successful
-  else
-    echo "Attempt $attempt failed. Retrying in $sleep_duration seconds..."
-    attempt=$((attempt + 1))
-    sleep "$sleep_duration"
-  fi
-done
-
-# If VM stop failed after all attempts, exit the script
-if [ "$attempt" -gt "$max_attempts" ]; then
-  echo "Failed to stop VM after $max_attempts attempts. Exiting."
-  exit 1
-fi
-
-# LOCK
 %s
-
-VM_IP=$(/opt/homebrew/bin/tart ip %s)
-ANCHOR_FILE="/etc/pf.anchors/tart"
-ANCHOR_CONTENT="rdr pass log (all) on en0 inet proto tcp from any to any port %d -> $VM_IP port 9079"
-
-# Remove any existing entry with same IP if present
-echo "$MACHINE_PASSWORD" | sudo -S sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
-echo "$MACHINE_PASSWORD" | sudo -S sh -c "echo '$ANCHOR_CONTENT' | tee -a '$ANCHOR_FILE'"
-echo "$MACHINE_PASSWORD" | sudo -S pfctl -a tart -f "$ANCHOR_FILE"
-
-#UNLOCK
-%s
-
-# Sleep of 5s so that internet connectivity is not affected in VM after packer filter reload
-sleep 5
-
-echo "Re-starting tart VM with id $VM_ID"
-# Run the VM in background
-/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=tmp:/tmp "$VM_ID"
-
 # Remove known_hosts file to avoid too many authentication errors
 if [ -f ~/.ssh/known_hosts ]; then
     rm ~/.ssh/known_hosts
@@ -335,8 +291,10 @@ while true
 		sleep 1
 	done
 echo "Tart VM Started"
-`, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
-		vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password, machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, lockFunction, vmID, port, UnlockFunction)
+`, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password,
+		vmImageConfig.VMImageAuth.Registry, vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password,
+		machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize,
+		macPortForwardBlock(ephemeral, vmID, port, lockFunction, UnlockFunction))
 }
 
 func (mv *MacVirtualizer) GetMachineFrequency() int {
@@ -431,7 +389,64 @@ DONE
 }
 
 // This will be responsible to port forward the traffic from host to VM
-func (mv *MacVirtualizer) getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vmID string) string {
+func macPortForwardBlock(ephemeral bool, vmID string, port int, lockFunction, unlockFunction string) string {
+	if ephemeral {
+		return `echo "ephemeral delegate: not publishing the lite-engine port"`
+	}
+	return fmt.Sprintf(`attempt=1
+max_attempts=3
+sleep_duration=5
+
+# Stop VM to apply port forwarding otherwise VMs lose internet connectivity
+echo "Stopping tart VM with id $VM_ID"
+while [ "$attempt" -le "$max_attempts" ]; do
+  if /opt/homebrew/bin/tart stop "$VM_ID"; then
+    echo "VM stopped successfully."
+    break  # Exit the loop if successful
+  else
+    echo "Attempt $attempt failed. Retrying in $sleep_duration seconds..."
+    attempt=$((attempt + 1))
+    sleep "$sleep_duration"
+  fi
+done
+
+# If VM stop failed after all attempts, exit the script
+if [ "$attempt" -gt "$max_attempts" ]; then
+  echo "Failed to stop VM after $max_attempts attempts. Exiting."
+  exit 1
+fi
+
+# LOCK
+%s
+
+VM_IP=$(/opt/homebrew/bin/tart ip %s)
+ANCHOR_FILE="/etc/pf.anchors/tart"
+ANCHOR_CONTENT="rdr pass log (all) on en0 inet proto tcp from any to any port %d -> $VM_IP port 9079"
+
+# Remove any existing entry with same IP if present
+echo "$MACHINE_PASSWORD" | sudo -S sed -i '' "/$VM_IP/d" "$ANCHOR_FILE"
+echo "$MACHINE_PASSWORD" | sudo -S sh -c "echo '$ANCHOR_CONTENT' | tee -a '$ANCHOR_FILE'"
+echo "$MACHINE_PASSWORD" | sudo -S pfctl -a tart -f "$ANCHOR_FILE"
+
+#UNLOCK
+%s
+
+# Sleep of 5s so that internet connectivity is not affected in VM after packer filter reload
+sleep 5
+
+echo "Re-starting tart VM with id $VM_ID"
+# Run the VM in background
+/opt/homebrew/sbin/daemonize /opt/homebrew/bin/tart run --no-graphics --dir=tmp:/tmp "$VM_ID"
+`, lockFunction, vmID, port, unlockFunction)
+}
+
+func (mv *MacVirtualizer) getPostStartUpScript(vmStartupScriptPath, cloudInitScriptPath, vmID string, ephemeral bool) string {
+	if ephemeral {
+		return fmt.Sprintf(`
+echo "Cleaning up vm startup and cloudinit script"
+rm %s %s
+`, vmStartupScriptPath, cloudInitScriptPath)
+	}
 	return fmt.Sprintf(`
 echo "Cleaning up vm startup and cloudinit script"
 rm %s %s

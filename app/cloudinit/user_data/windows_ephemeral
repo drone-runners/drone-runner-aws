@@ -1,0 +1,21 @@
+$ProgressPreference = 'SilentlyContinue'
+New-Item -ItemType Directory -Force -Path "C:\Program Files\harness-delegate" | Out-Null
+$cfg = [System.Convert]::FromBase64String("{{ .DelegateConfigEnv | base64 }}")
+[System.IO.File]::WriteAllBytes("C:\Program Files\harness-delegate\config.env", $cfg)
+{{ if .DownloadProxyURL }}
+$env:http_proxy = "{{ .DownloadProxyURL }}"
+$env:https_proxy = "{{ .DownloadProxyURL }}"
+{{ end }}
+$primary = "{{ .DelegatePath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$out = "C:\Program Files\harness-delegate\delegate.exe"
+try {
+    Invoke-WebRequest -Uri $primary -OutFile $out
+} catch {
+    {{ if .DelegateFallbackPath }}
+    Invoke-WebRequest -Uri "{{ .DelegateFallbackPath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile $out
+    {{ else }}
+    throw
+    {{ end }}
+}
+$env:ENV_FILE = "C:\Program Files\harness-delegate\config.env"
+Start-Process -FilePath $out -ArgumentList "server" -RedirectStandardOutput "C:\Program Files\harness-delegate\delegate.log" -RedirectStandardError "C:\Program Files\harness-delegate\delegate.err"

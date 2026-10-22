@@ -225,6 +225,20 @@ type InstanceCreateOpts struct {
 	TenantID            string
 	// VMUsername: when set, run lite-engine as this login user instead of root (Orka).
 	VMUsername string
+
+	// EphemeralDelegate selects the in-VM delegate boot path. The lite-engine
+	// path ignores these fields.
+	EphemeralDelegate       bool
+	DelegatePath            string
+	DelegateFallbackPath    string
+	DelegateToken           string
+	DelegateManagerEndpoint string
+	DelegateTransactionID   string
+	DelegateName            string
+	DelegateTags            string
+	DelegateParallelWorkers string
+	EgressProxyUser         string
+	EgressProxyPassword     string
 }
 
 type MachineTypeFallback struct {
