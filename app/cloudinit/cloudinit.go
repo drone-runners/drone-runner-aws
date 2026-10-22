@@ -49,6 +49,11 @@ type Params struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	DelegatePath                 string
+	DelegateFallbackPath         string
+	DelegateConfigEnv            string
+	DownloadProxyURL             string
+	DockerProxyDropIn            string
 }
 
 var funcs = map[string]interface{}{
@@ -146,6 +151,14 @@ var ubuntuTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntu)
 //go:embed user_data/ubuntu_linux_egress_v2
 var userDataUbuntuEgressProxy string
 var ubuntuEgressProxyTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntuEgressProxy)
+
+//go:embed user_data/ubuntu_ephemeral
+var userDataUbuntuEphemeral string
+var ubuntuEphemeralTemplate = template.Must(template.New("ubuntu-ephemeral").Funcs(funcs).Parse(userDataUbuntuEphemeral))
+
+//go:embed user_data/ubuntu_ephemeral_egress
+var userDataUbuntuEphemeralEgress string
+var ubuntuEphemeralEgressTemplate = template.Must(template.New("ubuntu-ephemeral-egress").Funcs(funcs).Parse(userDataUbuntuEphemeralEgress))
 
 //go:embed user_data/gitspaces_ubuntu
 var userDataGitspacesUbuntu string
@@ -307,6 +320,20 @@ func Linux(params *Params) (payload string, err error) {
 		return "", fmt.Errorf("error while executing template: %w", err)
 	}
 
+	return sb.String(), nil
+}
+
+// Ephemeral creates userdata that installs the in-VM delegate. EgressControl
+// selects the fleet-proxy variant. Lite-engine templates are not used.
+func Ephemeral(params *Params) (string, error) {
+	tmpl := ubuntuEphemeralTemplate
+	if params.EgressControl {
+		tmpl = ubuntuEphemeralEgressTemplate
+	}
+	sb := &strings.Builder{}
+	if err := tmpl.Execute(sb, params); err != nil {
+		return "", fmt.Errorf("error while executing ephemeral template: %w", err)
+	}
 	return sb.String(), nil
 }
 

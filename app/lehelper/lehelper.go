@@ -52,6 +52,13 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		params.CertsDirectory = "/harness/certs"
 	}
 
+	if opts.EphemeralDelegate {
+		if err := applyEphemeralUserdata(&params, opts); err != nil {
+			return "", err
+		}
+		return cloudinit.Ephemeral(&params)
+	}
+
 	var err error
 	if userdata == "" {
 		if opts.Platform.OS == oshelp.OSWindows {

@@ -670,6 +670,12 @@ func refreshClaimIdentityLabels(ctx context.Context, pool *poolEntry, inst *type
 	}
 }
 
+// PinBinaryDownloadsToHarness rewrites binary download URLs onto the Harness
+// download origin. Empty URLs stay empty.
+func PinBinaryDownloadsToHarness(o *types.InstanceCreateOpts) {
+	pinBinaryDownloadsToHarness(o)
+}
+
 // pinBinaryDownloadsToHarness rewrites every binary download URL to the canonical
 // Harness origin and collapses each primary/fallback pair onto the same (rebased)
 // primary, leaving no non-allow-listed destination to fall back to.
@@ -681,6 +687,7 @@ func pinBinaryDownloadsToHarness(o *types.InstanceCreateOpts) {
 		{&o.AnnotationsBinaryURI, &o.AnnotationsBinaryFallbackURI},
 		{&o.EnvmanBinaryURI, &o.EnvmanBinaryFallbackURI},
 		{&o.TmateBinaryURI, &o.TmateBinaryFallbackURI},
+		{&o.DelegatePath, &o.DelegateFallbackPath},
 	} {
 		*p.primary = rebaseToHarnessDownload(*p.primary)
 		*p.fallback = *p.primary

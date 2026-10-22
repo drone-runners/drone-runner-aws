@@ -1,0 +1,89 @@
+#cloud-config
+{{ if not .IsHosted }}
+apt:
+  sources:
+    docker.list:
+      source: deb [arch={{ .Platform.Arch }}] https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+packages:
+  - wget
+  - curl
+  - docker-ce=5:28.5.2-1~ubuntu.22.04~jammy
+{{ end }}
+write_files:
+- path: /usr/local/share/ca-certificates/harness-ca.crt
+  permissions: '0644'
+  encoding: b64
+  content: {{ .EgressCACert | base64 }}
+- path: /etc/harness-certs/ca.crt
+  permissions: '0644'
+  encoding: b64
+  content: {{ .EgressCACert | base64 }}
+- path: /etc/systemd/system/docker.service.d/http-proxy.conf
+  permissions: '0644'
+  encoding: b64
+  content: {{ .DockerProxyDropIn | base64 }}
+- path: /opt/harness-delegate/config.env
+  permissions: '0400'
+  encoding: b64
+  content: {{ .DelegateConfigEnv | base64 }}
+- path: /etc/systemd/system/harness-delegate.service
+  permissions: '0644'
+  content: |
+    [Unit]
+    Description=Harness ephemeral delegate
+    After=network-online.target docker.service
+    Wants=network-online.target
+
+    [Service]
+    Environment="ENV_FILE=/opt/harness-delegate/config.env"
+    ExecStart=/usr/bin/delegate server
+    Restart=on-failure
+    RestartSec=5
+
+    [Install]
+    WantedBy=multi-user.target
+runcmd:
+  - set -x
+  {{ if .IsHosted }}
+  - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
+  - systemctl restart systemd-resolved
+  {{ end }}
+  - update-ca-certificates
+  - cp /etc/ssl/certs/ca-certificates.crt /etc/harness-certs/ca-bundle.crt
+  - |
+    set -e
+    export http_proxy="{{ .DownloadProxyURL }}"
+    export https_proxy="{{ .DownloadProxyURL }}"
+    export HTTP_PROXY="{{ .DownloadProxyURL }}"
+    export HTTPS_PROXY="{{ .DownloadProxyURL }}"
+    export no_proxy="{{ .EgressNoProxy }}"
+    export NO_PROXY="{{ .EgressNoProxy }}"
+    if ! /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .DelegatePath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/delegate; then
+      {{ if .DelegateFallbackPath }}
+      /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .DelegateFallbackPath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/delegate
+      {{ else }}
+      exit 1
+      {{ end }}
+    fi
+    chmod 755 /usr/bin/delegate
+  - systemctl daemon-reload
+  - systemctl restart docker
+  - |
+    set -e
+    ok=0
+    for i in 1 2 3 4 5; do
+      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "{{ .EgressProxyURL }}/healthz" || true)
+      if [ "$code" = "200" ]; then
+        echo "egress proxy healthz=200 (attempt $i)"
+        ok=1
+        break
+      fi
+      echo "egress proxy healthz=$code (attempt $i/5)"
+      sleep 3
+    done
+    if [ "$ok" != "1" ]; then
+      echo "egress proxy health check failed" >&2
+      exit 1
+    fi
+  - systemctl enable --now harness-delegate
