@@ -151,6 +151,34 @@ type (
 		VM     NomadVM     `json:"vm" yaml:"vm"`
 	}
 
+	// Orka specifies the configuration for a MacStadium Orka instance.
+	Orka struct {
+		ControllerURL  string            `json:"controller_url,omitempty" yaml:"controller_url"`
+		Namespace      string            `json:"namespace,omitempty" yaml:"namespace"`
+		Token          string            `json:"token,omitempty" yaml:"token"` // optional; falls back to passwords.OrkaToken (ORKA_TOKEN env/.env) if empty, same pattern as AnkaToken
+		VMConfig       string            `json:"vm_config,omitempty" yaml:"vm_config"`
+		Image          string            `json:"image,omitempty" yaml:"image"`
+		CPU            int               `json:"cpu,omitempty" yaml:"cpu"`
+		Memory         float64           `json:"memory,omitempty" yaml:"memory"`
+		GPUPassthrough bool              `json:"gpu_passthrough,omitempty" yaml:"gpu_passthrough"`
+		NetBoost       bool              `json:"net_boost,omitempty" yaml:"net_boost"`
+		LegacyIO       bool              `json:"legacy_io,omitempty" yaml:"legacy_io"`
+		VNC            bool              `json:"vnc,omitempty" yaml:"vnc"`
+		Tag            string            `json:"tag,omitempty" yaml:"tag"`
+		TagRequired    bool              `json:"tag_required,omitempty" yaml:"tag_required"`
+		Node           string            `json:"node,omitempty" yaml:"node"`
+		Scheduler      string            `json:"scheduler,omitempty" yaml:"scheduler"`
+		DisplayWidth   int               `json:"display_width,omitempty" yaml:"display_width"`
+		DisplayHeight  int               `json:"display_height,omitempty" yaml:"display_height"`
+		DisplayDPI     int               `json:"display_dpi,omitempty" yaml:"display_dpi"`
+		SystemSerial   string            `json:"system_serial,omitempty" yaml:"system_serial"`
+		Timeout        int               `json:"timeout,omitempty" yaml:"timeout"`
+		CustomMetadata map[string]string `json:"custom_metadata,omitempty" yaml:"custom_metadata"`
+		RootDirectory  string            `json:"root_directory,omitempty" yaml:"root_directory"`
+		UserData       string            `json:"user_data,omitempty" yaml:"user_data"`
+		UserDataPath   string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+	}
+
 	NomadServer struct {
 		Address        string `json:"address" yaml:"address"`
 		Insecure       bool   `json:"insecure,omitempty" yaml:"insecure" default:"false"`
@@ -355,6 +383,12 @@ type EnvConfig struct {
 		VMName string `envconfig:"ANKA_BUILD_VM_NAME"`
 		URL    string `envconfig:"ANKA_BUILD_URL"`
 		Token  string `envconfig:"ANKA_BUILD_TOKEN"`
+	}
+
+	Orka struct {
+		Namespace string `envconfig:"ORKA_NAMESPACE"`
+		URL       string `envconfig:"ORKA_URL"`
+		Token     string `envconfig:"ORKA_TOKEN"`
 	}
 
 	TartBuild struct {
@@ -604,6 +638,7 @@ func (c EnvConfig) Passwords() types.Passwords {
 		AWSAccessKeyID:     c.Amazon.AccessKeyID,
 		AWSAccessKeySecret: c.Amazon.AccessKeySecret,
 		AWSSessionToken:    c.Amazon.SessionToken,
+		OrkaToken:          c.Orka.Token,
 	}
 }
 
@@ -715,6 +750,8 @@ func (s *Instance) newSpec() (interface{}, error) {
 		return new(Noop), nil
 	case string(types.Nomad):
 		return new(Nomad), nil
+	case string(types.Orka):
+		return new(Orka), nil
 	default:
 		return nil, fmt.Errorf("unknown instance type %s", s.Type)
 	}

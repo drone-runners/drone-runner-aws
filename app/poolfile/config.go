@@ -19,6 +19,7 @@ import (
 	"github.com/drone-runners/drone-runner-aws/app/drivers/google"
 	"github.com/drone-runners/drone-runner-aws/app/drivers/nomad"
 	"github.com/drone-runners/drone-runner-aws/app/drivers/noop"
+	"github.com/drone-runners/drone-runner-aws/app/drivers/orka"
 	"github.com/drone-runners/drone-runner-aws/app/drivers/vmfusion"
 	"github.com/drone-runners/drone-runner-aws/app/oshelp"
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -319,6 +320,50 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 			pool := mapPool(&instance, runnerName)
 			pool.Driver = driver
 			pools = append(pools, pool)
+		case string(types.Orka):
+			var orkaConfig, ok = instance.Spec.(*config.Orka)
+			if !ok {
+				return nil, fmt.Errorf("%s pool parsing failed", instance.Name)
+			}
+			if orkaConfig.Token == "" && passwords.OrkaToken != "" {
+				orkaConfig.Token = passwords.OrkaToken
+			}
+			if orkaConfig.VMConfig == "" && orkaConfig.Image == "" {
+				return nil, fmt.Errorf("orka: pool %q must set either vm_config or image", instance.Name)
+			}
+			platform, platformErr := orka.SetPlatformDefaults(&instance.Platform)
+			if platformErr != nil {
+				return nil, platformErr
+			}
+			instance.Platform = *platform
+			driver, err := orka.New(
+				orka.WithNamespace(orkaConfig.Namespace),
+				orka.WithControllerURI(orkaConfig.ControllerURL),
+				orka.WithAuthToken(orkaConfig.Token),
+				orka.WithVMConfig(orkaConfig.VMConfig),
+				orka.WithImage(orkaConfig.Image),
+				orka.WithUserData(orkaConfig.UserData, orkaConfig.UserDataPath),
+				orka.WithRootDirectory(orkaConfig.RootDirectory),
+				orka.WithTimeout(orkaConfig.Timeout),
+				orka.WithCPU(orkaConfig.CPU),
+				orka.WithMemory(orkaConfig.Memory),
+				orka.WithGPUPassthrough(orkaConfig.GPUPassthrough),
+				orka.WithNetBoost(orkaConfig.NetBoost),
+				orka.WithLegacyIO(orkaConfig.LegacyIO),
+				orka.WithVNC(orkaConfig.VNC),
+				orka.WithTag(orkaConfig.Tag, orkaConfig.TagRequired),
+				orka.WithNode(orkaConfig.Node),
+				orka.WithScheduler(orkaConfig.Scheduler),
+				orka.WithDisplay(orkaConfig.DisplayWidth, orkaConfig.DisplayHeight, orkaConfig.DisplayDPI),
+				orka.WithSystemSerial(orkaConfig.SystemSerial),
+				orka.WithCustomMetadata(orkaConfig.CustomMetadata),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)
+			}
+			pool := mapPool(&instance, runnerName)
+			pool.Driver = driver
+			pools = append(pools, pool)
 		default:
 			return nil, fmt.Errorf("unknown instance tip %s", instance.Type)
 		}
@@ -519,6 +564,9 @@ func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile,
 				logrus.Printf("google:unable to find credentials file at '%s' or set GOOGLE_JSON_PATH to the correct location", conf.Google.JSONPath)
 			}
 			return createGooglePool(conf.Google.ProjectID, conf.Google.JSONPath, conf.Google.Zone, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
+		case conf.Orka.Namespace != "" && conf.Orka.URL != "":
+			logrus.Infoln("in memory pool is using orka")
+			return createOrkaPool(conf.Orka.Namespace, conf.Orka.URL, conf.Orka.Token, conf.Settings.MinPoolSize, conf.Settings.MaxPoolSize), nil
 		default:
 			return pool,
 				fmt.Errorf("unsupported driver, please choose a driver setting the manditory environment variables:\n" +
@@ -527,7 +575,8 @@ func ConfigPoolFile(path string, conf *config.EnvConfig) (pool *config.PoolFile,
 					"for azure AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID\n" +
 					"for amazon AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_SECRET\n" +
 					"for google GOOGLE_PROJECT_ID\n" +
-					"for digitalocean DIGITALOCEAN_PAT")
+					"for digitalocean DIGITALOCEAN_PAT\n" +
+					"for orka ORKA_NAMESPACE, ORKA_URL, ORKA_TOKEN")
 		}
 	}
 	pool, err = config.ParseFile(path)
@@ -679,6 +728,31 @@ func createAnkaBuildPool(vmName, url, token string, minPoolSize, maxPoolSize int
 			VMID:        vmName,
 			RegistryURL: url,
 			AuthToken:   token,
+		},
+	}
+	poolfile := config.PoolFile{
+		Version:   "1",
+		Instances: []config.Instance{instance},
+	}
+
+	return &poolfile
+}
+
+func createOrkaPool(namespace, controllerURL, token string, minPoolSize, maxPoolSize int) *config.PoolFile {
+	instance := config.Instance{
+		Name:    DefaultPoolName,
+		Default: true,
+		Type:    string(types.Orka),
+		Pool:    minPoolSize,
+		Limit:   maxPoolSize,
+		Platform: types.Platform{
+			Arch: oshelp.ArchARM64,
+			OS:   oshelp.OSMac,
+		},
+		Spec: &config.Orka{
+			Namespace:     namespace,
+			ControllerURL: controllerURL,
+			Token:         token,
 		},
 	}
 	poolfile := config.PoolFile{
