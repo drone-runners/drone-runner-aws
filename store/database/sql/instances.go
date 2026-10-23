@@ -151,9 +151,26 @@ func (s InstanceStore) FindAndClaim(
 	defer tx.Rollback() //nolint
 
 	// --- Build subquery (CTE) ---
-	subQuery := builder.Select("instance_id AS inst_id").
-		From("instances").
-		Where(squirrel.Eq{"instance_pool": params.PoolName})
+	subQuery := builder.Select("instance_id AS inst_id").From("instances")
+	switch {
+	case params.AnyPool:
+		if len(params.ExcludePoolNames) > 0 {
+			subQuery = subQuery.Where(squirrel.NotEq{"instance_pool": params.ExcludePoolNames})
+		}
+	case len(params.PoolNames) > 0:
+		subQuery = subQuery.Where(squirrel.Eq{"instance_pool": params.PoolNames})
+	default:
+		subQuery = subQuery.Where(squirrel.Eq{"instance_pool": params.PoolName})
+	}
+
+	if params.Platform != nil {
+		if params.Platform.OS != "" {
+			subQuery = subQuery.Where(squirrel.Eq{"instance_os": params.Platform.OS})
+		}
+		if params.Platform.Arch != "" {
+			subQuery = subQuery.Where(squirrel.Eq{"instance_arch": params.Platform.Arch})
+		}
+	}
 
 	if params.RunnerName != "" {
 		subQuery = subQuery.Where(squirrel.Eq{"runner_name": params.RunnerName})
@@ -205,17 +222,10 @@ func (s InstanceStore) FindAndClaim(
 	}
 	subQuery = subQuery.Limit(1).Suffix("FOR UPDATE SKIP LOCKED")
 
-	// --- Convert subquery to SQL + args ---
-	subSQL, subArgs, err := subQuery.ToSql()
+	// --- Convert subquery to SQL + args (numbered once the full statement is assembled) ---
+	subSQL, subArgs, err := subQuery.PlaceholderFormat(squirrel.Question).ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build CTE subquery: %w", err)
-	}
-
-	// --- Shift placeholders in subquery to start after $1 (newState) ---
-	for i := len(subArgs); i > 0; i-- {
-		oldPlaceholder := fmt.Sprintf("$%d", i)
-		newPlaceholder := fmt.Sprintf("$%d", i+1)
-		subSQL = strings.ReplaceAll(subSQL, oldPlaceholder, newPlaceholder)
 	}
 
 	// --- Clean RETURNING columns ---
@@ -223,22 +233,25 @@ func (s InstanceStore) FindAndClaim(
 	cleanColumns = strings.TrimSpace(cleanColumns)
 
 	// --- Build final CTE UPDATE SQL ---
-	//nolint: gosec,mnd
-	finalSQL := fmt.Sprintf(`
+	//nolint: gosec
+	finalSQL, err := squirrel.Dollar.ReplacePlaceholders(fmt.Sprintf(`
 WITH candidate AS (
     %s
 )
 UPDATE instances
-SET instance_state = $1,
+SET instance_state = ?,
     instance_updated = extract(epoch FROM now()),
-    instance_started = CASE WHEN $%d THEN extract(epoch FROM now()) ELSE instance_started END
+    instance_started = CASE WHEN ? THEN extract(epoch FROM now()) ELSE instance_started END
 FROM candidate
 WHERE instances.instance_id = candidate.inst_id
 RETURNING %s
-`, subSQL, len(subArgs)+2, cleanColumns)
+`, subSQL, cleanColumns))
+	if err != nil {
+		return nil, fmt.Errorf("failed to number claim placeholders: %w", err)
+	}
 
-	// --- Combine args: newState first, then subquery args, then updateStartTime ---
-	args := append([]interface{}{newState}, append(subArgs, updateStartTime)...)
+	// --- Combine args in placeholder order: subquery args (the CTE comes first), newState, updateStartTime ---
+	args := append(subArgs, newState, updateStartTime) //nolint:gocritic
 
 	// --- Execute ---
 	dst := new(types.Instance)

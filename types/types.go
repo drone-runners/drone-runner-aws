@@ -242,12 +242,17 @@ type Platform struct {
 }
 
 type QueryParams struct {
-	Status               InstanceState
-	Stage                string
-	Platform             *Platform
-	RunnerName           string
-	MatchLabels          map[string]string
-	PoolName             string
+	Status      InstanceState
+	Stage       string
+	Platform    *Platform
+	RunnerName  string
+	MatchLabels map[string]string
+	PoolName    string
+	// PoolNames, when set, replaces PoolName with a match on any of the pools.
+	PoolNames []string
+	// AnyPool matches every pool except ExcludePoolNames, ignoring PoolName.
+	AnyPool              bool
+	ExcludePoolNames     []string
 	InstanceID           string
 	ImageName            string
 	MachineType          string
@@ -488,6 +493,9 @@ const (
 	TierFree = "free"
 )
 
+// FreeAccountID is the account id a setup request carries for a free-tier account.
+const FreeAccountID = "free"
+
 // ParseTier validates a pool tier. Empty resolves to TierPaid.
 func ParseTier(s string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
@@ -573,6 +581,21 @@ type ProvisionParams struct {
 	// ReservationPerPoolTimeout bounds, in milliseconds, how long a single pool's
 	// capacity reservation attempt may take. 0 means use the runner default.
 	ReservationPerPoolTimeout int64
+
+	// Claim widens the free instance claim beyond the provisioned pool. Nil claims from the
+	// provisioned pool only.
+	Claim *ClaimScope
+}
+
+// ClaimScope is where a request may claim a free instance and create a new one.
+type ClaimScope struct {
+	// Pools are tried in order, each claiming within the scope and then creating in that pool.
+	Pools []string
+	// Include limits the claim to these pools. Empty claims from any pool on Platform except
+	// Exclude.
+	Include  []string
+	Exclude  []string
+	Platform Platform
 }
 
 // ToSetupInstanceParams converts request-level ProvisionParams to internal SetupInstanceParams.

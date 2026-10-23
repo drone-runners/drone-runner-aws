@@ -41,6 +41,7 @@ type Metrics struct {
 	ScalerCapabilityTargetInstances    *prometheus.GaugeVec
 	ScalerCapabilityFreeInstances      *prometheus.GaugeVec
 	ScalerCreateSpillCount             *prometheus.CounterVec
+	HotpoolClaimCount                  *prometheus.CounterVec
 
 	// Instance idle age metric
 	InstanceIdleAge *prometheus.HistogramVec
@@ -563,6 +564,7 @@ func RegisterMetrics() *Metrics {
 	scalerCapabilityTargetInstances := ScalerCapabilityTargetInstances()
 	scalerCapabilityFreeInstances := ScalerCapabilityFreeInstances()
 	scalerCreateSpillCount := ScalerCreateSpillCount()
+	hotpoolClaimCount := HotpoolClaimCount()
 
 	// Instance idle age metric
 	instanceIdleAge := InstanceIdleAge()
@@ -618,6 +620,7 @@ func RegisterMetrics() *Metrics {
 		scalerPredictedInstances,
 		scalerCapabilityPredictedInstances, scalerCapabilityTargetInstances, scalerCapabilityFreeInstances,
 		scalerCreateSpillCount,
+		hotpoolClaimCount,
 		instanceIdleAge,
 		gcpAPIRequestsCount, gcpAPIRequestDuration,
 		gcpOperationsCount, gcpOperationDuration, gcpOperationRetriesCount, gcpOperationsInflight,
@@ -654,6 +657,7 @@ func RegisterMetrics() *Metrics {
 		ScalerCapabilityTargetInstances:         scalerCapabilityTargetInstances,
 		ScalerCapabilityFreeInstances:           scalerCapabilityFreeInstances,
 		ScalerCreateSpillCount:                  scalerCreateSpillCount,
+		HotpoolClaimCount:                       hotpoolClaimCount,
 		InstanceIdleAge:                         instanceIdleAge,
 		GCPAPIRequestsCount:                     gcpAPIRequestsCount,
 		GCPAPIRequestDuration:                   gcpAPIRequestDuration,

@@ -63,3 +63,23 @@ func ScalerCreateSpillCount() *prometheus.CounterVec {
 		[]string{"from_pool", "to_pool", labelOutcome},
 	)
 }
+
+// HotpoolClaimCount counts attempts to claim a free instance for a request in pool
+// requested_pool. claimed_pool is the pool the instance came from, empty on a miss.
+func HotpoolClaimCount() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "harness_ci_hotpool_claim_total",
+			Help: "Attempts to claim a free instance, by the pool requested and the pool the instance came from",
+		},
+		[]string{"algorithm", "tier", "requested_pool", "claimed_pool", labelOutcome},
+	)
+}
+
+// RecordHotpoolClaim records one claim attempt.
+func (m *Metrics) RecordHotpoolClaim(algorithm, tier, requestedPool, claimedPool, outcome string) {
+	if m == nil || m.HotpoolClaimCount == nil {
+		return
+	}
+	m.HotpoolClaimCount.WithLabelValues(algorithm, tier, requestedPool, claimedPool, outcome).Inc()
+}
