@@ -59,13 +59,13 @@ func TestPrepareEphemeralCreateOptsErrors(t *testing.T) {
 			wantErr: "delegate download path is required",
 		},
 		{
-			name: "non-google driver",
+			name: "unsupported driver",
 			input: func() EphemeralCreateInput {
 				pool := ephemeralPool(&config.Google{})
 				pool.Driver = &mockDriver{}
 				return ephemeralInput(pool)
 			},
-			wantErr: "google driver only",
+			wantErr: "drivers only",
 		},
 		{
 			name: "non-linux platform",

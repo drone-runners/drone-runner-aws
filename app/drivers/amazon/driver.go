@@ -75,14 +75,17 @@ type amazonConfig struct {
 
 	rootDir string
 
-	image         string
-	size          string
-	sizeAlt       string
-	user          string
-	userData      string
-	subnet        string
-	vpc           string
-	groups        []string
+	image    string
+	size     string
+	sizeAlt  string
+	user     string
+	userData string
+	subnet   string
+	vpc      string
+	groups   []string
+	// autoGroupID is the harness-runner group a lite-engine Create appended to
+	// groups. Ephemeral creates must not reuse it, since it opens the lite-engine port.
+	autoGroupID   string
 	allocPublicIP bool
 	volumeType    string
 	volumeSize    int64
@@ -422,6 +425,33 @@ func (p *amazonConfig) DestroyCapacity(ctx context.Context, capacity *drtypes.Ca
 	return nil
 }
 
+// securityGroupsFor returns the security groups for one create. Ephemeral
+// creates drop the group a lite-engine create added automatically.
+func (p *amazonConfig) securityGroupsFor(opts *drtypes.InstanceCreateOpts) []string {
+	if opts == nil || !opts.EphemeralDelegate || p.autoGroupID == "" {
+		return p.groups
+	}
+	groups := make([]string, 0, len(p.groups))
+	for _, group := range p.groups {
+		if group != p.autoGroupID {
+			groups = append(groups, group)
+		}
+	}
+	return groups
+}
+
+// terminateAfterFailedCreate removes an ephemeral instance whose create failed
+// after the instance existed. No store row exists for a later cleanup to find.
+func (p *amazonConfig) terminateAfterFailedCreate(instanceID string, logr logger.Logger) {
+	_, termErr := p.service.TerminateInstances(context.Background(), &ec2.TerminateInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
+	if termErr != nil {
+		logr.WithError(termErr).WithField("instance_id", instanceID).
+			Warnln("amazon: failed to terminate ephemeral instance after create failure")
+	}
+}
+
 // buildRunInstancesInput constructs the EC2 RunInstancesInput with all configuration
 func (p *amazonConfig) buildRunInstancesInput(
 	resolvedAMI string,
@@ -455,7 +485,7 @@ func (p *amazonConfig) buildRunInstancesInput(
 				AssociatePublicIpAddress: aws.Bool(p.allocPublicIP),
 				DeviceIndex:              aws.Int32(0),
 				SubnetId:                 aws.String(reqCfg.subnet),
-				Groups:                   p.groups,
+				Groups:                   p.securityGroupsFor(opts),
 			},
 		},
 		TagSpecifications: []types.TagSpecification{
@@ -589,28 +619,34 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	for k, v := range p.volumeTags {
 		volumeTags[k] = v
 	}
-	if p.vpc == "" {
-		logr.Traceln("amazon: using default vpc, checking security groups")
-	} else {
-		logr.Tracef("amazon: using vpc %s, checking security groups", p.vpc)
-	}
-	// check security group exists
-	if p.groups == nil || len(p.groups) == 0 {
-		logr.Warnf("aws: no security group specified assuming '%s'", defaultSecurityGroupName)
-		// lookup/create group
-		returnedGroupID, lookupErr := lookupCreateSecurityGroupID(ctx, client, p.vpc)
-		if lookupErr != nil {
-			return nil, lookupErr
+	// Ephemeral VMs take no inbound connection, so they skip the lite-engine
+	// security group and its port check. Without configured groups EC2 applies
+	// the VPC default group.
+	if !opts.EphemeralDelegate {
+		if p.vpc == "" {
+			logr.Traceln("amazon: using default vpc, checking security groups")
+		} else {
+			logr.Tracef("amazon: using vpc %s, checking security groups", p.vpc)
 		}
-		p.groups = append(p.groups, returnedGroupID)
-	}
-	// check the security group ingress rules
-	if len(p.groups) == 0 {
-		return nil, fmt.Errorf("no security groups configured")
-	}
-	rulesErr := checkIngressRules(ctx, client, p.groups[0])
-	if rulesErr != nil {
-		return nil, rulesErr
+		// check security group exists
+		if p.groups == nil || len(p.groups) == 0 {
+			logr.Warnf("aws: no security group specified assuming '%s'", defaultSecurityGroupName)
+			// lookup/create group
+			returnedGroupID, lookupErr := lookupCreateSecurityGroupID(ctx, client, p.vpc)
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			p.groups = append(p.groups, returnedGroupID)
+			p.autoGroupID = returnedGroupID
+		}
+		// check the security group ingress rules
+		if len(p.groups) == 0 {
+			return nil, fmt.Errorf("no security groups configured")
+		}
+		rulesErr := checkIngressRules(ctx, client, p.groups[0])
+		if rulesErr != nil {
+			return nil, rulesErr
+		}
 	}
 
 	logr.Traceln("amazon: provisioning VM")
@@ -671,6 +707,15 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	awsInstance := runResult.Instances[0]
 	logr = logr.
 		WithField("id", *awsInstanceID)
+
+	if opts.EphemeralDelegate {
+		createdID := *awsInstanceID
+		defer func() {
+			if err != nil {
+				p.terminateAfterFailedCreate(createdID, logr)
+			}
+		}()
+	}
 
 	logr.Debugln("amazon: [provision] created instance")
 

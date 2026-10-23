@@ -8,6 +8,14 @@ import (
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
+// ephemeralDrivers lists the drivers that support ephemeral-delegate creates.
+var ephemeralDrivers = map[string]bool{
+	string(types.Google):       true,
+	string(types.Amazon):       true,
+	string(types.Azure):        true,
+	string(types.DigitalOcean): true,
+}
+
 // EphemeralCreateInput is the pool and caller data for one ephemeral VM.
 // Store writes stay with setupInstance. This path does not call it.
 type EphemeralCreateInput struct {
@@ -37,8 +45,8 @@ type EphemeralCreateInput struct {
 	ProxyPassword        string
 }
 
-// PrepareEphemeralCreateOpts builds create options for an ephemeral Linux Google
-// VM. Certificates and instance-store fields are left empty. The Google driver
+// PrepareEphemeralCreateOpts builds create options for an ephemeral Linux VM.
+// Certificates and instance-store fields are left empty. The Google driver
 // fills egress control and the network proxy URL during Create.
 func PrepareEphemeralCreateOpts(in EphemeralCreateInput) (*types.InstanceCreateOpts, error) {
 	if in.Pool == nil {
@@ -49,8 +57,8 @@ func PrepareEphemeralCreateOpts(in EphemeralCreateInput) (*types.InstanceCreateO
 	}
 	tenantID := in.Pool.ResolveTenant(in.AccountID)
 	driver := in.Pool.DriverForTenant(tenantID)
-	if driver == nil || driver.DriverName() != string(types.Google) {
-		return nil, fmt.Errorf("ephemeral create supports the google driver only")
+	if driver == nil || !ephemeralDrivers[driver.DriverName()] {
+		return nil, fmt.Errorf("ephemeral create supports the google, amazon, azure and digitalocean drivers only")
 	}
 	platform := in.Platform
 	if platform.OS == "" {
@@ -59,9 +67,14 @@ func PrepareEphemeralCreateOpts(in EphemeralCreateInput) (*types.InstanceCreateO
 	if platform.OS != oshelp.OSLinux {
 		return nil, fmt.Errorf("ephemeral create supports linux only")
 	}
-	egress, err := googlePoolEgress(in.Pool, tenantID)
-	if err != nil {
-		return nil, err
+	// Egress control exists only on Google pools.
+	var egress bool
+	if driver.DriverName() == string(types.Google) {
+		var err error
+		egress, err = googlePoolEgress(in.Pool, tenantID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if egress && in.EgressCACert == "" {
 		return nil, fmt.Errorf("egress CA certificate is required")
