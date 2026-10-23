@@ -1,7 +1,7 @@
-FROM alpine:3.23.3 as alpine
-RUN apk add -U --no-cache ca-certificates
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS alpine
+RUN apk add -U --no-cache 'ca-certificates>=20261020-r0'
 
-FROM alpine:3.23.3
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1
 
 # Rootless variant - designed for Kubernetes with strict security policies
 # - Uses nobody user (UID/GID 65534)

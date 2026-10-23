@@ -1,9 +1,12 @@
 # First Stage: Build environment with Go and dependencies
-FROM golang:1.24 as builder
+FROM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10 AS hhi-go-toolchain-0
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS builder
+COPY --from=hhi-go-toolchain-0 /usr/lib/go /usr/lib/go
+ENV PATH=/usr/lib/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache \
+    'ca-certificates>=20261020-r0' git && \
+    rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
@@ -18,10 +21,10 @@ COPY . .
 # CGO is required for sqlite3 support
 RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/harness-vm-runner
 #Second Stage: Final lightweight image
-FROM us-west1-docker.pkg.dev/gar-setup/docker/alpine:3.23.3
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1
 WORKDIR /app
 RUN chown -R nobody:nobody /app
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add 'ca-certificates>=20261020-r0'
 RUN touch database.sqlite3 && chmod 777 /app/database.sqlite3
 COPY --from=builder /app/harness-vm-runner ./harness-vm-runner
 RUN chmod 777  ./harness-vm-runner
