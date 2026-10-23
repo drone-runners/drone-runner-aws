@@ -13,7 +13,7 @@ COPY --from=hhi-go-toolchain-1 /usr/lib/go /usr/lib/go
 ENV PATH=/usr/lib/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
 
 RUN apk add --no-cache \
-    'ca-certificates>=20261020-r0' git && \
+    'ca-certificates>=20261020-r0' git build-base && \
     rm -rf /var/cache/apk/*
 
 WORKDIR /app
