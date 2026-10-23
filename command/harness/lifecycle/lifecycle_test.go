@@ -24,9 +24,15 @@ type fakeDriver struct {
 	destroyed     []*types.Instance
 	destroyErr    error
 	destroyCalled int
+	name          string
 }
 
-func (f *fakeDriver) DriverName() string { return string(types.Google) }
+func (f *fakeDriver) DriverName() string {
+	if f.name != "" {
+		return f.name
+	}
+	return string(types.Google)
+}
 
 func (f *fakeDriver) Create(_ context.Context, opts *types.InstanceCreateOpts) (*types.Instance, error) {
 	f.createOpts = opts
@@ -120,6 +126,24 @@ func TestCreate(t *testing.T) {
 		fd := &fakeDriver{createResult: &types.Instance{}}
 		if _, err := Create(context.Background(), createRequest(newPool(fd))); err == nil {
 			t.Fatal("want error for an instance with no id")
+		}
+	})
+
+	t.Run("non-google drivers do not need a google pool spec", func(t *testing.T) {
+		for _, name := range []string{string(types.Amazon), string(types.Azure), string(types.DigitalOcean)} {
+			fd := &fakeDriver{
+				name:         name,
+				createResult: &types.Instance{ID: "i-1", Name: "vm-1", Provider: types.DriverType(name)},
+			}
+			pool := newPool(fd)
+			pool.Spec = &config.Amazon{}
+			state, err := Create(context.Background(), createRequest(pool))
+			if err != nil {
+				t.Fatalf("%s Create: %v", name, err)
+			}
+			if state.Provider != name || fd.createOpts == nil || fd.createOpts.DriverName != name || !fd.createOpts.EphemeralDelegate {
+				t.Fatalf("%s state=%+v opts=%+v", name, state, fd.createOpts)
+			}
 		}
 	})
 

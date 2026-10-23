@@ -178,6 +178,35 @@ func TestPrepareEphemeralCreateOpts(t *testing.T) {
 	})
 }
 
+// namedDriver is a google mock whose DriverName can be any supported driver.
+type namedDriver struct {
+	googleMockDriver
+	name string
+}
+
+func (n *namedDriver) DriverName() string { return n.name }
+
+func TestPrepareEphemeralCreateOptsNonGoogleDrivers(t *testing.T) {
+	for _, name := range []string{string(types.Amazon), string(types.Azure), string(types.DigitalOcean)} {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			pool := ephemeralPool(nil)
+			pool.Driver = &namedDriver{name: name}
+			pool.Spec = &config.Amazon{}
+			opts, err := PrepareEphemeralCreateOpts(ephemeralInput(pool))
+			if err != nil {
+				t.Fatalf("PrepareEphemeralCreateOpts: %v", err)
+			}
+			if !opts.EphemeralDelegate || opts.DriverName != name {
+				t.Fatalf("opts driver=%q ephemeral=%v", opts.DriverName, opts.EphemeralDelegate)
+			}
+			if opts.EgressCACert != "" {
+				t.Errorf("egress CA = %q, want empty", opts.EgressCACert)
+			}
+		})
+	}
+}
+
 func TestPinBinaryDownloadsToHarnessCoversDelegate(t *testing.T) {
 	t.Run("delegate path is rebased and fallback collapses onto it", func(t *testing.T) {
 		opts := &types.InstanceCreateOpts{

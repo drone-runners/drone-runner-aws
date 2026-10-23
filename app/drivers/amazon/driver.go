@@ -437,6 +437,10 @@ func (p *amazonConfig) securityGroupsFor(opts *drtypes.InstanceCreateOpts) []str
 			groups = append(groups, group)
 		}
 	}
+	// A nil list lets EC2 apply the VPC default group. An empty list is rejected.
+	if len(groups) == 0 {
+		return nil
+	}
 	return groups
 }
 
