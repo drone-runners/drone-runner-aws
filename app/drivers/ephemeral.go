@@ -14,6 +14,10 @@ var ephemeralDrivers = map[string]bool{
 	string(types.Amazon):       true,
 	string(types.Azure):        true,
 	string(types.DigitalOcean): true,
+	string(types.Anka):         true,
+	string(types.AnkaBuild):    true,
+	string(types.VMFusion):     true,
+	string(types.Nomad):        true,
 }
 
 // EphemeralCreateInput is the pool and caller data for one ephemeral VM.
@@ -58,14 +62,16 @@ func PrepareEphemeralCreateOpts(in EphemeralCreateInput) (*types.InstanceCreateO
 	tenantID := in.Pool.ResolveTenant(in.AccountID)
 	driver := in.Pool.DriverForTenant(tenantID)
 	if driver == nil || !ephemeralDrivers[driver.DriverName()] {
-		return nil, fmt.Errorf("ephemeral create supports the google, amazon, azure and digitalocean drivers only")
+		return nil, fmt.Errorf("ephemeral create supports the google, amazon, azure, digitalocean, anka, ankabuild, vmfusion and nomad drivers only")
 	}
 	platform := in.Platform
 	if platform.OS == "" {
 		platform = in.Pool.Platform
 	}
-	if platform.OS != oshelp.OSLinux {
-		return nil, fmt.Errorf("ephemeral create supports linux only")
+	switch platform.OS {
+	case oshelp.OSLinux, oshelp.OSMac, oshelp.OSWindows:
+	default:
+		return nil, fmt.Errorf("ephemeral create supports linux, darwin and windows only")
 	}
 	// Egress control exists only on Google pools.
 	var egress bool

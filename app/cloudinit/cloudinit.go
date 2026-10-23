@@ -160,6 +160,18 @@ var ubuntuEphemeralTemplate = template.Must(template.New("ubuntu-ephemeral").Fun
 var userDataUbuntuEphemeralEgress string
 var ubuntuEphemeralEgressTemplate = template.Must(template.New("ubuntu-ephemeral-egress").Funcs(funcs).Parse(userDataUbuntuEphemeralEgress))
 
+//go:embed user_data/mac_ephemeral
+var userDataMacEphemeral string
+var macEphemeralTemplate = template.Must(template.New("mac-ephemeral").Funcs(funcs).Parse(userDataMacEphemeral))
+
+//go:embed user_data/windows_ephemeral
+var userDataWindowsEphemeral string
+var windowsEphemeralTemplate = template.Must(template.New("windows-ephemeral").Funcs(funcs).Parse(userDataWindowsEphemeral))
+
+//go:embed user_data/nomad_linux_ephemeral
+var userDataNomadLinuxEphemeral string
+var nomadLinuxEphemeralTemplate = template.Must(template.New("nomad-linux-ephemeral").Funcs(funcs).Parse(userDataNomadLinuxEphemeral))
+
 //go:embed user_data/gitspaces_ubuntu
 var userDataGitspacesUbuntu string
 var gitspacesUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataGitspacesUbuntu))
@@ -323,13 +335,32 @@ func Linux(params *Params) (payload string, err error) {
 	return sb.String(), nil
 }
 
-// Ephemeral creates userdata that installs the in-VM delegate. EgressControl
-// selects the fleet-proxy variant. Lite-engine templates are not used.
+// Ephemeral creates userdata that installs the in-VM delegate. Linux cloud
+// drivers get cloud-config. Darwin and Windows get the script those drivers
+// execute directly. Lite-engine templates are not used.
 func Ephemeral(params *Params) (string, error) {
-	tmpl := ubuntuEphemeralTemplate
-	if params.EgressControl {
-		tmpl = ubuntuEphemeralEgressTemplate
+	var tmpl *template.Template
+	switch params.Platform.OS {
+	case oshelp.OSMac:
+		tmpl = macEphemeralTemplate
+	case oshelp.OSWindows:
+		tmpl = windowsEphemeralTemplate
+	default:
+		tmpl = ubuntuEphemeralTemplate
+		if params.EgressControl {
+			tmpl = ubuntuEphemeralEgressTemplate
+		}
 	}
+	return executeEphemeral(tmpl, params)
+}
+
+// LinuxEphemeralShell is the bash script Nomad's Linux virtualizer executes
+// inside the VM. It is not cloud-config.
+func LinuxEphemeralShell(params *Params) (string, error) {
+	return executeEphemeral(nomadLinuxEphemeralTemplate, params)
+}
+
+func executeEphemeral(tmpl *template.Template, params *Params) (string, error) {
 	sb := &strings.Builder{}
 	if err := tmpl.Execute(sb, params); err != nil {
 		return "", fmt.Errorf("error while executing ephemeral template: %w", err)

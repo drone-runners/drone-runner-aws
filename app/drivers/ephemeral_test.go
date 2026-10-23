@@ -68,13 +68,13 @@ func TestPrepareEphemeralCreateOptsErrors(t *testing.T) {
 			wantErr: "drivers only",
 		},
 		{
-			name: "non-linux platform",
+			name: "unsupported platform",
 			input: func() EphemeralCreateInput {
 				in := ephemeralInput(ephemeralPool(&config.Google{}))
-				in.Platform = types.Platform{OS: "windows", Arch: "amd64"}
+				in.Platform = types.Platform{OS: "freebsd", Arch: "amd64"}
 				return in
 			},
-			wantErr: "linux only",
+			wantErr: "windows only",
 		},
 		{
 			name: "egress pool without ca certificate",

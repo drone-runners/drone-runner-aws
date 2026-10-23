@@ -1,5 +1,4 @@
 #cloud-config
-{{ if not .IsHosted }}
 apt:
   sources:
     docker.list:
@@ -8,7 +7,6 @@ apt:
 packages:
   - wget
   - docker-ce=5:28.5.2-1~ubuntu.22.04~jammy
-{{ end }}
 write_files:
 - path: /opt/harness-delegate/config.env
   permissions: '0400'
@@ -32,10 +30,6 @@ write_files:
     WantedBy=multi-user.target
 runcmd:
   - set -x
-  {{ if .IsHosted }}
-  - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
-  - systemctl restart systemd-resolved
-  {{ end }}
   - |
     set -e
     if ! /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .DelegatePath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/delegate; then

@@ -161,17 +161,6 @@ func TestGenerateUserdataEphemeral(t *testing.T) {
 		mustNotContain(t, out, "echo custom")
 	})
 
-	t.Run("hosted image skips docker install", func(t *testing.T) {
-		opts := ephemeralOpts()
-		opts.IsHosted = true
-		out, err := GenerateUserdata("", opts)
-		if err != nil {
-			t.Fatalf("GenerateUserdata: %v", err)
-		}
-		mustNotContain(t, out, "docker-ce")
-		assertValidYAML(t, out)
-	})
-
 	t.Run("no fallback path exits when the primary download fails", func(t *testing.T) {
 		out, err := GenerateUserdata("", ephemeralOpts())
 		if err != nil {

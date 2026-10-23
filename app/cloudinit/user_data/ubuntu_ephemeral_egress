@@ -1,5 +1,4 @@
 #cloud-config
-{{ if not .IsHosted }}
 apt:
   sources:
     docker.list:
@@ -9,7 +8,6 @@ packages:
   - wget
   - curl
   - docker-ce=5:28.5.2-1~ubuntu.22.04~jammy
-{{ end }}
 write_files:
 - path: /usr/local/share/ca-certificates/harness-ca.crt
   permissions: '0644'
@@ -45,10 +43,6 @@ write_files:
     WantedBy=multi-user.target
 runcmd:
   - set -x
-  {{ if .IsHosted }}
-  - echo "DNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1 1.0.0.1\nDomains=~." | sudo tee -a /etc/systemd/resolved.conf
-  - systemctl restart systemd-resolved
-  {{ end }}
   - update-ca-certificates
   - cp /etc/ssl/certs/ca-certificates.crt /etc/harness-certs/ca-bundle.crt
   - |

@@ -12,6 +12,15 @@ import (
 
 const defaultDelegateParallelWorkers = "2"
 
+// GenerateEphemeralShell renders the bash script Nomad Linux runs inside the VM.
+func GenerateEphemeralShell(opts *types.InstanceCreateOpts) (string, error) {
+	params := cloudinit.Params{Platform: opts.Platform}
+	if err := applyEphemeralUserdata(&params, opts); err != nil {
+		return "", err
+	}
+	return cloudinit.LinuxEphemeralShell(&params)
+}
+
 func applyEphemeralUserdata(params *cloudinit.Params, opts *types.InstanceCreateOpts) error {
 	if opts.DelegatePath == "" {
 		return fmt.Errorf("delegate download path is required")
