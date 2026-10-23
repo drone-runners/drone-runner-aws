@@ -3,7 +3,9 @@ package digitalocean
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/drone/runner-go/logger"
@@ -29,8 +31,14 @@ type config struct {
 	tags       []string
 	FirewallID string
 	SSHKeys    []string
-	userData   string
-	rootDir    string
+	// configuredFirewallID is the firewall from the pool file. FirewallID may
+	// also hold a firewall cached by a lite-engine create, which ephemeral
+	// creates must not reuse because it opens the lite-engine port.
+	configuredFirewallID string
+	ephemeralFirewallMu  sync.Mutex
+	ephemeralFirewallID  string
+	userData             string
+	rootDir              string
 
 	image string
 
@@ -42,6 +50,7 @@ func New(opts ...Option) (drivers.Driver, error) {
 	for _, opt := range opts {
 		opt(p)
 	}
+	p.configuredFirewallID = p.FirewallID
 	return p, nil
 }
 
@@ -137,18 +146,42 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return nil, err
 	}
 	logr.Infof("digitalocean: instance created %s", name)
+	if opts.EphemeralDelegate {
+		// No store row exists for a later cleanup, so remove the droplet if create fails.
+		dropletID := droplet.ID
+		defer func() {
+			if err == nil {
+				return
+			}
+			if _, delErr := client.Droplets.Delete(context.Background(), dropletID); delErr != nil {
+				logr.WithError(delErr).Warnln("digitalocean: failed to delete ephemeral droplet after create failure")
+			}
+		}()
+	}
 	// get firewall id
-	if p.FirewallID == "" {
-		id, getFirewallErr := getFirewallID(ctx, client, len(p.SSHKeys) > 0)
+	var firewallID string
+	if opts.EphemeralDelegate {
+		id, getFirewallErr := p.getEphemeralFirewallID(ctx, client)
 		if getFirewallErr != nil {
 			logr.WithError(getFirewallErr).
-				Errorln("cannot get firewall id")
+				Errorln("cannot get ephemeral firewall id")
 			return nil, getFirewallErr
 		}
-		p.FirewallID = id
+		firewallID = id
+	} else {
+		if p.FirewallID == "" {
+			id, getFirewallErr := getFirewallID(ctx, client, len(p.SSHKeys) > 0)
+			if getFirewallErr != nil {
+				logr.WithError(getFirewallErr).
+					Errorln("cannot get firewall id")
+				return nil, getFirewallErr
+			}
+			p.FirewallID = id
+		}
+		firewallID = p.FirewallID
 	}
 	// setup the firewall
-	_, firewallErr := client.Firewalls.AddDroplets(ctx, p.FirewallID, droplet.ID)
+	_, firewallErr := client.Firewalls.AddDroplets(ctx, firewallID, droplet.ID)
 	if firewallErr != nil {
 		logr.WithError(firewallErr).
 			Errorln("cannot assign instance to firewall")
@@ -238,10 +271,10 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		}
 
 		_, res, err := client.Droplets.Get(ctx, id)
-		if err != nil && res.StatusCode == 404 {
+		if err != nil && res != nil && res.StatusCode == http.StatusNotFound {
 			logr.WithError(err).
-				Warnln("droplet does not exist")
-			return nil, fmt.Errorf("droplet does not exist '%s'", err)
+				Warnln("droplet does not exist, treating as already deleted")
+			continue
 		} else if err != nil {
 			logr.WithError(err).
 				Errorln("cannot find droplet")
@@ -249,8 +282,12 @@ func (p *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		}
 		logr.Debugln("deleting droplet")
 
-		_, err = client.Droplets.Delete(ctx, id)
-		if err != nil {
+		delRes, err := client.Droplets.Delete(ctx, id)
+		if err != nil && delRes != nil && delRes.StatusCode == http.StatusNotFound {
+			logr.WithError(err).
+				Warnln("droplet already deleted")
+			continue
+		} else if err != nil {
 			logr.WithError(err).
 				Errorln("deleting droplet failed")
 			return nil, err
@@ -302,6 +339,79 @@ func createSSHKeys(sshKeys []string) []godo.DropletCreateSSHKey {
 		})
 	}
 	return keys
+}
+
+const ephemeralFirewallName = "harness-runner-ephemeral"
+
+// defaultOutboundRules allows all outbound traffic.
+func defaultOutboundRules() []godo.OutboundRule {
+	return []godo.OutboundRule{
+		{
+			Protocol:  "icmp",
+			PortRange: "0",
+			Destinations: &godo.Destinations{
+				Addresses: []string{"0.0.0.0/0", "::/0"},
+			},
+		},
+		{
+			Protocol:  "tcp",
+			PortRange: "0",
+			Destinations: &godo.Destinations{
+				Addresses: []string{"0.0.0.0/0", "::/0"},
+			},
+		},
+		{
+			Protocol:  "udp",
+			PortRange: "0",
+			Destinations: &godo.Destinations{
+				Addresses: []string{"0.0.0.0/0", "::/0"},
+			},
+		},
+	}
+}
+
+// getEphemeralFirewallID returns the firewall for ephemeral droplets: the pool
+// file firewall when set, otherwise a shared firewall with no inbound rules
+// (SSH only when the pool has ssh keys). It never uses the lite-engine firewall.
+func (p *config) getEphemeralFirewallID(ctx context.Context, client *godo.Client) (string, error) {
+	if p.configuredFirewallID != "" {
+		return p.configuredFirewallID, nil
+	}
+	p.ephemeralFirewallMu.Lock()
+	defer p.ephemeralFirewallMu.Unlock()
+	if p.ephemeralFirewallID != "" {
+		return p.ephemeralFirewallID, nil
+	}
+	firewalls, _, listErr := client.Firewalls.List(ctx, &godo.ListOptions{})
+	if listErr != nil {
+		return "", listErr
+	}
+	for i := range firewalls {
+		if firewalls[i].Name == ephemeralFirewallName {
+			p.ephemeralFirewallID = firewalls[i].ID
+			return p.ephemeralFirewallID, nil
+		}
+	}
+	var inboundRules []godo.InboundRule
+	if len(p.SSHKeys) > 0 {
+		inboundRules = append(inboundRules, godo.InboundRule{
+			Protocol:  "tcp",
+			PortRange: "22",
+			Sources: &godo.Sources{
+				Addresses: []string{"0.0.0.0/0", "::/0"},
+			},
+		})
+	}
+	firewall, _, createErr := client.Firewalls.Create(ctx, &godo.FirewallRequest{
+		Name:          ephemeralFirewallName,
+		InboundRules:  inboundRules,
+		OutboundRules: defaultOutboundRules(),
+	})
+	if createErr != nil {
+		return "", createErr
+	}
+	p.ephemeralFirewallID = firewall.ID
+	return p.ephemeralFirewallID, nil
 }
 
 // retrieve the runner firewall id or create a new one.

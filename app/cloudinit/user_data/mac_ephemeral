@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -e
+mkdir -p /opt/harness-delegate
+echo {{ .DelegateConfigEnv | base64 }} | base64 -d > /opt/harness-delegate/config.env
+chmod 0400 /opt/harness-delegate/config.env
+{{ if .DownloadProxyURL }}
+export http_proxy="{{ .DownloadProxyURL }}"
+export https_proxy="{{ .DownloadProxyURL }}"
+{{ end }}
+if ! /usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .DelegatePath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/delegate; then
+  {{ if .DelegateFallbackPath }}
+  /usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .DelegateFallbackPath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/delegate
+  {{ else }}
+  exit 1
+  {{ end }}
+fi
+chmod 755 /usr/local/bin/delegate
+ENV_FILE=/opt/harness-delegate/config.env /usr/local/bin/delegate server >/var/log/harness-delegate.log 2>&1 &

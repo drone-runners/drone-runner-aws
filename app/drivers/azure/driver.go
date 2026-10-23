@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -157,6 +158,13 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		tagValue := v
 		tags[k] = &tagValue
 	}
+	// ephemeral VMs carry identity labels so they can be found without a store row
+	if opts.EphemeralDelegate {
+		for k, v := range opts.VMLabels {
+			tagValue := v
+			tags[k] = &tagValue
+		}
+	}
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Azure).
@@ -167,6 +175,18 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		WithField("image", c.offer).
 		WithField("size", c.size).
 		WithField("private_ip", c.privateIP)
+
+	if opts.EphemeralDelegate {
+		// No store row exists for a later cleanup, so remove whatever this create built.
+		defer func() {
+			if err == nil {
+				return
+			}
+			if _, destroyErr := c.DestroyInstanceAndStorage(context.Background(), []*types.Instance{{ID: name}}, nil); destroyErr != nil {
+				logr.WithError(destroyErr).Warnln("azure: failed to clean up ephemeral VM after create failure")
+			}
+		}()
+	}
 
 	logr.Info("starting Azure Setup")
 
@@ -382,16 +402,19 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		diskName := fmt.Sprintf("%s-disk", instanceID)
 
 		poller, err := c.service.BeginDelete(ctx, c.resourceGroupName, instanceID, nil)
-		if err != nil {
+		switch {
+		case isNotFound(err):
+			logr.Warnln("azure: VM not found, continuing with resource cleanup")
+		case err != nil:
 			return nil, err
-		}
-		_, err = poller.PollUntilDone(ctx, nil)
-		if err != nil {
-			return nil, err
+		default:
+			if _, err = poller.PollUntilDone(ctx, nil); err != nil && !isNotFound(err) {
+				return nil, err
+			}
 		}
 		logr.Info("azure: begin delete VM")
 		err = c.deleteNetworkInterface(ctx, networkInterfaceName)
-		if err != nil {
+		if err != nil && !isNotFound(err) {
 			logr.Errorln(err)
 			return nil, err
 		}
@@ -400,7 +423,7 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		// Only delete public IP if we're not using private IP mode
 		if !c.privateIP {
 			err = c.deletePublicIP(ctx, publicIPName)
-			if err != nil {
+			if err != nil && !isNotFound(err) {
 				logr.Errorln(err)
 				return nil, err
 			}
@@ -410,14 +433,14 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		// Only delete VNet if we're not using an existing network
 		if !useExistingNetwork {
 			err = c.deleteVirtualNetWork(ctx, vnetName)
-			if err != nil {
+			if err != nil && !isNotFound(err) {
 				logr.Errorln(err)
 				return nil, err
 			}
 			logr.Info("azure: deleted virtual network: ", vnetName)
 		}
 		err = c.deleteDisk(ctx, diskName)
-		if err != nil {
+		if err != nil && !isNotFound(err) {
 			logr.Errorln(err)
 			return nil, err
 		}
@@ -425,6 +448,12 @@ func (c *config) DestroyInstanceAndStorage(ctx context.Context, instances []*typ
 		logr.Info("azure: VM deleted")
 	}
 	return nil, nil
+}
+
+// isNotFound reports whether err is an Azure 404, meaning the resource is already gone.
+func isNotFound(err error) bool {
+	var respErr *azcore.ResponseError
+	return errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound
 }
 
 func (c *config) Hibernate(_ context.Context, _, _, _ string) error {

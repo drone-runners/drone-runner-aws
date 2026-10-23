@@ -193,7 +193,16 @@ func (p *config) createAndRunResourceJob(ctx context.Context, opts *types.Instan
 	if p.noop {
 		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
 	} else {
-		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, vmImageConfig, p.virtualizer.GetHealthCheckupGenerator())
+		health := p.virtualizer.GetHealthCheckupGenerator()
+		if opts.EphemeralDelegate {
+			// The lite-engine probe exits the resource job when 9079 is closed,
+			// which then destroys the VM. The delegate dials out, so hold the
+			// node until destroy without that probe.
+			health = func(sleep time.Duration, _, _ string) string {
+				return fmt.Sprintf("#!/bin/sh\nsleep %d\nwhile true; do sleep 60; done\n", int(sleep.Seconds()))
+			}
+		}
+		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, vmImageConfig, health)
 	}
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)

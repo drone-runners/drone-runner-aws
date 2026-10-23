@@ -120,10 +120,14 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 
 	inst := vm.Body
 
-	if inst.Vminfo.PortForwarding == nil {
-		return nil, errors.New("ankabuild: port forwarding is not set on vm template")
+	var port int
+	if inst.Vminfo.PortForwarding == nil || len(inst.Vminfo.PortForwarding) == 0 {
+		if !opts.EphemeralDelegate {
+			return nil, errors.New("ankabuild: port forwarding is not set on vm template")
+		}
+	} else {
+		port = inst.Vminfo.PortForwarding[0].HostPort
 	}
-	port := inst.Vminfo.PortForwarding[0].HostPort
 	instance = &types.Instance{
 		ID:       inst.InstanceID,
 		Name:     machineName,
