@@ -1,11 +1,7 @@
 # ---------------------------------------------------------#
 #                   Build Harness VM Runner                #
 # ---------------------------------------------------------#
-FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 as builder
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git && \
-    rm -rf /var/lib/apt/lists/*
+FROM harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7 as builder
 
 WORKDIR /app
 
@@ -63,7 +59,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # ---------------------------------------------------------#
 #                   Create final image                     #
 # ---------------------------------------------------------#
-FROM harness0.harness.io/oci/docker_artifacts/alpine:3.23.7@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a37c85b4284d2c11fa0778e5da79643d912a1f5a57d6f701b77644503b7e7
 
 # User/Group configuration (configurable via build args for Helm chart compatibility)
 # Note: Alpine already has 'nobody' user/group with UID/GID 65534
@@ -73,7 +69,7 @@ ARG USER_NAME=nobody
 ARG GROUP_NAME=nobody
 
 # Update all packages to get latest security patches
-RUN apk update && apk upgrade --no-cache && apk add --no-cache 'ca-certificates>=20261020-r0'
+RUN apk update && apk upgrade --no-cache && apk add --no-cache 'ca-certificates>=20261020-r0' wget libc-bin
 
 # Create directories with correct ownership for non-root user (CIS Docker Benchmark 4.1)
 RUN mkdir -p /app /data && \
