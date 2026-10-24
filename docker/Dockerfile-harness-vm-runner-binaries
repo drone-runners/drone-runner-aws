@@ -30,33 +30,37 @@ ARG ENABLE_OTEL=true
 # ---------------------------------------------------------#
 #           Pull binary component images                   #
 # ---------------------------------------------------------#
-FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-lite-engine:${LITE_ENGINE_VERSION} AS lite-engine-binary
-FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-plugin:${PLUGIN_VERSION} AS plugin-binary
-FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-auto-injection:${AUTO_INJECTION_VERSION} AS auto-injection-binary
-FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-hcli:${HCLI_VERSION} AS hcli-binary
-FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-tmate:${TMATE_VERSION} AS tmate-binary
-FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_VERSION} AS envman-binary
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS incident-ca
+RUN apk add --no-cache 'ca-certificates>=20261020-r0'
+
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-lite-engine:${LITE_ENGINE_VERSION} as lite-engine-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-plugin:${PLUGIN_VERSION} as plugin-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-auto-injection:${AUTO_INJECTION_VERSION} as auto-injection-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-hcli:${HCLI_VERSION} as hcli-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-tmate:${TMATE_VERSION} as tmate-binary
+FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_VERSION} as envman-binary
 
 # ---------------------------------------------------------#
 #       Download OpenTelemetry Collector Binary            #
 # ---------------------------------------------------------#
 # otel-true: downloads otelcol-contrib when ENABLE_OTEL=true
-FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS otel-true
+FROM alpine:3.23.3 as otel-true
 ARG OTEL_VERSION
 ARG TARGETARCH
-RUN apk add --no-cache wget  && \
-    mkdir -p /binaries && \
+RUN apk add --no-cache wget tar
+COPY --from=incident-ca /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN mkdir -p /binaries && \
     wget -nv "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${TARGETARCH}.tar.gz" -O /tmp/otelcol.tar.gz && \
     tar -xzf /tmp/otelcol.tar.gz -C /binaries otelcol-contrib && \
     chmod +x /binaries/otelcol-contrib && \
     rm /tmp/otelcol.tar.gz
 
 # otel-false: empty stage when ENABLE_OTEL=false (default)
-FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS otel-false
+FROM alpine:3.23.3 as otel-false
 RUN mkdir -p /binaries
 
 # Select stage based on ENABLE_OTEL flag
-FROM otel-${ENABLE_OTEL} AS otel-downloader
+FROM otel-${ENABLE_OTEL} as otel-downloader
 
 # ---------------------------------------------------------#
 #                Create Binaries Bundle Image              #
