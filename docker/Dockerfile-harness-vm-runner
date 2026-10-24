@@ -1,21 +1,11 @@
 # ---------------------------------------------------------#
-#                   Get certificates                       #
-# ---------------------------------------------------------#
-FROM --platform=$BUILDPLATFORM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS cert-image
-RUN apk --update add 'ca-certificates>=20261020-r0'
-
-# ---------------------------------------------------------#
 #                   Build Harness VM Runner                #
 # ---------------------------------------------------------#
-FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10 as builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 as builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git && \
     rm -rf /var/lib/apt/lists/*
-
-COPY --from=cert-image /usr/share/ca-certificates/ /usr/share/ca-certificates/
-COPY --from=cert-image /etc/ca-certificates.conf /etc/ca-certificates.conf
-RUN update-ca-certificates --fresh
 
 WORKDIR /app
 
@@ -73,7 +63,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # ---------------------------------------------------------#
 #                   Create final image                     #
 # ---------------------------------------------------------#
-FROM alpine:3.23.3
+FROM harness0.harness.io/oci/docker_artifacts/alpine:3.23.7@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63
 
 # User/Group configuration (configurable via build args for Helm chart compatibility)
 # Note: Alpine already has 'nobody' user/group with UID/GID 65534
@@ -83,7 +73,7 @@ ARG USER_NAME=nobody
 ARG GROUP_NAME=nobody
 
 # Update all packages to get latest security patches
-RUN apk update && apk upgrade --no-cache && apk add --no-cache ca-certificates
+RUN apk update && apk upgrade --no-cache && apk add --no-cache 'ca-certificates>=20261020-r0'
 
 # Create directories with correct ownership for non-root user (CIS Docker Benchmark 4.1)
 RUN mkdir -p /app /data && \
@@ -96,8 +86,6 @@ ENV GODEBUG=netdns=go
 ENV HARNESS_PLATFORM_OS=linux
 ENV HARNESS_PLATFORM_ARCH=amd64
 
-COPY --from=cert-image /usr/share/ca-certificates/ /usr/share/ca-certificates/
-COPY --from=cert-image /etc/ca-certificates.conf /etc/ca-certificates.conf
 RUN update-ca-certificates --fresh
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /app/harness-vm-runner /bin/harness-vm-runner
 

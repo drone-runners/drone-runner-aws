@@ -1,13 +1,6 @@
-FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS incident-ca
-RUN apk add --no-cache 'ca-certificates>=20261020-r0'
-
 # First Stage: Build environment with Go and dependencies
-FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10-alpine as builder
-RUN apk --no-cache add ca-certificates git build-base
-COPY --from=incident-ca /usr/share/ca-certificates/ /usr/share/ca-certificates/
-COPY --from=incident-ca /etc/ca-certificates.conf /etc/ca-certificates.conf
-RUN update-ca-certificates --fresh
-
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba as builder
+RUN apk --no-cache add 'ca-certificates>=20261020-r0' git build-base
 WORKDIR /app
 COPY . .
 USER root
@@ -17,12 +10,10 @@ RUN go mod download && export GOPATH=""
 # Build the application
 RUN CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o /app/drone-runner-aws
 #Second Stage: Final lightweight image
-FROM alpine:3.23.3
+FROM harness0.harness.io/oci/docker_artifacts/alpine:3.23.7@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63
 WORKDIR /app
 RUN chown -R nobody:nobody /app
-RUN apk --no-cache add ca-certificates
-COPY --from=incident-ca /usr/share/ca-certificates/ /usr/share/ca-certificates/
-COPY --from=incident-ca /etc/ca-certificates.conf /etc/ca-certificates.conf
+RUN apk --no-cache add 'ca-certificates>=20261020-r0'
 RUN update-ca-certificates --fresh
 RUN touch database.sqlite3 && chmod 777 /app/database.sqlite3
 COPY --from=builder /app/drone-runner-aws ./drone-runner-aws

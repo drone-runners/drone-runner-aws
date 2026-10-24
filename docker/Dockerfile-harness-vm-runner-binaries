@@ -30,9 +30,6 @@ ARG ENABLE_OTEL=true
 # ---------------------------------------------------------#
 #           Pull binary component images                   #
 # ---------------------------------------------------------#
-FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS incident-ca
-RUN apk add --no-cache 'ca-certificates>=20261020-r0'
-
 FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-lite-engine:${LITE_ENGINE_VERSION} as lite-engine-binary
 FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-plugin:${PLUGIN_VERSION} as plugin-binary
 FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-auto-injection:${AUTO_INJECTION_VERSION} as auto-injection-binary
@@ -44,11 +41,10 @@ FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_
 #       Download OpenTelemetry Collector Binary            #
 # ---------------------------------------------------------#
 # otel-true: downloads otelcol-contrib when ENABLE_OTEL=true
-FROM alpine:3.23.3 as otel-true
+FROM harness0.harness.io/oci/docker_artifacts/alpine:3.23.7@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 as otel-true
 ARG OTEL_VERSION
 ARG TARGETARCH
-RUN apk add --no-cache wget tar
-COPY --from=incident-ca /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN apk add --no-cache wget tar 'ca-certificates>=20261020-r0'
 RUN mkdir -p /binaries && \
     wget -nv "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${TARGETARCH}.tar.gz" -O /tmp/otelcol.tar.gz && \
     tar -xzf /tmp/otelcol.tar.gz -C /binaries otelcol-contrib && \
@@ -56,7 +52,7 @@ RUN mkdir -p /binaries && \
     rm /tmp/otelcol.tar.gz
 
 # otel-false: empty stage when ENABLE_OTEL=false (default)
-FROM alpine:3.23.3 as otel-false
+FROM harness0.harness.io/oci/docker_artifacts/alpine:3.23.7@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 as otel-false
 RUN mkdir -p /binaries
 
 # Select stage based on ENABLE_OTEL flag
