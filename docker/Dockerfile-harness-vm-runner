@@ -7,14 +7,15 @@ RUN apk --update add 'ca-certificates>=20261020-r0'
 # ---------------------------------------------------------#
 #                   Build Harness VM Runner                #
 # ---------------------------------------------------------#
-FROM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10 AS hhi-go-toolchain-1
-FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS builder
-COPY --from=hhi-go-toolchain-1 /usr/lib/go /usr/lib/go
-ENV PATH=/usr/lib/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
+FROM golang:1.26.10 as builder
 
-RUN apk add --no-cache \
-    'ca-certificates>=20261020-r0' git build-base && \
-    rm -rf /var/cache/apk/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=cert-image /usr/share/ca-certificates/ /usr/share/ca-certificates/
+COPY --from=cert-image /etc/ca-certificates.conf /etc/ca-certificates.conf
+RUN update-ca-certificates --fresh
 
 WORKDIR /app
 
@@ -95,7 +96,9 @@ ENV GODEBUG=netdns=go
 ENV HARNESS_PLATFORM_OS=linux
 ENV HARNESS_PLATFORM_ARCH=amd64
 
-COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=cert-image /usr/share/ca-certificates/ /usr/share/ca-certificates/
+COPY --from=cert-image /etc/ca-certificates.conf /etc/ca-certificates.conf
+RUN update-ca-certificates --fresh
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /app/harness-vm-runner /bin/harness-vm-runner
 
 # Switch to non-root user (Kubernetes can override via securityContext)
