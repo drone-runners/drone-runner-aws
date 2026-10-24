@@ -7,7 +7,7 @@ FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a
 # - Explicit database path to avoid WORKDIR-based path confusion
 
 # Update all packages to get latest security patches
-RUN apk update && apk upgrade --no-cache && apk add --no-cache 'ca-certificates>=20261020-r0' wget libc-bin
+RUN apk update && apk upgrade --no-cache && apk add --no-cache wget libc-bin
 
 # Create /data directory with group-writable permissions for K8s fsGroup compatibility
 # Users can override runAsUser and set fsGroup: 65534 to write to /data

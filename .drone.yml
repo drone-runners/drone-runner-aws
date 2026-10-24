@@ -10,7 +10,7 @@ steps:
   - name: build
     image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
-      - GOTOOLCHAIN=local GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
+      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
     volumes:
       - name: cache
         path: /root/.cache/go-build
@@ -219,7 +219,7 @@ steps:
   - name: build arm64 linux binary
     image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
-      - GOTOOLCHAIN=local GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/arm64/drone-runner-aws-linux-arm64
+      - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/arm64/drone-runner-aws-linux-arm64
   - name: release
     image: plugins/github-release
     settings:
@@ -261,7 +261,7 @@ steps:
   - name: build mac arm64 binary
     commands:
       - brew install golang
-      - GOTOOLCHAIN=go1.26.10 GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -o release/darwin/arm64/drone-runner-aws-darwin-arm64
+      - GOTOOLCHAIN=go1.26.10 CGO_ENABLED=1 go build -o release/darwin/arm64/drone-runner-aws-darwin-arm64
   - name: release
     commands:
       - release_binary/drone-github-release-darwin-arm64

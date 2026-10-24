@@ -44,8 +44,8 @@ FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_
 FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a37c85b4284d2c11fa0778e5da79643d912a1f5a57d6f701b77644503b7e7 as otel-true
 ARG OTEL_VERSION
 ARG TARGETARCH
-RUN apk add --no-cache wget tar 'ca-certificates>=20261020-r0'
-RUN mkdir -p /binaries && \
+RUN apk add --no-cache wget && \
+    mkdir -p /binaries && \
     wget -nv "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${TARGETARCH}.tar.gz" -O /tmp/otelcol.tar.gz && \
     tar -xzf /tmp/otelcol.tar.gz -C /binaries otelcol-contrib && \
     chmod +x /binaries/otelcol-contrib && \

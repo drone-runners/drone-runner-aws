@@ -82,7 +82,6 @@ ENV GODEBUG=netdns=go
 ENV HARNESS_PLATFORM_OS=linux
 ENV HARNESS_PLATFORM_ARCH=amd64
 
-RUN update-ca-certificates --fresh
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /app/harness-vm-runner /bin/harness-vm-runner
 
 # Switch to non-root user (Kubernetes can override via securityContext)
