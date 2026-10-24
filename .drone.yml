@@ -50,7 +50,7 @@ steps:
     image: docker:dind
     commands:
       # Build the rootless Docker image to test secure K8s variant
-      - docker build -f docker/Dockerfile.linux.amd64.rootless -t drone-runner-aws-rootless-test:$DRONE_COMMIT .
+      - docker build --pull --no-cache -f docker/Dockerfile.linux.amd64.rootless -t drone-runner-aws-rootless-test:$DRONE_COMMIT .
       # Test delegate startup with nobody user to verify /data directory and database permissions
       # This test validates the rootless variant works out of the box without volume configuration
       - |
