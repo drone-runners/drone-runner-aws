@@ -14,10 +14,10 @@
 ARG LITE_ENGINE_VERSION=1.4.0
 ARG PLUGIN_VERSION=1.5.0
 ARG AUTO_INJECTION_VERSION=1.1.0
-ARG HCLI_VERSION=1.6.0
+ARG HCLI_VERSION=1.6.1
 ARG TMATE_VERSION=1.1.0
 ARG ENVMAN_VERSION=1.5.0
-ARG OTEL_VERSION=0.150.1
+ARG OTEL_VERSION=0.163.2
 # ENABLE_OTEL controls whether otelcol-contrib is bundled in this image.
 # Defaults to true — the binary is always included so cloud-init can extract
 # it when OtelPreInstalled=false. Set to false only to produce a minimal image
@@ -41,10 +41,10 @@ FROM us-west1-docker.pkg.dev/gar-setup/docker/harness-vm-runner-envman:${ENVMAN_
 #       Download OpenTelemetry Collector Binary            #
 # ---------------------------------------------------------#
 # otel-true: downloads otelcol-contrib when ENABLE_OTEL=true
-FROM alpine:3 as otel-true
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a37c85b4284d2c11fa0778e5da79643d912a1f5a57d6f701b77644503b7e7 as otel-true
 ARG OTEL_VERSION
 ARG TARGETARCH
-RUN apk add --no-cache wget tar && \
+RUN apk add --no-cache wget && \
     mkdir -p /binaries && \
     wget -nv "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${TARGETARCH}.tar.gz" -O /tmp/otelcol.tar.gz && \
     tar -xzf /tmp/otelcol.tar.gz -C /binaries otelcol-contrib && \
@@ -52,7 +52,7 @@ RUN apk add --no-cache wget tar && \
     rm /tmp/otelcol.tar.gz
 
 # otel-false: empty stage when ENABLE_OTEL=false (default)
-FROM alpine:3 as otel-false
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a37c85b4284d2c11fa0778e5da79643d912a1f5a57d6f701b77644503b7e7 as otel-false
 RUN mkdir -p /binaries
 
 # Select stage based on ENABLE_OTEL flag
