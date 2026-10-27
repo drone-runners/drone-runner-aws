@@ -49,6 +49,7 @@ type Params struct {
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
 	TmateBinaryFallbackURI       string
+	VMUsername                   string
 }
 
 var funcs = map[string]interface{}{

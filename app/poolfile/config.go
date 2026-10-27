@@ -342,6 +342,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				orka.WithAuthToken(orkaConfig.Token),
 				orka.WithVMConfig(orkaConfig.VMConfig),
 				orka.WithImage(orkaConfig.Image),
+				orka.WithVMUser(orkaConfig.VMUsername),
 				orka.WithUserData(orkaConfig.UserData, orkaConfig.UserDataPath),
 				orka.WithRootDirectory(orkaConfig.RootDirectory),
 				orka.WithTimeout(orkaConfig.Timeout),

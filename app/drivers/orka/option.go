@@ -150,6 +150,13 @@ func WithDisplay(width, height, dpi int) Option {
 	}
 }
 
+// WithVMUser sets the VM login user lite-engine runs as instead of root.
+func WithVMUser(username string) Option {
+	return func(p *config) {
+		p.vmUsername = username
+	}
+}
+
 // WithCustomMetadata sets customer-supplied Orka customMetadata key/value pairs. The driver's
 // own "startup_script" key always wins over a customer-supplied collision (see Create()).
 func WithCustomMetadata(metadata map[string]string) Option {

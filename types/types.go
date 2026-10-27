@@ -225,6 +225,8 @@ type InstanceCreateOpts struct {
 	StageRuntimeID      string
 	PipelineExecutionID string
 	TenantID            string
+	// VMUsername: when set, run lite-engine as this login user instead of root (Orka).
+	VMUsername string
 }
 
 type MachineTypeFallback struct {
