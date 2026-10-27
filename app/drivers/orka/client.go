@@ -54,7 +54,7 @@ type deployVMRequest struct {
 	SystemSerial   string            `json:"systemSerial,omitempty"`
 	ReservedPorts  string            `json:"reservedPorts,omitempty"`
 	CustomMetadata map[string]string `json:"customMetadata,omitempty"`
-	Timeout        int               `json:"timeout,omitempty"`
+	Timeout        int               `json:"timeout,omitempty"` // In minutes (Orka's unit).
 }
 
 // deployVMResponse mirrors v1.OrkaVMDeployResponseModel. No forwarded-port field is echoed back

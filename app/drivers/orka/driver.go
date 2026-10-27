@@ -158,7 +158,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		DisplayDPI:     c.displayDPI,
 		SystemSerial:   c.systemSerial,
 		CustomMetadata: c.buildCustomMetadata(userData),
-		Timeout:        timeoutSec,
+		Timeout:        deployTimeoutMinutes(timeoutSec),
 	}
 
 	deployCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second+deployTimeoutBuffer)
@@ -235,6 +235,16 @@ func (c *config) buildCustomMetadata(userData string) map[string]string {
 	}
 	merged[startupScriptKey] = base64.StdEncoding.EncodeToString([]byte(userData))
 	return merged
+}
+
+// deployTimeoutMinutes converts a seconds-based timeout to the minutes Orka's deploy "timeout"
+// field expects, rounding up. A non-positive value stays 0, which Orka treats as its default.
+func deployTimeoutMinutes(timeoutSec int) int {
+	if timeoutSec <= 0 {
+		return 0
+	}
+	const secondsPerMinute = 60
+	return (timeoutSec + secondsPerMinute - 1) / secondsPerMinute
 }
 
 // deployWithPortRetry tries vmDeploy with primaryPort, retrying once with fallbackPort if the
