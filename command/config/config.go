@@ -160,9 +160,6 @@ type (
 		Image          string            `json:"image,omitempty" yaml:"image"`
 		CPU            int               `json:"cpu,omitempty" yaml:"cpu"`
 		Memory         float64           `json:"memory,omitempty" yaml:"memory"`
-		GPUPassthrough bool              `json:"gpu_passthrough,omitempty" yaml:"gpu_passthrough"`
-		NetBoost       bool              `json:"net_boost,omitempty" yaml:"net_boost"`
-		LegacyIO       bool              `json:"legacy_io,omitempty" yaml:"legacy_io"`
 		VNC            bool              `json:"vnc,omitempty" yaml:"vnc"`
 		Tag            string            `json:"tag,omitempty" yaml:"tag"`
 		TagRequired    bool              `json:"tag_required,omitempty" yaml:"tag_required"`
@@ -171,7 +168,6 @@ type (
 		DisplayWidth   int               `json:"display_width,omitempty" yaml:"display_width"`
 		DisplayHeight  int               `json:"display_height,omitempty" yaml:"display_height"`
 		DisplayDPI     int               `json:"display_dpi,omitempty" yaml:"display_dpi"`
-		SystemSerial   string            `json:"system_serial,omitempty" yaml:"system_serial"`
 		Timeout        int               `json:"timeout,omitempty" yaml:"timeout"`
 		CustomMetadata map[string]string `json:"custom_metadata,omitempty" yaml:"custom_metadata"`
 		RootDirectory  string            `json:"root_directory,omitempty" yaml:"root_directory"`

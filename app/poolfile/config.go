@@ -347,15 +347,11 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				orka.WithTimeout(orkaConfig.Timeout),
 				orka.WithCPU(orkaConfig.CPU),
 				orka.WithMemory(orkaConfig.Memory),
-				orka.WithGPUPassthrough(orkaConfig.GPUPassthrough),
-				orka.WithNetBoost(orkaConfig.NetBoost),
-				orka.WithLegacyIO(orkaConfig.LegacyIO),
 				orka.WithVNC(orkaConfig.VNC),
 				orka.WithTag(orkaConfig.Tag, orkaConfig.TagRequired),
 				orka.WithNode(orkaConfig.Node),
 				orka.WithScheduler(orkaConfig.Scheduler),
 				orka.WithDisplay(orkaConfig.DisplayWidth, orkaConfig.DisplayHeight, orkaConfig.DisplayDPI),
-				orka.WithSystemSerial(orkaConfig.SystemSerial),
 				orka.WithCustomMetadata(orkaConfig.CustomMetadata),
 			)
 			if err != nil {

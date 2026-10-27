@@ -66,9 +66,6 @@ type config struct {
 	// struct) through to Create()'s vmDeploy body.
 	cpu            int
 	memory         float64
-	gpuPassthrough bool
-	netBoost       bool
-	legacyIO       bool
 	vnc            bool
 	tag            string
 	tagRequired    bool
@@ -77,7 +74,6 @@ type config struct {
 	displayWidth   int
 	displayHeight  int
 	displayDPI     int
-	systemSerial   string
 	customMetadata map[string]string
 }
 
@@ -145,9 +141,6 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Image:          imageField,
 		CPU:            c.cpu,
 		Memory:         c.memory,
-		GPUPassthrough: c.gpuPassthrough,
-		NetBoost:       c.netBoost,
-		LegacyIO:       c.legacyIO,
 		VNC:            c.vnc,
 		Tag:            c.tag,
 		TagRequired:    c.tagRequired,
@@ -156,7 +149,6 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		DisplayWidth:   c.displayWidth,
 		DisplayHeight:  c.displayHeight,
 		DisplayDPI:     c.displayDPI,
-		SystemSerial:   c.systemSerial,
 		CustomMetadata: c.buildCustomMetadata(userData),
 		Timeout:        deployTimeoutMinutes(timeoutSec),
 	}

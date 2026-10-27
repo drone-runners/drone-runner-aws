@@ -40,9 +40,6 @@ type deployVMRequest struct {
 	Image          string            `json:"image,omitempty"`
 	CPU            int               `json:"cpu,omitempty"`
 	Memory         float64           `json:"memory,omitempty"`
-	GPUPassthrough bool              `json:"gpuPassthrough,omitempty"`
-	NetBoost       bool              `json:"netBoost,omitempty"`
-	LegacyIO       bool              `json:"legacyIO,omitempty"`
 	VNC            bool              `json:"vnc,omitempty"`
 	Tag            string            `json:"tag,omitempty"`
 	TagRequired    bool              `json:"tagRequired,omitempty"`
@@ -51,7 +48,6 @@ type deployVMRequest struct {
 	DisplayWidth   int               `json:"displayWidth,omitempty"`
 	DisplayHeight  int               `json:"displayHeight,omitempty"`
 	DisplayDPI     int               `json:"displayDPI,omitempty"`
-	SystemSerial   string            `json:"systemSerial,omitempty"`
 	ReservedPorts  string            `json:"reservedPorts,omitempty"`
 	CustomMetadata map[string]string `json:"customMetadata,omitempty"`
 	Timeout        int               `json:"timeout,omitempty"` // In minutes (Orka's unit).
