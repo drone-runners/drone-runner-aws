@@ -75,6 +75,8 @@ func TestCreate_Success(t *testing.T) {
 	mock := &mockClient{
 		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
 			assert.Equal(t, "9079:9079", req.ReservedPorts)
+			// Default timeout (10m / 600s) must reach Orka as 10 minutes, not 600.
+			assert.Equal(t, 10, req.Timeout)
 			return &deployVMResponse{IP: "10.0.0.5", Status: vmStatusRunning}, nil
 		},
 	}
@@ -88,6 +90,41 @@ func TestCreate_Success(t *testing.T) {
 	assert.Equal(t, types.Orka, inst.Provider)
 	assert.Equal(t, types.StateProvisioning, inst.State)
 	assert.Equal(t, inst.ID, inst.Name)
+}
+
+func TestDeployTimeoutMinutes(t *testing.T) {
+	cases := []struct {
+		name    string
+		seconds int
+		want    int
+	}{
+		{"zero uses default", 0, 0},
+		{"negative uses default", -5, 0},
+		{"sub-minute rounds up to 1", 30, 1},
+		{"exact minute", 60, 1},
+		{"rounds up", 90, 2},
+		{"default 600s is 10m", 600, 10},
+		{"example 1200s is 20m", 1200, 20},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, deployTimeoutMinutes(tc.seconds))
+		})
+	}
+}
+
+func TestCreate_CustomTimeoutConvertedToMinutes(t *testing.T) {
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			assert.Equal(t, 20, req.Timeout) // 1200s -> 20m
+			return &deployVMResponse{IP: "10.0.0.7", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+	c.timeoutSec = 1200
+
+	_, err := c.Create(context.Background(), newTestOpts())
+	assert.NoError(t, err)
 }
 
 func TestCreate_PortConflictFallsBackToSecondPort(t *testing.T) {

@@ -112,27 +112,6 @@ func WithMemory(memory float64) Option {
 	}
 }
 
-// WithGPUPassthrough enables/disables GPU passthrough for the VM.
-func WithGPUPassthrough(enabled bool) Option {
-	return func(p *config) {
-		p.gpuPassthrough = enabled
-	}
-}
-
-// WithNetBoost enables/disables Orka's network-performance boost for the VM.
-func WithNetBoost(enabled bool) Option {
-	return func(p *config) {
-		p.netBoost = enabled
-	}
-}
-
-// WithLegacyIO enables/disables legacy I/O mode for the VM.
-func WithLegacyIO(enabled bool) Option {
-	return func(p *config) {
-		p.legacyIO = enabled
-	}
-}
-
 // WithVNC enables/disables VNC access to the VM.
 func WithVNC(enabled bool) Option {
 	return func(p *config) {
@@ -168,13 +147,6 @@ func WithDisplay(width, height, dpi int) Option {
 		p.displayWidth = width
 		p.displayHeight = height
 		p.displayDPI = dpi
-	}
-}
-
-// WithSystemSerial sets a custom system serial number for the VM.
-func WithSystemSerial(serial string) Option {
-	return func(p *config) {
-		p.systemSerial = serial
 	}
 }
 

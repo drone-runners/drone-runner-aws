@@ -66,9 +66,6 @@ type config struct {
 	// struct) through to Create()'s vmDeploy body.
 	cpu            int
 	memory         float64
-	gpuPassthrough bool
-	netBoost       bool
-	legacyIO       bool
 	vnc            bool
 	tag            string
 	tagRequired    bool
@@ -77,7 +74,6 @@ type config struct {
 	displayWidth   int
 	displayHeight  int
 	displayDPI     int
-	systemSerial   string
 	customMetadata map[string]string
 }
 
@@ -145,9 +141,6 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Image:          imageField,
 		CPU:            c.cpu,
 		Memory:         c.memory,
-		GPUPassthrough: c.gpuPassthrough,
-		NetBoost:       c.netBoost,
-		LegacyIO:       c.legacyIO,
 		VNC:            c.vnc,
 		Tag:            c.tag,
 		TagRequired:    c.tagRequired,
@@ -156,9 +149,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		DisplayWidth:   c.displayWidth,
 		DisplayHeight:  c.displayHeight,
 		DisplayDPI:     c.displayDPI,
-		SystemSerial:   c.systemSerial,
 		CustomMetadata: c.buildCustomMetadata(userData),
-		Timeout:        timeoutSec,
+		Timeout:        deployTimeoutMinutes(timeoutSec),
 	}
 
 	deployCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second+deployTimeoutBuffer)
@@ -235,6 +227,16 @@ func (c *config) buildCustomMetadata(userData string) map[string]string {
 	}
 	merged[startupScriptKey] = base64.StdEncoding.EncodeToString([]byte(userData))
 	return merged
+}
+
+// deployTimeoutMinutes converts a seconds-based timeout to the minutes Orka's deploy "timeout"
+// field expects, rounding up. A non-positive value stays 0, which Orka treats as its default.
+func deployTimeoutMinutes(timeoutSec int) int {
+	if timeoutSec <= 0 {
+		return 0
+	}
+	const secondsPerMinute = 60
+	return (timeoutSec + secondsPerMinute - 1) / secondsPerMinute
 }
 
 // deployWithPortRetry tries vmDeploy with primaryPort, retrying once with fallbackPort if the
