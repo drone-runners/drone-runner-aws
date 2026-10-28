@@ -291,8 +291,10 @@ while true
 		sleep 1
 	done
 echo "Tart VM Started"
-`, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password, vmImageConfig.VMImageAuth.Registry,
-		vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password, machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize, macPortForwardBlock(ephemeral, vmID, port, lockFunction, UnlockFunction))
+`, vmImageConfig.ImageName, vmID, vmImageConfig.Username, vmImageConfig.Password,
+		vmImageConfig.VMImageAuth.Registry, vmImageConfig.VMImageAuth.Username, vmImageConfig.VMImageAuth.Password,
+		machinePassword, resource.Cpus, convertGigsToMegs(memGB), resource.DiskSize,
+		macPortForwardBlock(ephemeral, vmID, port, lockFunction, UnlockFunction))
 }
 
 func (mv *MacVirtualizer) GetMachineFrequency() int {

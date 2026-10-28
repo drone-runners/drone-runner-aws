@@ -57,8 +57,8 @@ func newPool(d drivers.Driver) *drivers.Pool {
 	}
 }
 
-func createRequest(pool *drivers.Pool) CreateRequest {
-	return CreateRequest{
+func createRequest(pool *drivers.Pool) *CreateRequest {
+	return &CreateRequest{
 		Pool:            pool,
 		RunnerName:      "runner-1",
 		AccountID:       "acct1",
@@ -174,7 +174,7 @@ func TestDestroy(t *testing.T) {
 
 	t.Run("destroys the instance described by the state", func(t *testing.T) {
 		fd := &fakeDriver{}
-		if err := Destroy(context.Background(), newPool(fd), state); err != nil {
+		if err := Destroy(context.Background(), newPool(fd), &state); err != nil {
 			t.Fatalf("Destroy: %v", err)
 		}
 		if fd.destroyCalled != 1 || len(fd.destroyed) != 1 {
@@ -192,7 +192,7 @@ func TestDestroy(t *testing.T) {
 		fd := &fakeDriver{}
 		s := state
 		s.TenantID = ""
-		if err := Destroy(context.Background(), newPool(fd), s); err != nil {
+		if err := Destroy(context.Background(), newPool(fd), &s); err != nil {
 			t.Fatalf("Destroy: %v", err)
 		}
 		if fd.destroyed[0].TenantID != types.DefaultTenantID {
@@ -202,13 +202,13 @@ func TestDestroy(t *testing.T) {
 
 	t.Run("driver error is returned", func(t *testing.T) {
 		fd := &fakeDriver{destroyErr: errors.New("delete failed")}
-		if err := Destroy(context.Background(), newPool(fd), state); err == nil || !strings.Contains(err.Error(), "delete failed") {
+		if err := Destroy(context.Background(), newPool(fd), &state); err == nil || !strings.Contains(err.Error(), "delete failed") {
 			t.Fatalf("error = %v, want delete failed", err)
 		}
 	})
 
 	t.Run("nil pool is an error", func(t *testing.T) {
-		if err := Destroy(context.Background(), nil, state); err == nil {
+		if err := Destroy(context.Background(), nil, &state); err == nil {
 			t.Fatal("want error for nil pool")
 		}
 	})
@@ -217,7 +217,7 @@ func TestDestroy(t *testing.T) {
 		fd := &fakeDriver{}
 		s := state
 		s.ID = ""
-		if err := Destroy(context.Background(), newPool(fd), s); err == nil {
+		if err := Destroy(context.Background(), newPool(fd), &s); err == nil {
 			t.Fatal("want error for empty id")
 		}
 		if fd.destroyCalled != 0 {

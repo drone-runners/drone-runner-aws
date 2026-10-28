@@ -52,8 +52,8 @@ type EphemeralCreateInput struct {
 // PrepareEphemeralCreateOpts builds create options for an ephemeral Linux VM.
 // Certificates and instance-store fields are left empty. The Google driver
 // fills egress control and the network proxy URL during Create.
-func PrepareEphemeralCreateOpts(in EphemeralCreateInput) (*types.InstanceCreateOpts, error) {
-	if in.Pool == nil {
+func PrepareEphemeralCreateOpts(in *EphemeralCreateInput) (*types.InstanceCreateOpts, error) {
+	if in == nil || in.Pool == nil {
 		return nil, fmt.Errorf("pool is required")
 	}
 	if in.DelegatePath == "" {

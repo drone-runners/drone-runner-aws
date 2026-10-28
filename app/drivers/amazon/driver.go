@@ -425,6 +425,29 @@ func (p *amazonConfig) DestroyCapacity(ctx context.Context, capacity *drtypes.Ca
 	return nil
 }
 
+// ensureLiteEngineSecurityGroup looks up the harness-runner group and checks
+// that its ingress rules include the lite-engine port.
+func (p *amazonConfig) ensureLiteEngineSecurityGroup(ctx context.Context, client ec2ClientAPI, logr logger.Logger) error {
+	if p.vpc == "" {
+		logr.Traceln("amazon: using default vpc, checking security groups")
+	} else {
+		logr.Tracef("amazon: using vpc %s, checking security groups", p.vpc)
+	}
+	if p.groups == nil || len(p.groups) == 0 {
+		logr.Warnf("aws: no security group specified assuming '%s'", defaultSecurityGroupName)
+		returnedGroupID, lookupErr := lookupCreateSecurityGroupID(ctx, client, p.vpc)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		p.groups = append(p.groups, returnedGroupID)
+		p.autoGroupID = returnedGroupID
+	}
+	if len(p.groups) == 0 {
+		return fmt.Errorf("no security groups configured")
+	}
+	return checkIngressRules(ctx, client, p.groups[0])
+}
+
 // securityGroupsFor returns the security groups for one create. Ephemeral
 // creates drop the group a lite-engine create added automatically.
 func (p *amazonConfig) securityGroupsFor(opts *drtypes.InstanceCreateOpts) []string {
@@ -627,29 +650,8 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	// security group and its port check. Without configured groups EC2 applies
 	// the VPC default group.
 	if !opts.EphemeralDelegate {
-		if p.vpc == "" {
-			logr.Traceln("amazon: using default vpc, checking security groups")
-		} else {
-			logr.Tracef("amazon: using vpc %s, checking security groups", p.vpc)
-		}
-		// check security group exists
-		if p.groups == nil || len(p.groups) == 0 {
-			logr.Warnf("aws: no security group specified assuming '%s'", defaultSecurityGroupName)
-			// lookup/create group
-			returnedGroupID, lookupErr := lookupCreateSecurityGroupID(ctx, client, p.vpc)
-			if lookupErr != nil {
-				return nil, lookupErr
-			}
-			p.groups = append(p.groups, returnedGroupID)
-			p.autoGroupID = returnedGroupID
-		}
-		// check the security group ingress rules
-		if len(p.groups) == 0 {
-			return nil, fmt.Errorf("no security groups configured")
-		}
-		rulesErr := checkIngressRules(ctx, client, p.groups[0])
-		if rulesErr != nil {
-			return nil, rulesErr
+		if sgErr := p.ensureLiteEngineSecurityGroup(ctx, client, logr); sgErr != nil {
+			return nil, sgErr
 		}
 	}
 

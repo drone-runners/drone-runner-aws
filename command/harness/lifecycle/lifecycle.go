@@ -55,8 +55,11 @@ type DriverState struct {
 
 // Create provisions one Linux VM and returns its driverState.
 // It does not write instances, stage_owner, capacity, or outbox rows.
-func Create(ctx context.Context, req CreateRequest) (DriverState, error) {
-	opts, err := drivers.PrepareEphemeralCreateOpts(drivers.EphemeralCreateInput{
+func Create(ctx context.Context, req *CreateRequest) (DriverState, error) {
+	if req == nil {
+		return DriverState{}, fmt.Errorf("request is required")
+	}
+	opts, err := drivers.PrepareEphemeralCreateOpts(&drivers.EphemeralCreateInput{
 		Pool:                 req.Pool,
 		RunnerName:           req.RunnerName,
 		Env:                  req.Env,
@@ -110,11 +113,11 @@ func Create(ctx context.Context, req CreateRequest) (DriverState, error) {
 
 // Destroy deletes the VM described by driverState. A VM that is already gone
 // is success. It does not call HandleDestroy or Lite Engine.
-func Destroy(ctx context.Context, pool *drivers.Pool, state DriverState) error {
+func Destroy(ctx context.Context, pool *drivers.Pool, state *DriverState) error {
 	if pool == nil {
 		return fmt.Errorf("pool is required")
 	}
-	if state.ID == "" {
+	if state == nil || state.ID == "" {
 		return fmt.Errorf("driverState id is required")
 	}
 	tenantID := state.TenantID

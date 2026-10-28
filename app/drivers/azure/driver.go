@@ -135,6 +135,97 @@ func (c *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 	return &ierrors.ErrCapacityReservationNotSupported{Driver: c.DriverName()}
 }
 
+func azureCreateTags(poolTags map[string]string, opts *types.InstanceCreateOpts) map[string]*string {
+	tags := map[string]*string{}
+	for k, v := range poolTags {
+		tagValue := v
+		tags[k] = &tagValue
+	}
+	if opts.EphemeralDelegate {
+		for k, v := range opts.VMLabels {
+			tagValue := v
+			tags[k] = &tagValue
+		}
+	}
+	return tags
+}
+
+func (c *config) cleanupEphemeralCreate(name string, createErr error, logr logger.Logger) {
+	if createErr == nil {
+		return
+	}
+	if _, destroyErr := c.DestroyInstanceAndStorage(context.Background(), []*types.Instance{{ID: name}}, nil); destroyErr != nil {
+		logr.WithError(destroyErr).Warnln("azure: failed to clean up ephemeral VM after create failure")
+	}
+}
+
+func (c *config) subnetForCreate(ctx context.Context, useExistingNetwork bool, vnetName, subnetName string, logr logger.Logger) (string, error) {
+	if useExistingNetwork {
+		subnet, subnetErr := c.getExistingSubnet(ctx, vnetName, subnetName)
+		if subnetErr != nil {
+			logr.WithError(subnetErr).Error("could not get existing subnet")
+			return "", subnetErr
+		}
+		if subnet.ID == nil {
+			err := errors.New("existing subnet has nil ID")
+			logr.WithError(err).Error("could not get subnet ID")
+			return "", err
+		}
+		logr.Debugf("using existing VNet: %s, Subnet: %s", vnetName, subnetName)
+		return *subnet.ID, nil
+	}
+	if _, err := c.createVirtualNetwork(ctx, vnetName); err != nil {
+		logr.WithError(err).Error("could not create virtual network")
+		return "", err
+	}
+	subnet, subnetErr := c.createSubnets(ctx, subnetName, vnetName)
+	if subnetErr != nil {
+		logr.WithError(subnetErr).Error("could not create subnet")
+		return "", subnetErr
+	}
+	if subnet.ID == nil {
+		err := errors.New("created subnet has nil ID")
+		logr.WithError(err).Error("could not get subnet ID")
+		return "", err
+	}
+	return *subnet.ID, nil
+}
+
+func (c *config) networkInterfaceForCreate(ctx context.Context, networkInterfaceName, publicIPName, subnetID string, logr logger.Logger) (*armnetwork.Interface, error) {
+	if c.privateIP {
+		networkInterface, err := c.createNetworkInterfacePrivate(ctx, networkInterfaceName, subnetID)
+		if err != nil {
+			logr.WithError(err).Error("could not create network interface (private)")
+			return nil, err
+		}
+		c.IPAddress = c.getPrivateIPFromInterface(networkInterface)
+		if c.IPAddress == "" {
+			err = errors.New("failed to get private IP address from network interface")
+			logr.WithError(err).Error("could not obtain private IP")
+			return nil, err
+		}
+		logr.Infof("azure: using private IP: %s", c.IPAddress)
+		return networkInterface, nil
+	}
+	publicIP, publicIPErr := c.createPublicIP(ctx, publicIPName)
+	if publicIPErr != nil {
+		logr.WithError(publicIPErr).Error("could not create public IP")
+		return nil, publicIPErr
+	}
+	if publicIP.Properties == nil || publicIP.Properties.IPAddress == nil {
+		err := errors.New("failed to get public IP address: properties or IP address is nil")
+		logr.WithError(err).Error("could not obtain public IP")
+		return nil, err
+	}
+	c.IPAddress = *publicIP.Properties.IPAddress
+	networkInterface, err := c.createNetworkInterface(ctx, networkInterfaceName, subnetID, *publicIP.ID)
+	if err != nil {
+		logr.WithError(err).Error("could not create network interface")
+		return nil, err
+	}
+	return networkInterface, nil
+}
+
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	sanitizedRunnerName := strings.ReplaceAll(opts.RunnerName, " ", "-")
 	sanitizedPoolName := strings.ReplaceAll(opts.PoolName, " ", "-")
@@ -152,19 +243,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		subnetName = c.subnetName
 	}
 
-	var tags = map[string]*string{}
-	// add user defined tags
-	for k, v := range c.tags {
-		tagValue := v
-		tags[k] = &tagValue
-	}
-	// ephemeral VMs carry identity labels so they can be found without a store row
-	if opts.EphemeralDelegate {
-		for k, v := range opts.VMLabels {
-			tagValue := v
-			tags[k] = &tagValue
-		}
-	}
+	tags := azureCreateTags(c.tags, opts)
 
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Azure).
@@ -179,12 +258,7 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if opts.EphemeralDelegate {
 		// No store row exists for a later cleanup, so remove whatever this create built.
 		defer func() {
-			if err == nil {
-				return
-			}
-			if _, destroyErr := c.DestroyInstanceAndStorage(context.Background(), []*types.Instance{{ID: name}}, nil); destroyErr != nil {
-				logr.WithError(destroyErr).Warnln("azure: failed to clean up ephemeral VM after create failure")
-			}
+			c.cleanupEphemeralCreate(name, err, logr)
 		}()
 	}
 
@@ -196,76 +270,13 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		return
 	}
 
-	var subnetID string
-	if useExistingNetwork {
-		// Use existing VNet and Subnet
-		subnet, subnetErr := c.getExistingSubnet(ctx, vnetName, subnetName)
-		if subnetErr != nil {
-			logr.WithError(subnetErr).Error("could not get existing subnet")
-			return nil, subnetErr
-		}
-		if subnet.ID == nil {
-			err = errors.New("existing subnet has nil ID")
-			logr.WithError(err).Error("could not get subnet ID")
-			return nil, err
-		}
-		subnetID = *subnet.ID
-		logr.Debugf("using existing VNet: %s, Subnet: %s", vnetName, subnetName)
-	} else {
-		// Create new VNet and Subnet
-		_, err = c.createVirtualNetwork(ctx, vnetName)
-		if err != nil {
-			logr.WithError(err).Error("could not create virtual network")
-			return nil, err
-		}
-		subnet, subnetErr := c.createSubnets(ctx, subnetName, vnetName)
-		if subnetErr != nil {
-			logr.WithError(subnetErr).Error("could not create subnet")
-			return nil, subnetErr
-		}
-		if subnet.ID == nil {
-			err = errors.New("created subnet has nil ID")
-			logr.WithError(err).Error("could not get subnet ID")
-			return nil, err
-		}
-		subnetID = *subnet.ID
+	subnetID, err := c.subnetForCreate(ctx, useExistingNetwork, vnetName, subnetName, logr)
+	if err != nil {
+		return nil, err
 	}
-
-	var networkInterface *armnetwork.Interface
-	if c.privateIP {
-		// Create network interface without public IP
-		networkInterface, err = c.createNetworkInterfacePrivate(ctx, networkInterfaceName, subnetID)
-		if err != nil {
-			logr.WithError(err).Error("could not create network interface (private)")
-			return nil, err
-		}
-		// Get private IP from the network interface
-		c.IPAddress = c.getPrivateIPFromInterface(networkInterface)
-		if c.IPAddress == "" {
-			err = errors.New("failed to get private IP address from network interface")
-			logr.WithError(err).Error("could not obtain private IP")
-			return nil, err
-		}
-		logr.Infof("azure: using private IP: %s", c.IPAddress)
-	} else {
-		// Create public IP and network interface with public IP
-		publicIP, publicIPErr := c.createPublicIP(ctx, publicIPName)
-		if publicIPErr != nil {
-			logr.WithError(publicIPErr).Error("could not create public IP")
-			return nil, publicIPErr
-		}
-		// Get public IP address with nil check
-		if publicIP.Properties == nil || publicIP.Properties.IPAddress == nil {
-			err = errors.New("failed to get public IP address: properties or IP address is nil")
-			logr.WithError(err).Error("could not obtain public IP")
-			return nil, err
-		}
-		c.IPAddress = *publicIP.Properties.IPAddress
-		networkInterface, err = c.createNetworkInterface(ctx, networkInterfaceName, subnetID, *publicIP.ID)
-		if err != nil {
-			logr.WithError(err).Error("could not create network interface")
-			return nil, err
-		}
+	networkInterface, err := c.networkInterfaceForCreate(ctx, networkInterfaceName, publicIPName, subnetID, logr)
+	if err != nil {
+		return nil, err
 	}
 
 	// create the instance
