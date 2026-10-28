@@ -115,7 +115,7 @@ func (r *Runner) applyDefaultURIs(env *config.EnvConfig) {
 		env.Settings.HarnessTestBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/split_tests"
 	}
 	if env.Settings.AutoInjectionBinaryURI == "" {
-		env.Settings.AutoInjectionBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.19"
+		env.Settings.AutoInjectionBinaryURI = "https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.27"
 	}
 }
 
