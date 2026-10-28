@@ -1,7 +1,4 @@
-FROM alpine:3 as alpine
-RUN apk add -U --no-cache ca-certificates
-
-FROM alpine:3
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a37c85b4284d2c11fa0778e5da79643d912a1f5a57d6f701b77644503b7e7
 
 # Rootless variant - designed for Kubernetes with strict security policies
 # - Uses nobody user (UID/GID 65534)
@@ -10,7 +7,7 @@ FROM alpine:3
 # - Explicit database path to avoid WORKDIR-based path confusion
 
 # Update all packages to get latest security patches
-RUN apk update && apk upgrade --no-cache
+RUN apk update && apk upgrade --no-cache && apk add --no-cache wget libc-bin
 
 # Create /data directory with group-writable permissions for K8s fsGroup compatibility
 # Users can override runAsUser and set fsGroup: 65534 to write to /data
@@ -24,8 +21,6 @@ ENV DRONE_PLATFORM_ARCH amd64
 
 # Set explicit database path to /data/database.sqlite3
 ENV DRONE_DATABASE_DATASOURCE=/data/database.sqlite3
-
-COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 LABEL com.centurylinklabs.watchtower.stop-signal="SIGINT"
 

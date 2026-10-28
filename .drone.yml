@@ -8,7 +8,7 @@ platform:
 
 steps:
   - name: build
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/amd64/drone-runner-aws-linux-amd64
     volumes:
@@ -17,9 +17,10 @@ steps:
     depends_on:
       - clone
   - name: go vet and unit tests
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - go vet ./...
+      - apk add --no-cache bash
       - go test -cover ./...
     volumes:
       - name: cache
@@ -27,7 +28,7 @@ steps:
     depends_on:
       - build
   - name: check go.mod is up to date
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - cp go.mod go.mod.bak
       - go mod tidy
@@ -50,7 +51,7 @@ steps:
     image: docker:dind
     commands:
       # Build the rootless Docker image to test secure K8s variant
-      - docker build -f docker/Dockerfile.linux.amd64.rootless -t drone-runner-aws-rootless-test:$DRONE_COMMIT .
+      - docker build --pull --no-cache -f docker/Dockerfile.linux.amd64.rootless -t drone-runner-aws-rootless-test:$DRONE_COMMIT .
       # Test delegate startup with nobody user to verify /data directory and database permissions
       # This test validates the rootless variant works out of the box without volume configuration
       - |
@@ -75,14 +76,14 @@ steps:
     depends_on:
       - build
   - name: drone compile checks windows and linux
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_ubuntu.yml' test_files/compiler/drone_pool.yml
       - release/linux/amd64/drone-runner-aws-linux-amd64 compile --source='./test_files/compiler/drone_windows.yml' test_files/compiler/drone_pool.yml
     depends_on:
       - build
   - name: drone exec checks - linux
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws-linux-amd64 exec test_files/compiler/drone_ubuntu.yml --debug --trace --repo-http='https://github.com/tphoney/bash_plugin' --repo-branch='main' --commit-target='main' --commit-after='7e5f437589cdf071769158ce219b2f443ca13074'
     environment:
@@ -97,7 +98,7 @@ steps:
         exclude:
           - pull_request
   - name: drone exec checks - windows
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - |
         echo "version: '1'
@@ -127,7 +128,7 @@ steps:
       ref:
         - refs/heads/master
   - name: delegate checks
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - DRONE_MAX_POOL_SIZE=1 release/linux/amd64/drone-runner-aws-linux-amd64 delegate > delegate.log 2>&1 &
       - sleep 30
@@ -164,6 +165,8 @@ steps:
       auto_tag: true
       auto_tag_suffix: linux-amd64
       dockerfile: docker/Dockerfile.linux.amd64
+      pull_image: true
+      no_cache: true
       username:
         from_secret: docker_username
       password:
@@ -214,7 +217,7 @@ pool:
 
 steps:
   - name: build arm64 linux binary
-    image: golang:1.24
+    image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.27.3-dev@sha256:58aeee00b259a403aaef3fcfd36ede300e519ae794c15f6ed2a759d94bbeced7
     commands:
       - CGO_ENABLED=1 go build -ldflags "-extldflags \"-static\"" -o release/linux/arm64/drone-runner-aws-linux-arm64
   - name: release
@@ -235,6 +238,8 @@ steps:
       auto_tag: true
       auto_tag_suffix: linux-arm64
       dockerfile: docker/Dockerfile.linux.arm64
+      pull_image: true
+      no_cache: true
       username:
         from_secret: docker_username
       password:
@@ -256,7 +261,7 @@ steps:
   - name: build mac arm64 binary
     commands:
       - brew install golang
-      - CGO_ENABLED=1 go build -o release/darwin/arm64/drone-runner-aws-darwin-arm64
+      - GOTOOLCHAIN=go1.26.10 CGO_ENABLED=1 go build -o release/darwin/arm64/drone-runner-aws-darwin-arm64
   - name: release
     commands:
       - release_binary/drone-github-release-darwin-arm64
