@@ -269,7 +269,7 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 	}
 	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
 		(opts.GitspaceOpts.VMInitScript != "") {
-		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
+		params.GitspaceAgentConfig = types.GitspaceOpts{
 			Secret:       opts.GitspaceOpts.Secret,
 			AccessToken:  opts.GitspaceOpts.AccessToken,
 			VMInitScript: opts.GitspaceOpts.VMInitScript,

@@ -18,7 +18,6 @@ type InstanceProvisioner interface {
 		poolName, serverName, ownerID string,
 		provisionParams *types.ProvisionParams,
 		query *types.QueryParams,
-		gitspaceAgentConfig *types.GitspaceAgentConfig,
 		storageConfig *types.StorageConfig,
 		info *common.InstanceInfo,
 		timeout int64,

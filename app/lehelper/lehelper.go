@@ -47,7 +47,7 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		VMUsername:                   opts.VMUsername,
 	}
 	if opts.GitspaceOpts.VMInitScript != "" {
-		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
+		params.GitspaceAgentConfig = types.GitspaceOpts{
 			VMInitScript: opts.GitspaceOpts.VMInitScript,
 		}
 		params.CertsDirectory = "/harness/certs"

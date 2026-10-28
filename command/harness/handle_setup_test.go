@@ -53,7 +53,7 @@ type fakeIManager struct {
 
 //nolint:gocritic // unnamed results mirror drivers.InstanceProvisioner's Provision signature
 func (f *fakeIManager) Provision(ctx context.Context, _, _, _ string, _ *types.ProvisionParams, _ *types.QueryParams,
-	_ *types.GitspaceAgentConfig, _ *types.StorageConfig, _ *common.InstanceInfo, _ int64, _ bool,
+	_ *types.StorageConfig, _ *common.InstanceInfo, _ int64, _ bool,
 	_ *types.CapacityReservation, _ bool) (*types.Instance, *types.CapacityReservation, bool, string, error) {
 	if f.provisionFunc != nil {
 		return f.provisionFunc(ctx)

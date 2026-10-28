@@ -53,7 +53,7 @@ func TestDistributedProvisionFromPool_SuccessfulClaim(t *testing.T) {
 
 	inst, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
 		context.Background(), pool, "tls", "owner1",
-		&types.ProvisionParams{}, nil, nil, 60, pool.Name, nil, false,
+		&types.ProvisionParams{}, nil, 60, pool.Name, nil, false,
 	)
 
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestDistributedProvisionFromPoolClaimsConfiguredPrimaryMachineType(t *testi
 
 	inst, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
 		context.Background(), pool, "tls", "owner1",
-		&types.ProvisionParams{ResourceClass: "large"}, nil, nil, 60, pool.Name, nil, false,
+		&types.ProvisionParams{ResourceClass: "large"}, nil, 60, pool.Name, nil, false,
 	)
 
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestDistributedProvisionFromPool_EmptyPool_FallsBackToColdCreate(t *testing
 
 	_, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
 		context.Background(), pool, "tls", "owner1",
-		&types.ProvisionParams{}, nil, nil, 60, pool.Name, nil, false,
+		&types.ProvisionParams{}, nil, 60, pool.Name, nil, false,
 	)
 
 	require.Error(t, err)
@@ -127,7 +127,7 @@ func TestDistributedProvisionFromPool_ClaimStoreError(t *testing.T) {
 
 	_, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
 		context.Background(), pool, "tls", "owner1",
-		&types.ProvisionParams{}, nil, nil, 60, pool.Name, nil, false,
+		&types.ProvisionParams{}, nil, 60, pool.Name, nil, false,
 	)
 
 	require.Error(t, err)
@@ -148,7 +148,7 @@ func TestDistributedProvisionFromPool_PostClaimUpdateFails(t *testing.T) {
 
 	_, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
 		context.Background(), pool, "tls", "owner1",
-		&types.ProvisionParams{}, nil, nil, 60, pool.Name, nil, false,
+		&types.ProvisionParams{}, nil, 60, pool.Name, nil, false,
 	)
 
 	require.Error(t, err)
@@ -171,7 +171,7 @@ func TestDistributedProvisionFromPool_NilMetricsSafe(t *testing.T) {
 	assert.NotPanics(t, func() {
 		_, _, _, _, _ = d.provisionFromPool(
 			context.Background(), pool, "tls", "owner1",
-			&types.ProvisionParams{}, nil, nil, 60, pool.Name, nil, false,
+			&types.ProvisionParams{}, nil, 60, pool.Name, nil, false,
 		)
 	})
 }

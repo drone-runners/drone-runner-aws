@@ -35,7 +35,7 @@ type Params struct {
 	EgressNoProxy                string
 	EgressCACert                 string
 	EnableLEDiagnostics          bool
-	GitspaceAgentConfig          types.GitspaceAgentConfig
+	GitspaceAgentConfig          types.GitspaceOpts
 	StorageConfig                types.StorageConfig
 	AutoInjectionBinaryURI       string
 	LiteEngineFallbackPath       string

@@ -305,14 +305,6 @@ type StorageOpts struct {
 	BootDiskSize       string
 }
 
-type GitspaceAgentConfig struct {
-	Secret                   string `json:"secret"`       // Deprecated: VMInitScript should be used to send the whole script
-	AccessToken              string `json:"access_token"` // Deprecated: VMInitScript should be used to send the whole script
-	Ports                    []int  `json:"ports"`
-	VMInitScript             string `json:"vm_init_script"`
-	GitspaceConfigIdentifier string `json:"gitspace_config_identifier"`
-}
-
 type StorageConfig struct {
 	CephPoolIdentifier string `json:"ceph_pool_identifier"`
 	Identifier         string `json:"identifier"`

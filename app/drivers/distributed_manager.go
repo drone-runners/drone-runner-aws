@@ -60,7 +60,6 @@ func (d *DistributedManager) Provision(
 	ownerID string,
 	provisionParams *types.ProvisionParams,
 	query *types.QueryParams,
-	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	instanceInfo *common.InstanceInfo,
 	timeout int64,
@@ -78,7 +77,6 @@ func (d *DistributedManager) Provision(
 		serverName,
 		ownerID,
 		provisionParams,
-		gitspaceAgentConfig,
 		storageConfig,
 		timeout,
 		poolName,
@@ -260,7 +258,6 @@ func (d *DistributedManager) SetupInstanceForPool(
 		setupParams,
 		vmImageConfig,
 		nil,
-		nil,
 		-1,
 		nil,
 	)
@@ -273,7 +270,6 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 	tlsServerName, ownerID string,
 	setupParams *types.SetupInstanceParams,
 	vmImageConfig *spec.VMImageConfig,
-	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
 	poolName string,
@@ -303,7 +299,6 @@ func (d *DistributedManager) provisionFromReservedCapacity(
 		setupParams,
 		vmImageConfig,
 		true,
-		agentConfig,
 		storageConfig,
 		timeout,
 		nil,
@@ -322,7 +317,6 @@ func (d *DistributedManager) provisionFromPool(
 	pool *poolEntry,
 	tlsServerName, ownerID string,
 	provisionParams *types.ProvisionParams,
-	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
 	poolName string,
@@ -360,7 +354,7 @@ func (d *DistributedManager) provisionFromPool(
 	if reservedCapacity != nil {
 		resInst, hotpool, resErr := d.provisionFromReservedCapacity(
 			ctx, pool, tlsServerName, ownerID, setupParams, vmImageConfig,
-			agentConfig, storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
+			storageConfig, timeout, poolName, reservedCapacity, isCapacityTask)
 		if resErr != nil {
 			return nil, nil, false, "", resErr
 		}
@@ -473,7 +467,6 @@ func (d *DistributedManager) provisionFromPool(
 		setupParams,
 		vmImageConfig,
 		true,
-		agentConfig,
 		storageConfig,
 		timeout,
 		nil,
@@ -656,7 +649,6 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 	tlsServerName, ownerID string,
 	setupParams *types.SetupInstanceParams,
 	vmImageConfig *spec.VMImageConfig,
-	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
 	platform *types.Platform,
@@ -668,7 +660,6 @@ func (d *DistributedManager) setupInstanceWithHibernate(
 		setupParams,
 		vmImageConfig,
 		false,
-		agentConfig,
 		storageConfig,
 		timeout,
 		platform,
