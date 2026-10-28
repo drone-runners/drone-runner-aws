@@ -78,6 +78,9 @@ fi
 tar -xf /tmp/addon/tmate.xz -C /tmp/addon/
 chmod 777  /tmp/addon/tmate-1.0-static-mac-arm64/tmate
 mv  /tmp/addon/tmate-1.0-static-mac-arm64/tmate /tmp/addon/tmate
+
+{{ if .VMUsername }}chown -R '{{ .VMUsername }}' /tmp/addon
+{{ end }}
 {{ end }}
 
 {{ end }}
@@ -109,6 +112,10 @@ chmod 755 /usr/local/bin/hcli
 mkdir -p /tmp/harness/bin
 curl_retry "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" /tmp/harness/bin/auto-injection 10 10
 chmod 777 /tmp/harness/bin/auto-injection
+{{ end }}
+
+{{ if .VMUsername }}mkdir -p /tmp/harness
+chown -R '{{ .VMUsername }}' /tmp/harness
 {{ end }}
 
 {{ if .HarnessTestBinaryURI }}
