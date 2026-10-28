@@ -155,7 +155,8 @@ type (
 	Orka struct {
 		ControllerURL  string            `json:"controller_url,omitempty" yaml:"controller_url"`
 		Namespace      string            `json:"namespace,omitempty" yaml:"namespace"`
-		Token          string            `json:"token,omitempty" yaml:"token"` // optional; falls back to passwords.OrkaToken (ORKA_TOKEN env/.env) if empty, same pattern as AnkaToken
+		Token          string            `json:"token,omitempty" yaml:"token"`             // optional; falls back to passwords.OrkaToken (ORKA_TOKEN env/.env) if empty, same pattern as AnkaToken
+		VMUsername     string            `json:"vm_username,omitempty" yaml:"vm_username"` // login user to run lite-engine as instead of root
 		VMConfig       string            `json:"vm_config,omitempty" yaml:"vm_config"`
 		Image          string            `json:"image,omitempty" yaml:"image"`
 		CPU            int               `json:"cpu,omitempty" yaml:"cpu"`

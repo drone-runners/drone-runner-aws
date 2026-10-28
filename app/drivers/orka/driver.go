@@ -60,6 +60,7 @@ type config struct {
 	userData      string
 	rootDir       string
 	timeoutSec    int
+	vmUsername    string
 	orkaClient    Client
 
 	// VM deploy-request fields, carried from the pool-spec (command/config/config.go's Orka
@@ -124,6 +125,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	if err != nil {
 		return nil, fmt.Errorf("orka: failed to resolve image: %w", err)
 	}
+
+	opts.VMUsername = c.vmUsername
 
 	userData, err := lehelper.GenerateUserdata(c.userData, opts)
 	if err != nil {

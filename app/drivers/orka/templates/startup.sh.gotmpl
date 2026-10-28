@@ -28,6 +28,9 @@ chmod 0600 {{ .CertPath }}
 echo {{ .TLSKey | base64 }} | base64 -d >> {{ .KeyPath }}
 chmod 0600 {{ .KeyPath }}
 
+{{ if .VMUsername }}chown -R '{{ .VMUsername }}' /tmp/certs
+{{ end }}
+
 if curl_retry "{{ .LiteEnginePath }}/lite-engine-{{ .Platform.OS }}-{{ .Platform.Arch }}" /opt/homebrew/bin/lite-engine 3 3; then
     echo "Successfully downloaded lite engine binary from primary URL."
 else
@@ -41,12 +44,13 @@ else
 fi
 chmod 777 /opt/homebrew/bin/lite-engine
 
-# Orka's bootstrap LaunchDaemon runs this script under launchd, where $HOME is not
-# reliably the root home directory (observed /Users/admin instead of /var/root on a
-# real trial VM). Hardcode /var/root instead of trusting inherited $HOME.
-mkdir -p /var/root
-touch /var/root/.env
-echo "SKIP_PREPARE_SERVER=true" >> /var/root/.env
+# lite-engine's env-file/logs live under the configured login user's home, else root's.
+{{ if .VMUsername }}HOME="/Users/{{ .VMUsername }}"
+{{ else }}HOME="/var/root"
+{{ end }}mkdir -p "$HOME"
+touch "$HOME/.env"
+echo "SKIP_PREPARE_SERVER=true" >> "$HOME/.env"
+{{ if .VMUsername }}chown '{{ .VMUsername }}' "$HOME/.env"{{ end }}
 
 {{ if .PluginBinaryURI }}
 if curl_retry "{{ .PluginBinaryURI }}/plugin-{{ .Platform.OS }}-{{ .Platform.Arch }}" /usr/local/bin/plugin 3 3; then
@@ -116,12 +120,9 @@ chmod 777 /tmp/harness/bin/auto-injection
     fi
 {{ end }}
 
-# Unlike the regular cloud-init path (anka/GCP/etc.), this script runs once per Orka
-# VM boot via our own orka-bootstrap LaunchDaemon, not via a persistent init-managed
-# shell session - so backgrounding lite-engine with `&` here would not survive a
-# reboot or a bootstrap-daemon exit. Install it as its own KeepAlive LaunchDaemon
-# instead, matching what was validated live on the trial VM.
-cat > /Library/LaunchDaemons/com.harness.lite-engine.plist <<'PLIST'
+# Install lite-engine as a KeepAlive LaunchDaemon (backgrounding with `&` wouldn't survive
+# the bootstrap daemon exiting). With a login user set, it runs as that user via UserName.
+cat > /Library/LaunchDaemons/com.harness.lite-engine.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -133,23 +134,25 @@ cat > /Library/LaunchDaemons/com.harness.lite-engine.plist <<'PLIST'
         <string>/opt/homebrew/bin/lite-engine</string>
         <string>server</string>
         <string>--env-file</string>
-        <string>/var/root/.env</string>
+        <string>$HOME/.env</string>
     </array>
-    <key>EnvironmentVariables</key>
+{{ if .VMUsername }}    <key>UserName</key>
+    <string>{{ .VMUsername }}</string>
+{{ end }}    <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>HOME</key>
-        <string>/var/root</string>
+        <string>$HOME</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/root/lite-engine.log</string>
+    <string>$HOME/lite-engine.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/root/lite-engine.log</string>
+    <string>$HOME/lite-engine.log</string>
 </dict>
 </plist>
 PLIST
