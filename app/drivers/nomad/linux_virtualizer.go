@@ -41,14 +41,23 @@ var funcs = map[string]interface{}{
 func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout int64) (job *api.Job, id, group string, err error) { //nolint
 	id = getInitJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
-	uData := lv.generateUserData(opts)
+	uData, err := lv.generateUserData(opts)
+	if err != nil {
+		return nil, "", "", err
+	}
 	encodedUserData := base64.StdEncoding.EncodeToString([]byte(uData))
 
 	hostPath := fmt.Sprintf("/usr/local/bin/%s.sh", vm)
 	vmPath := fmt.Sprintf("/usr/bin/%s.sh", vm)
 	var runCmdFormat string
-	runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
-	args := []interface{}{ignitePath, vmImageConfig.ImageName, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
+	var args []interface{}
+	if opts.EphemeralDelegate {
+		runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --copy-files %s:%s"
+		args = []interface{}{ignitePath, vmImageConfig.ImageName, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, hostPath, vmPath}
+	} else {
+		runCmdFormat = "%s run %s --name %s --cpus %s --memory %sGB --size %s --ssh --runtime=docker --ports %d:%s --copy-files %s:%s"
+		args = []interface{}{ignitePath, vmImageConfig.ImageName, vm, resource.Cpus, resource.MemoryGB, resource.DiskSize, port, strconv.Itoa(lehelper.LiteEnginePort), hostPath, vmPath}
+	}
 
 	// add labels
 	if len(opts.InternalLabels) > 0 {
@@ -245,7 +254,10 @@ func (lv *LinuxVirtualizer) getCephStorageTask(
 	}
 }
 
-func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) string {
+func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) (string, error) {
+	if opts.EphemeralDelegate {
+		return lehelper.GenerateEphemeralShell(opts)
+	}
 	params := &cloudinit.Params{
 		Platform:                     opts.Platform,
 		CACert:                       string(opts.CACert),
@@ -275,7 +287,7 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 			VMInitScript: opts.GitspaceOpts.VMInitScript,
 		}
 	}
-	return cloudinit.LinuxBash(params)
+	return cloudinit.LinuxBash(params), nil
 }
 
 func (lv *LinuxVirtualizer) GetMachineFrequency() int {

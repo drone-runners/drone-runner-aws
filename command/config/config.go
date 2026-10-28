@@ -571,6 +571,13 @@ type EnvConfig struct {
 		MockStepTimeoutSecs int    `envconfig:"DRONE_LITE_ENGINE_MOCK_STEP_TIMEOUT_SECS" default:"120"`
 	}
 
+	// Delegate is the ephemeral in-VM delegate binary. There is no default:
+	// ephemeral create fails when Path is empty. Lite-engine pools ignore it.
+	Delegate struct {
+		Path         string `envconfig:"DRONE_DELEGATE_PATH"`
+		FallbackPath string `envconfig:"DRONE_DELEGATE_FALLBACK_PATH"`
+	}
+
 	Server struct {
 		Port  string `envconfig:"DRONE_HTTP_BIND" default:":3000"`
 		Proto string `envconfig:"DRONE_HTTP_PROTO"`
