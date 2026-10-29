@@ -16,7 +16,6 @@ import (
 
 	"github.com/drone-runners/drone-runner-aws/app/certs"
 	"github.com/drone-runners/drone-runner-aws/command/harness/common"
-	"github.com/drone-runners/drone-runner-aws/command/harness/storage"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
 
@@ -29,11 +28,10 @@ func (m *Manager) Provision(
 	ownerID string,
 	provisionParams *types.ProvisionParams,
 	query *types.QueryParams,
-	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
-	instanceInfo *common.InstanceInfo,
+	_ *common.InstanceInfo,
 	timeout int64,
-	isMarkedForInfraReset bool,
+	_ bool,
 	reservedCapacity *types.CapacityReservation,
 	isCapacityTask bool,
 ) (inst *types.Instance, capReservation *types.CapacityReservation, warmed bool, variantID string, err error) {
@@ -45,26 +43,6 @@ func (m *Manager) Provision(
 	setupParams := provisionParams.ToSetupInstanceParams()
 	vmImageConfig := provisionParams.GetVMImageConfig()
 
-	if m.isGitspaceRequest(gitspaceAgentConfig) {
-		if gsErr := m.validateGitspaceDriverCompatibility(pool); gsErr != nil {
-			return nil, nil, false, "", gsErr
-		}
-		existingInstance, _, gsErr := m.processExistingInstance(
-			ctx,
-			pool,
-			instanceInfo,
-			serverName,
-			ownerID,
-			setupParams,
-			vmImageConfig,
-			gitspaceAgentConfig,
-			storageConfig,
-			timeout,
-			isMarkedForInfraReset,
-		)
-		return existingInstance, nil, false, "", gsErr
-	}
-
 	instance, _, hotpool, _, err := m.provisionFromPool(
 		ctx,
 		pool,
@@ -73,7 +51,6 @@ func (m *Manager) Provision(
 		ownerID,
 		setupParams,
 		vmImageConfig,
-		gitspaceAgentConfig,
 		storageConfig,
 		timeout,
 		poolName,
@@ -86,7 +63,7 @@ func (m *Manager) Provision(
 	// TODO: Move to outbox
 	if hotpool {
 		go func(ctx context.Context) {
-			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", nil, nil, nil, nil, timeout, nil)
+			_, _ = m.setupInstanceWithHibernate(ctx, pool, serverName, "", nil, nil, nil, timeout, nil)
 		}(m.globalCtx)
 	}
 	return instance, nil, hotpool, "", err
@@ -118,7 +95,6 @@ func (m *Manager) provisionFromPool(
 	serverName, ownerID string,
 	setupParams *types.SetupInstanceParams,
 	vmImageConfig *spec.VMImageConfig,
-	gitspaceAgentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
 	poolName string,
@@ -148,7 +124,7 @@ func (m *Manager) provisionFromPool(
 			return nil, nil, false, "", ErrorNoInstanceAvailable
 		}
 		var inst *types.Instance
-		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, setupParams, vmImageConfig, true, gitspaceAgentConfig, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
+		inst, _, err = m.setupInstance(ctx, pool, serverName, ownerID, setupParams, vmImageConfig, true, storageConfig, timeout, nil, reservedCapacity, isCapacityTask)
 		if err != nil {
 			return nil, nil, false, "", fmt.Errorf("provision: failed to create instance: %w", err)
 		}
@@ -189,7 +165,6 @@ func (m *Manager) setupInstance(
 	setupParams *types.SetupInstanceParams,
 	vmImageConfig *spec.VMImageConfig,
 	inuse bool,
-	agentConfig *types.GitspaceAgentConfig,
 	storageConfig *types.StorageConfig,
 	timeout int64,
 	platform *types.Platform,
@@ -245,16 +220,6 @@ func (m *Manager) setupInstance(
 	tenantID := tenantIDForSetup(setupParams)
 	if m.IsEgressPool(pool.Name, tenantID) {
 		pinBinaryDownloadsToHarness(createOptions)
-	}
-	if agentConfig != nil && (agentConfig.Secret != "" || agentConfig.VMInitScript != "") {
-		createOptions.GitspaceOpts = types.GitspaceOpts{
-			Secret:                   agentConfig.Secret,
-			AccessToken:              agentConfig.AccessToken,
-			Ports:                    agentConfig.Ports,
-			VMInitScript:             agentConfig.VMInitScript,
-			GitspaceConfigIdentifier: agentConfig.GitspaceConfigIdentifier,
-		}
-		retain = "true"
 	}
 	// when CI_SKIP_CLOUD_VM_CLEANUP is on for the target, CI Manager
 	// asks the runner to retain the VM past the purger's maxAge window. Explicit
@@ -413,96 +378,6 @@ func applyStorageConfig(o *types.InstanceCreateOpts, storageConfig *types.Storag
 			o.StorageOpts.BootDiskType = setupParams.DiskType
 		}
 	}
-}
-
-// isGitspaceRequest checks if the request is for a GitSpace configuration with ports.
-func (m *Manager) isGitspaceRequest(gitspaceAgentConfig *types.GitspaceAgentConfig) bool {
-	return gitspaceAgentConfig != nil && len(gitspaceAgentConfig.Ports) > 0
-}
-
-// validateGitspaceDriverCompatibility checks if the pool's driver is compatible with gitspace configuration.
-// Returns an error if the driver is incompatible.
-func (m *Manager) validateGitspaceDriverCompatibility(pool *poolEntry) error {
-	if pool.Driver.DriverName() != string(types.Nomad) &&
-		pool.Driver.DriverName() != string(types.Google) &&
-		pool.Driver.DriverName() != string(types.Amazon) {
-		return fmt.Errorf("incorrect pool, gitspaces is only supported on nomad, google, and amazon")
-	}
-	return nil
-}
-
-// processExistingInstance processes an existing instance based on provided instance info.
-// It validates the instance info, creates an instance from it, and handles reset or resume operations.
-// If no valid existing instance is found, it sets up a new instance.
-func (m *Manager) processExistingInstance(
-	ctx context.Context,
-	pool *poolEntry,
-	instanceInfo *common.InstanceInfo,
-	serverName, ownerID string,
-	setupParams *types.SetupInstanceParams,
-	vmImageConfig *spec.VMImageConfig,
-	gitspaceAgentConfig *types.GitspaceAgentConfig,
-	storageConfig *types.StorageConfig,
-	timeout int64,
-	isMarkedForInfraReset bool,
-) (*types.Instance, *types.CapacityReservation, error) {
-	if instanceInfo != nil && instanceInfo.ID != "" {
-		if validateInstanceInfoErr := common.ValidateStruct(*instanceInfo); validateInstanceInfoErr != nil {
-			logrus.Warnf("missing information in the instance info: %v", validateInstanceInfoErr)
-		} else {
-			inst := common.BuildInstanceFromRequest(*instanceInfo)
-			if isMarkedForInfraReset {
-				logrus.WithFields(logrus.Fields{
-					"instance_id":    instanceInfo.ID,
-					"pool":           pool.Name,
-					"destroy_caller": "processExistingInstance:infra_reset",
-				}).Infoln("destroy: destroying instance for infra reset")
-				storageCleanupType := storage.Detach
-				_, destroyInstanceErr := pool.DriverForTenant(inst.TenantID).DestroyInstanceAndStorage(ctx, []*types.Instance{inst}, &storageCleanupType)
-				if destroyInstanceErr != nil {
-					logrus.Warnf(
-						"failed to destroy instance %s: %v",
-						instanceInfo.ID,
-						destroyInstanceErr,
-					)
-				}
-				// Continue to create a new instance below
-			} else {
-				logrus.Tracef("instance is suspend, waking up the instance")
-				inst.IsHibernated = true
-				inst.State = types.StateInUse
-				inst.OwnerID = ownerID
-				inst.Started = time.Now().Unix()
-				return inst, nil, nil
-			}
-		}
-	}
-
-	logrus.Infof("instance info is not present or reset required, setting up a new instance")
-
-	var platform *types.Platform
-	if instanceInfo != nil {
-		platform = &types.Platform{
-			OS:   instanceInfo.OS,
-			Arch: instanceInfo.Arch,
-		}
-	}
-
-	return m.setupInstance(
-		ctx,
-		pool,
-		serverName,
-		ownerID,
-		setupParams,
-		vmImageConfig,
-		true,
-		gitspaceAgentConfig,
-		storageConfig,
-		timeout,
-		platform,
-		nil,
-		false,
-	)
 }
 
 // deepCopySetupParams creates a deep copy of SetupInstanceParams, ensuring slice immutability.

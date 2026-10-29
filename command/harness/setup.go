@@ -28,11 +28,10 @@ import (
 type SetupVMRequest struct {
 	CapacityReservationRequest
 	api.SetupRequest      `json:"setup_request"`
-	LogKey                string                    `json:"log_key"`
-	CorrelationID         string                    `json:"correlation_id"`
-	GitspaceAgentConfig   types.GitspaceAgentConfig `json:"gitspace_agent_config"`
-	InstanceInfo          common.InstanceInfo       `json:"instance_info"`
-	IsMarkedForInfraReset bool                      `json:"is_marked_for_infra_reset,omitempty"`
+	LogKey                string              `json:"log_key"`
+	CorrelationID         string              `json:"correlation_id"`
+	InstanceInfo          common.InstanceInfo `json:"instance_info"`
+	IsMarkedForInfraReset bool                `json:"is_marked_for_infra_reset,omitempty"`
 	// SkipCloudVMCleanup, when true, instructs the runner to label the VM
 	// retain=true so the background purger leaves it alone. Set by CI Manager
 	// when the CI_SKIP_CLOUD_VM_CLEANUP FF is on for the target.
@@ -40,10 +39,9 @@ type SetupVMRequest struct {
 }
 
 type SetupVMResponse struct {
-	IPAddress             string              `json:"ip_address"`
-	InstanceID            string              `json:"instance_id"`
-	GitspacesPortMappings map[int]int         `json:"gitspaces_port_mappings"`
-	InstanceInfo          common.InstanceInfo `json:"instance_info"`
+	IPAddress    string              `json:"ip_address"`
+	InstanceID   string              `json:"instance_id"`
+	InstanceInfo common.InstanceInfo `json:"instance_info"`
 }
 
 var (
@@ -371,7 +369,7 @@ func HandleSetup(
 		TLSCert:           instance.TLSCert,
 		ProxyURL:          instance.ProxyURL,
 	}
-	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, GitspacesPortMappings: instance.GitspacePortMappings, InstanceInfo: instanceInfo}
+	resp := &SetupVMResponse{InstanceID: instance.ID, IPAddress: instance.Address, InstanceInfo: instanceInfo}
 
 	printKV(logr, "Machine IP", instance.Address)
 	printOK(logr, "VM setup is complete")
@@ -512,7 +510,6 @@ func handleSetup(
 		owner,
 		provisionParams,
 		query,
-		&r.GitspaceAgentConfig,
 		&r.StorageConfig,
 		&r.InstanceInfo,
 		r.Timeout,

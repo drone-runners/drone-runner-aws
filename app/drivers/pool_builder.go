@@ -37,7 +37,6 @@ func (m *Manager) buildPool(
 		string,
 		*types.SetupInstanceParams,
 		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
 		*types.StorageConfig,
 		int64,
 		*types.Platform,
@@ -97,7 +96,7 @@ func (m *Manager) buildPool(
 			defer wg.Done()
 
 			// generate certs cert
-			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", nil, nil, nil, nil, 0, nil)
+			inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", nil, nil, nil, 0, nil)
 			if err != nil {
 				logr.WithError(err).Errorln("build pool: failed to create instance")
 				if setupInstanceAsync != nil {
@@ -141,7 +140,6 @@ func (m *Manager) buildPoolMultiTenant(
 		string,
 		*types.SetupInstanceParams,
 		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
 		*types.StorageConfig,
 		int64,
 		*types.Platform,
@@ -203,7 +201,7 @@ func (m *Manager) buildPoolMultiTenant(
 
 		for shouldCreate > 0 {
 			setupParams := &types.SetupInstanceParams{TenantID: tenant.ID}
-			inst, cerr := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, nil, nil, nil, 0, nil)
+			inst, cerr := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, nil, nil, 0, nil)
 			if cerr != nil {
 				logr.WithError(cerr).Errorln("build pool: failed to create tenant instance")
 				if setupInstanceAsync != nil {
@@ -228,7 +226,7 @@ func (m *Manager) buildPoolMultiTenant(
 				setupParams := deepCopySetupParams(&variantParams)
 				setupParams.TenantID = tenant.ID
 				vmImageConfig := vmImageConfigFromSetupParams(setupParams)
-				inst, cerr := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, vmImageConfig, nil, nil, 0, nil)
+				inst, cerr := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, vmImageConfig, nil, 0, nil)
 				if cerr != nil {
 					logr.WithError(cerr).WithField("variant_id", setupParams.VariantID).
 						Errorln("build pool: failed to create tenant variant instance")
@@ -266,7 +264,6 @@ func (m *Manager) buildPoolWithVariants(
 		string,
 		*types.SetupInstanceParams,
 		*spec.VMImageConfig,
-		*types.GitspaceAgentConfig,
 		*types.StorageConfig,
 		int64,
 		*types.Platform,
@@ -305,7 +302,7 @@ func (m *Manager) buildPoolWithVariants(
 			go func(ctx context.Context, logr logger.Logger, variantParams *types.SetupInstanceParams, setupParams *types.SetupInstanceParams, vmImageConfig *spec.VMImageConfig) {
 				defer wg.Done()
 
-				inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, vmImageConfig, nil, nil, 0, nil)
+				inst, err := setupInstanceWithHibernate(ctx, pool, tlsServerName, "", setupParams, vmImageConfig, nil, 0, nil)
 				if err != nil {
 					logr.WithError(err).Errorln("build pool with variants: failed to create instance")
 					if setupInstanceAsync != nil {

@@ -569,7 +569,7 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 		WithField("zone", reqCfg.availabilityZone).
 		WithField("hibernate", p.CanHibernate())
 
-	var name = getInstanceName(opts.RunnerName, opts.PoolName, opts.GitspaceOpts.GitspaceConfigIdentifier)
+	var name = getInstanceName(opts.RunnerName, opts.PoolName)
 
 	// Start with common harness tags
 	tags := buildHarnessTags(opts)
@@ -724,34 +724,28 @@ func (p *amazonConfig) Create(ctx context.Context, opts *drtypes.InstanceCreateO
 	if marshalErr != nil {
 		return &drtypes.Instance{}, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.InternalLabels, marshalErr)
 	}
-	gitspacePortMappings := make(map[int]int)
-	for _, port := range opts.GitspaceOpts.Ports {
-		gitspacePortMappings[port] = port
-	}
-
 	instance = &drtypes.Instance{
-		ID:                   instanceID,
-		Name:                 instanceID,
-		Provider:             drtypes.Amazon, // this is driver, though its the old legacy name of provider
-		State:                drtypes.StateProvisioning,
-		Pool:                 opts.PoolName,
-		Image:                resolvedAMI,
-		Zone:                 reqCfg.availabilityZone,
-		Region:               p.region,
-		Size:                 reqCfg.size,
-		Platform:             opts.Platform,
-		Address:              instanceIP,
-		CACert:               opts.CACert,
-		CAKey:                opts.CAKey,
-		TLSCert:              opts.TLSCert,
-		TLSKey:               opts.TLSKey,
-		Started:              launchTime.Unix(),
-		Updated:              time.Now().Unix(),
-		IsHibernated:         false,
-		Port:                 lehelper.LiteEnginePort,
-		StorageIdentifier:    opts.StorageOpts.Identifier,
-		Labels:               labelsBytes,
-		GitspacePortMappings: gitspacePortMappings,
+		ID:                instanceID,
+		Name:              instanceID,
+		Provider:          drtypes.Amazon, // this is driver, though its the old legacy name of provider
+		State:             drtypes.StateProvisioning,
+		Pool:              opts.PoolName,
+		Image:             resolvedAMI,
+		Zone:              reqCfg.availabilityZone,
+		Region:            p.region,
+		Size:              reqCfg.size,
+		Platform:          opts.Platform,
+		Address:           instanceIP,
+		CACert:            opts.CACert,
+		CAKey:             opts.CAKey,
+		TLSCert:           opts.TLSCert,
+		TLSKey:            opts.TLSKey,
+		Started:           launchTime.Unix(),
+		Updated:           time.Now().Unix(),
+		IsHibernated:      false,
+		Port:              lehelper.LiteEnginePort,
+		StorageIdentifier: opts.StorageOpts.Identifier,
+		Labels:            labelsBytes,
 	}
 	logr.
 		WithField("ip", instanceIP).
@@ -1453,9 +1447,6 @@ func (p *amazonConfig) createPersistentDisks(
 	return volumes, nil
 }
 
-func getInstanceName(runner, pool, gitspaceConfigIdentifier string) string {
-	if gitspaceConfigIdentifier != "" {
-		return gitspaceConfigIdentifier
-	}
+func getInstanceName(runner, pool string) string {
 	return fmt.Sprintf("%s-%s-%s", runner, pool, uniuri.NewLen(8)) //nolint:mnd
 }

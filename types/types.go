@@ -104,7 +104,6 @@ type Instance struct {
 	IsHibernated               bool           `db:"is_hibernated" json:"is_hibernated"`
 	Port                       int64          `db:"instance_port" json:"port"`
 	RunnerName                 string         `db:"runner_name" json:"runner_name"`
-	GitspacePortMappings       map[int]int    `json:"gitspaces_port_mappings"`
 	StorageIdentifier          string         `db:"instance_storage_identifier" json:"storage_identifier"`
 	Labels                     []byte         `db:"instance_labels" json:"instance_labels"`
 	EnableNestedVirtualization bool           `db:"enable_nested_virtualization" json:"enable_nested_virtualization"`
@@ -193,7 +192,6 @@ type InstanceCreateOpts struct {
 	EgressCACert                 string
 	EnableLEDiagnostics          bool
 	ResourceClass                string
-	GitspaceOpts                 GitspaceOpts
 	StorageOpts                  StorageOpts
 	AutoInjectionBinaryURI       string
 	AnnotationsBinaryURI         string
@@ -288,14 +286,6 @@ func StringPtr(s string) *string {
 	return &s
 }
 
-type GitspaceOpts struct {
-	GitspaceConfigIdentifier string
-	Secret                   string // Deprecated: VMInitScript should be used to send the whole script
-	AccessToken              string // Deprecated: VMInitScript should be used to send the whole script
-	Ports                    []int
-	VMInitScript             string
-}
-
 type StorageOpts struct {
 	CephPoolIdentifier string
 	Identifier         string
@@ -303,14 +293,6 @@ type StorageOpts struct {
 	Type               string
 	BootDiskType       string
 	BootDiskSize       string
-}
-
-type GitspaceAgentConfig struct {
-	Secret                   string `json:"secret"`       // Deprecated: VMInitScript should be used to send the whole script
-	AccessToken              string `json:"access_token"` // Deprecated: VMInitScript should be used to send the whole script
-	Ports                    []int  `json:"ports"`
-	VMInitScript             string `json:"vm_init_script"`
-	GitspaceConfigIdentifier string `json:"gitspace_config_identifier"`
 }
 
 type StorageConfig struct {
