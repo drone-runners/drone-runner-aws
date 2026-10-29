@@ -152,7 +152,7 @@ func TestResourceJobSequoiaExclusionConstraint(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			vmImageConfig := types.VMImageConfig{ImageName: tc.imageName}
-			job, _ := p.resourceJob(6, 12, 3200, 0, "test-vm-id", tc.accountID, vmImageConfig, noopHealthCheck)
+			job, _ := p.resourceJob(6, 12, 3200, "test-vm-id", tc.accountID, vmImageConfig, noopHealthCheck)
 
 			found := false
 			for _, c := range job.Constraints {
@@ -190,7 +190,7 @@ func TestResourceJobNodeClassConstraintPreserved(t *testing.T) {
 
 	noopHealthCheck := func(_ time.Duration, _, _ string) string { return "sleep 1" }
 	vmImageConfig := types.VMImageConfig{ImageName: "sonoma_14.6_xcodes_15.2"}
-	job, _ := p.resourceJob(6, 12, 3200, 0, "test-vm-id", "GLOBAL_ACCOUNT_ID_MAC", vmImageConfig, noopHealthCheck)
+	job, _ := p.resourceJob(6, 12, 3200, "test-vm-id", "GLOBAL_ACCOUNT_ID_MAC", vmImageConfig, noopHealthCheck)
 
 	var nodeClassFound, sequoiaExclusionFound bool
 	for _, c := range job.Constraints {

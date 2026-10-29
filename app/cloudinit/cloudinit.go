@@ -35,7 +35,6 @@ type Params struct {
 	EgressNoProxy                string
 	EgressCACert                 string
 	EnableLEDiagnostics          bool
-	GitspaceAgentConfig          types.GitspaceOpts
 	StorageConfig                types.StorageConfig
 	AutoInjectionBinaryURI       string
 	LiteEngineFallbackPath       string
@@ -136,10 +135,6 @@ var macArm64Template = template.Must(template.New("mac-arm64").Funcs(funcs).Pars
 var userDataNomadLinux string
 var linuxBashTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(userDataNomadLinux))
 
-//go:embed user_data/gitspaces_linux
-var userDataGitspacesLinux string
-var gitspacesLinuxTemplate = template.Must(template.New("linux-bash").Funcs(funcs).Parse(userDataGitspacesLinux))
-
 //go:embed user_data/ubuntu_linux
 var userDataUbuntu string
 var ubuntuTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntu)
@@ -148,21 +143,9 @@ var ubuntuTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntu)
 var userDataUbuntuEgressProxy string
 var ubuntuEgressProxyTemplate = mustParseUbuntu(oshelp.OSLinux, userDataUbuntuEgressProxy)
 
-//go:embed user_data/gitspaces_ubuntu
-var userDataGitspacesUbuntu string
-var gitspacesUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataGitspacesUbuntu))
-
-//go:embed user_data/amazon_gitspaces_ubuntu
-var userDataAmazonGitspacesUbuntu string
-var gitspacesAWSUbuntuTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataAmazonGitspacesUbuntu))
-
 //go:embed user_data/amazon_linux
 var userDataAmazonLinux string
 var amazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataAmazonLinux))
-
-//go:embed user_data/gitspaces_amazon_linux
-var userDataGitspacesAmazonLinux string
-var gitspacesAmazonLinuxTemplate = template.Must(template.New(oshelp.OSLinux).Funcs(funcs).Parse(userDataGitspacesAmazonLinux))
 
 //go:embed user_data/windows
 var userDataWindows string
@@ -229,21 +212,7 @@ func LinuxBash(params *Params) (payload string) {
 		KeyPath:    keyPath,
 	}
 
-	var err error
-	if (params.GitspaceAgentConfig.Secret != "" && params.GitspaceAgentConfig.AccessToken != "") ||
-		(params.GitspaceAgentConfig.VMInitScript != "") {
-		if params.GitspaceAgentConfig.VMInitScript != "" {
-			decodedScript, decodeErr := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
-			if decodeErr != nil {
-				err = fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
-				panic(err)
-			}
-			p.GitspaceAgentConfig.VMInitScript = string(decodedScript)
-		}
-		err = gitspacesLinuxTemplate.Execute(sb, p)
-	} else {
-		err = linuxBashTemplate.Execute(sb, p)
-	}
+	err := linuxBashTemplate.Execute(sb, p)
 	if err != nil {
 		err = fmt.Errorf("failed to execute linux bash template to get init script: %w", err)
 		panic(err)
@@ -272,32 +241,12 @@ func Linux(params *Params) (payload string, err error) {
 		KeyPath:    keyPath,
 	}
 
-	// Decode VMInitScript if provided
-	if params.GitspaceAgentConfig.VMInitScript != "" {
-		decoded, err := base64.StdEncoding.DecodeString(params.GitspaceAgentConfig.VMInitScript)
-		if err != nil {
-			return "", fmt.Errorf("failed to decode the gitspaces vm init script: %w", err)
-		}
-		templateData.GitspaceAgentConfig.VMInitScript = string(decoded)
-	}
-
-	// Select template
 	var tmpl *template.Template
 	switch params.Platform.OSName {
 	case oshelp.AmazonLinux:
-		if params.GitspaceAgentConfig.VMInitScript != "" {
-			tmpl = gitspacesAmazonLinuxTemplate
-		} else {
-			tmpl = amazonLinuxTemplate
-		}
+		tmpl = amazonLinuxTemplate
 	default:
-		if params.GitspaceAgentConfig.VMInitScript != "" {
-			if params.DriverName == string(types.Amazon) {
-				tmpl = gitspacesAWSUbuntuTemplate
-			} else {
-				tmpl = gitspacesUbuntuTemplate
-			}
-		} else if params.EgressControl {
+		if params.EgressControl {
 			tmpl = ubuntuEgressProxyTemplate
 		} else {
 			tmpl = ubuntuTemplate
