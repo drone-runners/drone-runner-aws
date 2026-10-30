@@ -115,6 +115,42 @@ func TestInstanceStore_FindAndClaimAnyPool(t *testing.T) {
 	}
 }
 
+func TestInstanceStore_FindAndClaimAnyPoolWithEveryFilter(t *testing.T) {
+	ctx := context.Background()
+	s := newPostgresInstanceStore(t)
+
+	amd64 := types.Platform{OS: "linux", Arch: "amd64"}
+	for _, inst := range []*types.Instance{
+		{ID: "excluded", Pool: "linux-free", Platform: amd64, GPU: true, EnableNestedVirtualization: true},
+		{ID: "no-gpu", Pool: "linux-paid", Platform: amd64, EnableNestedVirtualization: true},
+		{ID: "no-nested", Pool: "linux-paid", Platform: amd64, GPU: true},
+		{ID: "arm", Pool: "linux-arm", Platform: types.Platform{OS: "linux", Arch: "arm64"}, GPU: true, EnableNestedVirtualization: true},
+		{ID: "hibernating", Pool: "linux-other", Platform: amd64, GPU: true, EnableNestedVirtualization: true, State: types.StateHibernating},
+		{ID: "match", Pool: "linux-paid", Platform: amd64, GPU: true, EnableNestedVirtualization: true},
+	} {
+		inst.Name, inst.Image, inst.VariantID, inst.TenantID, inst.Labels = inst.ID, "img", "large", "default", []byte("{}")
+		if inst.State == "" {
+			inst.State = types.StateCreated
+		}
+		if err := s.Create(ctx, inst); err != nil {
+			t.Fatalf("create %s: %v", inst.ID, err)
+		}
+	}
+
+	params := &types.QueryParams{
+		PoolName: "linux-other", AnyPool: true, ExcludePoolNames: []string{"linux-free"}, Platform: &amd64,
+		GPU: true, NestedVirtualization: true, VariantID: "large", TenantID: "default", ImageName: "img",
+	}
+	allowed := []types.InstanceState{types.StateCreated}
+	got, err := s.FindAndClaim(ctx, params, types.StateInUse, allowed, true)
+	if err != nil || got.ID != "match" {
+		t.Fatalf("expected match, got %+v, %v", got, err)
+	}
+	if extra, err := s.FindAndClaim(ctx, params, types.StateInUse, allowed, true); err == nil {
+		t.Fatalf("expected no match, claimed %s", extra.ID)
+	}
+}
+
 func TestInstanceStore_FindAndClaimWithTenOrMoreArgs(t *testing.T) {
 	ctx := context.Background()
 	s := newPostgresInstanceStore(t)

@@ -86,7 +86,7 @@ type MetricsRecorder interface {
 	// the resumed VM being confirmed healthy and set up for a stage (includes the health-check
 	// and setup phases, unlike RecordVMResumeDuration).
 	RecordVMResumeToReadyDuration(poolID, zone, vmType, outcome string, duration time.Duration)
-	// RecordHotpoolClaim records one attempt to claim a free instance for a request in
-	// requestedPool; claimedPool is empty on a miss.
+	// RecordHotpoolClaim records a claim of a free instance for a request in requestedPool;
+	// claimedPool is empty on a miss. A request records at most one miss per claim scope.
 	RecordHotpoolClaim(algorithm, tier, requestedPool, claimedPool, outcome string)
 }

@@ -468,7 +468,10 @@ func (d *DistributedManager) provisionFromPool(
 			return inst, capacity, true, candidateVariantID, nil
 		}
 	}
-	d.recordClaim(poolName, nil)
+	// Every pool of a scope runs the same claim, so a request records one miss, not one per pool.
+	if claimScope == nil || len(claimScope.Pools) == 0 || claimScope.Pools[0] == poolName {
+		d.recordClaim(poolName, nil)
+	}
 
 	// set the variant ID to the first variant in the list
 	variantID = variantsToTry[0]

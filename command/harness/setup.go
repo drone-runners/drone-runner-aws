@@ -383,10 +383,6 @@ func HandleSetup(
 	return resp, selectedPoolDriver, nil
 }
 
-// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
-// run a health check on the lite engine. It returns information about the setup
-// VM and an error if setup failed.
-// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
 // claimReservedCapacity atomically moves the stage's reservation from "created" to "inuse" so
 // concurrent requests can't claim the same capacity. It returns nil when there is none to claim.
 func claimReservedCapacity(crs store.CapacityReservationStore, stageRuntimeID string, internalLogr *logrus.Entry) *types.CapacityReservation {
@@ -446,6 +442,10 @@ func resumeToReadyOutcome(ctx context.Context, err error) string {
 	return drivers.VMLifecycleOutcomeError
 }
 
+// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
+// run a health check on the lite engine. It returns information about the setup
+// VM and an error if setup failed.
+// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
 func handleSetup(
 	ctx context.Context,
 	buildLog *logrus.Entry,

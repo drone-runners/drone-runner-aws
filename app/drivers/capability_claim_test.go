@@ -478,3 +478,31 @@ func TestProvisionFromPool_ScopeOfOwnPoolKeepsMachineTypeAndRecordsMiss(t *testi
 	require.Error(t, err)
 	assert.Equal(t, []hotpoolClaimRecord{{"capability", types.TierPaid, "pool1", "", ClaimOutcomeMiss}}, metrics.claims)
 }
+
+func TestProvisionFromPool_ScopeRecordsOneMissPerRequest(t *testing.T) {
+	instances := &mockInstanceStore{
+		FindAndClaimFunc: func(context.Context, *types.QueryParams, types.InstanceState, []types.InstanceState, bool) (*types.Instance, error) {
+			return nil, sql.ErrNoRows
+		},
+	}
+	d, _, metrics := newCapabilityTestManager(instances)
+	scope := &types.ClaimScope{Pools: []string{"pool1", "pool2"}, Exclude: []string{"free1"}, Platform: types.Platform{OS: "linux", Arch: "amd64"}}
+	failCreate := &flexibleMockDriver{
+		CreateFunc: func(context.Context, *types.InstanceCreateOpts) (*types.Instance, error) {
+			return nil, errors.New("no capacity in test driver")
+		},
+	}
+
+	for _, name := range scope.Pools {
+		pool := d.poolMap[name]
+		pool.Driver = failCreate
+		_, _, _, _, err := d.provisionFromPool( //nolint:dogsled
+			context.Background(), pool, "tls", "owner1",
+			&types.ProvisionParams{ResourceClass: "large", Claim: scope},
+			nil, nil, 60, name, nil, false,
+		)
+		require.Error(t, err)
+	}
+
+	assert.Equal(t, []hotpoolClaimRecord{{"capability", types.TierPaid, "pool1", "", ClaimOutcomeMiss}}, metrics.claims)
+}
