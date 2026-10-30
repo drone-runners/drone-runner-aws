@@ -47,7 +47,7 @@ type SetupVMResponse struct {
 }
 
 var (
-	freeAccount = "free"
+	freeAccount = types.FreeAccountID
 	noContext   = context.Background()
 )
 
@@ -140,15 +140,6 @@ func HandleSetup(
 		r.Volumes = append(r.Volumes, &vol)
 	}
 
-	pools := []string{}
-	pools = append(pools, r.PoolID)
-	// If request has no fallback pools, use the env config fallback pools if available
-	if len(r.FallbackPoolIDs) == 0 && len(envFallbackPoolIDs) > 0 {
-		pools = append(pools, envFallbackPoolIDs...)
-	} else {
-		pools = append(pools, r.FallbackPoolIDs...)
-	}
-
 	var selectedPool, selectedPoolDriver string
 	var poolErr error
 	var instance *types.Instance
@@ -181,50 +172,28 @@ func HandleSetup(
 	logRequestedMachine(logr, poolManager, fetchPool(r.SetupRequest.LogConfig.AccountID, r.PoolID, poolMapByAccount), owner,
 		&platform, r.ResourceClass, r.VMImageConfig.ImageVersion, r.VMImageConfig.ImageName, stageRuntimeID, r.NestedVirtualization)
 
+	pools, scope := requestPools(ctx, poolManager, r.PoolID, r.FallbackPoolIDs, envFallbackPoolIDs, &types.ProvisionParams{
+		VMImageConfig:        &r.VMImageConfig,
+		NestedVirtualization: r.NestedVirtualization,
+		ResourceClass:        r.ResourceClass,
+		AccountID:            owner,
+	}, r.SetupRequest.LogConfig.AccountID, poolMapByAccount)
+
 	// try to provision an instance with fallbacks
 	setupTime := time.Duration(0)
 
-	var capacity *types.CapacityReservation
-	if crs != nil {
-		// Atomically find and claim the capacity reservation, transitioning from "created" to "inuse"
-		// This prevents race conditions where multiple requests could claim the same capacity
-		capacities, capClaimErr := crs.FindAndClaim(
-			noContext,
-			&types.CapacityReservationQueryParams{StageID: stageRuntimeID, Limit: 1},
-			types.CapacityReservationStateInUse,
-			[]types.CapacityReservationState{types.CapacityReservationStateCreated},
-		)
-
-		if capClaimErr != nil {
-			// sql.ErrNoRows means either the capacity doesn't exist or it's not in "created" state
-			internalLogr.WithError(capClaimErr).Debug("could not find or claim capacity reservation")
-		} else if len(capacities) > 0 && capacities[0].PoolName != "" {
-			capacity = capacities[0]
-		}
-	}
-
-	// if capacity was reserved in any pool then that pool should be tried first
-	if capacity != nil && capacity.PoolName != "" {
-		for i, p := range pools {
-			if p == capacity.PoolName {
-				// Move matched pool to the front
-				if i != 0 {
-					pools = append([]string{p}, append(pools[:i], pools[i+1:]...)...)
-				}
-				break
-			}
-		}
-	}
+	capacity := claimReservedCapacity(crs, stageRuntimeID, internalLogr)
+	pools = reservedPoolFirst(pools, capacity, scope)
 
 	for idx, p := range pools {
 		st := time.Now()
 		if idx > 0 {
 			fallback = true
 		}
-		pool := fetchPool(r.SetupRequest.LogConfig.AccountID, p, poolMapByAccount)
+		pool := targetPool(p, scope, r.SetupRequest.LogConfig.AccountID, poolMapByAccount)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the setup process")
 		_, _, poolDriver := poolManager.Inspect(p)
-		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, noProxy, metrics)
+		instance, warmed, hibernated, variantID, poolErr = handleSetup(ctx, logr, internalLogr, r, runnerName, enableMock, mockTimeout, poolManager, pool, owner, capacity, noProxy, metrics, scope)
 		setupTime = time.Since(st)
 		metrics.WaitDurationCount.WithLabelValues(
 			pool,
@@ -256,6 +225,9 @@ func HandleSetup(
 			continue
 		}
 		selectedPool = pool
+		if instance != nil && instance.Pool != "" {
+			selectedPool = instance.Pool
+		}
 		foundPool = true
 		_, _, selectedPoolDriver = poolManager.Inspect(selectedPool)
 		break
@@ -411,10 +383,49 @@ func HandleSetup(
 	return resp, selectedPoolDriver, nil
 }
 
-// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
-// run a health check on the lite engine. It returns information about the setup
-// VM and an error if setup failed.
-// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
+// claimReservedCapacity atomically moves the stage's reservation from "created" to "inuse" so
+// concurrent requests can't claim the same capacity. It returns nil when there is none to claim.
+func claimReservedCapacity(crs store.CapacityReservationStore, stageRuntimeID string, internalLogr *logrus.Entry) *types.CapacityReservation {
+	if crs == nil {
+		return nil
+	}
+	capacities, err := crs.FindAndClaim(
+		noContext,
+		&types.CapacityReservationQueryParams{StageID: stageRuntimeID, Limit: 1},
+		types.CapacityReservationStateInUse,
+		[]types.CapacityReservationState{types.CapacityReservationStateCreated},
+	)
+	if err != nil {
+		// sql.ErrNoRows means either the capacity doesn't exist or it's not in "created" state
+		internalLogr.WithError(err).Debug("could not find or claim capacity reservation")
+		return nil
+	}
+	if len(capacities) > 0 && capacities[0].PoolName != "" {
+		return capacities[0]
+	}
+	return nil
+}
+
+// reservedPoolFirst moves the pool holding the reserved capacity to the front of pools.
+func reservedPoolFirst(pools []string, capacity *types.CapacityReservation, scope *types.ClaimScope) []string {
+	if capacity == nil || capacity.PoolName == "" {
+		return pools
+	}
+	for i, p := range pools {
+		if p == capacity.PoolName {
+			if i != 0 {
+				pools = append([]string{p}, append(pools[:i], pools[i+1:]...)...)
+			}
+			return pools
+		}
+	}
+	// A claim within the scope may have reserved an instance in a pool outside its pools.
+	if scope != nil {
+		pools = append([]string{capacity.PoolName}, pools...)
+	}
+	return pools
+}
+
 // resumeToReadyOutcome classifies the result of the resume-to-ready span (StartInstance through
 // the health-check and setup phases below it) into the bounded outcome set for
 // runner_vm_resume_to_ready_duration_seconds. There is no `reason` label on this metric (see
@@ -431,6 +442,10 @@ func resumeToReadyOutcome(ctx context.Context, err error) string {
 	return drivers.VMLifecycleOutcomeError
 }
 
+// handleSetup tries to setup an instance in a given pool. It tries to provision an instance and
+// run a health check on the lite engine. It returns information about the setup
+// VM and an error if setup failed.
+// It is idempotent so in case there was a setup failure, it cleans up any intermediate state.
 func handleSetup(
 	ctx context.Context,
 	buildLog *logrus.Entry,
@@ -445,6 +460,7 @@ func handleSetup(
 	reservedCapacity *types.CapacityReservation,
 	noProxy string,
 	metrics *metric.Metrics,
+	scope *types.ClaimScope,
 ) (
 	instance *types.Instance,
 	warmed bool,
@@ -500,6 +516,7 @@ func handleSetup(
 		StageRuntimeID:       stageRuntimeID,
 		PipelineExecutionID:  getPipelineExecutionID(&r.Context, r.Tags),
 		LongRunning:          r.Timeout > longRunningStageThresholdSec,
+		Claim:                scope,
 	}
 	if r.Zone != "" {
 		provisionParams.Zones = []string{r.Zone}
@@ -526,6 +543,10 @@ func handleSetup(
 	}
 	initZone, initVMType = instance.Zone, instance.Size
 	initSource = computeInitSource(reservedCapacity, warmed, false)
+	// A free instance can come from another pool of the capability.
+	if instance.Pool != "" {
+		pool = instance.Pool
+	}
 
 	ilog := internalLogr.WithField("pool_id", pool).
 		WithField("ip", instance.Address).

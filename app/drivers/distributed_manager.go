@@ -41,7 +41,9 @@ func tenantIDForSetup(setupParams *types.SetupInstanceParams) string {
 
 type DistributedManager struct {
 	Manager
-	outboxStore store.OutboxStore
+	outboxStore       store.OutboxStore
+	capabilityCatalog CapabilityCatalog
+	algorithm         types.SchedulerAlgorithm
 }
 
 func NewDistributedManager(manager *Manager, outboxStore store.OutboxStore) *DistributedManager {
@@ -387,6 +389,11 @@ func (d *DistributedManager) provisionFromPool(
 	}
 	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
 
+	var claimScope *types.ClaimScope
+	if provisionParams != nil {
+		claimScope = provisionParams.Claim
+	}
+
 	for _, candidateVariantID := range variantsToTry {
 		queryParams := &types.QueryParams{
 			PoolName:             poolName,
@@ -397,6 +404,7 @@ func (d *DistributedManager) provisionFromPool(
 			ImageName:            fullyQualifiedImageName,
 			GPU:                  setupParams.GPU,
 		}
+		applyClaimScope(queryParams, claimScope, poolName)
 
 		// Try to find and claim a free instance atomically
 		inst, err = d.instanceStore.FindAndClaim(ctx, queryParams, types.StateInUse, allowedStates, true)
@@ -406,12 +414,20 @@ func (d *DistributedManager) provisionFromPool(
 
 		// If we successfully claimed an instance, update it and return
 		if inst != nil {
+			d.recordClaim(poolName, inst)
+			claimedPool, variantParams := pool, setupParams
+			if inst.Pool != poolName {
+				if entry, ok := d.poolMap[inst.Pool]; ok {
+					claimedPool, variantParams = entry, variantSetupParams(entry, inst)
+				}
+			}
 			inst.OwnerID = ownerID
 			if err = d.instanceStore.Update(ctx, inst); err != nil {
-				return nil, nil, false, candidateVariantID, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", poolName, err)
+				return nil, nil, false, candidateVariantID, fmt.Errorf("provision: failed to tag an instance in %q pool: %w", inst.Pool, err)
 			}
 			logger.FromContext(ctx).
-				WithField("pool", poolName).
+				WithField("pool", inst.Pool).
+				WithField("requested_pool", poolName).
 				WithField("instance_id", inst.ID).
 				WithField("hotpool", true).
 				WithField("variant_id", candidateVariantID).
@@ -425,32 +441,36 @@ func (d *DistributedManager) provisionFromPool(
 					ImageName:            inst.Image,
 					NestedVirtualization: inst.EnableNestedVirtualization,
 					GPU:                  inst.GPU,
-					MachineType:          setupParams.MachineType,
+					MachineType:          variantParams.MachineType,
 					Hibernate:            inst.IsHibernated,
 					VariantID:            inst.VariantID,
 					TenantID:             inst.TenantID,
-					DiskSize:             setupParams.DiskSize,
-					DiskType:             setupParams.DiskType,
+					DiskSize:             variantParams.DiskSize,
+					DiskType:             variantParams.DiskType,
 					ResourceClass:        setupParams.ResourceClass,
 					Source:               types.InstanceSourcePool,
 				})
 			} else {
 				logger.FromContext(ctx).
-					WithField("pool", poolName).
+					WithField("pool", inst.Pool).
 					WithField("instance_id", inst.ID).
 					WithField("source", string(inst.Source)).
 					Infoln("provision: skipping replenishment for non-pool instance")
 			}
 
-			refreshClaimIdentityLabels(ctx, pool, inst, setupParams, timeout)
+			refreshClaimIdentityLabels(ctx, claimedPool, inst, setupParams, timeout)
 
 			capacity = &types.CapacityReservation{
 				InstanceID: inst.ID,
-				PoolName:   poolName,
+				PoolName:   inst.Pool,
 				CreatedAt:  time.Now().Unix(),
 			}
 			return inst, capacity, true, candidateVariantID, nil
 		}
+	}
+	// Every pool of a scope runs the same claim, so a request records one miss, not one per pool.
+	if claimScope == nil || len(claimScope.Pools) == 0 || claimScope.Pools[0] == poolName {
+		d.recordClaim(poolName, nil)
 	}
 
 	// set the variant ID to the first variant in the list
