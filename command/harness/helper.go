@@ -29,8 +29,7 @@ const (
 )
 
 func getStreamLogger(cfg *leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, correlationID string) *lelivelog.Writer {
-	client := lestream.NewHTTPClient(cfg.URL, cfg.AccountID,
-		cfg.Token, cfg.IndirectUpload, false, mtlsConfig.ClientCert, mtlsConfig.ClientCertKey)
+	client := newStreamClient(cfg, mtlsConfig)
 	wc := lelivelog.New(context.Background(), client, logKey, correlationID, nil, true, cfg.TrimNewLineSuffix, cfg.SkipOpeningStream, cfg.SkipClosingStream)
 	go func() {
 		if err := wc.Open(); err != nil {
@@ -38,6 +37,20 @@ func getStreamLogger(cfg *leapi.LogConfig, mtlsConfig spec.MtlsConfig, logKey, c
 		}
 	}()
 	return wc
+}
+
+func newStreamClient(cfg *leapi.LogConfig, mtlsConfig spec.MtlsConfig) *lestream.HTTPClient {
+	return lestream.NewHTTPClientWithLogScope(
+		cfg.URL,
+		cfg.AccountID,
+		cfg.OrgID,
+		cfg.ProjectID,
+		cfg.Token,
+		cfg.IndirectUpload,
+		false,
+		mtlsConfig.ClientCert,
+		mtlsConfig.ClientCertKey,
+	)
 }
 
 // generate a id from the filename
