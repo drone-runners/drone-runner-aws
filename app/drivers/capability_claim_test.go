@@ -394,7 +394,7 @@ func TestProvisionFromPool_TenantScopeClaimsFromAnotherTenantPool(t *testing.T) 
 	inst, capacity, _, _, err := d.provisionFromPool(
 		context.Background(), pool, "tls", "acct",
 		&types.ProvisionParams{ResourceClass: "large", AccountID: "acct", Claim: scope},
-		nil, nil, 60, pool.Name, nil, false,
+		nil, 60, pool.Name, nil, false,
 	)
 
 	require.NoError(t, err)
@@ -434,7 +434,7 @@ func TestProvisionFromPool_ClaimsFromAnyPoolInScope(t *testing.T) {
 	inst, capacity, warmed, _, err := d.provisionFromPool(
 		context.Background(), pool, "tls", "owner1",
 		&types.ProvisionParams{ResourceClass: "large", Claim: scope},
-		nil, nil, 60, pool.Name, nil, false,
+		nil, 60, pool.Name, nil, false,
 	)
 
 	require.NoError(t, err)
@@ -472,7 +472,7 @@ func TestProvisionFromPool_ScopeOfOwnPoolKeepsMachineTypeAndRecordsMiss(t *testi
 	_, _, _, _, err := d.provisionFromPool( //nolint:dogsled
 		context.Background(), pool, "tls", "owner1",
 		&types.ProvisionParams{ResourceClass: "large", Claim: &types.ClaimScope{Pools: []string{"pool1"}, Include: []string{"pool1"}}},
-		nil, nil, 60, pool.Name, nil, false,
+		nil, 60, pool.Name, nil, false,
 	)
 
 	require.Error(t, err)
@@ -499,7 +499,7 @@ func TestProvisionFromPool_ScopeRecordsOneMissPerRequest(t *testing.T) {
 		_, _, _, _, err := d.provisionFromPool( //nolint:dogsled
 			context.Background(), pool, "tls", "owner1",
 			&types.ProvisionParams{ResourceClass: "large", Claim: scope},
-			nil, nil, 60, name, nil, false,
+			nil, 60, name, nil, false,
 		)
 		require.Error(t, err)
 	}

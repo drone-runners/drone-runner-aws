@@ -57,7 +57,7 @@ type fakeIManager struct {
 
 //nolint:gocritic // unnamed results mirror drivers.InstanceProvisioner's Provision signature
 func (f *fakeIManager) Provision(ctx context.Context, poolName, _, ownerID string, params *types.ProvisionParams, _ *types.QueryParams,
-	_ *types.GitspaceAgentConfig, _ *types.StorageConfig, _ *common.InstanceInfo, _ int64, _ bool,
+	_ *types.StorageConfig, _ *common.InstanceInfo, _ int64, _ bool,
 	_ *types.CapacityReservation, _ bool) (*types.Instance, *types.CapacityReservation, bool, string, error) {
 	f.provisionParams = params
 	f.provisionedPools = append(f.provisionedPools, poolName)

@@ -57,7 +57,7 @@ func (p *config) initJobNoop(vm, nodeID string, liteEngineHostPort int) (initJob
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount int) (job *api.Job, id string) { //nolint:unparam
+func (p *config) resourceJobNoop(cpus, memGB int, vm string) (job *api.Job, id string) { //nolint:unparam
 	id = getResourceJobID(vm)
 	portLabel := vm
 
@@ -75,7 +75,7 @@ func (p *config) resourceJobNoop(cpus, memGB int, vm string, gitspacesPortCount 
 		},
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks:                  getNetworkResources(portLabel, gitspacesPortCount),
+				Networks:                  getNetworkResources(portLabel),
 				StopAfterClientDisconnect: &p.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),

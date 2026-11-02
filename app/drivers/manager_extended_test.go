@@ -1394,7 +1394,6 @@ func TestManager_buildPool_terminatingNotCountedAsFree(t *testing.T) {
 				variantID string,
 				params *types.SetupInstanceParams,
 				vmImage *spec.VMImageConfig,
-				gitspaceConfig *types.GitspaceAgentConfig,
 				storageConfig *types.StorageConfig,
 				storageSize int64,
 				platform *types.Platform,

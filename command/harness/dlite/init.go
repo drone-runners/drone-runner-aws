@@ -75,9 +75,8 @@ func (t *VMInitTask) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			HostName: t.c.delegateInfo.Host,
 			ID:       t.c.delegateInfo.ID,
 		},
-		PoolDriverUsed:        selectedPoolDriver,
-		GitspacesPortMappings: setupResp.GitspacesPortMappings,
-		InstanceInfo:          setupResp.InstanceInfo,
+		PoolDriverUsed: selectedPoolDriver,
+		InstanceInfo:   setupResp.InstanceInfo,
 	}
 
 	writeSuccessResponse(w, &resp)

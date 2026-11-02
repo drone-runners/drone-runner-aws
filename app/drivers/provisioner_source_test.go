@@ -93,7 +93,7 @@ func TestSetupInstanceDisablesFallbacksForWarmCapacity(t *testing.T) {
 			}
 
 			_, _, err := manager.setupInstance(
-				context.Background(), pool, "tls", "owner", params, nil, true, nil, nil, 60, nil, nil, false,
+				context.Background(), pool, "tls", "owner", params, nil, true, nil, 60, nil, nil, false,
 			)
 			if err != nil {
 				t.Fatalf("setupInstance: %v", err)

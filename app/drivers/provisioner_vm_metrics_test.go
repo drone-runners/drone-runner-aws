@@ -55,7 +55,7 @@ func TestSetupInstance_CreateSucceeds_RecordsSuccessOutcome(t *testing.T) {
 
 	inst, _, err := m.setupInstance(
 		context.Background(), pool, "tls-server", "owner1",
-		&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, nil, 60, nil, nil, false,
+		&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, 60, nil, nil, false,
 	)
 
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestSetupInstance_CreateFails_StillRecordsAttemptAndDuration(t *testing.T) 
 
 	inst, _, err := m.setupInstance(
 		context.Background(), pool, "tls-server", "owner1",
-		&types.SetupInstanceParams{MachineType: "n1-standard-2", Zones: []string{"us-east1-b"}}, nil, true, nil, nil, 60, nil, nil, false,
+		&types.SetupInstanceParams{MachineType: "n1-standard-2", Zones: []string{"us-east1-b"}}, nil, true, nil, 60, nil, nil, false,
 	)
 
 	require.Error(t, err)
@@ -114,7 +114,7 @@ func TestSetupInstance_CreateFails_QuotaExceededClassification(t *testing.T) {
 
 	_, _, err := m.setupInstance(
 		context.Background(), pool, "tls-server", "owner1",
-		&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, nil, 60, nil, nil, false,
+		&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, 60, nil, nil, false,
 	)
 
 	require.Error(t, err)
@@ -134,7 +134,7 @@ func TestSetupInstance_CreateFails_GenericErrorClassifiedAsDriverError(t *testin
 
 	_, _, err := m.setupInstance(
 		context.Background(), pool, "tls-server", "owner1",
-		&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, nil, 60, nil, nil, false,
+		&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, 60, nil, nil, false,
 	)
 
 	require.Error(t, err)
@@ -154,7 +154,7 @@ func TestSetupInstance_NilMetricsSafe(t *testing.T) {
 	assert.NotPanics(t, func() {
 		_, _, _ = m.setupInstance(
 			context.Background(), pool, "tls-server", "owner1",
-			&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, nil, 60, nil, nil, false,
+			&types.SetupInstanceParams{MachineType: "n1-standard-2"}, nil, true, nil, 60, nil, nil, false,
 		)
 	})
 }

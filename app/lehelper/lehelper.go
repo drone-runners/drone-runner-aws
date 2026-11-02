@@ -46,12 +46,6 @@ func GenerateUserdata(userdata string, opts *types.InstanceCreateOpts) (string, 
 		TmateBinaryFallbackURI:       opts.TmateBinaryFallbackURI,
 		VMUsername:                   opts.VMUsername,
 	}
-	if opts.GitspaceOpts.VMInitScript != "" {
-		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
-			VMInitScript: opts.GitspaceOpts.VMInitScript,
-		}
-		params.CertsDirectory = "/harness/certs"
-	}
 
 	var err error
 	if userdata == "" {

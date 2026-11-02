@@ -693,7 +693,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 			AutomaticRestart:  googleapi.Bool(true),
 		},
 		DeletionProtection: false,
-		Labels:             p.buildLabelsWithGitspace(opts),
+		Labels:             p.buildInstanceLabels(opts),
 	}
 
 	// Add BYOI metadata for custom images
@@ -1346,10 +1346,6 @@ func (p *config) mapToInstance(
 	}
 
 	started, _ := time.Parse(time.RFC3339, vm.CreationTimestamp)
-	gitspacePortMappings := make(map[int]int)
-	for _, port := range opts.GitspaceOpts.Ports {
-		gitspacePortMappings[port] = port
-	}
 	actualMachineType := path.Base(vm.MachineType)
 	if actualMachineType == "" || actualMachineType == "." || actualMachineType == "/" {
 		actualMachineType = machineType
@@ -1377,7 +1373,6 @@ func (p *config) mapToInstance(
 		GPU:                        gpu,
 		StorageIdentifier:          opts.StorageOpts.Identifier,
 		Labels:                     labelsBytes,
-		GitspacePortMappings:       gitspacePortMappings,
 		Network:                    resolvedNetwork,
 		ProxyURL:                   opts.EgressProxyURL,
 	}, nil
@@ -1792,28 +1787,18 @@ func retry[T any](ctx context.Context, m *metric.Metrics, resource, operation, z
 	return result, err
 }
 
-// buildLabelsWithGitspace creates a copy of the instance labels and adds
-// the GitspaceConfigIdentifier if present in the options.
-func (p *config) buildLabelsWithGitspace(opts *types.InstanceCreateOpts) map[string]string {
-	// Start with the default labels
-	labels := p.labels
-
-	// Check if we need to modify labels (GitspaceConfigIdentifier or VMLabels present)
-	if opts.GitspaceOpts.GitspaceConfigIdentifier != "" || len(opts.VMLabels) > 0 {
-		// Create a copy of labels to avoid modifying the original
-		labels = make(map[string]string)
-		for k, v := range p.labels {
-			labels[k] = v
-		}
-		// Add GitspaceConfigIdentifier to labels if present
-		if opts.GitspaceOpts.GitspaceConfigIdentifier != "" {
-			labels["name"] = opts.GitspaceOpts.GitspaceConfigIdentifier
-		}
-		// Add VM labels from createOptions
-		for k, v := range opts.VMLabels {
-			labels[k] = v
-		}
+// buildInstanceLabels returns the driver labels plus any per-VM labels.
+// The map is copied when VM labels are present so the shared driver labels stay unchanged.
+func (p *config) buildInstanceLabels(opts *types.InstanceCreateOpts) map[string]string {
+	if len(opts.VMLabels) == 0 {
+		return p.labels
 	}
-
+	labels := make(map[string]string, len(p.labels)+len(opts.VMLabels))
+	for k, v := range p.labels {
+		labels[k] = v
+	}
+	for k, v := range opts.VMLabels {
+		labels[k] = v
+	}
 	return labels
 }

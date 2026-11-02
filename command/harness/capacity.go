@@ -283,7 +283,6 @@ func handleCapacityReservation(
 		owner,
 		provisionParams,
 		query,
-		nil,
 		&r.StorageConfig,
 		nil,
 		timeoutSeconds,

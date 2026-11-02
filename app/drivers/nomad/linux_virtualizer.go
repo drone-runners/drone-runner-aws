@@ -38,7 +38,7 @@ var funcs = map[string]interface{}{
 	"trim": strings.TrimSpace,
 }
 
-func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout int64) (job *api.Job, id, group string, err error) { //nolint
+func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, timeout int64) (job *api.Job, id, group string, err error) { //nolint
 	id = getInitJobID(vm)
 	group = fmt.Sprintf("init_task_group_%s", vm)
 	uData := lv.generateUserData(opts)
@@ -62,13 +62,7 @@ func (lv *LinuxVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, de
 		runCmdFormat += fmt.Sprintf(" --label ttl=%d", timeout)
 	}
 
-	// gitspace args
-	for vmPort, hostPort := range gitspacesPortMappings {
-		runCmdFormat += " --ports %d:%d"
-		args = append(args, hostPort, vmPort)
-	}
-
-	// gitspace storage args
+	// storage args
 	var provisionCephStorageScriptPath string
 	var storageTask *api.Task
 	if opts.StorageOpts.Identifier != "" {
@@ -266,14 +260,6 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		EnvmanBinaryFallbackURI:      opts.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               opts.TmateBinaryURI,
 		TmateBinaryFallbackURI:       opts.TmateBinaryFallbackURI,
-	}
-	if (opts.GitspaceOpts.Secret != "" && opts.GitspaceOpts.AccessToken != "") ||
-		(opts.GitspaceOpts.VMInitScript != "") {
-		params.GitspaceAgentConfig = types.GitspaceAgentConfig{
-			Secret:       opts.GitspaceOpts.Secret,
-			AccessToken:  opts.GitspaceOpts.AccessToken,
-			VMInitScript: opts.GitspaceOpts.VMInitScript,
-		}
 	}
 	return cloudinit.LinuxBash(params)
 }

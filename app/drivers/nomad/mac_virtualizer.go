@@ -47,7 +47,7 @@ func NewMacVirtualizer(nomadConfig *types.NomadConfig) *MacVirtualizer {
 	}
 }
 
-func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, gitspacesPortMappings map[int]int, timeout int64) (job *api.Job, id, group string, err error) { //nolint
+func (mv *MacVirtualizer) GetInitJob(vm, nodeID, userData, machinePassword, defaultVMImage string, vmImageConfig types.VMImageConfig, port int, resource cf.NomadResource, opts *types.InstanceCreateOpts, timeout int64) (job *api.Job, id, group string, err error) { //nolint
 	uData, err := mv.generateUserData(userData, opts)
 	if err != nil {
 		return nil, "", "", err

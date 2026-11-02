@@ -191,9 +191,9 @@ func (p *config) createAndRunResourceJob(ctx context.Context, opts *types.Instan
 	// oversubscribing the node
 	var resourceJob *api.Job
 	if p.noop {
-		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm, len(opts.GitspaceOpts.Ports))
+		resourceJob, resourceJobID = p.resourceJobNoop(cpus, memGB, vm)
 	} else {
-		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), len(opts.GitspaceOpts.Ports), vm, class, vmImageConfig, p.virtualizer.GetHealthCheckupGenerator())
+		resourceJob, resourceJobID = p.resourceJob(cpus, memGB, p.virtualizer.GetMachineFrequency(), vm, class, vmImageConfig, p.virtualizer.GetHealthCheckupGenerator())
 	}
 
 	logr := logger.FromContext(ctx).WithField("vm", vm).WithField("node_class", class).WithField("resource_job_id", resourceJobID)
@@ -313,24 +313,12 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	vmImageConfig := p.getVMImageConfig(opts)
 
 	// get the machine details where the resource job was allocated
-	ip, id, liteEngineHostPort, gitspacesPorts, err := p.fetchMachine(logr, resourceJobID)
+	ip, id, liteEngineHostPort, err := p.fetchMachine(logr, resourceJobID)
 	if err != nil {
 		defer func() {
 			go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
 		}()
 		return nil, err
-	}
-
-	var gitspacesPortMappingsString string
-	gitspacesPortMappings := make(map[int]int)
-
-	if len(opts.GitspaceOpts.Ports) != len(gitspacesPorts) {
-		return nil, fmt.Errorf("scheduler: could not allocate required number of ports for gitspaces")
-	}
-
-	for i, vmPort := range opts.GitspaceOpts.Ports {
-		gitspacesPortMappings[vmPort] = gitspacesPorts[i]
-		gitspacesPortMappingsString += fmt.Sprintf("%d->%d;", gitspacesPorts[i], vmPort)
 	}
 
 	// create a VM on the same machine where the resource job was allocated
@@ -339,7 +327,7 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 	if p.noop {
 		initJob, initJobID, initTaskGroup = p.initJobNoop(vm, id, liteEngineHostPort)
 	} else {
-		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, p.userData, p.machinePassword, p.vmImage, vmImageConfig, liteEngineHostPort, resource, opts, gitspacesPortMappings, opts.Timeout) //nolint
+		initJob, initJobID, initTaskGroup, err = p.virtualizer.GetInitJob(vm, id, p.userData, p.machinePassword, p.vmImage, vmImageConfig, liteEngineHostPort, resource, opts, opts.Timeout) //nolint
 		if err != nil {
 			defer func() {
 				go p.deregisterJob(logr, resourceJobID, false) //nolint:errcheck
@@ -354,10 +342,6 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		WithField("vm_image", vmImageConfig.ImageName).
 		WithField("vm_image_version", vmImageConfig.ImageVersion)
 
-	if gitspacesPortMappingsString != "" {
-		logr = logr.WithField("gitspaces_port_mapping", gitspacesPortMappingsString)
-	}
-
 	labelsBytes, marshalErr := json.Marshal(opts.InternalLabels)
 	if marshalErr != nil {
 		defer func() {
@@ -366,23 +350,22 @@ func (p *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (*t
 		return nil, fmt.Errorf("scheduler: could not marshal labels: %v, err: %w", opts.InternalLabels, marshalErr)
 	}
 	instance := &types.Instance{
-		ID:                   vm,
-		NodeID:               id,
-		Name:                 vm,
-		Platform:             opts.Platform,
-		State:                types.StateProvisioning,
-		CACert:               opts.CACert,
-		CAKey:                opts.CAKey,
-		TLSCert:              opts.TLSCert,
-		TLSKey:               opts.TLSKey,
-		Provider:             types.Nomad,
-		Pool:                 opts.PoolName,
-		Started:              time.Now().Unix(),
-		Updated:              time.Now().Unix(),
-		Port:                 int64(liteEngineHostPort),
-		GitspacePortMappings: gitspacesPortMappings,
-		Address:              ip,
-		Labels:               labelsBytes,
+		ID:       vm,
+		NodeID:   id,
+		Name:     vm,
+		Platform: opts.Platform,
+		State:    types.StateProvisioning,
+		CACert:   opts.CACert,
+		CAKey:    opts.CAKey,
+		TLSCert:  opts.TLSCert,
+		TLSKey:   opts.TLSKey,
+		Provider: types.Nomad,
+		Pool:     opts.PoolName,
+		Started:  time.Now().Unix(),
+		Updated:  time.Now().Unix(),
+		Port:     int64(liteEngineHostPort),
+		Address:  ip,
+		Labels:   labelsBytes,
 	}
 	if opts.StorageOpts.Identifier != "" {
 		instance.StorageIdentifier = opts.StorageOpts.CephPoolIdentifier + "/" + opts.StorageOpts.Identifier
@@ -466,7 +449,7 @@ func (p *config) checkTaskGroupStatus(jobID, taskGroup string) error {
 }
 
 // resourceJob creates a job which occupies resources until the VM lifecycle
-func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCount int, vm, accountID string, vmImageConfig types.VMImageConfig, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) { //nolint
+func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz int, vm, accountID string, vmImageConfig types.VMImageConfig, healthCheckGenerator func(time.Duration, string, string) string) (job *api.Job, id string) { //nolint
 	id = getResourceJobID(vm)
 	portLabel := vm
 
@@ -499,7 +482,7 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 		Constraints: constraintList,
 		TaskGroups: []*api.TaskGroup{
 			{
-				Networks:                  getNetworkResources(portLabel, gitspacesPortCount),
+				Networks:                  getNetworkResources(portLabel),
 				StopAfterClientDisconnect: &p.nomadConfig.ClientDisconnectTimeout,
 				RestartPolicy: &api.RestartPolicy{
 					Attempts: intToPtr(0),
@@ -528,68 +511,57 @@ func (p *config) resourceJob(cpus, memGB, machineFrequencyMhz, gitspacesPortCoun
 }
 
 // fetchMachine returns details of the machine where the job has been allocated
-func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string, liteEngineHostPort int, ports []int, err error) {
+func (p *config) fetchMachine(logr logger.Logger, id string) (ip, nodeID string, liteEngineHostPort int, err error) {
 	// Get the allocation corresponding to this job submission. If this call fails, there is not much we can do in terms
 	// of cleanup - as the job has created a virtual machine but we could not parse the node identifier.
 	l, _, err := p.client.Jobs().Allocations(id, false, nil)
 	if err != nil {
-		return ip, nodeID, liteEngineHostPort, ports, err
+		return ip, nodeID, liteEngineHostPort, err
 	}
 	if len(l) == 0 {
-		return ip, nodeID, liteEngineHostPort, ports, errors.New("scheduler: no allocation found for the job")
+		return ip, nodeID, liteEngineHostPort, errors.New("scheduler: no allocation found for the job")
 	}
 
 	nodeID = l[0].NodeID
 	allocID := l[0].ID
 	if nodeID == "" || allocID == "" {
-		return ip, nodeID, liteEngineHostPort, ports, errors.New("scheduler: could not find an allocation identifier for the job")
+		return ip, nodeID, liteEngineHostPort, errors.New("scheduler: could not find an allocation identifier for the job")
 	}
 
 	alloc, _, err := p.client.Allocations().Info(allocID, &api.QueryOptions{})
 	if err != nil {
-		return ip, nodeID, liteEngineHostPort, ports, err
+		return ip, nodeID, liteEngineHostPort, err
 	}
 
 	// Not expected - if nomad is unable to find a port, it should not run the job at all.
 	if alloc.Resources.Networks == nil || len(alloc.Resources.Networks) == 0 {
 		err = fmt.Errorf("scheduler: could not allocate network and ports for job")
 		logr.Errorln(err)
-		return ip, nodeID, liteEngineHostPort, ports, err
+		return ip, nodeID, liteEngineHostPort, err
 	}
 
 	liteEngineHostPort = alloc.Resources.Networks[0].DynamicPorts[0].Value
-	for i := 1; i < len(alloc.Resources.Networks[0].DynamicPorts); i++ {
-		ports = append(ports, alloc.Resources.Networks[0].DynamicPorts[i].Value)
-	}
 
-	// sanity check
 	if liteEngineHostPort <= 0 || liteEngineHostPort > 65535 {
 		err = fmt.Errorf("scheduler: lite engine host port %d generated is not a valid port", liteEngineHostPort)
 		logr.Errorln(err)
-		return ip, nodeID, liteEngineHostPort, ports, err
-	}
-	for _, port := range ports {
-		if port <= 0 || port > 65535 {
-			err = fmt.Errorf("scheduler: gitspace host port %d generated is not a valid port", port)
-			logr.Errorln(err)
-			return ip, nodeID, liteEngineHostPort, ports, err
-		}
+		return ip, nodeID, liteEngineHostPort, err
 	}
 
 	n, _, err := p.client.Nodes().Info(nodeID, &api.QueryOptions{})
 	if err != nil {
 		logr.WithError(err).Errorln("scheduler: could not get information about the node which picked up the resource job")
-		return ip, nodeID, liteEngineHostPort, ports, err
+		return ip, nodeID, liteEngineHostPort, err
 	}
 
 	ip = strings.Split(n.HTTPAddr, ":")[0]
 	if net.ParseIP(ip) == nil {
 		err = fmt.Errorf("scheduler: could not parse client machine IP: %s", ip)
 		logr.Errorln(err)
-		return ip, nodeID, liteEngineHostPort, ports, err
+		return ip, nodeID, liteEngineHostPort, err
 	}
 
-	return ip, nodeID, liteEngineHostPort, ports, nil
+	return ip, nodeID, liteEngineHostPort, nil
 }
 
 // destroyJob returns a job targeted to the given node which stops and removes the VM
@@ -1004,14 +976,8 @@ func sequoiaExclusionConstraint() *api.Constraint {
 	}
 }
 
-// Request Nomad to assign available ports dynamically.
-// 1 for lite engine and another n ports for gitspaces as requested
-// Since the port labels have to be unique, VM ID is used usually.
-// For gitspaces port, prefix of _gitspaces_{port_number_count} is added to the label to keep it unique
-func getNetworkResources(portLabel string, gitspacesPortCount int) []*api.NetworkResource {
-	dynamicPorts := []api.Port{{Label: portLabel}}
-	for i := 0; i < gitspacesPortCount; i++ {
-		dynamicPorts = append(dynamicPorts, api.Port{Label: fmt.Sprintf("%s_gitspaces_%d", portLabel, i+1)})
-	}
-	return []*api.NetworkResource{{DynamicPorts: dynamicPorts}}
+// Request Nomad to assign the lite-engine port dynamically.
+// The port label has to be unique, so the VM ID is used.
+func getNetworkResources(portLabel string) []*api.NetworkResource {
+	return []*api.NetworkResource{{DynamicPorts: []api.Port{{Label: portLabel}}}}
 }
