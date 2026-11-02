@@ -115,6 +115,7 @@ func SetupDistributedMode(cfg DistributedSetupConfig) (*DistributedSetupResult, 
 		"pools":              len(catalog.Pools()),
 		"capabilities":       len(catalog.Groups()),
 	}).Infoln("capability catalog built")
+	poolManager.SetCapabilityCatalog(catalog, algorithm)
 
 	// Register utilization tracking jobs if stores are available
 	if instanceStore != nil && utilizationHistoryStore != nil {

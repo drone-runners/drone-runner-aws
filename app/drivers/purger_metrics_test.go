@@ -95,6 +95,17 @@ type fakePurgerMetrics struct {
 	vmResumeAtts     []vmResumeAttemptRecord
 	vmResumeDurs     []vmResumeDurationRecord
 	vmResumeToReady  []vmResumeToReadyDurationRecord
+	claims           []hotpoolClaimRecord
+}
+
+type hotpoolClaimRecord struct {
+	algorithm, tier, requestedPool, claimedPool, outcome string
+}
+
+func (f *fakePurgerMetrics) RecordHotpoolClaim(algorithm, tier, requestedPool, claimedPool, outcome string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.claims = append(f.claims, hotpoolClaimRecord{algorithm, tier, requestedPool, claimedPool, outcome})
 }
 
 func (f *fakePurgerMetrics) RecordPurgerLastRun(poolID string) {

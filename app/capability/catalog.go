@@ -4,6 +4,7 @@ package capability
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/drone-runners/drone-runner-aws/command/config"
@@ -178,6 +179,50 @@ func (c *Catalog) KeyFor(pool, tenantID, variantID string) (types.CapabilityKey,
 		return types.CapabilityKey{}, false
 	}
 	return p.key(defaultIfEmpty(variantID, types.DefaultVariantID), defaultIfEmpty(tenantID, types.DefaultTenantID)), true
+}
+
+// Platform returns the tier, os and arch of pool; ok is false when the pool is not in the catalog.
+func (c *Catalog) Platform(pool string) (tier, os, arch string, ok bool) {
+	p, ok := c.pools[pool]
+	if !ok {
+		return "", "", "", false
+	}
+	return p.Tier, p.OS, p.Arch, true
+}
+
+// PlatformPools returns the pools of the tier, os and arch in pool-file order.
+func (c *Catalog) PlatformPools(tier, os, arch string) []string {
+	var pools []string
+	for _, p := range c.order {
+		if p.Tier == tier && p.OS == os && p.Arch == arch {
+			pools = append(pools, p.Name)
+		}
+	}
+	return pools
+}
+
+// ClaimPools returns the tier of pool and the pools, in pool-file order, of the group serving
+// pool with the tenant and variant. ok is false when pool is not a member of that group.
+func (c *Catalog) ClaimPools(pool, tenantID, variantID string) (tier string, pools []string, ok bool) {
+	key, ok := c.KeyFor(pool, tenantID, variantID)
+	if !ok {
+		return "", nil, false
+	}
+	group, ok := c.Group(&key)
+	if !ok {
+		return "", nil, false
+	}
+	member := false
+	for _, m := range group.Members {
+		if !slices.Contains(pools, m.Pool) {
+			pools = append(pools, m.Pool)
+		}
+		member = member || m.Pool == pool
+	}
+	if !member {
+		return "", nil, false
+	}
+	return key.Tier, pools, true
 }
 
 // DriverSet normalizes a driver list into a lookup set, falling back to the default drivers.

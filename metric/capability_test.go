@@ -42,3 +42,19 @@ func TestCapabilityScalerMetrics(t *testing.T) {
 		t.Errorf("spill counter = %v", v)
 	}
 }
+
+func TestRecordHotpoolClaim(t *testing.T) {
+	m := &Metrics{HotpoolClaimCount: HotpoolClaimCount()}
+	m.RecordHotpoolClaim("capability", "paid", "linux-amd64", "linux-amd64-fallback", "warm")
+	m.RecordHotpoolClaim("capability", "paid", "linux-amd64", "", "miss")
+
+	if got := testutil.ToFloat64(m.HotpoolClaimCount.WithLabelValues(
+		"capability", "paid", "linux-amd64", "linux-amd64-fallback", "warm")); got != 1 {
+		t.Errorf("warm claims = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(m.HotpoolClaimCount.WithLabelValues("capability", "paid", "linux-amd64", "", "miss")); got != 1 {
+		t.Errorf("misses = %v, want 1", got)
+	}
+	var nilMetrics *Metrics
+	nilMetrics.RecordHotpoolClaim("pool", "paid", "a", "", "miss")
+}

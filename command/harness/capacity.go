@@ -74,15 +74,6 @@ func HandleCapacityReservation(
 	internalLogr = AddContext(internalLogr, &r.Context, r.Tags)
 	ctx = logger.WithContext(ctx, logger.Logrus(internalLogr))
 
-	pools := []string{}
-	pools = append(pools, r.PoolID)
-	// If request has no fallback pools, use the env config fallback pools if available
-	if len(r.FallbackPoolIDs) == 0 && len(envFallbackPoolIDs) > 0 {
-		pools = append(pools, envFallbackPoolIDs...)
-	} else {
-		pools = append(pools, r.FallbackPoolIDs...)
-	}
-
 	var selectedPool string
 	var poolErr error
 	var capacity *types.CapacityReservation
@@ -105,15 +96,22 @@ func HandleCapacityReservation(
 
 	platform, _, driver := poolManager.Inspect(r.PoolID)
 
+	pools, scope := requestPools(ctx, poolManager, r.PoolID, r.FallbackPoolIDs, envFallbackPoolIDs, &types.ProvisionParams{
+		VMImageConfig:        &r.RequestedVMImageConfig,
+		NestedVirtualization: r.NestedVirtualization,
+		ResourceClass:        r.ResourceClass,
+		AccountID:            owner,
+	}, r.Context.AccountID, poolMapByAccount)
+
 	for idx, p := range pools {
 		poolStartTime := time.Now()
 		if idx > 0 {
 			fallback = true
 		}
-		pool := fetchPool(r.Context.AccountID, p, poolMapByAccount)
+		pool := targetPool(p, scope, r.Context.AccountID, poolMapByAccount)
 		_, _, poolDriver := poolManager.Inspect(p)
 		internalLogr.WithField("pool_id", pool).Traceln("starting the capacity reservation process")
-		capacity, _, poolErr = handleCapacityReservation(ctx, internalLogr, r, runnerName, poolManager, pool, owner)
+		capacity, _, poolErr = handleCapacityReservation(ctx, internalLogr, r, runnerName, poolManager, pool, owner, scope)
 		poolDuration := time.Since(poolStartTime)
 		metrics.CapacityReservationPerPoolDurationCount.WithLabelValues(
 			pool,
@@ -139,6 +137,9 @@ func HandleCapacityReservation(
 			continue
 		}
 		selectedPool = pool
+		if capacity != nil && capacity.PoolName != "" {
+			selectedPool = capacity.PoolName
+		}
 		foundPool = true
 		break
 	}
@@ -244,6 +245,7 @@ func handleCapacityReservation(
 	poolManager drivers.IManager,
 	pool,
 	owner string,
+	scope *types.ClaimScope,
 ) (
 	capacityReservation *types.CapacityReservation,
 	warmed bool,
@@ -268,6 +270,7 @@ func handleCapacityReservation(
 		ResourceClass:             r.ResourceClass,
 		AccountID:                 GetAccountID(&r.Context, r.Tags),
 		ReservationPerPoolTimeout: r.ReservationPerPoolTimeout,
+		Claim:                     scope,
 	}
 	if r.Zone != "" {
 		provisionParams.Zones = []string{r.Zone}
