@@ -54,7 +54,7 @@ type DriverState struct {
 	Address           string `json:"address,omitempty"`
 }
 
-// Create provisions one Linux VM and returns its driverState.
+// Create provisions one linux, darwin, or windows VM and returns its driverState.
 // It does not write instances, stage_owner, capacity, or outbox rows.
 func Create(ctx context.Context, req *CreateRequest) (DriverState, error) {
 	if req == nil {

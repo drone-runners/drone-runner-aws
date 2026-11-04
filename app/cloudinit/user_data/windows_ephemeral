@@ -17,5 +17,14 @@ try {
     throw
     {{ end }}
 }
+$dockerReady = $false
+for ($i = 0; $i -lt 12; $i++) {
+    docker info *> $null
+    if ($LASTEXITCODE -eq 0) { $dockerReady = $true; break }
+    $svc = Get-Service -Name docker -ErrorAction SilentlyContinue
+    if ($null -ne $svc -and $svc.Status -ne 'Running') { Start-Service docker }
+    Start-Sleep -Seconds 5
+}
+if (-not $dockerReady) { throw "docker is not running; the Windows image must include Docker" }
 $env:ENV_FILE = "C:\Program Files\harness-delegate\config.env"
 Start-Process -FilePath $out -ArgumentList "server" -RedirectStandardOutput "C:\Program Files\harness-delegate\delegate.log" -RedirectStandardError "C:\Program Files\harness-delegate\delegate.err"
