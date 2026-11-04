@@ -211,6 +211,10 @@ func (m *Manager) setupInstance(
 	createOptions.AutoInjectionBinaryURI = m.autoInjectionBinaryURI
 	createOptions.AnnotationsBinaryURI = m.annotationsBinaryURI
 	createOptions.AnnotationsBinaryFallbackURI = m.annotationsBinaryFallbackURI
+	createOptions.HarnessCLIBinaryURI = m.harnessCLIBinaryURI
+	createOptions.HarnessCLIBinaryFallbackURI = m.harnessCLIBinaryFallbackURI
+	createOptions.HarnessHCliBinaryURI = m.harnessHCliBinaryURI
+	createOptions.HarnessHCliBinaryFallbackURI = m.harnessHCliBinaryFallbackURI
 	createOptions.EnvmanBinaryURI = m.envmanBinaryURI
 	createOptions.EnvmanBinaryFallbackURI = m.envmanBinaryFallbackURI
 	createOptions.TmateBinaryURI = m.tmateBinaryURI
@@ -554,6 +558,8 @@ func pinBinaryDownloadsToHarness(o *types.InstanceCreateOpts) {
 		{&o.LiteEnginePath, &o.LiteEngineFallbackPath},
 		{&o.PluginBinaryURI, &o.PluginBinaryFallbackURI},
 		{&o.AnnotationsBinaryURI, &o.AnnotationsBinaryFallbackURI},
+		{&o.HarnessCLIBinaryURI, &o.HarnessCLIBinaryFallbackURI},
+		{&o.HarnessHCliBinaryURI, &o.HarnessHCliBinaryFallbackURI},
 		{&o.EnvmanBinaryURI, &o.EnvmanBinaryFallbackURI},
 		{&o.TmateBinaryURI, &o.TmateBinaryFallbackURI},
 	} {

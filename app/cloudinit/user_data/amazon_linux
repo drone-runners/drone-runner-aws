@@ -40,6 +40,15 @@ runcmd:
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .AnnotationsBinaryURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .AnnotationsBinaryFallbackURI }}hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/hcli'
 - 'chmod 755 /usr/bin/hcli'
 {{ end }}
+{{ if .HarnessCLIBinaryURI }}
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness'
+- 'chmod 755 /usr/bin/harness'
+{{ end }}
+{{ if .HarnessHCliBinaryURI }}
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli'
+- 'chmod 755 /usr/bin/harness-hcli'
+{{ end }}
+- '[ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ] && /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true'
 {{ if eq .Platform.Arch "amd64" }}
 - 'curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /usr/bin/envman || curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /usr/bin/envman'
 - 'chmod 777 /usr/bin/envman'

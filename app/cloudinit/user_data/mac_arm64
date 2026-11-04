@@ -79,6 +79,38 @@ fi
 chmod 755 /usr/local/bin/hcli
 {{ end }}
 
+{{ if .HarnessCLIBinaryURI }}
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness; then
+    echo "Successfully downloaded harness binary from primary URL."
+else
+    echo "Primary URL failed for harness. Trying fallback URL..."
+    if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=3 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness; then
+        echo "Successfully downloaded harness binary from fallback URL."
+    else
+        echo "Failed to download harness from both URLs."
+    fi
+fi
+chmod 755 /usr/local/bin/harness
+{{ end }}
+
+{{ if .HarnessHCliBinaryURI }}
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli; then
+    echo "Successfully downloaded harness-hcli binary from primary URL."
+else
+    echo "Primary URL failed for harness-hcli. Trying fallback URL..."
+    if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=3 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli; then
+        echo "Successfully downloaded harness-hcli binary from fallback URL."
+    else
+        echo "Failed to download harness-hcli from both URLs."
+    fi
+fi
+chmod 755 /usr/local/bin/harness-hcli
+{{ end }}
+
+if [ -x /usr/local/bin/harness ] && [ -x /usr/local/bin/harness-hcli ]; then
+    /usr/local/bin/harness install plugin /usr/local/bin/harness-hcli 2>/dev/null || true
+fi
+
 {{ if .AutoInjectionBinaryURI }}
 mkdir -p /tmp/harness/bin
 wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection || wget --retry-connrefused --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection

@@ -554,6 +554,10 @@ type EnvConfig struct {
 		AutoInjectionBinaryURI       string   `envconfig:"DRONE_HARNESS_AUTO_INJECTION_BINARY_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/auto-injection/1.0.27"`
 		AnnotationsBinaryURI         string   `envconfig:"DRONE_ANNOTATIONS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/hcli/v0.30/"`
 		AnnotationsBinaryFallbackURI string   `envconfig:"DRONE_ANNOTATIONS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/hcli/v0.30/"`
+		HarnessCLIBinaryURI          string   `envconfig:"DRONE_HARNESS_CLI_URI" default:"https://storage.googleapis.com/harness-ti/harness-cli/v1.0.1/"`
+		HarnessCLIBinaryFallbackURI  string   `envconfig:"DRONE_HARNESS_CLI_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-cli/v1.0.1/"`
+		HarnessHCliBinaryURI         string   `envconfig:"DRONE_HARNESS_HCLI_BINARY_URI" default:"https://storage.googleapis.com/harness-ti/harness-cli-plugins/hcli/v1.0.1/"`
+		HarnessHCliBinaryFallbackURI string   `envconfig:"DRONE_HARNESS_HCLI_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-cli-plugins/hcli/v1.0.1/"`
 		EnvmanBinaryURI              string   `envconfig:"DRONE_ENVMAN_BINARY_URI" default:"https://github.com/bitrise-io/envman/releases/download/v2.5.6/"`
 		EnvmanBinaryFallbackURI      string   `envconfig:"DRONE_ENVMAN_BINARY_FALLBACK_URI" default:"https://app.harness.io/storage/harness-download/harness-ti/harness-envman/v2.5.6/"`
 		TmateBinaryURI               string   `envconfig:"DRONE_TMATE_BINARY_URI" default:"https://github.com/harness/tmate/releases/download/1.0/"`

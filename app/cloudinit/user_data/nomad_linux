@@ -67,6 +67,32 @@ fi
 chmod 755 /usr/bin/hcli
 {{ end }}
 
+{{ if .HarnessCLIBinaryURI }}
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness; then
+    echo "Successfully downloaded harness binary from primary URL."
+else
+    echo "Primary URL failed for harness. Trying fallback URL..."
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness
+    echo "Successfully downloaded harness binary from fallback URL."
+fi
+chmod 755 /usr/bin/harness
+{{ end }}
+
+{{ if .HarnessHCliBinaryURI }}
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli; then
+    echo "Successfully downloaded harness-hcli binary from primary URL."
+else
+    echo "Primary URL failed for harness-hcli. Trying fallback URL..."
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli
+    echo "Successfully downloaded harness-hcli binary from fallback URL."
+fi
+chmod 755 /usr/bin/harness-hcli
+{{ end }}
+
+if [ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ]; then
+    /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true
+fi
+
 {{ if eq .Platform.Arch "amd64" }}
 if curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /usr/bin/envman; then
 	echo "Successfully downloaded envman binary from primary URL."
