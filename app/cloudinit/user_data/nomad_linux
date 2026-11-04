@@ -90,7 +90,13 @@ chmod 755 /usr/bin/harness-hcli
 {{ end }}
 
 if [ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ]; then
-    /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true
+    mkdir -p /etc/harness
+    HARNESS_CLI_HOME=/etc/harness /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true
+    chmod -R 777 /etc/harness 2>/dev/null || true
+    echo "HARNESS_CLI_HOME=/etc/harness" >> /etc/environment
+    [ -f $HOME/.env ] && echo "HARNESS_CLI_HOME=/etc/harness" >> $HOME/.env
+    mkdir -p $HOME/.harness && cp -r /etc/harness/* $HOME/.harness/ 2>/dev/null || true
+    chmod -R 777 $HOME/.harness 2>/dev/null || true
 fi
 
 {{ if eq .Platform.Arch "amd64" }}

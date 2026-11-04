@@ -48,7 +48,7 @@ runcmd:
 - 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli'
 - 'chmod 755 /usr/bin/harness-hcli'
 {{ end }}
-- '[ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ] && /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true'
+- 'if [ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ]; then mkdir -p /etc/harness && HARNESS_CLI_HOME=/etc/harness /usr/bin/harness install plugin /usr/bin/harness-hcli && chmod -R 777 /etc/harness && echo "HARNESS_CLI_HOME=/etc/harness" >> /etc/environment && mkdir -p /root/.harness && cp -r /etc/harness/* /root/.harness/ 2>/dev/null || true && for u in /home/*; do [ -d "$u" ] && mkdir -p "$u/.harness" && cp -r /etc/harness/* "$u/.harness/" 2>/dev/null && chmod -R 777 "$u/.harness" 2>/dev/null || true; done; fi'
 {{ if eq .Platform.Arch "amd64" }}
 - 'curl -fL {{ .EnvmanBinaryURI }}envman-Linux-x86_64 > /usr/bin/envman || curl -fL {{ .EnvmanBinaryFallbackURI }}envman-Linux-x86_64 > /usr/bin/envman'
 - 'chmod 777 /usr/bin/envman'

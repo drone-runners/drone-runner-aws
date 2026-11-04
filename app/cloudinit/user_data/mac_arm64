@@ -108,7 +108,14 @@ chmod 755 /usr/local/bin/harness-hcli
 {{ end }}
 
 if [ -x /usr/local/bin/harness ] && [ -x /usr/local/bin/harness-hcli ]; then
-    /usr/local/bin/harness install plugin /usr/local/bin/harness-hcli 2>/dev/null || true
+    mkdir -p /etc/harness
+    HARNESS_CLI_HOME=/etc/harness /usr/local/bin/harness install plugin /usr/local/bin/harness-hcli 2>/dev/null || true
+    chmod -R 777 /etc/harness 2>/dev/null || true
+    echo "HARNESS_CLI_HOME=/etc/harness" >> "$HOME/.env"
+    echo "export HARNESS_CLI_HOME=/etc/harness" >> /etc/zshenv 2>/dev/null || true
+    echo "export HARNESS_CLI_HOME=/etc/harness" >> /etc/profile 2>/dev/null || true
+    mkdir -p "$HOME/.harness" && cp -r /etc/harness/* "$HOME/.harness/" 2>/dev/null || true
+    chmod -R 777 "$HOME/.harness" 2>/dev/null || true
 fi
 
 {{ if .AutoInjectionBinaryURI }}

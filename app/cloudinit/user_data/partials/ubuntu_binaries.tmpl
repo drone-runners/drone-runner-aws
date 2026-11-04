@@ -66,7 +66,21 @@
   # Install harness-hcli plugin for harness-cli if both binaries exist
   - |
     if [ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ]; then
-      /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true
+      mkdir -p /etc/harness
+      HARNESS_CLI_HOME=/etc/harness /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true
+      chmod -R 777 /etc/harness 2>/dev/null || true
+      echo "HARNESS_CLI_HOME=/etc/harness" >> /etc/environment
+      [ -f /root/.env ] && echo "HARNESS_CLI_HOME=/etc/harness" >> /root/.env
+      mkdir -p /etc/profile.d && echo "export HARNESS_CLI_HOME=/etc/harness" > /etc/profile.d/harness.sh
+      mkdir -p /root/.harness && cp -r /etc/harness/* /root/.harness/ 2>/dev/null || true
+      mkdir -p /etc/skel/.harness && cp -r /etc/harness/* /etc/skel/.harness/ 2>/dev/null || true
+      for user_home in /home/*; do
+        if [ -d "$user_home" ]; then
+          mkdir -p "$user_home/.harness"
+          cp -r /etc/harness/* "$user_home/.harness/" 2>/dev/null || true
+          chmod -R 777 "$user_home/.harness" 2>/dev/null || true
+        fi
+      done
     fi
 
   # Setup tmate if enabled

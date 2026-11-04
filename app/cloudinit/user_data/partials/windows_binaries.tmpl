@@ -70,9 +70,12 @@ try {
 
 if ((Test-Path -Path "C:\Program Files\lite-engine\harness.exe") -and (Test-Path -Path "C:\Program Files\lite-engine\harness-hcli.exe")) {
     try {
+        $env:HARNESS_CLI_HOME = "C:\Program Files\lite-engine"
         & "C:\Program Files\lite-engine\harness.exe" install plugin "C:\Program Files\lite-engine\harness-hcli.exe"
+        [Environment]::SetEnvironmentVariable("HARNESS_CLI_HOME", "C:\Program Files\lite-engine", "Machine")
+        echo "HARNESS_CLI_HOME=C:\Program Files\lite-engine" >> "C:\Program Files\lite-engine\.env"
     } catch {
-        echo "[DRONE] WARNING: Failed to install harness-hcli plugin"
+        echo "[DRONE] WARNING: Failed to install harness-hcli plugin: $_"
     }
 }
 
