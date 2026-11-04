@@ -113,9 +113,7 @@ func (c *config) DestroyCapacity(ctx context.Context, capacity *types.CapacityRe
 // being accepted.
 func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (instance *types.Instance, err error) {
 	startTime := time.Now()
-	// Orka validates VM names as RFC 1123 lowercase subdomains; uniuri.NewLen draws from
-	// uniuri.StdChars, which includes uppercase letters, so the whole name must be lowered.
-	machineName := strings.ToLower(fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8))) //nolint:mnd
+	machineName := newMachineName(opts)
 	logr := logger.FromContext(ctx).
 		WithField("cloud", types.Orka).
 		WithField("name", machineName).
@@ -159,7 +157,9 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	deployCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second+deployTimeoutBuffer)
 	defer cancel()
 
-	hostPort, deployResp, deployErr := c.deployWithPortRetry(deployCtx, req, logr)
+	// A port-conflict retry deploys under a fresh name, so machineName is whatever was last tried.
+	deployedName, hostPort, deployResp, deployErr := c.deployWithPortRetry(deployCtx, req, func() string { return newMachineName(opts) }, logr)
+	machineName = deployedName
 	if deployErr != nil {
 		if errors.Is(deployErr, context.DeadlineExceeded) || errors.Is(deployErr, context.Canceled) {
 			// ctx may already be done here too (e.g. a canceled stage deadline, not just
@@ -197,7 +197,8 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:  startTime.Unix(),
 		Updated:  now,
 	}
-	logr.WithField("ip", deployResp.IP).
+	logr.WithField("name", machineName).
+		WithField("ip", deployResp.IP).
 		WithField("port", hostPort).
 		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
 		Infoln("orka: VM created")
@@ -242,29 +243,42 @@ func deployTimeoutMinutes(timeoutSec int) int {
 	return (timeoutSec + secondsPerMinute - 1) / secondsPerMinute
 }
 
+// newMachineName returns a unique VM name. Orka requires RFC 1123 lowercase subdomains, and
+// uniuri.StdChars includes uppercase letters, so the whole name is lowered.
+func newMachineName(opts *types.InstanceCreateOpts) string {
+	return strings.ToLower(fmt.Sprintf("%s-%s-%s", opts.RunnerName, opts.PoolName, uniuri.NewLen(8))) //nolint:mnd
+}
+
 // deployWithPortRetry tries vmDeploy with primaryPort, retrying once with fallbackPort if the
 // controller rejects the first attempt because that port range isn't free on the chosen node
 // (see IsPortUnavailable). A second attempt always succeeds if the cluster has any capacity at
 // all, so no further retries happen.
-func (c *config) deployWithPortRetry(ctx context.Context, req *deployVMRequest, logr logger.Logger) (hostPort int, resp *deployVMResponse, err error) {
+//
+// Orka deletes a rejected deploy asynchronously, so the retry uses a fresh name from newName;
+// reusing the old one fails with 409 "object is being deleted". It returns the name of the last
+// attempt, which is the one Create must use (or delete) afterwards.
+func (c *config) deployWithPortRetry(ctx context.Context, req *deployVMRequest, newName func() string, logr logger.Logger) (name string, hostPort int, resp *deployVMResponse, err error) {
 	ports := []int{primaryPort, fallbackPort}
 	for i, port := range ports {
+		if i > 0 {
+			req.Name = newName()
+		}
 		req.ReservedPorts = fmt.Sprintf("%d:%d", port, guestLiteEnginePort)
 		resp, err = c.orkaClient.DeployVM(ctx, c.namespace, req)
 		if err == nil {
-			return port, resp, nil
+			return req.Name, port, resp, nil
 		}
 		var apiErr *APIError
 		if !errors.As(err, &apiErr) || !apiErr.IsPortUnavailable() {
-			return 0, nil, fmt.Errorf("orka: deploy failed: %w", err)
+			return req.Name, 0, nil, fmt.Errorf("orka: deploy failed: %w", err)
 		}
 		logr.WithField("port", port).WithError(err).
 			Warnln("orka: deploy rejected (port conflict), retrying with fallback port")
 		if i == len(ports)-1 {
-			return 0, nil, fmt.Errorf("orka: deploy failed after port retry: %w", err)
+			return req.Name, 0, nil, fmt.Errorf("orka: deploy failed after port retry: %w", err)
 		}
 	}
-	return 0, nil, fmt.Errorf("orka: deploy failed: %w", err)
+	return req.Name, 0, nil, fmt.Errorf("orka: deploy failed: %w", err)
 }
 
 // deleteAndWrapErr explicitly deletes the VM before surfacing origErr - required because Orka

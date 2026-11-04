@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/drone-runners/drone-runner-aws/types"
 )
@@ -125,6 +127,280 @@ func TestCreate_CustomTimeoutConvertedToMinutes(t *testing.T) {
 
 	_, err := c.Create(context.Background(), newTestOpts())
 	assert.NoError(t, err)
+}
+
+func TestCreate_PortConflictRetriesUnderFreshName(t *testing.T) {
+	var names []string
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			names = append(names, req.Name)
+			if req.ReservedPorts == "9079:9079" {
+				return nil, &APIError{StatusCode: http.StatusInternalServerError, Status: statusModel{
+					Message: "Internal error occurred: Requested reserved port range not available on the chosen node(s).",
+				}}
+			}
+			return &deployVMResponse{IP: "10.0.0.6", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	inst, err := c.Create(context.Background(), newTestOpts())
+
+	require.NoError(t, err)
+	require.Len(t, names, 2)
+	assert.NotEqual(t, names[0], names[1], "retry must not reuse the name Orka is still deleting")
+	assert.Equal(t, names[1], inst.ID, "instance must carry the name of the successful attempt")
+	assert.Equal(t, names[1], inst.Name)
+}
+
+func TestCreate_TimeoutAfterRetryDeletesLatestName(t *testing.T) {
+	var names []string
+	var deleted string
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			names = append(names, req.Name)
+			if req.ReservedPorts == "9079:9079" {
+				return nil, &APIError{StatusCode: http.StatusInternalServerError, Status: statusModel{
+					Message: "Internal error occurred: Requested reserved port range not available on the chosen node(s).",
+				}}
+			}
+			return nil, context.DeadlineExceeded
+		},
+		DeleteVMFunc: func(ctx context.Context, namespace, name string) error {
+			deleted = name
+			return nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	_, err := c.Create(context.Background(), newTestOpts())
+
+	require.Error(t, err)
+	require.Len(t, names, 2)
+	assert.Equal(t, names[1], deleted, "cleanup must delete the retry's VM, not the rejected first one")
+}
+
+func portConflictErr() error {
+	return &APIError{StatusCode: http.StatusInternalServerError, Status: statusModel{
+		Message: "Internal error occurred: Requested reserved port range not available on the chosen node(s).",
+		Reason:  "InternalError",
+	}}
+}
+
+func TestCreate_RetryKeepsRequestExceptNameAndPort(t *testing.T) {
+	var reqs []deployVMRequest
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			reqs = append(reqs, *req) // copy: the driver reuses one request
+			if len(reqs) == 1 {
+				return nil, portConflictErr()
+			}
+			return &deployVMResponse{IP: "10.0.0.6", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	_, err := c.Create(context.Background(), newTestOpts())
+
+	require.NoError(t, err)
+	require.Len(t, reqs, 2)
+	assert.Equal(t, "9079:9079", reqs[0].ReservedPorts)
+	assert.Equal(t, "9080:9079", reqs[1].ReservedPorts)
+	assert.NotEqual(t, reqs[0].Name, reqs[1].Name)
+
+	// Everything else must be identical, or the retry would deploy a different VM.
+	a, b := reqs[0], reqs[1]
+	a.Name, b.Name = "", ""
+	a.ReservedPorts, b.ReservedPorts = "", ""
+	assert.Equal(t, a, b)
+}
+
+func TestCreate_RetryNameIsValidAndPrefixed(t *testing.T) {
+	var names []string
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			names = append(names, req.Name)
+			if len(names) == 1 {
+				return nil, portConflictErr()
+			}
+			return &deployVMResponse{IP: "10.0.0.6", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	_, err := c.Create(context.Background(), newTestOpts())
+
+	require.NoError(t, err)
+	require.Len(t, names, 2)
+	for _, n := range names {
+		assert.Regexp(t, `^test-runner-test-pool-[a-z0-9]{8}$`, n, "Orka needs RFC 1123 lowercase names")
+	}
+}
+
+func TestCreate_NonPortErrorDoesNotRetry(t *testing.T) {
+	calls := 0
+	deleteCalled := false
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			calls++
+			return nil, &APIError{StatusCode: http.StatusConflict, Status: statusModel{Message: "already exists"}}
+		},
+		DeleteVMFunc: func(ctx context.Context, namespace, name string) error {
+			deleteCalled = true
+			return nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	inst, err := c.Create(context.Background(), newTestOpts())
+
+	require.Error(t, err)
+	assert.Nil(t, inst)
+	assert.Equal(t, 1, calls)
+	assert.False(t, deleteCalled)
+}
+
+func TestCreate_BothPortsConflictUsesTwoNamesAndNoDelete(t *testing.T) {
+	var names []string
+	deleteCalled := false
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			names = append(names, req.Name)
+			return nil, portConflictErr()
+		},
+		DeleteVMFunc: func(ctx context.Context, namespace, name string) error {
+			deleteCalled = true
+			return nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	inst, err := c.Create(context.Background(), newTestOpts())
+
+	require.Error(t, err)
+	assert.Nil(t, inst)
+	assert.Contains(t, err.Error(), "after port retry")
+	require.Len(t, names, 2)
+	assert.NotEqual(t, names[0], names[1])
+	assert.False(t, deleteCalled, "Orka auto-deletes rejected deploys")
+}
+
+func TestCreate_FirstAttemptTimeoutDeletesFirstName(t *testing.T) {
+	var names []string
+	var deleted []string
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			names = append(names, req.Name)
+			return nil, context.DeadlineExceeded
+		},
+		DeleteVMFunc: func(ctx context.Context, namespace, name string) error {
+			deleted = append(deleted, name)
+			return nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	_, err := c.Create(context.Background(), newTestOpts())
+
+	require.Error(t, err)
+	require.Len(t, names, 1, "a timeout is not a port conflict, so no retry")
+	assert.Equal(t, names, deleted)
+}
+
+func TestCreate_NonRunningAfterRetryDeletesRetryName(t *testing.T) {
+	var names []string
+	var deleted []string
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			names = append(names, req.Name)
+			if len(names) == 1 {
+				return nil, portConflictErr()
+			}
+			return &deployVMResponse{IP: "10.0.0.6", Status: "Failed"}, nil
+		},
+		DeleteVMFunc: func(ctx context.Context, namespace, name string) error {
+			deleted = append(deleted, name)
+			return nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	_, err := c.Create(context.Background(), newTestOpts())
+
+	require.Error(t, err)
+	require.Len(t, names, 2)
+	assert.Equal(t, []string{names[1]}, deleted)
+	assert.Contains(t, err.Error(), names[1], "error should name the VM that actually failed")
+}
+
+func TestCreate_CanceledContextAfterRetryStillDeletesRetryName(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var names []string
+	var deleted []string
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			names = append(names, req.Name)
+			if len(names) == 1 {
+				return nil, portConflictErr()
+			}
+			cancel()
+			return nil, context.Canceled
+		},
+		DeleteVMFunc: func(dctx context.Context, namespace, name string) error {
+			assert.NoError(t, dctx.Err(), "cleanup must not reuse the canceled context")
+			deleted = append(deleted, name)
+			return nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	_, err := c.Create(ctx, newTestOpts())
+
+	require.Error(t, err)
+	require.Len(t, names, 2)
+	assert.Equal(t, []string{names[1]}, deleted)
+}
+
+func TestCreate_ConcurrentRetriesGetDistinctNames(t *testing.T) {
+	const n = 20
+	var mu sync.Mutex
+	seen := map[string]int{}
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			mu.Lock()
+			seen[req.Name]++
+			mu.Unlock()
+			if req.ReservedPorts == "9079:9079" {
+				return nil, portConflictErr()
+			}
+			return &deployVMResponse{IP: "10.0.0.6", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+
+	var wg sync.WaitGroup
+	ids := make([]string, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			inst, err := c.Create(context.Background(), newTestOpts())
+			if assert.NoError(t, err) {
+				ids[i] = inst.ID
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	assert.Len(t, seen, 2*n, "every attempt must use its own name")
+	for name, count := range seen {
+		assert.Equal(t, 1, count, name)
+	}
+	uniq := map[string]bool{}
+	for _, id := range ids {
+		uniq[id] = true
+	}
+	assert.Len(t, uniq, n)
 }
 
 func TestCreate_PortConflictFallsBackToSecondPort(t *testing.T) {
