@@ -361,7 +361,7 @@ type EgressProxy struct {
 	// (Go/OpenSSL, Python requests, curl, git). Steps in egress pools get these
 	// pointed at the merged CA bundle so public roots keep working alongside
 	// the Harness egress CA. A step-provided value always wins.
-	CABundleEnvVars []string `json:"ca_bundle_env_vars" yaml:"ca_bundle_env_vars" envconfig:"DRONE_EGRESS_CA_BUNDLE_ENV_VARS" default:"SSL_CERT_FILE,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO"`
+	CABundleEnvVars []string `json:"ca_bundle_env_vars" yaml:"ca_bundle_env_vars" envconfig:"DRONE_EGRESS_CA_BUNDLE_ENV_VARS" default:"SSL_CERT_FILE,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO,CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE"`
 	// CAExtraEnvVars lists env vars that add to a tool's built-in trust store
 	// (Node's NODE_EXTRA_CA_CERTS). These get the Harness-only CA, since the
 	// tool already carries public roots. A step-provided value always wins.

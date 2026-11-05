@@ -22,6 +22,7 @@ func TestEgressProxyConfig(t *testing.T) {
 			"REQUESTS_CA_BUNDLE",
 			"CURL_CA_BUNDLE",
 			"GIT_SSL_CAINFO",
+			"CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE",
 		}
 		got := cfg.Egress.Proxy.CABundleEnvVars
 		if len(got) != len(wantBundleEnvVars) {
