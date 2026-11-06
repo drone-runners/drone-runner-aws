@@ -108,6 +108,52 @@ fi
 chmod 755 /usr/local/bin/hcli
 {{ end }}
 
+{{ if .HarnessCLIBinaryURI }}
+if curl_retry "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" /usr/local/bin/harness 3 3; then
+    echo "Successfully downloaded harness binary from primary URL."
+else
+    echo "Primary URL failed for harness. Trying fallback URL..."
+    if curl_retry "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" /usr/local/bin/harness 10 3; then
+        echo "Successfully downloaded harness binary from fallback URL."
+    else
+        echo "Failed to download harness from both URLs."
+    fi
+fi
+chmod 755 /usr/local/bin/harness
+{{ end }}
+
+{{ if .HarnessHCliBinaryURI }}
+if curl_retry "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" /usr/local/bin/harness-hcli 3 3; then
+    echo "Successfully downloaded harness-hcli binary from primary URL."
+else
+    echo "Primary URL failed for harness-hcli. Trying fallback URL..."
+    if curl_retry "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" /usr/local/bin/harness-hcli 10 3; then
+        echo "Successfully downloaded harness-hcli binary from fallback URL."
+    else
+        echo "Failed to download harness-hcli from both URLs."
+    fi
+fi
+chmod 755 /usr/local/bin/harness-hcli
+{{ end }}
+
+if [ -x /usr/local/bin/harness ] && [ -x /usr/local/bin/harness-hcli ]; then
+    mkdir -p /etc/harness
+    HARNESS_CLI_HOME=/etc/harness /usr/local/bin/harness install plugin /usr/local/bin/harness-hcli 2>/dev/null || true
+    chmod -R 777 /etc/harness 2>/dev/null || true
+    echo "HARNESS_CLI_HOME=/etc/harness" >> "$HOME/.env"
+    echo "export HARNESS_CLI_HOME=/etc/harness" >> /etc/zshenv 2>/dev/null || true
+    echo "export HARNESS_CLI_HOME=/etc/harness" >> /etc/profile 2>/dev/null || true
+    mkdir -p "$HOME/.harness" && cp -r /etc/harness/* "$HOME/.harness/" 2>/dev/null || true
+    chmod -R 777 "$HOME/.harness" 2>/dev/null || true
+    for user_home in /Users/*; do
+        if [ -d "$user_home" ]; then
+            mkdir -p "$user_home/.harness"
+            cp -r /etc/harness/* "$user_home/.harness/" 2>/dev/null || true
+            chmod -R 777 "$user_home/.harness" 2>/dev/null || true
+        fi
+    done
+fi
+
 {{ if .AutoInjectionBinaryURI }}
 mkdir -p /tmp/harness/bin
 curl_retry "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" /tmp/harness/bin/auto-injection 10 10

@@ -39,6 +39,10 @@ type ManagerConfig struct {
 	AutoInjectionBinaryURI       string
 	AnnotationsBinaryURI         string
 	AnnotationsBinaryFallbackURI string
+	HarnessCLIBinaryURI          string
+	HarnessCLIBinaryFallbackURI  string
+	HarnessHCliBinaryURI         string
+	HarnessHCliBinaryFallbackURI string
 	EnvmanBinaryURI              string
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string
@@ -69,6 +73,10 @@ func NewManagerFromConfig(cfg *ManagerConfig) *Manager {
 		autoInjectionBinaryURI:       cfg.AutoInjectionBinaryURI,
 		annotationsBinaryURI:         cfg.AnnotationsBinaryURI,
 		annotationsBinaryFallbackURI: cfg.AnnotationsBinaryFallbackURI,
+		harnessCLIBinaryURI:          cfg.HarnessCLIBinaryURI,
+		harnessCLIBinaryFallbackURI:  cfg.HarnessCLIBinaryFallbackURI,
+		harnessHCliBinaryURI:         cfg.HarnessHCliBinaryURI,
+		harnessHCliBinaryFallbackURI: cfg.HarnessHCliBinaryFallbackURI,
 		envmanBinaryURI:              cfg.EnvmanBinaryURI,
 		envmanBinaryFallbackURI:      cfg.EnvmanBinaryFallbackURI,
 		tmateBinaryURI:               cfg.TmateBinaryURI,
@@ -99,6 +107,10 @@ func NewManagerConfigFromEnv(ctx context.Context, instanceStore store.InstanceSt
 		AutoInjectionBinaryURI:       envConfig.Settings.AutoInjectionBinaryURI,
 		AnnotationsBinaryURI:         envConfig.Settings.AnnotationsBinaryURI,
 		AnnotationsBinaryFallbackURI: envConfig.Settings.AnnotationsBinaryFallbackURI,
+		HarnessCLIBinaryURI:          envConfig.Settings.HarnessCLIBinaryURI,
+		HarnessCLIBinaryFallbackURI:  envConfig.Settings.HarnessCLIBinaryFallbackURI,
+		HarnessHCliBinaryURI:         envConfig.Settings.HarnessHCliBinaryURI,
+		HarnessHCliBinaryFallbackURI: envConfig.Settings.HarnessHCliBinaryFallbackURI,
 		EnvmanBinaryURI:              envConfig.Settings.EnvmanBinaryURI,
 		EnvmanBinaryFallbackURI:      envConfig.Settings.EnvmanBinaryFallbackURI,
 		TmateBinaryURI:               envConfig.Settings.TmateBinaryURI,
