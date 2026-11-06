@@ -86,6 +86,15 @@ try {
 } catch {
     echo "[egress] git --system config write failed: $($_.Exception.Message)"
 }
+# libcurl's schannel backend requests revocation checks itself, ignoring the
+# SCHANNEL registry Mode above. CRL/AIA fetches go direct on port 80 (not via
+# the proxy), get dropped by the firewall and stall the TLS handshake ~100s.
+try {
+    & "C:\Program Files\Git\cmd\git.exe" config --system http.schannelCheckRevoke false 2>$null
+    echo "[egress] git --system http.schannelCheckRevoke=false set"
+} catch {
+    echo "[egress] git --system schannelCheckRevoke write failed: $($_.Exception.Message)"
+}
 
 echo "[egress] Writing merged CA bundle for replacement-style CA env vars"
 # SSL_CERT_FILE / REQUESTS_CA_BUNDLE / CURL_CA_BUNDLE / GIT_SSL_CAINFO replace
