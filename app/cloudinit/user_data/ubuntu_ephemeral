@@ -1,0 +1,44 @@
+#cloud-config
+apt:
+  sources:
+    docker.list:
+      source: deb [arch={{ .Platform.Arch }}] https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+packages:
+  - wget
+  - docker-ce=5:28.5.2-1~ubuntu.22.04~jammy
+write_files:
+- path: /opt/harness-delegate/config.env
+  permissions: '0400'
+  encoding: b64
+  content: {{ .DelegateConfigEnv | base64 }}
+- path: /etc/systemd/system/harness-delegate.service
+  permissions: '0644'
+  content: |
+    [Unit]
+    Description=Harness ephemeral delegate
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Environment="ENV_FILE=/opt/harness-delegate/config.env"
+    ExecStart=/usr/bin/delegate server
+    Restart=on-failure
+    RestartSec=5
+
+    [Install]
+    WantedBy=multi-user.target
+runcmd:
+  - set -x
+  - |
+    set -e
+    if ! /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=3 --waitretry=3 "{{ .DelegatePath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/delegate; then
+      {{ if .DelegateFallbackPath }}
+      /usr/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .DelegateFallbackPath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/delegate
+      {{ else }}
+      exit 1
+      {{ end }}
+    fi
+    chmod 755 /usr/bin/delegate
+  - systemctl daemon-reload
+  - systemctl enable --now harness-delegate

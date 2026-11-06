@@ -260,7 +260,7 @@ func generateScriptForTest(t *testing.T, vmImage, registry string) string {
 		},
 	}
 	resource := cf.NomadResource{Cpus: "4", MemoryGB: "8", DiskSize: "100"}
-	return mv.generateStartupScript("vm-id", "machine-pw", imgCfg, resource, 8080)
+	return mv.generateStartupScript("vm-id", "machine-pw", imgCfg, resource, 8080, false)
 }
 
 // extractImageCleanupScript returns the portion of the generated startup

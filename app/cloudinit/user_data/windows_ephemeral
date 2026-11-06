@@ -1,0 +1,30 @@
+$ProgressPreference = 'SilentlyContinue'
+New-Item -ItemType Directory -Force -Path "C:\Program Files\harness-delegate" | Out-Null
+$cfg = [System.Convert]::FromBase64String("{{ .DelegateConfigEnv | base64 }}")
+[System.IO.File]::WriteAllBytes("C:\Program Files\harness-delegate\config.env", $cfg)
+{{ if .DownloadProxyURL }}
+$env:http_proxy = "{{ .DownloadProxyURL }}"
+$env:https_proxy = "{{ .DownloadProxyURL }}"
+{{ end }}
+$primary = "{{ .DelegatePath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$out = "C:\Program Files\harness-delegate\delegate.exe"
+try {
+    Invoke-WebRequest -Uri $primary -OutFile $out
+} catch {
+    {{ if .DelegateFallbackPath }}
+    Invoke-WebRequest -Uri "{{ .DelegateFallbackPath }}/delegate-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe" -OutFile $out
+    {{ else }}
+    throw
+    {{ end }}
+}
+$dockerReady = $false
+for ($i = 0; $i -lt 12; $i++) {
+    docker info *> $null
+    if ($LASTEXITCODE -eq 0) { $dockerReady = $true; break }
+    $svc = Get-Service -Name docker -ErrorAction SilentlyContinue
+    if ($null -ne $svc -and $svc.Status -ne 'Running') { Start-Service docker }
+    Start-Sleep -Seconds 5
+}
+if (-not $dockerReady) { throw "docker is not running; the Windows image must include Docker" }
+$env:ENV_FILE = "C:\Program Files\harness-delegate\config.env"
+Start-Process -FilePath $out -ArgumentList "server" -RedirectStandardOutput "C:\Program Files\harness-delegate\delegate.log" -RedirectStandardError "C:\Program Files\harness-delegate\delegate.err"
