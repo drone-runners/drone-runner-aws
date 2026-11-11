@@ -41,11 +41,11 @@ runcmd:
 - 'chmod 755 /usr/bin/hcli'
 {{ end }}
 {{ if .HarnessCLIBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness'
 - 'chmod 755 /usr/bin/harness'
 {{ end }}
 {{ if .HarnessHCliBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli'
 - 'chmod 755 /usr/bin/harness-hcli'
 {{ end }}
 - 'if [ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ]; then mkdir -p /etc/harness && HARNESS_CLI_HOME=/etc/harness /usr/bin/harness install plugin /usr/bin/harness-hcli && chmod -R 777 /etc/harness && echo "HARNESS_CLI_HOME=/etc/harness" >> /etc/environment && mkdir -p /root/.harness && cp -r /etc/harness/* /root/.harness/ 2>/dev/null || true && for u in /home/*; do [ -d "$u" ] && mkdir -p "$u/.harness" && cp -r /etc/harness/* "$u/.harness/" 2>/dev/null && chmod -R 777 "$u/.harness" 2>/dev/null || true; done; fi'

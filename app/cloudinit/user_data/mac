@@ -26,12 +26,12 @@ chmod 755 /usr/local/bin/hcli
 {{ end }}
 
 {{ if .HarnessCLIBinaryURI }}
-/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness
 chmod 755 /usr/local/bin/harness
 {{ end }}
 
 {{ if .HarnessHCliBinaryURI }}
-/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli
 chmod 755 /usr/local/bin/harness-hcli
 {{ end }}
 
