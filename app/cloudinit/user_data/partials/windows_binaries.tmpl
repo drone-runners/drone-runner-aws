@@ -36,6 +36,49 @@ try {
 }
 {{ end }}
 
+{{ if .HarnessCLIBinaryURI }}
+$primaryHarnessUrl = "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$secondaryHarnessUrl = "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$harnessPath = "C:\Program Files\lite-engine\harness.exe"
+
+try {
+    Invoke-WebRequest -Uri $primaryHarnessUrl -OutFile $harnessPath -ErrorAction Stop
+} catch {
+    try {
+        Invoke-WebRequest -Uri $secondaryHarnessUrl -OutFile $harnessPath -ErrorAction Stop
+    } catch {
+        echo "[DRONE] WARNING: Failed to download harness CLI"
+    }
+}
+{{ end }}
+
+{{ if .HarnessHCliBinaryURI }}
+$primaryHarnessHcliUrl = "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$secondaryHarnessHcliUrl = "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$harnessHcliPath = "C:\Program Files\lite-engine\harness-hcli.exe"
+
+try {
+    Invoke-WebRequest -Uri $primaryHarnessHcliUrl -OutFile $harnessHcliPath -ErrorAction Stop
+} catch {
+    try {
+        Invoke-WebRequest -Uri $secondaryHarnessHcliUrl -OutFile $harnessHcliPath -ErrorAction Stop
+    } catch {
+        echo "[DRONE] WARNING: Failed to download harness-hcli plugin binary"
+    }
+}
+{{ end }}
+
+if ((Test-Path -Path "C:\Program Files\lite-engine\harness.exe") -and (Test-Path -Path "C:\Program Files\lite-engine\harness-hcli.exe")) {
+    try {
+        $env:HARNESS_CLI_HOME = "C:\Program Files\lite-engine"
+        & "C:\Program Files\lite-engine\harness.exe" install plugin "C:\Program Files\lite-engine\harness-hcli.exe"
+        [Environment]::SetEnvironmentVariable("HARNESS_CLI_HOME", "C:\Program Files\lite-engine", "Machine")
+        echo "HARNESS_CLI_HOME=C:\Program Files\lite-engine" >> "C:\Program Files\lite-engine\.env"
+    } catch {
+        echo "[DRONE] WARNING: Failed to install harness-hcli plugin: $_"
+    }
+}
+
 {{ if .AutoInjectionBinaryURI }}
 $autoInjectionUrl = "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection"
 $autoInjectionPath = "C:\Program Files\lite-engine\auto-injection.exe"

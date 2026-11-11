@@ -25,6 +25,27 @@ chmod 777 /usr/bin/plugin
 chmod 755 /usr/local/bin/hcli
 {{ end }}
 
+{{ if .HarnessCLIBinaryURI }}
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness
+chmod 755 /usr/local/bin/harness
+{{ end }}
+
+{{ if .HarnessHCliBinaryURI }}
+/usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/local/bin/harness-hcli
+chmod 755 /usr/local/bin/harness-hcli
+{{ end }}
+
+if [ -x /usr/local/bin/harness ] && [ -x /usr/local/bin/harness-hcli ]; then
+    mkdir -p /etc/harness
+    HARNESS_CLI_HOME=/etc/harness /usr/local/bin/harness install plugin /usr/local/bin/harness-hcli 2>/dev/null || true
+    chmod -R 777 /etc/harness 2>/dev/null || true
+    echo "HARNESS_CLI_HOME=/etc/harness" >> "$HOME/.env"
+    echo "export HARNESS_CLI_HOME=/etc/harness" >> /etc/zshenv 2>/dev/null || true
+    echo "export HARNESS_CLI_HOME=/etc/harness" >> /etc/profile 2>/dev/null || true
+    mkdir -p "$HOME/.harness" && cp -r /etc/harness/* "$HOME/.harness/" 2>/dev/null || true
+    chmod -R 777 "$HOME/.harness" 2>/dev/null || true
+fi
+
 {{ if .AutoInjectionBinaryURI }}
 mkdir -p /tmp/harness/bin
 /usr/local/bin/wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection || /usr/local/bin/wget --retry-connrefused --tries=10 --waitretry=10 "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" -O /tmp/harness/bin/auto-injection

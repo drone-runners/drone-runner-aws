@@ -47,6 +47,42 @@
   - chmod 755 /usr/bin/hcli
   {{ end }}
 
+  # Download and install harness-cli if configured
+  {{ if .HarnessCLIBinaryURI }}
+  - |
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=5 --waitretry=5 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness && echo "Successfully downloaded harness binary from primary URL.") {{ if .HarnessCLIBinaryFallbackURI }} || \
+    (echo "Primary URL failed for harness. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=5 --waitretry=5 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness && echo "Successfully downloaded harness binary from fallback URL."){{ end }}
+  - chmod 755 /usr/bin/harness
+  {{ end }}
+
+  # Download and install harness-hcli if configured
+  {{ if .HarnessHCliBinaryURI }}
+  - |
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=5 --waitretry=5 -nv "{{ .HarnessHCliBinaryURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli && echo "Successfully downloaded harness-hcli binary from primary URL.") {{ if .HarnessHCliBinaryFallbackURI }} || \
+    (echo "Primary URL failed for harness-hcli. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=5 --waitretry=5 -nv "{{ .HarnessHCliBinaryFallbackURI }}harness-hcli-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness-hcli && echo "Successfully downloaded harness-hcli binary from fallback URL."){{ end }}
+  - chmod 755 /usr/bin/harness-hcli
+  {{ end }}
+
+  # Install harness-hcli plugin for harness-cli if both binaries exist
+  - |
+    if [ -x /usr/bin/harness ] && [ -x /usr/bin/harness-hcli ]; then
+      mkdir -p /etc/harness
+      HARNESS_CLI_HOME=/etc/harness /usr/bin/harness install plugin /usr/bin/harness-hcli 2>/dev/null || true
+      chmod -R 777 /etc/harness 2>/dev/null || true
+      echo "HARNESS_CLI_HOME=/etc/harness" >> /etc/environment
+      [ -f /root/.env ] && echo "HARNESS_CLI_HOME=/etc/harness" >> /root/.env
+      mkdir -p /etc/profile.d && echo "export HARNESS_CLI_HOME=/etc/harness" > /etc/profile.d/harness.sh
+      mkdir -p /root/.harness && cp -r /etc/harness/* /root/.harness/ 2>/dev/null || true
+      mkdir -p /etc/skel/.harness && cp -r /etc/harness/* /etc/skel/.harness/ 2>/dev/null || true
+      for user_home in /home/*; do
+        if [ -d "$user_home" ]; then
+          mkdir -p "$user_home/.harness"
+          cp -r /etc/harness/* "$user_home/.harness/" 2>/dev/null || true
+          chmod -R 777 "$user_home/.harness" 2>/dev/null || true
+        fi
+      done
+    fi
+
   # Setup tmate if enabled
   {{ if .Tmate.Enabled }}
   - mkdir /addon

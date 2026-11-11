@@ -196,6 +196,10 @@ type InstanceCreateOpts struct {
 	AutoInjectionBinaryURI       string
 	AnnotationsBinaryURI         string
 	AnnotationsBinaryFallbackURI string
+	HarnessCLIBinaryURI          string
+	HarnessCLIBinaryFallbackURI  string
+	HarnessHCliBinaryURI         string
+	HarnessHCliBinaryFallbackURI string
 	InternalLabels               map[string]string
 	VMLabels                     map[string]string
 	Zones                        []string

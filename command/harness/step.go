@@ -94,6 +94,17 @@ func HandleStep(ctx context.Context,
 		setPrevStepExportEnvs(r)
 	}
 
+	if r.StartStepRequest.Envs == nil {
+		r.StartStepRequest.Envs = make(map[string]string)
+	}
+	if _, ok := r.StartStepRequest.Envs["HARNESS_CLI_HOME"]; !ok {
+		if inst.Platform.OS == oshelp.OSWindows {
+			r.StartStepRequest.Envs["HARNESS_CLI_HOME"] = `C:\Program Files\lite-engine`
+		} else {
+			r.StartStepRequest.Envs["HARNESS_CLI_HOME"] = "/etc/harness"
+		}
+	}
+
 	// add global volumes as mounts only if image is specified
 	if r.Image != "" {
 		for _, pair := range globalVolumes {
