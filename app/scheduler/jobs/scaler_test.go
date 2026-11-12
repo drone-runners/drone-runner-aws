@@ -631,7 +631,7 @@ func TestScaler_ScaleUp(t *testing.T) {
 	})
 
 	pools := []ScalablePool{
-		{Name: "pool-1", MinSize: 1},
+		{Name: "pool-1", MinSize: 0},
 	}
 
 	config := types.ScalerConfig{
@@ -718,6 +718,46 @@ func TestScaler_RespectMinSize(t *testing.T) {
 	}
 }
 
+func TestScaler_MinHotpoolAddedToPrediction(t *testing.T) {
+	instanceStore := NewMockInstanceStore()
+	outboxStore := NewMockOutboxStore()
+	mockPredictor := NewMockPredictor()
+	historyStore := NewMockUtilizationHistoryStore()
+
+	mockPredictor.SetPredictionForImage("pool-1", "default", "ubuntu-2204", 5)
+	historyStore.records = append(historyStore.records, types.UtilizationRecord{
+		Pool: "pool-1", VariantID: "default", ImageName: "ubuntu-2204",
+		RecordedAt: time.Now().Unix(), InUseInstances: 1,
+	})
+	for i := 0; i < 5; i++ {
+		instanceStore.AddInstance(&types.Instance{
+			ID:        fmt.Sprintf("inst-%d", i),
+			Pool:      "pool-1",
+			VariantID: "default",
+			Image:     "ubuntu-2204",
+			State:     types.StateCreated,
+		})
+	}
+
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 3}}
+	scaler := NewScaler(nil, mockPredictor, instanceStore, historyStore, outboxStore, types.ScalerConfig{
+		WindowDuration: 30 * time.Minute,
+		LeadTime:       5 * time.Minute,
+		Enabled:        true,
+	}, pools, nil)
+
+	now := time.Now()
+	if err := scaler.ScalePool(context.Background(), "pool-1", now.Unix(), now.Add(30*time.Minute).Unix()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Free already matches the prediction. The hotpool minimum is still created on top.
+	setupJobs := outboxStore.GetJobsByType(types.OutboxJobTypeSetupInstance)
+	if len(setupJobs) != 3 {
+		t.Errorf("expected 3 setup jobs (prediction 5 + min 3 - free 5), got %d", len(setupJobs))
+	}
+}
+
 func TestScaler_NoScalingNeeded(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
 	outboxStore := NewMockOutboxStore()
@@ -750,7 +790,7 @@ func TestScaler_NoScalingNeeded(t *testing.T) {
 	})
 
 	pools := []ScalablePool{
-		{Name: "pool-1", MinSize: 1},
+		{Name: "pool-1", MinSize: 0},
 	}
 
 	config := types.ScalerConfig{
@@ -799,10 +839,10 @@ func TestScaler_WithVariants(t *testing.T) {
 	pools := []ScalablePool{
 		{
 			Name:    "pool-1",
-			MinSize: 1,
+			MinSize: 0,
 			Variants: []ScalableVariant{
 				{
-					MinSize: 1,
+					MinSize: 0,
 					Params: types.SetupInstanceParams{
 						VariantID:   "large",
 						MachineType: "n1-standard-8",
@@ -1355,7 +1395,7 @@ func TestScaler_ScalePercent_CreatesHibernatedBuffer(t *testing.T) {
 		RecordedAt: time.Now().Unix(), InUseInstances: 1,
 	})
 
-	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 0}}
 
 	config := types.ScalerConfig{
 		WindowDuration: 30 * time.Minute,
@@ -1423,7 +1463,7 @@ func TestScaler_ScalePercent_NotAppliedWhenDeltaIsZero(t *testing.T) {
 		RecordedAt: time.Now().Unix(), InUseInstances: 1,
 	})
 
-	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 0}}
 
 	config := types.ScalerConfig{
 		WindowDuration: 30 * time.Minute,
@@ -1459,7 +1499,7 @@ func TestScaler_ScalePercent_Disabled_At100(t *testing.T) {
 		RecordedAt: time.Now().Unix(), InUseInstances: 1,
 	})
 
-	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 0}}
 
 	config := types.ScalerConfig{
 		WindowDuration: 30 * time.Minute,
@@ -1506,7 +1546,7 @@ func TestScaler_ScalePercent_CeilingRounding(t *testing.T) {
 		RecordedAt: time.Now().Unix(), InUseInstances: 1,
 	})
 
-	pools := []ScalablePool{{Name: "pool-1", MinSize: 1}}
+	pools := []ScalablePool{{Name: "pool-1", MinSize: 0}}
 
 	config := types.ScalerConfig{
 		WindowDuration: 30 * time.Minute,
@@ -1613,7 +1653,7 @@ type tenantVariant struct {
 //
 //	tenant=default variant=default  predicted=0 minSize=2 free=1 -> +1
 //	tenant=default variant=large    predicted=0 minSize=1 free=0 -> +1
-//	tenant=acctA   variant=default  predicted=5 minSize=1 free=2 -> +3
+//	tenant=acctA   variant=default  predicted=5 minSize=1 free=2 -> +4
 //	tenant=acctA   variant=large    predicted=0 minSize=4 free=1 -> +3
 func TestScaler_MultiTenantVariantsScaleUpIndependently(t *testing.T) {
 	instanceStore := NewMockInstanceStore()
@@ -1624,8 +1664,8 @@ func TestScaler_MultiTenantVariantsScaleUpIndependently(t *testing.T) {
 	const image = "ubuntu-2204"
 
 	// Per-(tenant, variant) predictions. Only acctA/default is demand-driven; the rest are 0 so
-	// their MinSize floor decides the target. Distinct values prove predictions are keyed by
-	// tenant AND variant, not shared across the pool.
+	// their hotpool minimum decides the target. A non-zero prediction is increased by that
+	// minimum. Distinct values prove predictions are keyed by tenant AND variant.
 	mockPredictor.SetPredictionForTenant("pool-1", "default", "default", image, 0)
 	mockPredictor.SetPredictionForTenant("pool-1", "default", "large", image, 0)
 	mockPredictor.SetPredictionForTenant("pool-1", "acctA", "default", image, 5)
@@ -1705,7 +1745,7 @@ func TestScaler_MultiTenantVariantsScaleUpIndependently(t *testing.T) {
 	want := map[tenantVariant]int{
 		{"default", "default"}: 1,
 		{"default", "large"}:   1,
-		{"acctA", "default"}:   3,
+		{"acctA", "default"}:   4,
 		{"acctA", "large"}:     3,
 	}
 	if len(got) != len(want) {
