@@ -290,9 +290,9 @@ func TestScaleGroup_ScalesUpAcrossPoolsInOrder(t *testing.T) {
 
 	h.scale(t, &capMedium)
 
-	// target 10 - free 1 = 9; primary has room for 1 under limit 4 (3 used), the rest go to fallback.
+	// target (10 predicted + 1 min) - free 1 = 10; primary has room for 1 under limit 4 (3 used).
 	jobs := h.setupJobs(t)
-	assertCounts(t, jobCounts(jobs), map[string][2]int{"linux-amd64": {1, 0}, "linux-amd64-fallback": {8, 0}})
+	assertCounts(t, jobCounts(jobs), map[string][2]int{"linux-amd64": {1, 0}, "linux-amd64-fallback": {9, 0}})
 
 	for _, j := range jobs {
 		p := j.params
@@ -319,14 +319,14 @@ func TestScaleGroup_ScalesUpAcrossPoolsInOrder(t *testing.T) {
 	}
 
 	labels := []string{"paid", "linux", "amd64", "variant_medium", "default"}
-	if v := testutil.ToFloat64(h.metrics.ScalerCapabilityPredictedInstances.WithLabelValues(labels...)); v != 10 {
-		t.Errorf("predicted metric = %v, want 10", v)
+	if v := testutil.ToFloat64(h.metrics.ScalerCapabilityPredictedInstances.WithLabelValues(labels...)); v != 11 {
+		t.Errorf("predicted metric = %v, want 11", v)
 	}
 	if v := testutil.ToFloat64(h.metrics.ScalerCapabilityFreeInstances.WithLabelValues(append(labels, "linux-amd64")...)); v != 1 {
 		t.Errorf("free metric for primary = %v, want 1", v)
 	}
-	if v := testutil.ToFloat64(h.metrics.ScalerCapabilityTargetInstances.WithLabelValues(append(labels, "linux-amd64-fallback")...)); v != 8 {
-		t.Errorf("target metric for fallback = %v, want 8", v)
+	if v := testutil.ToFloat64(h.metrics.ScalerCapabilityTargetInstances.WithLabelValues(append(labels, "linux-amd64-fallback")...)); v != 9 {
+		t.Errorf("target metric for fallback = %v, want 9", v)
 	}
 }
 
@@ -350,17 +350,18 @@ func TestScaleGroup_VariantImageAndPoolDefault(t *testing.T) {
 func TestScaleGroup_MinSizesFirst(t *testing.T) {
 	h := newCapHarness(t, 3, nil)
 	h.scale(t, &capBase)
-	// Base group min sizes: primary 2, fallback 1, west4 0.
-	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {2, 0}, "linux-amd64-fallback": {1, 0}})
+	// Base mins are 2 + 1 + 0, and the prediction of 3 is added on top: primary takes its
+	// minimum and then the forecast, fallback takes its minimum.
+	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {5, 0}, "linux-amd64-fallback": {1, 0}})
 }
 
 func TestScaleGroup_Buffer(t *testing.T) {
 	h := newCapHarness(t, 7, func(c *types.ScalerConfig) { c.ScalePercent = 150 })
 	h.add(3, "linux-amd64", "default", "default", "", types.StateCreated, types.InstanceSourcePool)
 	h.scale(t, &capBase)
-	// delta 4 live + ceil(4*0.5)=2 hibernated. Fallback's min of 1 is filled first, the rest go
-	// to the primary, which has no limit.
-	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {3, 2}, "linux-amd64-fallback": {1, 0}})
+	// target = 7 predicted + mins 3, free 3, so delta 7 live + ceil(7*0.5)=4 hibernated.
+	// Fallback's min of 1 is filled first; the rest go to the primary, which has no limit.
+	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {6, 4}, "linux-amd64-fallback": {1, 0}})
 }
 
 func TestScaleGroup_ScaleDownFromEndKeepsMin(t *testing.T) {
@@ -416,15 +417,15 @@ func TestScaleGroup_DisabledPoolSkipped(t *testing.T) {
 	h := newCapHarness(t, 5, func(c *types.ScalerConfig) { c.DisabledPools = []string{"linux-amd64-fallback"} })
 	h.add(4, "linux-amd64", "default", "variant_medium", "", types.StateInUse, types.InstanceSourcePredictor)
 	h.scale(t, &capMedium)
-	// Primary is at its limit, fallback is disabled, so everything goes to west4.
-	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64-west4": {5, 0}})
+	// Primary is at its limit, fallback is disabled, so the prediction plus the primary minimum go to west4.
+	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64-west4": {6, 0}})
 }
 
 func TestScaleGroup_TenantGroupStaysInTenantPools(t *testing.T) {
 	h := newCapHarness(t, 4, nil)
 	h.scale(t, &capEgress)
 	jobs := h.setupJobs(t)
-	assertCounts(t, jobCounts(jobs), map[string][2]int{"linux-amd64": {4, 0}})
+	assertCounts(t, jobCounts(jobs), map[string][2]int{"linux-amd64": {5, 0}})
 	if jobs[0].params.TenantID != capEgressTenant {
 		t.Errorf("tenant id = %q", jobs[0].params.TenantID)
 	}
@@ -437,7 +438,7 @@ func TestScaleGroup_DryRun(t *testing.T) {
 	if len(h.setupJobs(t)) != 0 || len(h.manager.destroyed) != 0 {
 		t.Error("dry run must not create or destroy instances")
 	}
-	if v := testutil.ToFloat64(h.metrics.ScalerCapabilityPredictedInstances.WithLabelValues("paid", "linux", "amd64", "default", "default")); v != 6 {
+	if v := testutil.ToFloat64(h.metrics.ScalerCapabilityPredictedInstances.WithLabelValues("paid", "linux", "amd64", "default", "default")); v != 9 {
 		t.Errorf("dry run should still record the target, got %v", v)
 	}
 }
@@ -534,8 +535,8 @@ func TestScaleGroup_CountsPendingSetupJobsAgainstLimit(t *testing.T) {
 		}
 	}
 	h.scale(t, &capMedium)
-	// Free is 0 (in-flight jobs are not free), so delta 3; the primary only has room for 1.
-	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {1, 2}, "linux-amd64-fallback": {2, 0}})
+	// Free is 0. Target is prediction 3 plus the primary minimum of 1; the primary only has room for 1.
+	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {1, 2}, "linux-amd64-fallback": {3, 0}})
 }
 
 func TestHandleSetupFailure_SkipsDisabledPools(t *testing.T) {
@@ -604,8 +605,8 @@ func TestOutboxProcessor_DispatchesCapabilityScaleJob(t *testing.T) {
 	if len(h.pred.inputs) != 1 || h.pred.inputs[0].StartTimestamp != 1000 || h.pred.inputs[0].EndTimestamp != 2800 {
 		t.Errorf("expected one capability prediction for the window, got %+v", h.pred.inputs)
 	}
-	// Prediction 2 is floored by the group's min sizes (2 + 1 + 0).
-	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {2, 0}, "linux-amd64-fallback": {1, 0}})
+	// Prediction 2 is added to the group's min sizes (2 + 1 + 0).
+	assertCounts(t, jobCounts(h.setupJobs(t)), map[string][2]int{"linux-amd64": {4, 0}, "linux-amd64-fallback": {1, 0}})
 }
 
 func TestScalerTrigger_CapabilityTargetsOneJobPerGroup(t *testing.T) {
