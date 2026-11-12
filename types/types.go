@@ -429,8 +429,9 @@ type ScalerConfig struct {
 	RecentUsageLookbackDays int
 	// RecentUsageMinInstances is the minimum number of instances to maintain for a variant/image
 	// combination that has zero prediction but had usage within the lookback window.
-	// This is applied on top of minSize: if RecentUsageMinInstances=3 and minSize=2,
-	// only 1 additional instance is added. Default: 0 (disabled)
+	// It raises the target when that total is below this value. The pool hotpool minimum is
+	// separate and is always added to a non-zero prediction. When both apply at prediction 0,
+	// RecentUsageMinInstances=3 and minSize=2 produce 3 instances, not 5. Default: 0 (disabled)
 	RecentUsageMinInstances int
 	// ScalePercent is the percentage of additional instances to pre-provision as a hibernated
 	// buffer above the predicted live demand. It is only applied to positive scale-up deltas.
