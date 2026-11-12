@@ -87,8 +87,9 @@ func (s *CapabilityScaler) RunScaleJob(ctx context.Context, target string, windo
 }
 
 // ScaleGroup scales a capability group for the given window: one prediction for the whole
-// group, with new instances placed in pool-file order (each pool's min size first, then up to
-// its limit) and excess predictor instances removed from the end of that order.
+// group, plus each pool's hotpool minimum. New instances are placed in pool-file order (each
+// pool's min size first, then up to its limit) and excess predictor instances are removed from
+// the end of that order, never below a pool's minimum.
 func (s *CapabilityScaler) ScaleGroup(ctx context.Context, groupName string, windowStart, windowEnd int64) error {
 	logr := logrus.WithField(logFieldCapability, groupName)
 	group, ok := s.catalog.GroupByName(groupName)
@@ -124,7 +125,12 @@ func (s *CapabilityScaler) ScaleGroup(ctx context.Context, groupName string, win
 		minTotal += slots[i].member.MinSize
 		freeTotal += slots[i].free
 	}
-	target := max(prediction.PredictedInstances, minTotal)
+	// The hotpool minimum sits on top of the forecast. A zero forecast still
+	// keeps the group minimum ready.
+	target := prediction.PredictedInstances
+	if minTotal > 0 {
+		target += minTotal
+	}
 
 	scaledByRecentUsage := false
 	if prediction.PredictedInstances == 0 && s.config.RecentUsageMinInstances > 0 && target < s.config.RecentUsageMinInstances {
