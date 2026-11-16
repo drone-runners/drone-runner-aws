@@ -78,6 +78,20 @@ func TestBinaryPresence(t *testing.T) {
 		)
 	}
 
+	// harness-cli
+	for _, filename := range []string{
+		"harness-linux-amd64",
+		"harness-linux-arm64",
+		"harness-darwin-amd64",
+		"harness-darwin-arm64",
+		"harness-windows-amd64.exe",
+	} {
+		checks = append(checks,
+			urlCheck{"harness primary", join(cfg.Settings.HarnessCLIBinaryURI, filename)},
+			urlCheck{"harness fallback", join(cfg.Settings.HarnessCLIBinaryFallbackURI, filename)},
+		)
+	}
+
 	// envman
 	for _, filename := range []string{
 		"envman-Linux-x86_64",

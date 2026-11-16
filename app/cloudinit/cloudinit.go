@@ -44,6 +44,8 @@ type Params struct {
 	EnableC4D                    bool
 	AnnotationsBinaryURI         string
 	AnnotationsBinaryFallbackURI string
+	HarnessCLIBinaryURI          string
+	HarnessCLIBinaryFallbackURI  string
 	EnvmanBinaryURI              string
 	EnvmanBinaryFallbackURI      string
 	TmateBinaryURI               string

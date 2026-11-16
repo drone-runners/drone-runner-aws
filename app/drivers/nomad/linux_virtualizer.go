@@ -255,6 +255,8 @@ func (lv *LinuxVirtualizer) generateUserData(opts *types.InstanceCreateOpts) str
 		PluginBinaryFallbackURI:      opts.PluginBinaryFallbackURI,
 		AnnotationsBinaryURI:         opts.AnnotationsBinaryURI,
 		AnnotationsBinaryFallbackURI: opts.AnnotationsBinaryFallbackURI,
+		HarnessCLIBinaryURI:          opts.HarnessCLIBinaryURI,
+		HarnessCLIBinaryFallbackURI:  opts.HarnessCLIBinaryFallbackURI,
 		DriverName:                   opts.DriverName,
 		EnvmanBinaryURI:              opts.EnvmanBinaryURI,
 		EnvmanBinaryFallbackURI:      opts.EnvmanBinaryFallbackURI,
