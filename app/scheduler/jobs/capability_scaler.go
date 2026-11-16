@@ -277,7 +277,7 @@ func (s *CapabilityScaler) capabilitySlot(ctx context.Context, key *types.Capabi
 		slot.image = m.Variant.ImageName
 	}
 	slot.fqImage = slot.image
-	fq, err := s.manager.FullyQualifiedImage(ctx, m.Pool, slot.image)
+	fq, err := s.manager.FullyQualifiedImage(ctx, m.Pool, key.TenantID, slot.image)
 	if err != nil {
 		logrus.WithError(err).WithField(logFieldPool, m.Pool).Warnln("scaler: failed to resolve pool image, matching configured image name")
 	} else {
