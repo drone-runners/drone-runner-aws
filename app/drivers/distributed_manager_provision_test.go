@@ -93,6 +93,47 @@ func TestDistributedProvisionFromPoolClaimsConfiguredPrimaryMachineType(t *testi
 	assert.Equal(t, claimed.ID, inst.ID)
 }
 
+func TestDistributedProvisionFromPool_TenantClaimsWithTenantImage(t *testing.T) {
+	const tenantImage = "tenant-project/global/images/byoi-ubuntu22"
+	claimed := &types.Instance{
+		ID: "inst-1", Pool: "pool1", Size: "c4d-standard-8", Image: tenantImage,
+		State: types.StateInUse, Source: types.InstanceSourcePredictor, VariantID: "large", TenantID: "acctA",
+	}
+	store := &mockInstanceStore{
+		FindAndClaimFunc: func(_ context.Context, params *types.QueryParams, _ types.InstanceState, _ []types.InstanceState, _ bool) (*types.Instance, error) {
+			assert.Equal(t, "acctA", params.TenantID)
+			assert.Equal(t, tenantImage, params.ImageName)
+			return claimed, nil
+		},
+		UpdateFunc: func(_ context.Context, _ *types.Instance) error { return nil },
+	}
+	defaultDriver := &googleMockDriver{defaultImage: "projects/paid-project/global/images/byoi-ubuntu22"}
+	variants := []types.PoolVariant{{SetupInstanceParams: types.SetupInstanceParams{
+		VariantID: "large", ResourceClass: "large", MachineType: "c4d-standard-8",
+	}}}
+	d, pool := newProvisionTestManager(store, &flexibleMockDriver{})
+	pool.Driver = defaultDriver
+	pool.PoolVariants = variants
+	pool.AccountToTenant = map[string]string{"acctA": "acctA"}
+	pool.TenantDrivers = map[string]Driver{
+		types.DefaultTenantID: defaultDriver,
+		"acctA":               &googleMockDriver{defaultImage: "projects/" + tenantImage},
+	}
+	pool.Tenants = []TenantPool{
+		{ID: types.DefaultTenantID, PoolVariants: variants},
+		{ID: "acctA", PoolVariants: variants},
+	}
+
+	inst, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
+		context.Background(), pool, "tls", "owner1",
+		&types.ProvisionParams{ResourceClass: "large", AccountID: "acctA"}, nil, 60, pool.Name, nil, false,
+	)
+
+	require.NoError(t, err)
+	assert.True(t, warmed)
+	assert.Equal(t, claimed.ID, inst.ID)
+}
+
 func TestDistributedProvisionFromPool_EmptyPool_FallsBackToColdCreate(t *testing.T) {
 	store := &mockInstanceStore{
 		FindAndClaimFunc: func(_ context.Context, _ *types.QueryParams, _ types.InstanceState, _ []types.InstanceState, _ bool) (*types.Instance, error) {
