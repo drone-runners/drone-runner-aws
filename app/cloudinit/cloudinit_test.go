@@ -190,10 +190,6 @@ func TestUbuntuBinariesPartialShared(t *testing.T) {
 			AutoInjectionBinaryURI:       "https://example.com/ai",
 			AnnotationsBinaryURI:         "https://example.com/hcli/",
 			AnnotationsBinaryFallbackURI: "https://example.com/hcli-fb/",
-			HarnessCLIBinaryURI:          "https://example.com/harness-cli/",
-			HarnessCLIBinaryFallbackURI:  "https://example.com/harness-cli-fb/",
-			HarnessHCliBinaryURI:         "https://example.com/harness-hcli/",
-			HarnessHCliBinaryFallbackURI: "https://example.com/harness-hcli-fb/",
 			EnvmanBinaryURI:              "https://example.com/envman/",
 			EnvmanBinaryFallbackURI:      "https://example.com/envman-fb/",
 			TmateBinaryURI:               "https://example.com/tmate/",
@@ -212,9 +208,6 @@ func TestUbuntuBinariesPartialShared(t *testing.T) {
 		"/usr/bin/auto-injection",
 		"/usr/bin/envman",
 		"/usr/bin/hcli",
-		"/usr/bin/harness",
-		"/usr/bin/harness-hcli",
-		"install plugin /usr/bin/harness-hcli",
 		"/addon/tmate.xz",
 	}
 
@@ -292,10 +285,6 @@ func TestWindowsBinariesPartialShared(t *testing.T) {
 			AutoInjectionBinaryURI:       "https://example.com/ai",
 			AnnotationsBinaryURI:         "https://example.com/hcli/",
 			AnnotationsBinaryFallbackURI: "https://example.com/hcli-fb/",
-			HarnessCLIBinaryURI:          "https://example.com/harness-cli/",
-			HarnessCLIBinaryFallbackURI:  "https://example.com/harness-cli-fb/",
-			HarnessHCliBinaryURI:         "https://example.com/harness-hcli/",
-			HarnessHCliBinaryFallbackURI: "https://example.com/harness-hcli-fb/",
 			EgressCACert:                 caCertFile + "\n",
 			EgressProxyURL:               "http://127.0.0.1:3128",
 			EgressNoProxy:                "localhost",
@@ -307,9 +296,6 @@ func TestWindowsBinariesPartialShared(t *testing.T) {
 		"plugin.exe",
 		"auto-injection.exe",
 		"hcli.exe",
-		"harness.exe",
-		"harness-hcli.exe",
-		"install plugin \"C:\\Program Files\\lite-engine\\harness-hcli.exe\"",
 	}
 
 	cases := []struct {
