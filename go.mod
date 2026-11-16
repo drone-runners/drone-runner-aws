@@ -50,9 +50,9 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.43.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.43.0
 	go.opentelemetry.io/otel/log v1.47.0
-	go.opentelemetry.io/otel/sdk v1.45.0
+	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/log v0.21.0
-	go.opentelemetry.io/otel/sdk/metric v1.45.0
+	go.opentelemetry.io/otel/sdk/metric v1.47.0
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
@@ -152,7 +152,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
