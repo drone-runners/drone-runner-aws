@@ -65,7 +65,7 @@ type InstanceKey struct {
 // ScalerManager is the subset of the distributed manager the scaler uses.
 type ScalerManager interface {
 	Destroy(ctx context.Context, poolName, instanceID string, instance *types.Instance, storageCleanupType *storage.CleanupType) error
-	FullyQualifiedImage(ctx context.Context, poolName, imageName string) (string, error)
+	FullyQualifiedImage(ctx context.Context, poolName, tenantID, imageName string) (string, error)
 }
 
 // Scaler handles scaling pools up and down based on predictions.

@@ -64,12 +64,16 @@ type fakeScalerManager struct {
 	destroyed []string
 }
 
-// FullyQualifiedImage mimics the driver: an empty image resolves to the pool default.
-func (m *fakeScalerManager) FullyQualifiedImage(_ context.Context, pool, image string) (string, error) {
-	if image == "" {
-		return "projects/p/images/" + pool + "-default", nil
+// FullyQualifiedImage mimics the driver: an empty image resolves to the pool default, and a
+// non-default tenant has its own default image.
+func (m *fakeScalerManager) FullyQualifiedImage(_ context.Context, pool, tenant, image string) (string, error) {
+	if image != "" {
+		return "projects/p/images/" + image, nil
 	}
-	return "projects/p/images/" + image, nil
+	if tenant != "" && tenant != types.DefaultTenantID {
+		return "projects/" + tenant + "/images/" + pool + "-default", nil
+	}
+	return "projects/p/images/" + pool + "-default", nil
 }
 
 func (m *fakeScalerManager) Destroy(_ context.Context, pool, id string, _ *types.Instance, _ *storage.CleanupType) error {
@@ -133,7 +137,7 @@ func newCapHarness(t *testing.T, predicted int, mutate func(*types.ScalerConfig)
 
 // add creates instances in a pool. image "" means the pool's default image as resolved by the manager.
 func (h *capHarness) add(n int, pool, tenant, variant, image string, state types.InstanceState, source types.InstanceSource) {
-	fq, _ := h.manager.FullyQualifiedImage(context.Background(), pool, image)
+	fq, _ := h.manager.FullyQualifiedImage(context.Background(), pool, tenant, image)
 	for i := 0; i < n; i++ {
 		h.nextID++
 		h.instances.AddInstance(&types.Instance{
@@ -428,6 +432,20 @@ func TestScaleGroup_TenantGroupStaysInTenantPools(t *testing.T) {
 	assertCounts(t, jobCounts(jobs), map[string][2]int{"linux-amd64": {5, 0}})
 	if jobs[0].params.TenantID != capEgressTenant {
 		t.Errorf("tenant id = %q", jobs[0].params.TenantID)
+	}
+}
+
+func TestScaleGroup_TenantFreeInstancesUseTenantImage(t *testing.T) {
+	h := newCapHarness(t, 4, nil)
+	h.add(7, "linux-amd64", capEgressTenant, "default", "", types.StateCreated, types.InstanceSourcePredictor)
+
+	// target (4 predicted + 1 tenant min) - 7 free on the tenant's own image = 2 to remove.
+	h.scale(t, &capEgress)
+	if n := len(h.setupJobs(t)); n != 0 {
+		t.Errorf("expected no setup jobs, got %d", n)
+	}
+	if len(h.manager.destroyed) != 2 {
+		t.Errorf("destroyed = %v, want 2 tenant instances", h.manager.destroyed)
 	}
 }
 

@@ -387,7 +387,7 @@ func (d *DistributedManager) provisionFromPool(
 	if vmImageConfig != nil {
 		imageConfig.ImageName = vmImageConfig.ImageName
 	}
-	fullyQualifiedImageName, _ := pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
+	fullyQualifiedImageName, _ := pool.DriverForTenant(tenantID).GetFullyQualifiedImage(ctx, imageConfig)
 
 	var claimScope *types.ClaimScope
 	if provisionParams != nil {
@@ -547,13 +547,14 @@ func (d *DistributedManager) filterVariants(
 	}
 
 	// Step 2: Optionally refine by ImageName (best-effort)
+	driver := pool.DriverForTenant(pool.ResolveTenant(provisionParams.AccountID))
 	var fullyQualifiedImageName string
 	vmImageConfig := provisionParams.GetVMImageConfig()
 	imageConfig := &types.VMImageConfig{}
 	if vmImageConfig != nil {
 		imageConfig.ImageName = vmImageConfig.ImageName
 	}
-	fullyQualifiedImageName, _ = pool.Driver.GetFullyQualifiedImage(ctx, imageConfig)
+	fullyQualifiedImageName, _ = driver.GetFullyQualifiedImage(ctx, imageConfig)
 
 	if fullyQualifiedImageName == "" {
 		variantIDs := make([]string, len(candidates))
@@ -572,7 +573,7 @@ func (d *DistributedManager) filterVariants(
 			noImageName = append(noImageName, variant)
 			continue
 		}
-		variantFQ, _ := pool.Driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
+		variantFQ, _ := driver.GetFullyQualifiedImage(ctx, &types.VMImageConfig{ImageName: variant.ImageName})
 		if variantFQ == fullyQualifiedImageName {
 			matched = append(matched, variant)
 		}
