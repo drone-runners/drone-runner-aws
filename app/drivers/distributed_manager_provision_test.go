@@ -126,7 +126,7 @@ func TestDistributedProvisionFromPool_TenantClaimsWithTenantImage(t *testing.T) 
 
 	inst, _, warmed, _, err := d.provisionFromPool( //nolint:dogsled
 		context.Background(), pool, "tls", "owner1",
-		&types.ProvisionParams{ResourceClass: "large", AccountID: "acctA"}, nil, 60, pool.Name, nil, false,
+		&types.ProvisionParams{ResourceClass: "large", AccountID: "acctA"}, nil, nil, 60, pool.Name, nil, false,
 	)
 
 	require.NoError(t, err)
