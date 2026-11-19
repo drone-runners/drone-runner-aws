@@ -243,10 +243,10 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 h1:5VipnvEpbqr2gA2VbM+nYVbkIF2
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0/go.mod h1:Hyl3n6Twe1hvtd9XUXDec4pTvgMSEixRuQKPTMH2bNs=
 github.com/harness/godotenv/v3 v3.0.1 h1:7QPEOkpx6SLLrYRRzPBp50d6c0XIxq721iqoFxbz1Bs=
 github.com/harness/godotenv/v3 v3.0.1/go.mod h1:UIXXJtTM7NkSYMYknHYOO2d8BfDlAWMYZRuRsXcDDR0=
-github.com/harness/lite-engine v0.5.215 h1:GSkiRI66XJU8e3b+bHW1JGAqtX0wDzAuc0ah+xpmhVo=
-github.com/harness/lite-engine v0.5.215/go.mod h1:bvDZFCpJnYACKeQmZosdukzj/0XQy1/cmxiMi++ajgA=
-github.com/harness/ti-client v0.0.0-20261006201020-dfac3dc8c35b h1:VIFu7A8jqzQxrju77tV/AC3gr1et4qusLL/6OKWRp+g=
-github.com/harness/ti-client v0.0.0-20261006201020-dfac3dc8c35b/go.mod h1:DLVgJTI0Jo5rQPl2cUIEzLl5ltVTXmzTk0aRh0ZIH8s=
+github.com/harness/lite-engine v0.5.217 h1:hqTeKUpY6WSO4rvq1vuaHQeW3dLKcHPbJj1QRsI5vgc=
+github.com/harness/lite-engine v0.5.217/go.mod h1:e6gpNEJ5BAASsOekm684r/U9ctZDsjZNaNKOglDK+LU=
+github.com/harness/ti-client v0.0.0-20261027203846-4638611a07fd h1:FL5+MMJrYngMRyk0vCk1hy9COPj1zwM4rFs8qj2qlco=
+github.com/harness/ti-client v0.0.0-20261027203846-4638611a07fd/go.mod h1:DLVgJTI0Jo5rQPl2cUIEzLl5ltVTXmzTk0aRh0ZIH8s=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/cronexpr v1.1.1 h1:NJZDd87hGXjoZBdvyCF9mX4DCq5Wy7+A/w+A7q0wn6c=
