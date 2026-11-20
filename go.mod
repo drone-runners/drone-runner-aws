@@ -23,7 +23,7 @@ require (
 	github.com/drone/runner-go v1.13.0
 	github.com/drone/signal v1.0.0
 	github.com/ghodss/yaml v1.0.0
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.5.0
