@@ -88,6 +88,17 @@ func TestBuildIdentityVMLabels(t *testing.T) {
 			notWantKeys: []string{"harness_env"},
 		},
 		{
+			name: "free tier AccountID is overridden by CustomerAccountID",
+			setupParams: &types.SetupInstanceParams{
+				AccountID:         types.FreeAccountID,
+				CustomerAccountID: "G3kLiIf0Q7KPD8acY1ZIfw",
+			},
+			timeout:  3600,
+			poolName: "linux-amd64-free",
+			source:   types.InstanceSourcePool,
+			wantKeys: map[string]string{LabelAccountID: "g3kliif0q7kpd8acy1zifw"},
+		},
+		{
 			name: "empty individual identity fields omit their label",
 			setupParams: &types.SetupInstanceParams{
 				AccountID:           "",
@@ -278,4 +289,18 @@ func TestRefreshClaimIdentityLabels(t *testing.T) {
 		}()
 		refreshClaimIdentityLabels(context.Background(), pool, inst, setupParams, int64(3600))
 	})
+}
+
+func TestBuildClaimIdentityLabels_FreeTierUsesCustomerAccountID(t *testing.T) {
+	got := buildClaimIdentityLabels(&types.SetupInstanceParams{
+		AccountID:         types.FreeAccountID,
+		CustomerAccountID: "AbC",
+	}, 60)
+	if got[LabelAccountID] != "abc" {
+		t.Fatalf("want abc, got %q", got[LabelAccountID])
+	}
+	got = buildClaimIdentityLabels(&types.SetupInstanceParams{AccountID: "Paid1"}, 60)
+	if got[LabelAccountID] != "paid1" {
+		t.Fatalf("fallback to AccountID failed, got %q", got[LabelAccountID])
+	}
 }

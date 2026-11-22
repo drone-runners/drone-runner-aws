@@ -670,7 +670,7 @@ func (p *config) create(ctx context.Context, opts *types.InstanceCreateOpts, nam
 		MinCpuPlatform: "Automatic",
 		Metadata: &compute.Metadata{
 			Items: []*compute.MetadataItems{
-				{Key: "harness-account-id", Value: googleapi.String(opts.AccountID)},
+				{Key: "harness-account-id", Value: googleapi.String(opts.IdentityAccountID())},
 				{Key: "harness-stage-execution-id", Value: googleapi.String(opts.StageRuntimeID)},
 				{Key: "harness-pipeline-execution-id", Value: googleapi.String(opts.PipelineExecutionID)},
 				{Key: "harness-pool-name", Value: googleapi.String(opts.PoolName)},

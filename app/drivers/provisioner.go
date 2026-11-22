@@ -190,6 +190,7 @@ func (m *Manager) setupInstance(
 	createOptions.PluginBinaryFallbackURI = m.pluginBinaryFallbackURI
 	createOptions.Tmate = m.tmate
 	createOptions.AccountID = ownerID
+	createOptions.CustomerAccountID = setupParams.IdentityAccountID()
 	if setupParams != nil {
 		createOptions.ResourceClass = setupParams.ResourceClass
 		createOptions.Zones = setupParams.Zones
@@ -492,8 +493,8 @@ func buildIdentityVMLabels(setupParams *types.SetupInstanceParams, timeout int64
 		labels["harness_env"] = env
 	}
 	if setupParams != nil {
-		if setupParams.AccountID != "" {
-			labels[LabelAccountID] = strings.ToLower(setupParams.AccountID)
+		if id := setupParams.IdentityAccountID(); id != "" {
+			labels[LabelAccountID] = strings.ToLower(id)
 		}
 		if setupParams.StageRuntimeID != "" {
 			labels[LabelStageExecutionID] = strings.ToLower(setupParams.StageRuntimeID)
@@ -515,8 +516,8 @@ func buildClaimIdentityLabels(setupParams *types.SetupInstanceParams, timeout in
 		LabelLongRunning: fmt.Sprintf("%t", timeout > longRunningStageThresholdSec),
 	}
 	if setupParams != nil {
-		if setupParams.AccountID != "" {
-			labels[LabelAccountID] = strings.ToLower(setupParams.AccountID)
+		if id := setupParams.IdentityAccountID(); id != "" {
+			labels[LabelAccountID] = strings.ToLower(id)
 		}
 		if setupParams.StageRuntimeID != "" {
 			labels[LabelStageExecutionID] = strings.ToLower(setupParams.StageRuntimeID)

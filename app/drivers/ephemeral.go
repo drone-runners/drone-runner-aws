@@ -27,6 +27,7 @@ type EphemeralCreateInput struct {
 	RunnerName           string
 	Env                  string
 	AccountID            string
+	CustomerAccountID    string
 	StageRuntimeID       string
 	PipelineExecutionID  string
 	Platform             types.Platform
@@ -92,6 +93,7 @@ func PrepareEphemeralCreateOpts(in *EphemeralCreateInput) (*types.InstanceCreate
 		PoolName:                in.Pool.Name,
 		RunnerName:              in.RunnerName,
 		AccountID:               in.AccountID,
+		CustomerAccountID:       in.CustomerAccountID,
 		StageRuntimeID:          in.StageRuntimeID,
 		PipelineExecutionID:     in.PipelineExecutionID,
 		TenantID:                tenantID,
@@ -116,6 +118,7 @@ func PrepareEphemeralCreateOpts(in *EphemeralCreateInput) (*types.InstanceCreate
 	}
 	opts.VMLabels = buildIdentityVMLabels(&types.SetupInstanceParams{
 		AccountID:           in.AccountID,
+		CustomerAccountID:   in.CustomerAccountID,
 		StageRuntimeID:      in.StageRuntimeID,
 		PipelineExecutionID: in.PipelineExecutionID,
 		Source:              types.InstanceSourceOnDemand,

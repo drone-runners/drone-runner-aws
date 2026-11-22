@@ -40,6 +40,15 @@ func GetAccountID(context *Context, tags map[string]string) string {
 	return tags["accountID"]
 }
 
+// customerAccountID returns the real Harness account id for VM identity labels/metadata,
+// unlike the owner which is "free" for free-tier requests. Falls back to the log config account id.
+func customerAccountID(context *Context, tags map[string]string, logConfigAccountID string) string {
+	if id := GetAccountID(context, tags); id != "" {
+		return id
+	}
+	return logConfigAccountID
+}
+
 func getIsFreeAccount(context *Context, tags map[string]string) bool {
 	// if freeCI is a key in tags, use it
 	if tags["freeCI"] == trueString {

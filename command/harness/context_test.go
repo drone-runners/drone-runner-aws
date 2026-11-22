@@ -37,3 +37,15 @@ func TestGetPipelineExecutionID(t *testing.T) {
 		})
 	}
 }
+
+func TestCustomerAccountID(t *testing.T) {
+	if got := customerAccountID(&Context{AccountID: "ctx"}, map[string]string{"accountID": "tag"}, "log"); got != "ctx" {
+		t.Errorf("context first: %q", got)
+	}
+	if got := customerAccountID(&Context{}, map[string]string{"accountID": "tag"}, "log"); got != "tag" {
+		t.Errorf("tag second: %q", got)
+	}
+	if got := customerAccountID(&Context{}, nil, "log"); got != "log" {
+		t.Errorf("log config last: %q", got)
+	}
+}

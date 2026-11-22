@@ -511,6 +511,7 @@ func handleSetup(
 		ResourceClass:        r.ResourceClass,
 		SkipCloudVMCleanup:   r.SkipCloudVMCleanup,
 		AccountID:            owner,
+		CustomerAccountID:    customerAccountID(&r.Context, r.Tags, r.SetupRequest.LogConfig.AccountID),
 		StageRuntimeID:       stageRuntimeID,
 		PipelineExecutionID:  getPipelineExecutionID(&r.Context, r.Tags),
 		LongRunning:          r.Timeout > longRunningStageThresholdSec,

@@ -177,14 +177,17 @@ type InstanceCreateOpts struct {
 	TLSCert        []byte
 	LiteEnginePath string
 	Platform
-	PoolName                     string
-	RunnerName                   string
-	Limit                        int
-	Pool                         int
-	HarnessTestBinaryURI         string
-	PluginBinaryURI              string
-	Tmate                        Tmate
-	AccountID                    string
+	PoolName             string
+	RunnerName           string
+	Limit                int
+	Pool                 int
+	HarnessTestBinaryURI string
+	PluginBinaryURI      string
+	Tmate                Tmate
+	AccountID            string
+	// CustomerAccountID is the real Harness account id, written to VM identity metadata.
+	// AccountID may be "free" for free tier. Use IdentityAccountID to read.
+	CustomerAccountID            string
 	IsHosted                     bool
 	EgressControl                bool
 	EgressProxyURL               string
@@ -400,7 +403,10 @@ type SetupInstanceParams struct {
 
 	// Identity fields used to label the instance for cleanup eligibility.
 	// All optional; empty values mean the label is not written.
-	AccountID           string `json:"account_id,omitempty" yaml:"account_id,omitempty"`
+	AccountID string `json:"account_id,omitempty" yaml:"account_id,omitempty"`
+	// CustomerAccountID is the real Harness account id. AccountID may be "free" for free
+	// tier and is used for routing/ownership only. Use IdentityAccountID to read.
+	CustomerAccountID   string `json:"customer_account_id,omitempty" yaml:"customer_account_id,omitempty"`
 	StageRuntimeID      string `json:"stage_runtime_id,omitempty" yaml:"stage_runtime_id,omitempty"`
 	PipelineExecutionID string `json:"pipeline_execution_id,omitempty" yaml:"pipeline_execution_id,omitempty"`
 	LongRunning         bool   `json:"long_running,omitempty" yaml:"long_running,omitempty"`
@@ -572,7 +578,10 @@ type ProvisionParams struct {
 	// AccountID is also the requesting Harness account id, used to resolve
 	// the tenant for multi-tenant pools. Empty resolves to the default
 	// tenant (backward compatible).
-	AccountID           string
+	AccountID string
+	// CustomerAccountID is the real Harness account id. AccountID is "free" for free tier and
+	// drives routing, tenant resolution and ownership. Use IdentityAccountID to read.
+	CustomerAccountID   string
 	StageRuntimeID      string
 	PipelineExecutionID string
 	LongRunning         bool
@@ -597,6 +606,42 @@ type ClaimScope struct {
 	Platform Platform
 }
 
+// IdentityAccountID returns the account id to stamp on VM labels/metadata: the real customer
+// account id when known, otherwise AccountID.
+func (p *ProvisionParams) IdentityAccountID() string {
+	if p == nil {
+		return ""
+	}
+	if p.CustomerAccountID != "" {
+		return p.CustomerAccountID
+	}
+	return p.AccountID
+}
+
+// IdentityAccountID returns the account id to stamp on VM labels/metadata: the real customer
+// account id when known, otherwise AccountID.
+func (p *SetupInstanceParams) IdentityAccountID() string {
+	if p == nil {
+		return ""
+	}
+	if p.CustomerAccountID != "" {
+		return p.CustomerAccountID
+	}
+	return p.AccountID
+}
+
+// IdentityAccountID returns the account id to stamp on VM metadata: the real customer
+// account id when known, otherwise AccountID.
+func (o *InstanceCreateOpts) IdentityAccountID() string {
+	if o == nil {
+		return ""
+	}
+	if o.CustomerAccountID != "" {
+		return o.CustomerAccountID
+	}
+	return o.AccountID
+}
+
 // ToSetupInstanceParams converts request-level ProvisionParams to internal SetupInstanceParams.
 func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
 	if p == nil {
@@ -607,6 +652,7 @@ func (p *ProvisionParams) ToSetupInstanceParams() *SetupInstanceParams {
 		ResourceClass:             p.ResourceClass,
 		SkipCloudVMCleanup:        p.SkipCloudVMCleanup,
 		AccountID:                 p.AccountID,
+		CustomerAccountID:         p.CustomerAccountID,
 		StageRuntimeID:            p.StageRuntimeID,
 		PipelineExecutionID:       p.PipelineExecutionID,
 		LongRunning:               p.LongRunning,

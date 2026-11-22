@@ -112,3 +112,26 @@ func TestSetupInstanceParams_IdentityFieldsJSONRoundTrip(t *testing.T) {
 		t.Errorf("CreatedAt: got %d want %d", out.CreatedAt, in.CreatedAt)
 	}
 }
+
+func TestIdentityAccountID(t *testing.T) {
+	if got := (&SetupInstanceParams{AccountID: "free", CustomerAccountID: "acc"}).IdentityAccountID(); got != "acc" {
+		t.Errorf("setup params: got %q", got)
+	}
+	if got := (&SetupInstanceParams{AccountID: "paid"}).IdentityAccountID(); got != "paid" {
+		t.Errorf("setup params fallback: got %q", got)
+	}
+	if got := (&InstanceCreateOpts{AccountID: "free", CustomerAccountID: "acc"}).IdentityAccountID(); got != "acc" {
+		t.Errorf("create opts: got %q", got)
+	}
+	if got := (&InstanceCreateOpts{AccountID: "paid"}).IdentityAccountID(); got != "paid" {
+		t.Errorf("create opts fallback: got %q", got)
+	}
+	p := &ProvisionParams{AccountID: "free", CustomerAccountID: "acc"}
+	if got := p.ToSetupInstanceParams(); got.AccountID != "free" || got.CustomerAccountID != "acc" {
+		t.Errorf("conversion: %+v", got)
+	}
+	var nilOpts *InstanceCreateOpts
+	if nilOpts.IdentityAccountID() != "" {
+		t.Error("nil opts should return empty")
+	}
+}
