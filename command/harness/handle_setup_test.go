@@ -53,6 +53,7 @@ type fakeIManager struct {
 	provisionedPools     []string
 	provisionOwners      []string
 	provisionPoolFunc    func(pool string) (*types.CapacityReservation, error)
+	instanceTags         map[string]string
 }
 
 //nolint:gocritic // unnamed results mirror drivers.InstanceProvisioner's Provision signature
@@ -133,7 +134,8 @@ func (f *fakeIManager) StartInstance(ctx context.Context, poolName, instanceID s
 	return nil, errors.New("startInstanceFunc not set")
 }
 func (f *fakeIManager) Suspend(context.Context, string, *types.Instance) error { return nil }
-func (f *fakeIManager) SetInstanceTags(context.Context, string, *types.Instance, map[string]string) error {
+func (f *fakeIManager) SetInstanceTags(_ context.Context, _ string, _ *types.Instance, tags map[string]string) error {
+	f.instanceTags = tags
 	return nil
 }
 func (f *fakeIManager) InstanceLogs(context.Context, string, string) (string, error) { return "", nil }
