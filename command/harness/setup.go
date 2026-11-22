@@ -620,7 +620,7 @@ func handleSetup(
 		hibernated = true
 	}
 
-	client, err := tagAndConnectInstance(ctx, poolManager, instance, pool, stageRuntimeID, r.Tags, enableMock, mockTimeout)
+	client, err := tagAndConnectInstance(ctx, poolManager, instance, pool, stageRuntimeID, GetAccountID(&r.Context, r.Tags), r.Tags, enableMock, mockTimeout)
 	if err != nil {
 		go cleanUpInstanceFn(false)
 		initFailureReason = InitReasonStateFailed

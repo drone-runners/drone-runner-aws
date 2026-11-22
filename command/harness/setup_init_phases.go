@@ -23,7 +23,7 @@ func tagAndConnectInstance(
 	ctx context.Context,
 	poolManager drivers.IManager,
 	instance *types.Instance,
-	pool, stageRuntimeID string,
+	pool, stageRuntimeID, accountID string,
 	tags map[string]string,
 	enableMock bool,
 	mockTimeout int,
@@ -33,7 +33,7 @@ func tagAndConnectInstance(
 	if err := poolManager.Update(ctx, instance); err != nil {
 		return nil, fmt.Errorf("failed to tag: %w", err)
 	}
-	if err := poolManager.SetInstanceTags(ctx, pool, instance, tags); err != nil {
+	if err := poolManager.SetInstanceTags(ctx, pool, instance, withHarnessAccountID(tags, instance, accountID)); err != nil {
 		return nil, fmt.Errorf("failed to add tags to the instance: %w", err)
 	}
 	client, err := lehelper.GetClient(instance, poolManager.GetTLSServerName(), instance.Port, enableMock, mockTimeout)
@@ -41,6 +41,22 @@ func tagAndConnectInstance(
 		return nil, fmt.Errorf("failed to create LE client: %w", err)
 	}
 	return client, nil
+}
+
+const harnessAccountIDMetadataKey = "harnessAccountId"
+
+// withHarnessAccountID adds the real account id to the tags of a GCP instance, where tags are
+// stored as case-preserving instance metadata. The input map is not modified.
+func withHarnessAccountID(tags map[string]string, instance *types.Instance, accountID string) map[string]string {
+	if instance.Provider != types.Google || accountID == "" {
+		return tags
+	}
+	out := make(map[string]string, len(tags)+1)
+	for k, v := range tags {
+		out[k] = v
+	}
+	out[harnessAccountIDMetadataKey] = accountID
+	return out
 }
 
 // runHealthCheckPhase runs the lite-engine health check and instruments
