@@ -263,12 +263,10 @@ func (s *Scaler) scaleVariant(
 	key := InstanceKey{TenantID: tenantID, VariantID: variantID, ImageName: imageName}
 	currentFree := freeCounts[key]
 
-	// Target is predicted demand plus the hotpool minimum. The minimum stays
-	// even when the forecast is already higher, and a zero forecast still
-	// keeps minSize instances ready.
+	// Target = predicted demand, floored by MinSize.
 	targetCount := prediction.PredictedInstances
-	if minSize > 0 {
-		targetCount += minSize
+	if targetCount < minSize {
+		targetCount = minSize
 	}
 
 	// If prediction is 0 but there was recent usage, apply a minimum floor.
