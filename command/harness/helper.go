@@ -73,10 +73,11 @@ func mergeEgressPolicy(existing *leapi.EgressPolicy, proxyURL, noProxy string) *
 		return &leapi.EgressPolicy{ProxyURL: proxyURL, NoProxy: noProxy}
 	}
 	return &leapi.EgressPolicy{
-		Username: existing.Username,
-		Password: existing.Password,
-		ProxyURL: proxyURL,
-		NoProxy:  noProxy,
+		Username:       existing.Username,
+		Password:       existing.Password,
+		ProxyURL:       proxyURL,
+		NoProxy:        noProxy,
+		SidecarEnabled: existing.SidecarEnabled,
 	}
 }
 
