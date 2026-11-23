@@ -55,6 +55,7 @@ HCLI_VERSION=$(yq eval '.binaries.hcli.version' "${BINARY_VERSIONS_YAML}")
 TMATE_VERSION=$(yq eval '.binaries.tmate.version' "${BINARY_VERSIONS_YAML}")
 ENVMAN_VERSION=$(yq eval '.binaries.envman.version' "${BINARY_VERSIONS_YAML}")
 OTEL_VERSION=$(yq eval '.binaries.otelcol-contrib.version' "${BINARY_VERSIONS_YAML}")
+HARNESS_CLI_VERSION=$(yq eval '.binaries.harness-cli.version' "${BINARY_VERSIONS_YAML}")
 
 echo ""
 echo "Binary versions from config/binary-versions.yaml:"
@@ -65,6 +66,7 @@ echo "  hcli:            ${HCLI_VERSION}"
 echo "  tmate:           ${TMATE_VERSION}"
 echo "  envman:          ${ENVMAN_VERSION}"
 echo "  otelcol-contrib: ${OTEL_VERSION}"
+echo "  harness-cli:     ${HARNESS_CLI_VERSION}"
 echo ""
 
 # Determine registry prefix
@@ -136,6 +138,7 @@ if [[ -f "${BINARIES_DOCKERFILE}" ]]; then
     update_arg "${BINARIES_DOCKERFILE}" "TMATE_VERSION" "${TMATE_VERSION}"
     update_arg "${BINARIES_DOCKERFILE}" "ENVMAN_VERSION" "${ENVMAN_VERSION}"
     update_arg "${BINARIES_DOCKERFILE}" "OTEL_VERSION" "${OTEL_VERSION}"
+    update_arg "${BINARIES_DOCKERFILE}" "HARNESS_CLI_VERSION" "${HARNESS_CLI_VERSION}"
 
     # Update FROM lines to use correct registry
     update_from_registry "${BINARIES_DOCKERFILE}" "${REGISTRY_PREFIX}"
@@ -172,6 +175,7 @@ echo "  hcli:            ${HCLI_VERSION}"
 echo "  tmate:           ${TMATE_VERSION}"
 echo "  envman:          ${ENVMAN_VERSION}"
 echo "  otelcol-contrib: ${OTEL_VERSION}"
+echo "  harness-cli:     ${HARNESS_CLI_VERSION}"
 echo ""
 echo "Updated files:"
 echo "  • ${RUNNER_DOCKERFILE}"

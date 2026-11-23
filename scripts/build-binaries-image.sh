@@ -25,6 +25,7 @@ AUTO_INJECTION_VERSION=$(yq '.binaries.auto-injection.version' "$VERSIONS_FILE")
 HCLI_VERSION=$(yq '.binaries.hcli.version' "$VERSIONS_FILE")
 TMATE_VERSION=$(yq '.binaries.tmate.version' "$VERSIONS_FILE")
 ENVMAN_VERSION=$(yq '.binaries.envman.version' "$VERSIONS_FILE")
+HARNESS_CLI_VERSION=$(yq '.binaries.harness-cli.version' "$VERSIONS_FILE")
 
 echo "Binary versions:"
 echo "  lite-engine: $LITE_ENGINE_VERSION"
@@ -33,6 +34,7 @@ echo "  auto-injection: $AUTO_INJECTION_VERSION"
 echo "  hcli: $HCLI_VERSION"
 echo "  tmate: $TMATE_VERSION"
 echo "  envman: $ENVMAN_VERSION"
+echo "  harness-cli: $HARNESS_CLI_VERSION"
 
 # Get build version (passed as first argument or default to "dev")
 BUILD_VERSION="${1:-dev}"
@@ -48,6 +50,7 @@ docker build \
   --build-arg HCLI_VERSION="$HCLI_VERSION" \
   --build-arg TMATE_VERSION="$TMATE_VERSION" \
   --build-arg ENVMAN_VERSION="$ENVMAN_VERSION" \
+  --build-arg HARNESS_CLI_VERSION="$HARNESS_CLI_VERSION" \
   --build-arg BUILD_VERSION="$BUILD_VERSION" \
   --build-arg BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
   --build-arg COMMIT_SHA="$(git rev-parse HEAD)" \

@@ -56,3 +56,11 @@ binaries:
     supported_architectures:
       - amd64
       - arm64
+
+  harness-cli:
+    version: "1.0.1"
+    description: "Harness Unified CLI"
+    download_url: "https://storage.googleapis.com/harness-ti/harness-cli/v${VERSION}/harness-linux-${ARCH}"
+    supported_architectures:
+      - amd64
+      - arm64

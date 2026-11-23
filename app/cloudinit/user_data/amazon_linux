@@ -41,7 +41,7 @@ runcmd:
 - 'chmod 755 /usr/bin/hcli'
 {{ end }}
 {{ if .HarnessCLIBinaryURI }}
-- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness'
+- 'wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness || wget --retry-connrefused --tries=10 --waitretry=10 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness'
 - 'chmod 755 /usr/bin/harness'
 {{ end }}
 {{ if eq .Platform.Arch "amd64" }}

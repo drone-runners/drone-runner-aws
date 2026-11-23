@@ -68,11 +68,11 @@ chmod 755 /usr/bin/hcli
 {{ end }}
 
 {{ if .HarnessCLIBinaryURI }}
-if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=2 --waitretry=2 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness; then
+if wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=2 --waitretry=2 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness; then
     echo "Successfully downloaded harness binary from primary URL."
 else
     echo "Primary URL failed for harness. Trying fallback URL..."
-    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,429 --tries=5 --waitretry=5 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness
+    wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness
     echo "Successfully downloaded harness binary from fallback URL."
 fi
 chmod 755 /usr/bin/harness
