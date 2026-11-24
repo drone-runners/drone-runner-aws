@@ -47,6 +47,14 @@
   - chmod 755 /usr/bin/hcli
   {{ end }}
 
+  # Download and install harness-cli if configured
+  {{ if .HarnessCLIBinaryURI }}
+  - |
+    (wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness && echo "Successfully downloaded harness binary from primary URL.") {{ if .HarnessCLIBinaryFallbackURI }} || \
+    (echo "Primary URL failed for harness. Trying fallback URL..." && wget --retry-connrefused --retry-on-host-error --retry-on-http-error=503,404,429 --tries=5 --waitretry=5 -nv "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" -O /usr/bin/harness && echo "Successfully downloaded harness binary from fallback URL."){{ end }}
+  - chmod 755 /usr/bin/harness
+  {{ end }}
+
   # Setup tmate if enabled
   {{ if .Tmate.Enabled }}
   - mkdir /addon

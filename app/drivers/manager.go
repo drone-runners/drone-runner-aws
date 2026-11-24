@@ -38,6 +38,8 @@ type (
 		runnerConfig                 types.RunnerConfig
 		annotationsBinaryURI         string
 		annotationsBinaryFallbackURI string
+		harnessCLIBinaryURI          string
+		harnessCLIBinaryFallbackURI  string
 		envmanBinaryURI              string
 		envmanBinaryFallbackURI      string
 		tmateBinaryURI               string

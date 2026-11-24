@@ -36,6 +36,22 @@ try {
 }
 {{ end }}
 
+{{ if .HarnessCLIBinaryURI }}
+$primaryHarnessUrl = "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$secondaryHarnessUrl = "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}.exe"
+$harnessPath = "C:\Program Files\lite-engine\harness.exe"
+
+try {
+    Invoke-WebRequest -Uri $primaryHarnessUrl -OutFile $harnessPath -ErrorAction Stop
+} catch {
+    try {
+        Invoke-WebRequest -Uri $secondaryHarnessUrl -OutFile $harnessPath -ErrorAction Stop
+    } catch {
+        echo "[DRONE] WARNING: Failed to download harness CLI"
+    }
+}
+{{ end }}
+
 {{ if .AutoInjectionBinaryURI }}
 $autoInjectionUrl = "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection"
 $autoInjectionPath = "C:\Program Files\lite-engine\auto-injection.exe"

@@ -108,6 +108,20 @@ fi
 chmod 755 /usr/local/bin/hcli
 {{ end }}
 
+{{ if .HarnessCLIBinaryURI }}
+if curl_retry "{{ .HarnessCLIBinaryURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" /usr/local/bin/harness 3 3; then
+    echo "Successfully downloaded harness binary from primary URL."
+else
+    echo "Primary URL failed for harness. Trying fallback URL..."
+    if curl_retry "{{ .HarnessCLIBinaryFallbackURI }}harness-{{ .Platform.OS }}-{{ .Platform.Arch }}" /usr/local/bin/harness 10 3; then
+        echo "Successfully downloaded harness binary from fallback URL."
+    else
+        echo "Failed to download harness from both URLs."
+    fi
+fi
+chmod 755 /usr/local/bin/harness
+{{ end }}
+
 {{ if .AutoInjectionBinaryURI }}
 mkdir -p /tmp/harness/bin
 curl_retry "{{ .AutoInjectionBinaryURI }}/{{ .Platform.OS }}/{{ .Platform.Arch }}/auto-injection" /tmp/harness/bin/auto-injection 10 10
