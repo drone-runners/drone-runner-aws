@@ -307,7 +307,7 @@ type poolCapacity struct {
 func (c *poolCapacity) count(key *types.CapabilityKey, fqImage string) (free, used int) {
 	for i := range c.instances {
 		n := &c.instances[i]
-		if orDefault(n.TenantID, types.DefaultTenantID) != key.TenantID || orDefault(n.VariantID, types.DefaultVariantID) != key.VariantID {
+		if tenantOrDefault(n.TenantID) != key.TenantID || variantOrDefault(n.VariantID) != key.VariantID {
 			continue
 		}
 		if n.State == types.StateTerminating {
@@ -329,9 +329,18 @@ func (c *poolCapacity) count(key *types.CapabilityKey, fqImage string) (free, us
 	return free, used
 }
 
-func orDefault(id, def string) string {
+// tenantOrDefault resolves a stored tenant, which is empty for rows written before tenants existed.
+func tenantOrDefault(id string) string {
 	if id == "" {
-		return def
+		return types.DefaultTenantID
+	}
+	return id
+}
+
+// variantOrDefault resolves a stored variant, which is empty for a pool's base configuration.
+func variantOrDefault(id string) string {
+	if id == "" {
+		return types.DefaultVariantID
 	}
 	return id
 }

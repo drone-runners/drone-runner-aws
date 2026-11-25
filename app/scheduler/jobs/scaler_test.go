@@ -414,7 +414,7 @@ func (m *MockOutboxStore) CountSetupJobs(_ context.Context, poolName string) ([]
 				return nil, err
 			}
 		}
-		k := [2]string{orDefault(params.TenantID, types.DefaultTenantID), orDefault(params.VariantID, types.DefaultVariantID)}
+		k := [2]string{tenantOrDefault(params.TenantID), variantOrDefault(params.VariantID)}
 		if _, ok := counts[k]; !ok {
 			order = append(order, k)
 		}

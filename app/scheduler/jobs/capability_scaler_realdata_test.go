@@ -44,11 +44,14 @@ import (
 )
 
 const (
-	realPods           = 4  // runner pods in prod2
-	realJobsPerPod     = 30 // outbox batch size: concurrent jobs a pod runs
-	realScaleWindows   = 576
-	realBurstRepeats   = 5
-	realDisabledPools  = "windows-amd64,windows-amd64-fallback,linux-amd64-fallback,linux-amd64-west4,linux-amd64-east5,linux-arm64-fallback,linux-arm64-asia-southeast1,linux-arm64-europe-west4,linux-amd64-fallback-aws"
+	realPods         = 4  // runner pods in prod2
+	realJobsPerPod   = 30 // outbox batch size: concurrent jobs a pod runs
+	realScaleWindows = 576
+	realBurstRepeats = 5
+	// prod1's disabled pools.
+	realDisabledPools = "windows-amd64,windows-amd64-fallback," +
+		"linux-amd64-fallback,linux-amd64-west4,linux-amd64-east5,linux-amd64-fallback-aws," +
+		"linux-arm64-fallback,linux-arm64-asia-southeast1,linux-arm64-europe-west4"
 	realSecretBytesCA  = 227 // measured on prod1 dlite_1.instances: avg octet_length of each column
 	realSecretBytesCrt = 570
 )
@@ -125,13 +128,15 @@ func (c countingConn) Write(b []byte) (int, error) {
 }
 
 func (d countingDialer) Dial(network, addr string) (net.Conn, error) {
-	conn, err := net.Dial(network, addr)
-	return countingConn{conn, d.read}, err
+	return d.DialTimeout(network, addr, 0)
 }
 
 func (d countingDialer) DialTimeout(network, addr string, timeout time.Duration) (net.Conn, error) {
-	conn, err := net.DialTimeout(network, addr, timeout)
-	return countingConn{conn, d.read}, err
+	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(context.Background(), network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return countingConn{conn, d.read}, nil
 }
 
 // realManager resolves images like the google driver: the pool's default image, or the variant's.
@@ -188,7 +193,7 @@ func legacySlot(ctx context.Context, p *realPod, mgr realManager, key *types.Cap
 		return 0, 0, err
 	}
 	for _, inst := range instances {
-		tenantID, variantID := orDefault(inst.TenantID, types.DefaultTenantID), orDefault(inst.VariantID, types.DefaultVariantID)
+		tenantID, variantID := tenantOrDefault(inst.TenantID), variantOrDefault(inst.VariantID)
 		if tenantID != key.TenantID || variantID != key.VariantID || inst.State == types.StateTerminating {
 			continue
 		}
@@ -299,8 +304,12 @@ func TestRealDataCapabilityReads(t *testing.T) {
 	pods := make([]*realPod, realPods)
 	for i := range pods {
 		pods[i] = newRealPod(t, dsn, cat, mgr, disabled)
-		defer pods[i].db.Close()
 	}
+	defer func() {
+		for _, p := range pods {
+			_ = p.db.Close()
+		}
+	}()
 
 	var groups []capability.Group
 	slots := 0
@@ -379,7 +388,7 @@ func checkSameCounts(ctx context.Context, t *testing.T, p *realPod, mgr realMana
 
 func runBurst(ctx context.Context, t *testing.T, admin *sqlx.DB, pods []*realPod, mgr realManager, mode readMode, groups []capability.Group, disabled []string) burstStats {
 	t.Helper()
-	if _, err := admin.Exec("SELECT pg_stat_statements_reset()"); err != nil {
+	if _, err := admin.ExecContext(ctx, "SELECT pg_stat_statements_reset()"); err != nil {
 		t.Fatal(err)
 	}
 	var before int64
@@ -416,7 +425,7 @@ func runBurst(ctx context.Context, t *testing.T, admin *sqlx.DB, pods []*realPod
 	sort.Slice(lat, func(i, j int) bool { return lat[i] < lat[j] })
 	st.p50, st.p95, st.max = lat[len(lat)/2], lat[int(math.Ceil(float64(len(lat))*0.95))-1], lat[len(lat)-1]
 
-	row := admin.QueryRow(`SELECT COALESCE(SUM(calls),0), COALESCE(SUM(rows),0), COALESCE(SUM(total_exec_time),0)
+	row := admin.QueryRowContext(ctx, `SELECT COALESCE(SUM(calls),0), COALESCE(SUM(rows),0), COALESCE(SUM(total_exec_time),0)
 FROM pg_stat_statements
 WHERE (query ILIKE '%FROM instances%' OR query ILIKE '%FROM outbox_jobs%') AND query NOT ILIKE '%pg_stat_statements%'`)
 	if err := row.Scan(&st.statements, &st.rows, &st.dbExecMs); err != nil {
@@ -429,7 +438,7 @@ WHERE (query ILIKE '%FROM instances%' OR query ILIKE '%FROM outbox_jobs%') AND q
 			Rows  int64   `db:"rows"`
 			Mean  float64 `db:"mean_exec_time"`
 		}
-		_ = admin.Select(&rows, `SELECT left(regexp_replace(query, '\s+', ' ', 'g'), 110) AS query, calls, rows, mean_exec_time FROM pg_stat_statements
+		_ = admin.SelectContext(ctx, &rows, `SELECT left(regexp_replace(query, '\s+', ' ', 'g'), 110) AS query, calls, rows, mean_exec_time FROM pg_stat_statements
 WHERE (query ILIKE '%FROM instances%' OR query ILIKE '%FROM outbox_jobs%') AND query NOT ILIKE '%pg_stat_statements%' ORDER BY calls DESC`)
 		for _, r := range rows {
 			t.Logf("   [%s] calls=%d rows=%d mean=%.3fms  %s", mode, r.Calls, r.Rows, r.Mean, r.Query)
@@ -440,14 +449,14 @@ WHERE (query ILIKE '%FROM instances%' OR query ILIKE '%FROM outbox_jobs%') AND q
 
 func loadOutbox(t *testing.T, db *sqlx.DB, targets []string) {
 	t.Helper()
-	if _, err := db.Exec("TRUNCATE outbox_jobs"); err != nil {
+	if _, err := db.ExecContext(ctx0, "TRUNCATE outbox_jobs"); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().Unix()
 	first := now - int64(realScaleWindows*300)
 	first -= first % 300
 	// The outbox keeps scale jobs for 48 hours; this is that history for every target.
-	if _, err := db.Exec(`INSERT INTO outbox_jobs (pool_name, runner_name, job_type, job_params, created_at, processed_at, status, retry_count)
+	if _, err := db.ExecContext(ctx0, `INSERT INTO outbox_jobs (pool_name, runner_name, job_type, job_params, created_at, processed_at, status, retry_count)
 SELECT t, '', 'scale', jsonb_build_object('window_start', ws, 'window_end', ws + 300), ws - 171, ws - 141, 'running', 1
 FROM unnest($1::text[]) AS t, generate_series($2::bigint, $2::bigint + $3::bigint * 300, 300) AS ws`,
 		pq.Array(targets), first, int64(realScaleWindows-1)); err != nil {
@@ -462,7 +471,7 @@ FROM unnest($1::text[]) AS t, generate_series($2::bigint, $2::bigint + $3::bigin
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.Exec("ANALYZE outbox_jobs"); err != nil {
+	if _, err := db.ExecContext(ctx0, "ANALYZE outbox_jobs"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -473,11 +482,11 @@ var ctx0 = context.Background()
 // random key and certificate material of the real lengths, so they are as wide as prod's.
 func loadInstances(t *testing.T, db *sqlx.DB, factor float64) int {
 	t.Helper()
-	if _, err := db.Exec("TRUNCATE instances"); err != nil {
+	if _, err := db.ExecContext(ctx0, "TRUNCATE instances"); err != nil {
 		t.Fatal(err)
 	}
 	is := dbsql.NewInstanceStore(db)
-	rng := rand.New(rand.NewSource(1))
+	rng := rand.New(rand.NewSource(1)) //nolint:gosec // fixed seed: reproducible test data, not security-sensitive
 	blob := func(n int) []byte {
 		b := make([]byte, n)
 		for i := range b {
@@ -506,7 +515,7 @@ func loadInstances(t *testing.T, db *sqlx.DB, factor float64) int {
 			}
 		}
 	}
-	if _, err := db.Exec("ANALYZE instances"); err != nil {
+	if _, err := db.ExecContext(ctx0, "ANALYZE instances"); err != nil {
 		t.Fatal(err)
 	}
 	return total

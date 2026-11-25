@@ -83,7 +83,7 @@ func (s *lockedStore) snapshot() []types.Instance {
 }
 
 // lockedOutbox makes MockOutboxStore safe for the processor's concurrent job goroutines.
-// It also honours the retry interval on a virtual clock: a failed job is not claimed again
+// It also honors the retry interval on a virtual clock: a failed job is not claimed again
 // until retryAfter seconds have passed.
 type lockedOutbox struct {
 	*MockOutboxStore
@@ -199,6 +199,9 @@ func TestReplayProd1CapabilityScaling(t *testing.T) {
 	t.Run("tenant_stockout_2h_then_recover", func(t *testing.T) { replayProd1(t, false, 24) })
 }
 
+// replayProd1 is one linear scenario: setup, a loop over windows, then assertions on the end state.
+//
+//nolint:gocyclo,funlen // splitting it would only scatter the shared scenario state across helpers
 func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 	window := 0
 	path := os.Getenv("PROD1_POOL_FILE")
@@ -329,8 +332,9 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 	}
 
 	idle := map[string]int{}
-	for _, i := range store.snapshot() {
-		if i.State == types.StateCreated {
+	vms := store.snapshot()
+	for n := range vms {
+		if i := &vms[n]; i.State == types.StateCreated {
 			idle[i.Pool+" "+i.TenantID+" "+i.VariantID]++
 		}
 	}
@@ -354,8 +358,9 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 	for i := range groups {
 		k := groups[i].Key
 		got := 0
-		for _, inst := range store.snapshot() {
-			if inst.TenantID == k.TenantID && inst.VariantID == k.VariantID && inst.State == types.StateCreated {
+		final := store.snapshot()
+		for n := range final {
+			if inst := &final[n]; inst.TenantID == k.TenantID && inst.VariantID == k.VariantID && inst.State == types.StateCreated {
 				got++
 			}
 		}
@@ -370,8 +375,9 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 	}
 
 	if failPrimaryTenant {
-		for _, inst := range store.snapshot() {
-			if inst.Pool == "linux-amd64" && inst.TenantID == replayTenant {
+		final := store.snapshot()
+		for n := range final {
+			if inst := &final[n]; inst.Pool == "linux-amd64" && inst.TenantID == replayTenant {
 				t.Errorf("tenant VM %s created in failing pool linux-amd64", inst.ID)
 			}
 		}
