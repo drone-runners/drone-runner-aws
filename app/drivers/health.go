@@ -37,9 +37,16 @@ func (m *Manager) GetRunnerConfig() types.RunnerConfig {
 
 // GetHealthCheckTimeout returns the appropriate health check timeout based on the OS, provider, warmed status, and hibernated status.
 func (m *Manager) GetHealthCheckTimeout(os string, provider types.DriverType, warmed, hibernated bool) time.Duration {
-	// Override for Windows
+	// For Windows instances resuming from hibernation, use the larger of the
+	// Windows and hibernated timeouts. Windows hibernate resume involves both
+	// OS-level boot delays and hibernate disk restore, so it needs the maximum
+	// of both timeout values.
 	if os == "windows" {
-		return m.runnerConfig.HealthCheckWindowsTimeout
+		windowsTimeout := m.runnerConfig.HealthCheckWindowsTimeout
+		if hibernated && m.runnerConfig.HealthCheckHibernatedTimeout > windowsTimeout {
+			return m.runnerConfig.HealthCheckHibernatedTimeout
+		}
+		return windowsTimeout
 	}
 
 	// Use hotpool timeout for Nomad (true hot pool with running processes)
