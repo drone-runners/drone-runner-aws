@@ -256,17 +256,18 @@ func (s *outboxStore) FindScaleJobForWindow(ctx context.Context, poolName string
 // CountSetupJobs counts the setup_instance jobs still in the outbox for the pool, grouped by
 // tenant and variant. Jobs without a tenant or variant in their params count as the default.
 func (s *outboxStore) CountSetupJobs(ctx context.Context, poolName string) ([]types.SetupJobCount, error) {
-	// The defaults are constants, so they are inlined: with bind parameters Postgres cannot tell
-	// that the grouped expressions are the selected ones.
-	tenant := fmt.Sprintf("COALESCE(NULLIF(job_params->>'tenant_id', ''), '%s')", types.DefaultTenantID)
-	variant := fmt.Sprintf("COALESCE(NULLIF(job_params->>'variant_id', ''), '%s')", types.DefaultVariantID)
-	query := squirrel.Select(tenant+" AS tenant_id", variant+" AS variant_id", "COUNT(*) AS count").
+	// The defaults are bind parameters like the rest. GROUP BY names the selected expressions by
+	// position: grouped by their text, each parameter would be a different one from the selected.
+	query := squirrel.Select().
+		Column(squirrel.Expr("COALESCE(NULLIF(job_params->>'tenant_id', ''), ?) AS tenant_id", types.DefaultTenantID)).
+		Column(squirrel.Expr("COALESCE(NULLIF(job_params->>'variant_id', ''), ?) AS variant_id", types.DefaultVariantID)).
+		Column("COUNT(*) AS count").
 		From("outbox_jobs").
 		Where(squirrel.And{
 			squirrel.Eq{colJobType: types.OutboxJobTypeSetupInstance},
 			squirrel.Eq{colPoolName: poolName},
 		}).
-		GroupBy(tenant, variant).
+		GroupBy("1", "2").
 		PlaceholderFormat(squirrel.Dollar)
 
 	sqlStr, args, err := query.ToSql()

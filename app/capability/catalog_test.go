@@ -145,6 +145,36 @@ func TestNewCatalog_GroupsAcrossPoolsInFileOrder(t *testing.T) {
 	}
 }
 
+// The capability scaler shares a pool's counts between the scale jobs of a window. That is safe
+// only because a job's counts and its changes cover just its own tenant and variant of its own
+// pools, and no other group has the same: every (pool, tenant, variant) belongs to one group.
+func TestNewCatalog_PoolTenantVariantBelongsToOneGroup(t *testing.T) {
+	c, err := NewCatalog(parsePools(t), nil, platformOf)
+	if err != nil {
+		t.Fatalf("NewCatalog: %v", err)
+	}
+
+	type slot struct{ pool, tenant, variant string }
+	owners := map[slot]map[string]bool{}
+	for _, g := range c.Groups() {
+		for _, m := range g.Members {
+			s := slot{m.Pool, g.Key.TenantID, g.Key.VariantID}
+			if owners[s] == nil {
+				owners[s] = map[string]bool{}
+			}
+			owners[s][g.Key.String()] = true
+		}
+	}
+	if len(owners) == 0 {
+		t.Fatal("the catalog has no members to check")
+	}
+	for s, groups := range owners {
+		if len(groups) != 1 {
+			t.Errorf("pool %q, tenant %q, variant %q belongs to %d groups: %v", s.pool, s.tenant, s.variant, len(groups), groups)
+		}
+	}
+}
+
 func TestNewCatalog_MemberSizing(t *testing.T) {
 	c, err := NewCatalog(parsePools(t), nil, platformOf)
 	if err != nil {

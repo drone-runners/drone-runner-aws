@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,8 +20,6 @@ import (
 	"github.com/drone-runners/drone-runner-aws/metric"
 	"github.com/drone-runners/drone-runner-aws/types"
 )
-
-const replayTenant = "CbUXX5rlTcuIsV8aAOjmuw"
 
 // lockedStore makes MockInstanceStore safe for the setup goroutines the manager starts.
 type lockedStore struct {
@@ -42,6 +41,11 @@ func (s *lockedStore) List(ctx context.Context, pool string, p *types.QueryParam
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.MockInstanceStore.List(ctx, pool, p)
+}
+func (s *lockedStore) CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.MockInstanceStore.CountPoolInstances(ctx, pool)
 }
 func (s *lockedStore) Create(ctx context.Context, i *types.Instance) error {
 	s.mu.Lock()
@@ -199,11 +203,35 @@ func TestReplayProd1CapabilityScaling(t *testing.T) {
 	t.Run("tenant_stockout_2h_then_recover", func(t *testing.T) { replayProd1(t, false, 24) })
 }
 
+// replayTenantOf returns the tenant id and one account id of the first tenant that linux-amd64
+// declares: the tenant whose creates the scenarios fail, and whose builds they check. It comes
+// from the pool file, so no customer identifier is kept in the repository.
+func replayTenantOf(t *testing.T, pf *config.PoolFile) (tenantID, accountID string) {
+	t.Helper()
+	for i := range pf.Instances {
+		if pf.Instances[i].Name != "linux-amd64" {
+			continue
+		}
+		for _, tn := range pf.Instances[i].Tenants {
+			if len(tn.IDs) == 0 {
+				continue
+			}
+			tenantID = tn.GroupID
+			if tenantID == "" {
+				tenantID = tn.IDs[0]
+			}
+			return tenantID, tn.IDs[0]
+		}
+	}
+	t.Skip("the pool file has no tenant in linux-amd64 to replay")
+	return "", ""
+}
+
 // replayProd1 is one linear scenario: setup, a loop over windows, then assertions on the end state.
 //
 //nolint:gocyclo,funlen // splitting it would only scatter the shared scenario state across helpers
 func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
-	window := 0
+	var window atomic.Int32
 	path := os.Getenv("PROD1_POOL_FILE")
 	if path == "" {
 		t.Skip("PROD1_POOL_FILE not set")
@@ -224,6 +252,8 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 	}
 	pf.Instances = google
 
+	replayTenant, replayAccount := replayTenantOf(t, pf)
+
 	pools, err := poolfile.ProcessPool(pf, "runner", types.Passwords{}, nil)
 	if err != nil {
 		t.Fatalf("ProcessPool: %v", err)
@@ -236,7 +266,7 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 			if o.TenantID != replayTenant {
 				return false
 			}
-			return (failPrimaryTenant && o.PoolName == "linux-amd64") || window < stockoutWindows
+			return (failPrimaryTenant && o.PoolName == "linux-amd64") || int(window.Load()) < stockoutWindows
 		}}
 	}
 	for i := range pools {
@@ -312,7 +342,7 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 				t.Fatalf("window %d %s: %v", w, groups[i].Key.String(), err)
 			}
 		}
-		window = w
+		window.Store(int32(w))
 		for pass := 0; pass < 10; pass++ {
 			outbox.mu.Lock()
 			outbox.now = int64(w*300 + pass*30)
@@ -368,7 +398,7 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 		for _, m := range groups[i].Members {
 			minTotal += m.MinSize
 		}
-		want := pred[k.TenantID+"/"+k.VariantID] + minTotal
+		want := max(pred[k.TenantID+"/"+k.VariantID], minTotal)
 		if got != want {
 			t.Errorf("%s: %d idle VMs, want target %d", k.String(), got, want)
 		}
@@ -387,7 +417,7 @@ func replayProd1(t *testing.T, failPrimaryTenant bool, stockoutWindows int) {
 	for _, rc := range []string{"large", "medium"} {
 		before := totalCreates()
 		inst, _, warmed, variant, err := dm.Provision(ctx, "linux-amd64", "runner", "owner",
-			&types.ProvisionParams{AccountID: replayTenant, ResourceClass: rc}, nil, nil, nil, 60, false, nil, false)
+			&types.ProvisionParams{AccountID: replayAccount, ResourceClass: rc}, nil, nil, nil, 60, false, nil, false)
 		if err != nil {
 			t.Fatalf("provision %s: %v", rc, err)
 		}

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"testing"
 
@@ -51,6 +52,16 @@ func TestInstanceStore_CountPoolInstancesMatchesList(t *testing.T) {
 	want := map[group]int{}
 	for _, inst := range listed {
 		want[group{inst.TenantID, inst.VariantID, inst.Image, inst.State}]++
+	}
+
+	// The helper that stores without SQL use must agree with the SQL store, group for group.
+	sorted := append([]types.PoolInstanceCount(nil), got...)
+	sort.Slice(sorted, func(i, j int) bool {
+		a, b := &sorted[i], &sorted[j]
+		return a.TenantID+"/"+a.VariantID+"/"+a.ImageName+"/"+string(a.State) < b.TenantID+"/"+b.VariantID+"/"+b.ImageName+"/"+string(b.State)
+	})
+	if aggregated := types.AggregatePoolInstances(listed); !reflect.DeepEqual(sorted, aggregated) {
+		t.Errorf("SQL counts differ from AggregatePoolInstances:\nsql  %+v\nhelp %+v", sorted, aggregated)
 	}
 
 	have := map[group]int{}

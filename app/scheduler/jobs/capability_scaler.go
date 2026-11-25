@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -106,7 +105,7 @@ func (s *CapabilityScaler) ScaleGroup(ctx context.Context, groupName string, win
 	}
 	key := group.Key
 
-	slots, err := s.capabilitySlots(ctx, &key, members)
+	slots, err := s.capabilitySlots(ctx, &key, members, windowStart)
 	if err != nil {
 		return err
 	}
@@ -256,10 +255,15 @@ func (s *CapabilityScaler) activeMembers(group *capability.Group) []capability.M
 }
 
 // capabilitySlots resolves each member's image and counts its free and used instances.
-func (s *CapabilityScaler) capabilitySlots(ctx context.Context, key *types.CapabilityKey, members []capability.Member) ([]capabilitySlot, error) {
+func (s *CapabilityScaler) capabilitySlots(
+	ctx context.Context, key *types.CapabilityKey, members []capability.Member, windowStart int64,
+) ([]capabilitySlot, error) {
+	load := func(ctx context.Context, pool string) (*poolCapacity, error) {
+		return s.sharedPoolCapacity(ctx, pool, windowStart)
+	}
 	slots := make([]capabilitySlot, 0, len(members))
 	for i := range members {
-		slot, err := s.capabilitySlot(ctx, key, &members[i], s.sharedPoolCapacity)
+		slot, err := s.capabilitySlot(ctx, key, &members[i], load)
 		if err != nil {
 			return nil, err
 		}
@@ -360,73 +364,17 @@ func (s *CapabilityScaler) loadPoolCapacity(ctx context.Context, pool string) (*
 
 // sharedPoolCapacity is loadPoolCapacity shared by the scale jobs of a window. Every pool serves
 // many capability groups, and a window's jobs run at about the same time, so without sharing the
-// same pool is read once per group. Sharing cannot make one group see stale counts of another:
-// a group is one tenant and variant of a platform, and a group's counts only cover its own tenant
-// and variant, so nothing a job changes is read by a job of another group.
-func (s *CapabilityScaler) sharedPoolCapacity(ctx context.Context, pool string) (*poolCapacity, error) {
-	return s.capacity.get(ctx, pool, func(ctx context.Context) (*poolCapacity, error) {
+// same pool is read once per group.
+//
+// Counts are shared only within one window: the next window always reads fresh ones. Within a
+// window, a group's counts cover only its own tenant and variant (a pool, tenant and variant
+// belong to one group), so what one job enqueues is never read by another group's job.
+// Enqueuing a setup job drops the pool's shared counts, so a read that follows an enqueue, such
+// as a retry of the same job, reloads instead of using counts from before it.
+func (s *CapabilityScaler) sharedPoolCapacity(ctx context.Context, pool string, windowStart int64) (*poolCapacity, error) {
+	return s.capacity.get(ctx, pool, windowStart, func(ctx context.Context) (*poolCapacity, error) {
 		return s.loadPoolCapacity(ctx, pool)
 	})
-}
-
-// capacityCacheTTL is how long a pool's counts are shared. A window's scale jobs are claimed
-// within one outbox poll of each other and the next window is minutes away, so the jobs of a
-// window share their pools' counts and the next window always reads fresh ones.
-const capacityCacheTTL = 20 * time.Second
-
-// capacityCache shares a pool's counts between concurrent and near-simultaneous callers: one
-// caller loads while the others wait for its result. Failed loads are not reused.
-type capacityCache struct {
-	ttl     time.Duration
-	now     func() time.Time
-	mu      sync.Mutex
-	entries map[string]*capacityEntry
-}
-
-type capacityEntry struct {
-	done     chan struct{} // closed once capacity and err are set
-	capacity *poolCapacity
-	err      error
-	loadedAt time.Time
-}
-
-func newCapacityCache(ttl time.Duration) *capacityCache {
-	return &capacityCache{ttl: ttl, now: time.Now, entries: map[string]*capacityEntry{}}
-}
-
-func (c *capacityCache) get(ctx context.Context, pool string, load func(context.Context) (*poolCapacity, error)) (*poolCapacity, error) {
-	c.mu.Lock()
-	e, ok := c.entries[pool]
-	if ok {
-		select {
-		case <-e.done:
-			// Loaded: reuse it while fresh. Otherwise (stale or failed) load again.
-			if e.err == nil && c.now().Sub(e.loadedAt) < c.ttl {
-				c.mu.Unlock()
-				return e.capacity, nil
-			}
-			ok = false
-		default:
-			// Another caller is loading: wait for it below.
-		}
-	}
-	if ok {
-		c.mu.Unlock()
-		select {
-		case <-e.done:
-			return e.capacity, e.err
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	e = &capacityEntry{done: make(chan struct{})}
-	c.entries[pool] = e
-	c.mu.Unlock()
-
-	e.capacity, e.err = load(ctx)
-	e.loadedAt = c.now()
-	close(e.done)
-	return e.capacity, e.err
 }
 
 func (s *CapabilityScaler) recordMetrics(key *types.CapabilityKey, slots []capabilitySlot, plans []slotPlan, groupTarget int) {
@@ -491,12 +439,16 @@ func (s *CapabilityScaler) createSetupJob(ctx context.Context, poolName string, 
 	}
 	raw := json.RawMessage(paramsJSON)
 	// Leave RunnerName empty so any runner can process this job.
-	return s.outboxStore.Create(ctx, &types.OutboxJob{
+	err = s.outboxStore.Create(ctx, &types.OutboxJob{
 		PoolName:  poolName,
 		JobType:   types.OutboxJobTypeSetupInstance,
 		JobParams: &raw,
 		Status:    types.OutboxJobStatusPending,
 	})
+	// The pool's counts change whether or not Create reported an error (the job may have been
+	// stored), so counts shared from before it must not be used again.
+	s.capacity.invalidate(poolName)
+	return err
 }
 
 // HandleSetupFailure spills a failed capability setup job to the next pool of its group, in

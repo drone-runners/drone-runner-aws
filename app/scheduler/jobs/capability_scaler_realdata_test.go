@@ -1,17 +1,23 @@
 package jobs
 
-// Real-data verification of how the capability scaler reads pool state.
+// Verification of how the capability scaler reads pool state, against Postgres.
 //
-// It replays one scale window against Postgres: every capability group of a real pool file
-// (prod1's) is scaled by 4 runner pods with 30 concurrent jobs each, as the outbox processor
-// does, on a database holding instance rows with the real prod1 mix and real row widths. It
-// compares the previous reads (List the pool per group, count setup jobs per slot) with the
-// current ones, and checks that both compute the same free and used counts.
+// It replays one scale window: every capability group of a pool file is scaled by 4 runner pods
+// with 30 concurrent jobs each, as the outbox processor does, on a database holding instance
+// rows as wide as production's. It compares the previous reads (List the pool per group, count
+// setup jobs per slot) with the current ones, and checks that both compute the same free and
+// used counts. The pool file is not part of the repository: pass a rendered one.
 //
 // Run with:
 //
 //	REALDATA_PG_DSN='postgres://postgres@127.0.0.1:55432/dlite_test?sslmode=disable' \
-//	REALDATA_POOL_FILE=/path/to/pool.yml go test ./app/scheduler/jobs -run TestRealDataCapabilityReads -v
+//	REALDATA_POOL_FILE=/path/to/pool.yml \
+//	REALDATA_DISABLED_POOLS=pool-a,pool-b \
+//	go test ./app/scheduler/jobs -run TestRealDataCapabilityReads -v
+//
+// REALDATA_DISABLED_POOLS (optional) lists pools whose scaling is disabled, REALDATA_RTT (e.g.
+// 1ms) adds a network round trip to every message sent to the database, and REALDATA_VERBOSE
+// prints every statement's counts.
 
 import (
 	"context"
@@ -44,20 +50,19 @@ import (
 )
 
 const (
-	realPods         = 4  // runner pods in prod2
+	realPods         = 4  // runner pods
 	realJobsPerPod   = 30 // outbox batch size: concurrent jobs a pod runs
 	realScaleWindows = 576
 	realBurstRepeats = 5
-	// prod1's disabled pools.
-	realDisabledPools = "windows-amd64,windows-amd64-fallback," +
-		"linux-amd64-fallback,linux-amd64-west4,linux-amd64-east5,linux-amd64-fallback-aws," +
-		"linux-arm64-fallback,linux-arm64-asia-southeast1,linux-arm64-europe-west4"
-	realSecretBytesCA  = 227 // measured on prod1 dlite_1.instances: avg octet_length of each column
+	realWindow       = 1000 // any window start: each burst starts with empty caches
+	// Column widths of a production instance row's secrets, in bytes.
+	realSecretBytesCA  = 227
 	realSecretBytesCrt = 570
 )
 
-// realGroup is a (pool, tenant, variant, image, state) group of instances measured on prod1
-// dlite_1.instances (2026-11-25 06:14 UTC, 213 rows, average row 2076 bytes).
+// realGroup is a (pool, tenant, variant, image, state) group of instances. The mix is shaped
+// like a production pool: most instances in one pool and variant, and a long tail of small
+// variants and pools, 213 rows in all.
 type realGroup struct {
 	pool, tenant, variant, image string
 	state                        types.InstanceState
@@ -65,14 +70,14 @@ type realGroup struct {
 }
 
 const (
-	imgAmd = "cie-hosted-vm-paid-prod/global/images/byoi-harness-cloud-ubuntu22-amd64-v20261026"
-	imgArm = "cie-hosted-vm-paid-prod/global/images/byoi-harness-cloud-ubuntu22-arm64-v20261026"
-	imgWin = "cie-hosted-vm-paid-prod/global/images/byoi-hosted-vm-windows22-v20261030"
-	imgFrA = "cie-hosted-vm-freemium-prod/global/images/byoi-harness-cloud-ubuntu22-amd64-v20261026"
-	imgFrW = "cie-hosted-vm-freemium-prod/global/images/byoi-hosted-vm-windows22-v20261030"
+	imgAmd = "images/ubuntu22-amd64"
+	imgArm = "images/ubuntu22-arm64"
+	imgWin = "images/windows22"
+	imgFrA = "images/free-ubuntu22-amd64"
+	imgFrW = "images/free-windows22"
 )
 
-var realProd1Mix = []realGroup{
+var realMix = []realGroup{
 	{"linux-amd64", "default", "variant_medium", imgAmd, types.StateInUse, 57},
 	{"linux-amd64", "default", "variant_medium", imgAmd, types.StateCreated, 52},
 	{"linux-arm64", "default", "variant_xlarge", imgArm, types.StateCreated, 33},
@@ -146,7 +151,7 @@ func (m realManager) FullyQualifiedImage(_ context.Context, pool, _, image strin
 	if image == "" {
 		return m.defaults[pool], nil
 	}
-	return "cie-hosted-vm-paid-prod/global/images/" + image, nil
+	return "images/" + image, nil
 }
 
 func (realManager) Destroy(context.Context, string, string, *types.Instance, *storage.CleanupType) error {
@@ -239,7 +244,7 @@ func scaleGroupReads(ctx context.Context, p *realPod, mgr realManager, mode read
 			}
 		}
 	case modeShared:
-		if _, err := p.scaler.capabilitySlots(ctx, &key, members); err != nil {
+		if _, err := p.scaler.capabilitySlots(ctx, &key, members, realWindow); err != nil {
 			return err
 		}
 	}
@@ -282,7 +287,10 @@ func TestRealDataCapabilityReads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	disabled := strings.Split(realDisabledPools, ",")
+	var disabled []string
+	if v := os.Getenv("REALDATA_DISABLED_POOLS"); v != "" {
+		disabled = strings.Split(v, ",")
+	}
 
 	admin, err := database.ConnectSQL("postgres", dsn) // also applies the migrations
 	if err != nil {
@@ -294,7 +302,7 @@ func TestRealDataCapabilityReads(t *testing.T) {
 	loadOutbox(t, admin, targets)
 
 	defaults := map[string]string{}
-	for _, g := range realProd1Mix {
+	for _, g := range realMix {
 		if _, ok := defaults[g.pool]; !ok || g.state == types.StateCreated {
 			defaults[g.pool] = g.image
 		}
@@ -327,9 +335,9 @@ func TestRealDataCapabilityReads(t *testing.T) {
 		scale float64
 	}
 	for _, sc := range []scenario{
-		{"prod1 as measured (213 instances)", 1},
-		{"prod1 at its 2-day peak (284 live, x1.33)", 1.33},
-		{"prod2-like peak (632 live, x3)", 3},
+		{"base mix (213 instances)", 1},
+		{"base mix x1.33", 1.33},
+		{"base mix x3", 3},
 	} {
 		rows := loadInstances(t, admin, sc.scale)
 		t.Logf("")
@@ -369,7 +377,9 @@ func checkSameCounts(ctx context.Context, t *testing.T, p *realPod, mgr realMana
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := p.scaler.capabilitySlot(ctx, &key, &members[i], p.scaler.sharedPoolCapacity)
+			got, err := p.scaler.capabilitySlot(ctx, &key, &members[i], func(ctx context.Context, pool string) (*poolCapacity, error) {
+				return p.scaler.sharedPoolCapacity(ctx, pool, realWindow)
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -449,40 +459,38 @@ WHERE (query ILIKE '%FROM instances%' OR query ILIKE '%FROM outbox_jobs%') AND q
 
 func loadOutbox(t *testing.T, db *sqlx.DB, targets []string) {
 	t.Helper()
-	if _, err := db.ExecContext(ctx0, "TRUNCATE outbox_jobs"); err != nil {
+	if _, err := db.ExecContext(t.Context(), "TRUNCATE outbox_jobs"); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().Unix()
 	first := now - int64(realScaleWindows*300)
 	first -= first % 300
 	// The outbox keeps scale jobs for 48 hours; this is that history for every target.
-	if _, err := db.ExecContext(ctx0, `INSERT INTO outbox_jobs (pool_name, runner_name, job_type, job_params, created_at, processed_at, status, retry_count)
+	if _, err := db.ExecContext(t.Context(), `INSERT INTO outbox_jobs (pool_name, runner_name, job_type, job_params, created_at, processed_at, status, retry_count)
 SELECT t, '', 'scale', jsonb_build_object('window_start', ws, 'window_end', ws + 300), ws - 171, ws - 141, 'running', 1
 FROM unnest($1::text[]) AS t, generate_series($2::bigint, $2::bigint + $3::bigint * 300, 300) AS ws`,
 		pq.Array(targets), first, int64(realScaleWindows-1)); err != nil {
 		t.Fatal(err)
 	}
-	// The setup jobs found on prod1 at the same time: 2 in linux-amd64, 1 in its fallback.
+	// A few setup jobs still pending: 2 in linux-amd64, 1 in linux-amd64-fallback.
 	ob := dbsql.NewOutboxStore(db)
 	for _, pool := range []string{"linux-amd64", "linux-amd64", "linux-amd64-fallback"} {
 		params, _ := json.Marshal(types.SetupInstanceParams{VariantID: "variant_medium"})
 		raw := json.RawMessage(params)
-		if err := ob.Create(ctx0, &types.OutboxJob{PoolName: pool, JobType: types.OutboxJobTypeSetupInstance, JobParams: &raw, Status: types.OutboxJobStatusPending}); err != nil {
+		if err := ob.Create(t.Context(), &types.OutboxJob{PoolName: pool, JobType: types.OutboxJobTypeSetupInstance, JobParams: &raw, Status: types.OutboxJobStatusPending}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.ExecContext(ctx0, "ANALYZE outbox_jobs"); err != nil {
+	if _, err := db.ExecContext(t.Context(), "ANALYZE outbox_jobs"); err != nil {
 		t.Fatal(err)
 	}
 }
 
-var ctx0 = context.Background()
-
-// loadInstances fills the instances table with the prod1 mix scaled by factor. Rows carry
+// loadInstances fills the instances table with the base mix scaled by factor. Rows carry
 // random key and certificate material of the real lengths, so they are as wide as prod's.
 func loadInstances(t *testing.T, db *sqlx.DB, factor float64) int {
 	t.Helper()
-	if _, err := db.ExecContext(ctx0, "TRUNCATE instances"); err != nil {
+	if _, err := db.ExecContext(t.Context(), "TRUNCATE instances"); err != nil {
 		t.Fatal(err)
 	}
 	is := dbsql.NewInstanceStore(db)
@@ -495,7 +503,7 @@ func loadInstances(t *testing.T, db *sqlx.DB, factor float64) int {
 		return b
 	}
 	total := 0
-	for _, g := range realProd1Mix {
+	for _, g := range realMix {
 		n := int(math.Ceil(float64(g.n) * factor))
 		for i := 0; i < n; i++ {
 			total++
@@ -510,12 +518,12 @@ func loadInstances(t *testing.T, db *sqlx.DB, factor float64) int {
 				CAKey: blob(realSecretBytesCA), CACert: blob(realSecretBytesCrt), TLSKey: blob(realSecretBytesCA), TLSCert: blob(realSecretBytesCrt),
 				Labels: []byte("{}"), Platform: types.Platform{OS: "linux", Arch: "amd64"}, Source: types.InstanceSourcePredictor,
 			}
-			if err := is.Create(ctx0, inst); err != nil {
+			if err := is.Create(t.Context(), inst); err != nil {
 				t.Fatalf("create instance: %v", err)
 			}
 		}
 	}
-	if _, err := db.ExecContext(ctx0, "ANALYZE instances"); err != nil {
+	if _, err := db.ExecContext(t.Context(), "ANALYZE instances"); err != nil {
 		t.Fatal(err)
 	}
 	return total
