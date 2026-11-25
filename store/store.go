@@ -17,6 +17,9 @@ type InstanceStore interface {
 	DeleteAndReturn(ctx context.Context, query string, args ...any) ([]*types.Instance, error)
 	FindAndClaim(ctx context.Context, params *types.QueryParams, newState types.InstanceState, allowedStates []types.InstanceState, updateStartTime bool) (*types.Instance, error)
 	CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error)
+	// CountPoolInstances counts the pool's instances grouped by tenant, variant, image and state.
+	// It returns a few small rows however large the pool is, unlike List.
+	CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error)
 }
 
 type StageOwnerStore interface {
@@ -36,9 +39,9 @@ type OutboxStore interface {
 	DeleteOlderThan(context.Context, int64) (int64, error)
 	// FindScaleJobForWindow checks if a scale job already exists for the given pool and window
 	FindScaleJobForWindow(ctx context.Context, poolName string, windowStart int64) (*types.OutboxJob, error)
-	// CountSetupJobs counts the setup_instance jobs still in the outbox for the pool, tenant and
-	// variant. Empty tenant or variant in a job's params count as the default.
-	CountSetupJobs(ctx context.Context, poolName, tenantID, variantID string) (int, error)
+	// CountSetupJobs counts the setup_instance jobs still in the outbox for the pool, grouped by
+	// tenant and variant. Empty tenant or variant in a job's params count as the default.
+	CountSetupJobs(ctx context.Context, poolName string) ([]types.SetupJobCount, error)
 }
 
 type CapacityReservationStore interface {

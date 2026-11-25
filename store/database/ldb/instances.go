@@ -112,6 +112,10 @@ func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.I
 	panic("implement me")
 }
 
+func (s InstanceStore) CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	panic("implement me")
+}
+
 func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
 	log := logrus.New()
 	if pool == "" {

@@ -61,3 +61,7 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
 	panic("implement me")
 }
+
+func (s InstanceStore) CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	panic("implement me")
+}

@@ -95,6 +95,10 @@ func (m *mockInstanceStore) CountGroupedInstances(ctx context.Context, status ty
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockInstanceStore) CountPoolInstances(context.Context, string) ([]types.PoolInstanceCount, error) {
+	return nil, errors.New("not implemented")
+}
+
 type mockStageOwnerStore struct {
 	FindFunc   func(ctx context.Context, id string) (*types.StageOwner, error)
 	CreateFunc func(ctx context.Context, owner *types.StageOwner) error

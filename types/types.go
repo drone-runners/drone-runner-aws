@@ -556,6 +556,24 @@ type InstanceCount struct {
 	Count     int    `db:"count"`
 }
 
+// PoolInstanceCount is the number of a pool's instances that share a tenant, variant, image and
+// state. Tenant and variant are as stored, so empty means the default.
+type PoolInstanceCount struct {
+	TenantID  string        `db:"tenant_id"`
+	VariantID string        `db:"variant_id"`
+	ImageName string        `db:"image_name"`
+	State     InstanceState `db:"state"`
+	Count     int           `db:"count"`
+}
+
+// SetupJobCount is the number of setup_instance jobs in the outbox for one tenant and variant of
+// a pool. Tenant and variant are resolved, so they are never empty.
+type SetupJobCount struct {
+	TenantID  string `db:"tenant_id"`
+	VariantID string `db:"variant_id"`
+	Count     int    `db:"count"`
+}
+
 // ProvisionParams holds parameters from the incoming provision request.
 // These represent what the API caller requested for instance provisioning.
 type ProvisionParams struct {
