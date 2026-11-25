@@ -123,7 +123,7 @@ func (c countingConn) Read(b []byte) (int, error) {
 	return n, err
 }
 
-// Write delays each message sent to the server by REALDATA_RTT (e.g. 1ms), standing in for the
+// Write delays each message sent to the server by REALDATA_CACHE_TTL (cache lifetime, default the scaler's), REALDATA_RTT (e.g. 1ms), standing in for the
 // network round trip to a remote database; loopback has none.
 func (c countingConn) Write(b []byte) (int, error) {
 	if d, _ := time.ParseDuration(os.Getenv("REALDATA_RTT")); d > 0 {
@@ -348,7 +348,7 @@ func TestRealDataCapabilityReads(t *testing.T) {
 			var all []burstStats
 			for rep := 0; rep < realBurstRepeats; rep++ {
 				for _, p := range pods { // a new window: nothing is shared with the previous one
-					p.scaler.capacity = newCapacityCache(capacityCacheTTL)
+					p.scaler.capacity = newCapacityCache()
 				}
 				all = append(all, runBurst(ctx, t, admin, pods, mgr, mode, groups, disabled))
 			}
@@ -367,7 +367,7 @@ func ms(d time.Duration) float64 { return float64(d) / float64(time.Millisecond)
 // every slot of every group, and reports how many slots actually have instances.
 func checkSameCounts(ctx context.Context, t *testing.T, p *realPod, mgr realManager, groups []capability.Group) {
 	t.Helper()
-	p.scaler.capacity = newCapacityCache(capacityCacheTTL)
+	p.scaler.capacity = newCapacityCache()
 	checked, nonZero, mismatches := 0, 0, 0
 	for gi := range groups {
 		key := groups[gi].Key

@@ -53,7 +53,7 @@ func NewCapabilityScaler(
 		catalog:         catalog,
 		config:          config,
 		metrics:         metrics,
-		capacity:        newCapacityCache(capacityCacheTTL),
+		capacity:        newCapacityCache(),
 	}
 }
 
@@ -362,15 +362,15 @@ func (s *CapabilityScaler) loadPoolCapacity(ctx context.Context, pool string) (*
 	return &poolCapacity{instances: instances, pending: pending}, nil
 }
 
-// sharedPoolCapacity is loadPoolCapacity shared by the scale jobs of a window. Every pool serves
-// many capability groups, and a window's jobs run at about the same time, so without sharing the
+// sharedPoolCapacity is loadPoolCapacity shared by the scale jobs that ask at the same time. Every
+// pool serves many capability groups, and a window's jobs run together, so without sharing the
 // same pool is read once per group.
 //
-// Counts are shared only within one window: the next window always reads fresh ones. Within a
-// window, a group's counts cover only its own tenant and variant (a pool, tenant and variant
-// belong to one group), so what one job enqueues is never read by another group's job.
-// Enqueuing a setup job drops the pool's shared counts, so a read that follows an enqueue, such
-// as a retry of the same job, reloads instead of using counts from before it.
+// Only a read in progress is shared, never one that is done: counts change as setup jobs are
+// created and finish, so a job that came later than the read must make its own. Reads of
+// different windows are never shared. Enqueuing a setup job also stops new callers from joining
+// the pool's reads in progress, so a read that follows an enqueue, such as a retry of the same
+// job, does not use counts from before it.
 func (s *CapabilityScaler) sharedPoolCapacity(ctx context.Context, pool string, windowStart int64) (*poolCapacity, error) {
 	return s.capacity.get(ctx, pool, windowStart, func(ctx context.Context) (*poolCapacity, error) {
 		return s.loadPoolCapacity(ctx, pool)
