@@ -79,8 +79,8 @@ func (s *fakeOutboxStore) DeleteOlderThan(context.Context, int64) (int64, error)
 func (s *fakeOutboxStore) FindScaleJobForWindow(context.Context, string, int64) (*types.OutboxJob, error) {
 	return nil, nil
 }
-func (s *fakeOutboxStore) CountSetupJobs(context.Context, string, string, string) (int, error) {
-	return 0, nil
+func (s *fakeOutboxStore) CountSetupJobs(context.Context, string) ([]types.SetupJobCount, error) {
+	return nil, nil
 }
 
 func largeVariant(machineType string, diskSize int64) types.PoolVariant {

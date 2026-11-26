@@ -70,3 +70,9 @@ func (i InstanceStoreSync) CountGroupedInstances(ctx context.Context, status typ
 	defer mutex.Unlock()
 	panic("implement me")
 }
+
+func (i InstanceStoreSync) CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	return i.base.CountPoolInstances(ctx, pool)
+}

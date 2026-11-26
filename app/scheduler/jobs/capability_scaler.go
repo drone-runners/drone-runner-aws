@@ -30,6 +30,7 @@ type CapabilityScaler struct {
 	catalog         *capability.Catalog
 	config          types.ScalerConfig
 	metrics         *metric.Metrics
+	capacity        *capacityCache
 }
 
 // NewCapabilityScaler creates a new CapabilityScaler. pred must predict from capability history.
@@ -52,6 +53,7 @@ func NewCapabilityScaler(
 		catalog:         catalog,
 		config:          config,
 		metrics:         metrics,
+		capacity:        newCapacityCache(),
 	}
 }
 
@@ -103,7 +105,7 @@ func (s *CapabilityScaler) ScaleGroup(ctx context.Context, groupName string, win
 	}
 	key := group.Key
 
-	slots, err := s.capabilitySlots(ctx, &key, members)
+	slots, err := s.capabilitySlots(ctx, &key, members, windowStart)
 	if err != nil {
 		return err
 	}
@@ -253,10 +255,15 @@ func (s *CapabilityScaler) activeMembers(group *capability.Group) []capability.M
 }
 
 // capabilitySlots resolves each member's image and counts its free and used instances.
-func (s *CapabilityScaler) capabilitySlots(ctx context.Context, key *types.CapabilityKey, members []capability.Member) ([]capabilitySlot, error) {
+func (s *CapabilityScaler) capabilitySlots(
+	ctx context.Context, key *types.CapabilityKey, members []capability.Member, windowStart int64,
+) ([]capabilitySlot, error) {
+	load := func(ctx context.Context, pool string) (*poolCapacity, error) {
+		return s.sharedPoolCapacity(ctx, pool, windowStart)
+	}
 	slots := make([]capabilitySlot, 0, len(members))
 	for i := range members {
-		slot, err := s.capabilitySlot(ctx, key, &members[i])
+		slot, err := s.capabilitySlot(ctx, key, &members[i], load)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +272,12 @@ func (s *CapabilityScaler) capabilitySlots(ctx context.Context, key *types.Capab
 	return slots, nil
 }
 
-func (s *CapabilityScaler) capabilitySlot(ctx context.Context, key *types.CapabilityKey, m *capability.Member) (capabilitySlot, error) {
+// capabilitySlot resolves the member's image and counts its free and used instances, reading the
+// pool's counts with load.
+func (s *CapabilityScaler) capabilitySlot(
+	ctx context.Context, key *types.CapabilityKey, m *capability.Member,
+	load func(ctx context.Context, pool string) (*poolCapacity, error),
+) (capabilitySlot, error) {
 	slot := capabilitySlot{member: *m}
 	if m.Variant != nil {
 		slot.image = m.Variant.ImageName
@@ -278,40 +290,91 @@ func (s *CapabilityScaler) capabilitySlot(ctx context.Context, key *types.Capabi
 		slot.fqImage = fq
 	}
 
-	instances, err := s.instanceStore.List(ctx, m.Pool, nil)
+	capacity, err := load(ctx, m.Pool)
 	if err != nil {
-		return slot, fmt.Errorf("scaler: failed to list instances for pool %s: %w", m.Pool, err)
+		return slot, err
 	}
-	for _, inst := range instances {
-		tenantID := inst.TenantID
-		if tenantID == "" {
-			tenantID = types.DefaultTenantID
-		}
-		variantID := inst.VariantID
-		if variantID == "" {
-			variantID = types.DefaultVariantID
-		}
-		if tenantID != key.TenantID || variantID != key.VariantID {
-			continue
-		}
-		if inst.State == types.StateTerminating {
-			continue
-		}
-		slot.used++
-		if slot.fqImage != "" && inst.Image != slot.fqImage {
-			continue
-		}
-		if inst.State == types.StateCreated || inst.State == types.StateHibernating || inst.State == types.StateProvisioning {
-			slot.free++
-		}
-	}
-	// Setup jobs still in the outbox have no instance yet but count against the limit.
-	pending, err := s.outboxStore.CountSetupJobs(ctx, m.Pool, key.TenantID, key.VariantID)
-	if err != nil {
-		return slot, fmt.Errorf("scaler: failed to count setup jobs for pool %s: %w", m.Pool, err)
-	}
-	slot.used += pending
+	slot.free, slot.used = capacity.count(key, slot.fqImage)
 	return slot, nil
+}
+
+// poolCapacity is a pool's instance counts and the setup jobs still waiting in the outbox.
+type poolCapacity struct {
+	instances []types.PoolInstanceCount
+	pending   []types.SetupJobCount
+}
+
+// count returns the free and used instances of the tenant and variant of key. Terminating
+// instances are neither. Free ones are those that match fqImage (any image if it is empty) and
+// are, or will soon be, ready for a build. Setup jobs still in the outbox have no instance yet
+// but count against the limit.
+func (c *poolCapacity) count(key *types.CapabilityKey, fqImage string) (free, used int) {
+	for i := range c.instances {
+		n := &c.instances[i]
+		if tenantOrDefault(n.TenantID) != key.TenantID || variantOrDefault(n.VariantID) != key.VariantID {
+			continue
+		}
+		if n.State == types.StateTerminating {
+			continue
+		}
+		used += n.Count
+		if fqImage != "" && n.ImageName != fqImage {
+			continue
+		}
+		if n.State == types.StateCreated || n.State == types.StateHibernating || n.State == types.StateProvisioning {
+			free += n.Count
+		}
+	}
+	for i := range c.pending {
+		if n := &c.pending[i]; n.TenantID == key.TenantID && n.VariantID == key.VariantID {
+			used += n.Count
+		}
+	}
+	return free, used
+}
+
+// tenantOrDefault resolves a stored tenant, which is empty for rows written before tenants existed.
+func tenantOrDefault(id string) string {
+	if id == "" {
+		return types.DefaultTenantID
+	}
+	return id
+}
+
+// variantOrDefault resolves a stored variant, which is empty for a pool's base configuration.
+func variantOrDefault(id string) string {
+	if id == "" {
+		return types.DefaultVariantID
+	}
+	return id
+}
+
+// loadPoolCapacity reads a pool's counts from the stores.
+func (s *CapabilityScaler) loadPoolCapacity(ctx context.Context, pool string) (*poolCapacity, error) {
+	instances, err := s.instanceStore.CountPoolInstances(ctx, pool)
+	if err != nil {
+		return nil, fmt.Errorf("scaler: failed to count instances for pool %s: %w", pool, err)
+	}
+	pending, err := s.outboxStore.CountSetupJobs(ctx, pool)
+	if err != nil {
+		return nil, fmt.Errorf("scaler: failed to count setup jobs for pool %s: %w", pool, err)
+	}
+	return &poolCapacity{instances: instances, pending: pending}, nil
+}
+
+// sharedPoolCapacity is loadPoolCapacity shared by the scale jobs that ask at the same time. Every
+// pool serves many capability groups, and a window's jobs run together, so without sharing the
+// same pool is read once per group.
+//
+// Only a read in progress is shared, never one that is done: counts change as setup jobs are
+// created and finish, so a job that came later than the read must make its own. Reads of
+// different windows are never shared. Enqueuing a setup job also stops new callers from joining
+// the pool's reads in progress, so a read that follows an enqueue, such as a retry of the same
+// job, does not use counts from before it.
+func (s *CapabilityScaler) sharedPoolCapacity(ctx context.Context, pool string, windowStart int64) (*poolCapacity, error) {
+	return s.capacity.get(ctx, pool, windowStart, func(ctx context.Context) (*poolCapacity, error) {
+		return s.loadPoolCapacity(ctx, pool)
+	})
 }
 
 func (s *CapabilityScaler) recordMetrics(key *types.CapabilityKey, slots []capabilitySlot, plans []slotPlan, groupTarget int) {
@@ -376,12 +439,16 @@ func (s *CapabilityScaler) createSetupJob(ctx context.Context, poolName string, 
 	}
 	raw := json.RawMessage(paramsJSON)
 	// Leave RunnerName empty so any runner can process this job.
-	return s.outboxStore.Create(ctx, &types.OutboxJob{
+	err = s.outboxStore.Create(ctx, &types.OutboxJob{
 		PoolName:  poolName,
 		JobType:   types.OutboxJobTypeSetupInstance,
 		JobParams: &raw,
 		Status:    types.OutboxJobStatusPending,
 	})
+	// The pool's counts change whether or not Create reported an error (the job may have been
+	// stored), so counts shared from before it must not be used again.
+	s.capacity.invalidate(poolName)
+	return err
 }
 
 // HandleSetupFailure spills a failed capability setup job to the next pool of its group, in
@@ -413,7 +480,8 @@ func (s *CapabilityScaler) HandleSetupFailure(ctx context.Context, failedPool st
 		if slices.Contains(tried, m.Pool) {
 			continue
 		}
-		slot, err := s.capabilitySlot(ctx, &key, &m)
+		// A spill follows a failed setup, so it needs counts that include the jobs just created.
+		slot, err := s.capabilitySlot(ctx, &key, &m, s.loadPoolCapacity)
 		if err != nil {
 			logr.WithError(err).WithField("to_pool", m.Pool).Warnln("scaler: failed to inspect spill pool, skipping it")
 			continue

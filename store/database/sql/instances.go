@@ -420,6 +420,29 @@ SET
 WHERE instance_id   = :instance_id
 `
 
+// CountPoolInstances counts the pool's instances grouped by tenant, variant, image and state.
+func (s InstanceStore) CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	query, args, err := builder.Select(
+		"COALESCE(tenant_id, '') as tenant_id",
+		"COALESCE(variant_id, '') as variant_id",
+		"COALESCE(instance_image, '') as image_name",
+		"instance_state as state",
+		"COUNT(*) as count",
+	).From("instances").
+		Where(squirrel.Eq{"instance_pool": pool}).
+		GroupBy(colTenantID, colVariantID, "instance_image", "instance_state").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build pool count query: %w", err)
+	}
+
+	var results []types.PoolInstanceCount
+	if err := s.db.SelectContext(ctx, &results, query, args...); err != nil {
+		return nil, fmt.Errorf("failed to count pool instances: %w", err)
+	}
+	return results, nil
+}
+
 // CountGroupedInstances returns instance counts grouped by pool, tenant_id, variant_id, and image.
 func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
 	stmt := builder.Select(

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/drone-runners/drone-runner-aws/store/database/sql"
@@ -47,25 +48,35 @@ func TestOutbox_CountSetupJobs(t *testing.T) {
 	add("p2", types.OutboxJobTypeSetupInstance, types.SetupInstanceParams{VariantID: "variant_medium"})
 	add("p1", types.OutboxJobTypeScale, types.ScaleJobParams{WindowStart: 1})
 
+	// Jobs without a tenant or variant count as the default, and other pools and job types are
+	// not counted.
 	cases := []struct {
-		pool, tenant, variant string
-		want                  int
+		pool string
+		want []types.SetupJobCount
 	}{
-		{"p1", "", "variant_medium", 2},
-		{"p1", "default", "variant_medium", 2},
-		{"p1", "acct", "variant_medium", 1},
-		{"p1", "", "", 2},
-		{"p1", "default", "default", 2},
-		{"p2", "", "variant_medium", 1},
-		{"p3", "", "variant_medium", 0},
+		{"p1", []types.SetupJobCount{
+			{TenantID: "acct", VariantID: "variant_medium", Count: 1},
+			{TenantID: "default", VariantID: "default", Count: 2},
+			{TenantID: "default", VariantID: "variant_medium", Count: 2},
+		}},
+		{"p2", []types.SetupJobCount{{TenantID: "default", VariantID: "variant_medium", Count: 1}}},
+		{"p3", nil},
 	}
 	for _, tc := range cases {
-		got, err := s.CountSetupJobs(ctx, tc.pool, tc.tenant, tc.variant)
+		got, err := s.CountSetupJobs(ctx, tc.pool)
 		if err != nil {
-			t.Fatalf("CountSetupJobs: %v", err)
+			t.Fatalf("CountSetupJobs(%q): %v", tc.pool, err)
 		}
-		if got != tc.want {
-			t.Errorf("CountSetupJobs(%q, %q, %q) = %d, want %d", tc.pool, tc.tenant, tc.variant, got, tc.want)
+		sort.Slice(got, func(i, j int) bool {
+			return got[i].TenantID+"/"+got[i].VariantID < got[j].TenantID+"/"+got[j].VariantID
+		})
+		if len(got) != len(tc.want) {
+			t.Fatalf("CountSetupJobs(%q) = %v, want %v", tc.pool, got, tc.want)
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("CountSetupJobs(%q)[%d] = %v, want %v", tc.pool, i, got[i], tc.want[i])
+			}
 		}
 	}
 }

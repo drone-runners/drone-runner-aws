@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -553,6 +554,56 @@ type InstanceCount struct {
 	TenantID  string `db:"tenant_id"`
 	VariantID string `db:"variant_id"`
 	ImageName string `db:"image_name"`
+	Count     int    `db:"count"`
+}
+
+// PoolInstanceCount is the number of a pool's instances that share a tenant, variant, image and
+// state. Tenant and variant are as stored, so empty means the default.
+type PoolInstanceCount struct {
+	TenantID  string        `db:"tenant_id"`
+	VariantID string        `db:"variant_id"`
+	ImageName string        `db:"image_name"`
+	State     InstanceState `db:"state"`
+	Count     int           `db:"count"`
+}
+
+// AggregatePoolInstances groups instances by tenant, variant, image and state, as stored, so it
+// returns what a store's CountPoolInstances returns for the same instances. Stores that cannot
+// aggregate in the database use it on a listing. The result is ordered for determinism.
+func AggregatePoolInstances(instances []*Instance) []PoolInstanceCount {
+	type group struct {
+		tenant, variant, image string
+		state                  InstanceState
+	}
+	counts := map[group]int{}
+	for _, inst := range instances {
+		counts[group{inst.TenantID, inst.VariantID, inst.Image, inst.State}]++
+	}
+	out := make([]PoolInstanceCount, 0, len(counts))
+	for g, n := range counts {
+		out = append(out, PoolInstanceCount{TenantID: g.tenant, VariantID: g.variant, ImageName: g.image, State: g.state, Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := &out[i], &out[j]
+		if a.TenantID != b.TenantID {
+			return a.TenantID < b.TenantID
+		}
+		if a.VariantID != b.VariantID {
+			return a.VariantID < b.VariantID
+		}
+		if a.ImageName != b.ImageName {
+			return a.ImageName < b.ImageName
+		}
+		return a.State < b.State
+	})
+	return out
+}
+
+// SetupJobCount is the number of setup_instance jobs in the outbox for one tenant and variant of
+// a pool. Tenant and variant are resolved, so they are never empty.
+type SetupJobCount struct {
+	TenantID  string `db:"tenant_id"`
+	VariantID string `db:"variant_id"`
 	Count     int    `db:"count"`
 }
 

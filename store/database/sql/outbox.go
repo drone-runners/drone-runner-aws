@@ -253,22 +253,30 @@ func (s *outboxStore) FindScaleJobForWindow(ctx context.Context, poolName string
 	return job, nil
 }
 
-// CountSetupJobs counts the setup_instance jobs still in the outbox for the pool, tenant and variant.
-func (s *outboxStore) CountSetupJobs(ctx context.Context, poolName, tenantID, variantID string) (int, error) {
-	query := squirrel.Select("COUNT(*)").
+// CountSetupJobs counts the setup_instance jobs still in the outbox for the pool, grouped by
+// tenant and variant. Jobs without a tenant or variant in their params count as the default.
+func (s *outboxStore) CountSetupJobs(ctx context.Context, poolName string) ([]types.SetupJobCount, error) {
+	// The defaults are bind parameters like the rest. GROUP BY names the selected expressions by
+	// position: grouped by their text, each parameter would be a different one from the selected.
+	query := squirrel.Select().
+		Column(squirrel.Expr("COALESCE(NULLIF(job_params->>'tenant_id', ''), ?) AS tenant_id", types.DefaultTenantID)).
+		Column(squirrel.Expr("COALESCE(NULLIF(job_params->>'variant_id', ''), ?) AS variant_id", types.DefaultVariantID)).
+		Column("COUNT(*) AS count").
 		From("outbox_jobs").
 		Where(squirrel.And{
 			squirrel.Eq{colJobType: types.OutboxJobTypeSetupInstance},
 			squirrel.Eq{colPoolName: poolName},
-			squirrel.Expr("COALESCE(NULLIF(job_params->>'tenant_id', ''), ?) = ?", types.DefaultTenantID, orDefaultID(tenantID)),
-			squirrel.Expr("COALESCE(NULLIF(job_params->>'variant_id', ''), ?) = ?", types.DefaultVariantID, orDefaultID(variantID)),
 		}).
-		RunWith(s.db).
+		GroupBy("1", "2").
 		PlaceholderFormat(squirrel.Dollar)
 
-	var n int
-	if err := query.QueryRowContext(ctx).Scan(&n); err != nil {
-		return 0, fmt.Errorf("error counting setup jobs: %w", err)
+	sqlStr, args, err := query.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("error building setup job count query: %w", err)
 	}
-	return n, nil
+	var counts []types.SetupJobCount
+	if err := s.db.SelectContext(ctx, &counts, sqlStr, args...); err != nil {
+		return nil, fmt.Errorf("error counting setup jobs: %w", err)
+	}
+	return counts, nil
 }

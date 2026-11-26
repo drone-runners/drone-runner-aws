@@ -112,6 +112,22 @@ func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.I
 	panic("implement me")
 }
 
+// CountPoolInstances groups the pool's instances. LevelDB cannot aggregate, so it lists them.
+func (s InstanceStore) CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	listed, err := s.List(ctx, pool, nil)
+	if err != nil {
+		return nil, err
+	}
+	// List treats an empty pool name as every pool; counting, like the SQL stores, matches the name.
+	instances := listed[:0]
+	for _, inst := range listed {
+		if inst.Pool == pool {
+			instances = append(instances, inst)
+		}
+	}
+	return types.AggregatePoolInstances(instances), nil
+}
+
 func (s InstanceStore) satisfy(inst *types.Instance, pool string, params *types.QueryParams) bool {
 	log := logrus.New()
 	if pool == "" {

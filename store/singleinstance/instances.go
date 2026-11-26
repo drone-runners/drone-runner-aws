@@ -61,3 +61,12 @@ func (s InstanceStore) DeleteAndReturn(ctx context.Context, query string, args .
 func (s InstanceStore) CountGroupedInstances(ctx context.Context, status types.InstanceState) ([]types.InstanceCount, error) {
 	panic("implement me")
 }
+
+// CountPoolInstances counts what List returns: this store lists no instances, so there is nothing to count.
+func (s InstanceStore) CountPoolInstances(ctx context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	instances, err := s.List(ctx, pool, nil)
+	if err != nil {
+		return nil, err
+	}
+	return types.AggregatePoolInstances(instances), nil
+}

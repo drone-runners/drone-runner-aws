@@ -192,6 +192,30 @@ func (m *MockInstanceStore) CountGroupedInstances(ctx context.Context, status ty
 	return result, nil
 }
 
+func (m *MockInstanceStore) CountPoolInstances(_ context.Context, pool string) ([]types.PoolInstanceCount, error) {
+	type groupKey struct {
+		tenant, variant, image string
+		state                  types.InstanceState
+	}
+	counts := map[groupKey]int{}
+	var order []groupKey
+	for _, inst := range m.instances {
+		if inst.Pool != pool {
+			continue
+		}
+		k := groupKey{inst.TenantID, inst.VariantID, inst.Image, inst.State}
+		if _, ok := counts[k]; !ok {
+			order = append(order, k)
+		}
+		counts[k]++
+	}
+	result := make([]types.PoolInstanceCount, 0, len(order))
+	for _, k := range order {
+		result = append(result, types.PoolInstanceCount{TenantID: k.tenant, VariantID: k.variant, ImageName: k.image, State: k.state, Count: counts[k]})
+	}
+	return result, nil
+}
+
 func (m *MockInstanceStore) AddInstance(instance *types.Instance) {
 	m.instances = append(m.instances, instance)
 }
@@ -377,14 +401,9 @@ func (m *MockOutboxStore) FindScaleJobForWindow(ctx context.Context, poolName st
 	return nil, nil
 }
 
-func (m *MockOutboxStore) CountSetupJobs(_ context.Context, poolName, tenantID, variantID string) (int, error) {
-	orDefault := func(id string) string {
-		if id == "" {
-			return types.DefaultTenantID
-		}
-		return id
-	}
-	n := 0
+func (m *MockOutboxStore) CountSetupJobs(_ context.Context, poolName string) ([]types.SetupJobCount, error) {
+	counts := map[[2]string]int{}
+	var order [][2]string
 	for _, job := range m.jobs {
 		if job.JobType != types.OutboxJobTypeSetupInstance || job.PoolName != poolName {
 			continue
@@ -392,14 +411,20 @@ func (m *MockOutboxStore) CountSetupJobs(_ context.Context, poolName, tenantID, 
 		var params types.SetupInstanceParams
 		if job.JobParams != nil {
 			if err := json.Unmarshal(*job.JobParams, &params); err != nil {
-				return 0, err
+				return nil, err
 			}
 		}
-		if orDefault(params.TenantID) == orDefault(tenantID) && orDefault(params.VariantID) == orDefault(variantID) {
-			n++
+		k := [2]string{tenantOrDefault(params.TenantID), variantOrDefault(params.VariantID)}
+		if _, ok := counts[k]; !ok {
+			order = append(order, k)
 		}
+		counts[k]++
 	}
-	return n, nil
+	result := make([]types.SetupJobCount, 0, len(order))
+	for _, k := range order {
+		result = append(result, types.SetupJobCount{TenantID: k[0], VariantID: k[1], Count: counts[k]})
+	}
+	return result, nil
 }
 
 func (m *MockOutboxStore) GetJobs() []*types.OutboxJob {
