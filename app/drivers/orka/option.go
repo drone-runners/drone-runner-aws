@@ -157,8 +157,17 @@ func WithVMUser(username string) Option {
 	}
 }
 
+// WithEnableUserdata sends the bootstrap script as Orka 4.0 native User Data instead of
+// customMetadata. Needs an Orka 4.0 controller and an image with the 4.0 VM tools.
+func WithEnableUserdata(enable bool) Option {
+	return func(p *config) {
+		p.enableUserdata = enable
+	}
+}
+
 // WithCustomMetadata sets customer-supplied Orka customMetadata key/value pairs. The driver's
-// own "startup_script" key always wins over a customer-supplied collision (see Create()).
+// own "startup_script" key wins over a customer-supplied collision in metadata mode, and the key is
+// dropped in User Data mode (see Create()).
 func WithCustomMetadata(metadata map[string]string) Option {
 	return func(p *config) {
 		p.customMetadata = metadata

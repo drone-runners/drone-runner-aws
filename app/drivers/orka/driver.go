@@ -30,7 +30,8 @@ var _ drivers.Driver = (*config)(nil)
 var defaultUserData string
 
 // startupScriptKey is the customMetadata key Orka's baked-in bootstrap LaunchDaemon fetches and
-// executes on every boot. It always wins over a customer-supplied key of the same name.
+// executes on every boot. In metadata mode it always wins over a customer-supplied key of the same
+// name; in User Data mode the key is dropped.
 const startupScriptKey = "startup_script"
 
 // primary/fallback reserved host ports for lite-engine. Hardcoded, not customer-configurable.
@@ -76,6 +77,9 @@ type config struct {
 	displayHeight  int
 	displayDPI     int
 	customMetadata map[string]string
+
+	// enableUserdata sends the script as Orka 4.0 native User Data instead of customMetadata.
+	enableUserdata bool
 }
 
 func New(opts ...Option) (drivers.Driver, error) {
@@ -137,21 +141,32 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 	}
 
 	req := &deployVMRequest{
-		Name:           machineName,
-		VMConfig:       vmConfigField,
-		Image:          imageField,
-		CPU:            c.cpu,
-		Memory:         c.memory,
-		VNC:            c.vnc,
-		Tag:            c.tag,
-		TagRequired:    c.tagRequired,
-		Node:           c.node,
-		Scheduler:      c.scheduler,
-		DisplayWidth:   c.displayWidth,
-		DisplayHeight:  c.displayHeight,
-		DisplayDPI:     c.displayDPI,
-		CustomMetadata: c.buildCustomMetadata(userData),
-		Timeout:        deployTimeoutMinutes(timeoutSec),
+		Name:          machineName,
+		VMConfig:      vmConfigField,
+		Image:         imageField,
+		CPU:           c.cpu,
+		Memory:        c.memory,
+		VNC:           c.vnc,
+		Tag:           c.tag,
+		TagRequired:   c.tagRequired,
+		Node:          c.node,
+		Scheduler:     c.scheduler,
+		DisplayWidth:  c.displayWidth,
+		DisplayHeight: c.displayHeight,
+		DisplayDPI:    c.displayDPI,
+		Timeout:       deployTimeoutMinutes(timeoutSec),
+	}
+
+	// Send the script through exactly one channel, or lite-engine could start twice.
+	nativeUserdata := c.enableUserdata
+	if nativeUserdata {
+		if strings.TrimSpace(userData) == "" {
+			return nil, errors.New("orka: bootstrap script rendered empty, refusing to deploy without one")
+		}
+		req.Userdata = base64.StdEncoding.EncodeToString([]byte(userData))
+		req.CustomMetadata = c.buildCustomMetadataWithoutScript()
+	} else {
+		req.CustomMetadata = c.buildCustomMetadata(userData)
 	}
 
 	deployCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second+deployTimeoutBuffer)
@@ -197,12 +212,20 @@ func (c *config) Create(ctx context.Context, opts *types.InstanceCreateOpts) (in
 		Started:  startTime.Unix(),
 		Updated:  now,
 	}
-	logr.WithField("name", machineName).
+	logr = logr.WithField("name", machineName).
 		WithField("ip", deployResp.IP).
 		WithField("port", hostPort).
-		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds())).
-		Infoln("orka: VM created")
+		WithField("script_delivery", scriptDeliveryName(nativeUserdata)).
+		WithField("time", fmt.Sprintf("%.2fs", time.Since(startTime).Seconds()))
+	logr.Infoln("orka: VM created")
 	return instance, nil
+}
+
+func scriptDeliveryName(nativeUserdata bool) string {
+	if nativeUserdata {
+		return "userdata"
+	}
+	return "custom_metadata"
 }
 
 // resolveDeployImage decides which of the deploy request's mutually-exclusive vmConfig/image
@@ -230,6 +253,19 @@ func (c *config) buildCustomMetadata(userData string) map[string]string {
 		merged[k] = v
 	}
 	merged[startupScriptKey] = base64.StdEncoding.EncodeToString([]byte(userData))
+	return merged
+}
+
+// buildCustomMetadataWithoutScript copies the customer's keys, dropping the reserved startup_script
+// so a LaunchDaemon in the image can't run a second script.
+func (c *config) buildCustomMetadataWithoutScript() map[string]string {
+	merged := make(map[string]string, len(c.customMetadata))
+	for k, v := range c.customMetadata {
+		if k == startupScriptKey {
+			continue
+		}
+		merged[k] = v
+	}
 	return merged
 }
 

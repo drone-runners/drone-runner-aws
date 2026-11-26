@@ -354,6 +354,7 @@ func ProcessPool(poolFile *config.PoolFile, runnerName string, passwords types.P
 				orka.WithScheduler(orkaConfig.Scheduler),
 				orka.WithDisplay(orkaConfig.DisplayWidth, orkaConfig.DisplayHeight, orkaConfig.DisplayDPI),
 				orka.WithCustomMetadata(orkaConfig.CustomMetadata),
+				orka.WithEnableUserdata(orkaConfig.EnableUserdata),
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create %s pool '%s': %v", instance.Type, instance.Name, err)

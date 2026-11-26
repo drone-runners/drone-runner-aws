@@ -50,6 +50,7 @@ type deployVMRequest struct {
 	DisplayDPI     int               `json:"displayDPI,omitempty"`
 	ReservedPorts  string            `json:"reservedPorts,omitempty"`
 	CustomMetadata map[string]string `json:"customMetadata,omitempty"`
+	Userdata       string            `json:"userdata,omitempty"`
 	Timeout        int               `json:"timeout,omitempty"` // In minutes (Orka's unit).
 }
 
