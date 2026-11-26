@@ -174,6 +174,8 @@ type (
 		RootDirectory  string            `json:"root_directory,omitempty" yaml:"root_directory"`
 		UserData       string            `json:"user_data,omitempty" yaml:"user_data"`
 		UserDataPath   string            `json:"user_data_path,omitempty" yaml:"user_data_path,omitempty"`
+		// EnableUserdata sends the bootstrap script as Orka 4.0 native User Data (default: customMetadata).
+		EnableUserdata bool `json:"enable_userdata,omitempty" yaml:"enable_userdata,omitempty"`
 	}
 
 	NomadServer struct {

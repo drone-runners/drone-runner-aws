@@ -2,6 +2,8 @@ package orka
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sync"
@@ -602,6 +604,27 @@ func TestBuildCustomMetadata(t *testing.T) {
 	})
 }
 
+func TestBuildCustomMetadataWithoutScript(t *testing.T) {
+	t.Run("forwards customer keys but never startup_script", func(t *testing.T) {
+		c := &config{customMetadata: map[string]string{
+			"startup_script": "customer-supplied",
+			"owner":          "team-a",
+		}}
+		merged := c.buildCustomMetadataWithoutScript()
+
+		assert.Equal(t, map[string]string{"owner": "team-a"}, merged)
+	})
+
+	t.Run("does not mutate the shared pool-level customMetadata map", func(t *testing.T) {
+		shared := map[string]string{"startup_script": "x", "owner": "team-a"}
+		c := &config{customMetadata: shared}
+
+		c.buildCustomMetadataWithoutScript()
+
+		assert.Len(t, shared, 2)
+	})
+}
+
 func TestPing(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockClient{
@@ -653,4 +676,142 @@ func TestNew(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, "#!/bin/bash\necho custom\n", c.userData)
 	})
+}
+
+// deliveryCapture runs Create() with enable_userdata set or not and returns the deploy request.
+// Version() must never be called: delivery is a pool setting, not detected from the controller.
+func deliveryCapture(t *testing.T, userdata bool, setup func(*config)) *deployVMRequest {
+	t.Helper()
+	var captured *deployVMRequest
+	mock := &mockClient{
+		VersionFunc: func(ctx context.Context) (*versionResponse, error) {
+			t.Error("Create must not call /version")
+			return &versionResponse{APIVersion: "4.0.0"}, nil
+		},
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			captured = req
+			return &deployVMResponse{IP: "10.0.0.5", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+	c.enableUserdata = userdata
+	if setup != nil {
+		setup(c)
+	}
+	_, err := c.Create(context.Background(), newTestOpts())
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	return captured
+}
+
+func TestCreate_ScriptDelivery(t *testing.T) {
+	cases := []struct {
+		name         string
+		enable       bool
+		wantUserdata bool
+	}{
+		{"default uses customMetadata", false, false},
+		{"enable_userdata uses native User Data", true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := deliveryCapture(t, tc.enable, nil)
+
+			script, hasScriptKey := req.CustomMetadata[startupScriptKey]
+			if tc.wantUserdata {
+				assert.NotEmpty(t, req.Userdata)
+				assert.False(t, hasScriptKey, "startup_script must NOT be sent alongside native User Data")
+			} else {
+				assert.Empty(t, req.Userdata, "native User Data must not be sent")
+				assert.True(t, hasScriptKey)
+				assert.NotEmpty(t, script)
+			}
+			assert.False(t, req.Userdata != "" && hasScriptKey, "bootstrap script sent through both channels")
+		})
+	}
+}
+
+func TestCreate_DefaultRequestBodyHasNoUserdataKey(t *testing.T) {
+	req := deliveryCapture(t, false, nil)
+
+	body, err := json.Marshal(req)
+
+	require.NoError(t, err)
+	assert.NotContains(t, string(body), `"userdata"`)
+	assert.Contains(t, string(body), `"customMetadata"`)
+}
+
+func TestCreate_ScriptDeliveryPayloadsCarrySameScript(t *testing.T) {
+	metaReq := deliveryCapture(t, false, nil)
+	udReq := deliveryCapture(t, true, nil)
+
+	metaScript, err := base64.StdEncoding.DecodeString(metaReq.CustomMetadata[startupScriptKey])
+	require.NoError(t, err)
+	udScript, err := base64.StdEncoding.DecodeString(udReq.Userdata)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, metaScript)
+	// Same opts in, so the rendered scripts must be identical.
+	assert.Equal(t, string(metaScript), string(udScript))
+}
+
+func TestCreate_UserdataModeCustomMetadata(t *testing.T) {
+	t.Run("forwards customer keys and strips a customer-supplied startup_script", func(t *testing.T) {
+		req := deliveryCapture(t, true, func(c *config) {
+			c.customMetadata = map[string]string{"owner": "team-a", "startup_script": "customer-supplied"}
+		})
+
+		assert.Equal(t, map[string]string{"owner": "team-a"}, req.CustomMetadata)
+		assert.NotEmpty(t, req.Userdata)
+	})
+
+	t.Run("no customer metadata leaves customMetadata empty", func(t *testing.T) {
+		req := deliveryCapture(t, true, nil)
+
+		assert.Empty(t, req.CustomMetadata)
+	})
+}
+
+func TestCreate_UserdataModeKeepsPayloadAcrossPortRetry(t *testing.T) {
+	var reqs []deployVMRequest
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			reqs = append(reqs, *req)
+			if len(reqs) == 1 {
+				return nil, portConflictErr()
+			}
+			return &deployVMResponse{IP: "10.0.0.6", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+	c.enableUserdata = true
+	c.customMetadata = map[string]string{startupScriptKey: "customer", "team": "ci"}
+
+	_, err := c.Create(context.Background(), newTestOpts())
+
+	require.NoError(t, err)
+	require.Len(t, reqs, 2)
+	assert.NotEmpty(t, reqs[0].Userdata)
+	assert.Equal(t, reqs[0].Userdata, reqs[1].Userdata)
+	assert.Equal(t, reqs[0].CustomMetadata, reqs[1].CustomMetadata)
+	assert.Equal(t, map[string]string{"team": "ci"}, reqs[1].CustomMetadata, "startup_script must not be sent in User Data mode")
+}
+
+func TestCreate_UserdataModeRejectsEmptyScript(t *testing.T) {
+	deployed := false
+	mock := &mockClient{
+		DeployVMFunc: func(ctx context.Context, namespace string, req *deployVMRequest) (*deployVMResponse, error) {
+			deployed = true
+			return &deployVMResponse{IP: "10.0.0.5", Status: vmStatusRunning}, nil
+		},
+	}
+	c := newTestConfig(mock)
+	c.enableUserdata = true
+	c.userData = "{{ if false }}x{{ end }}"
+
+	inst, err := c.Create(context.Background(), newTestOpts())
+
+	require.Error(t, err)
+	assert.Nil(t, inst)
+	assert.False(t, deployed, "no VM may be deployed without a bootstrap script")
 }
